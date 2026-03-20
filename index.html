@@ -1,0 +1,143 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Invox - Fuel Curiosity, Expand Consciousness</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'invox-dark': '#0A0A0A',
+              'invox-dark-accent': '#141414',
+              'invox-light-gray': '#B3B3B3',
+              'invox-red': '#E50914',
+              'invox-red-hover': '#F6121D',
+              'invox-red-text': '#FF4747',
+              'invox-blue': '#0052FF',
+              gray: {
+                800: '#1E1E1E',
+                700: '#262B33'
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      .pseudo-fullscreen {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        z-index: 2147483647 !important; /* max z-index */
+        background-color: black !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
+      }
+      .pseudo-fullscreen video {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: contain !important;
+      }
+      @keyframes wave {
+        0%, 100% { transform: scaleY(0.4); }
+        50% { transform: scaleY(1); }
+      }
+      .wave-bar {
+        animation: wave 1.2s ease-in-out infinite;
+        transform-origin: bottom;
+      }
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .animate-fadeInUp {
+        animation: fadeInUp 0.5s ease-out forwards;
+      }
+      .animated-gradient-border::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        padding: 1px; /* border thickness */
+        background: linear-gradient(90deg, #E50914, #0052FF);
+        -webkit-mask:
+          linear-gradient(#fff 0 0) content-box,
+          linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor;
+                mask-composite: exclude;
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out;
+        pointer-events: none;
+      }
+      .animated-gradient-border:hover::before {
+        opacity: 1;
+      }
+      .blur-background {
+        filter: blur(8px);
+        transition: filter 0.3s ease-in-out;
+      }
+      pre > code.hljs {
+        background-color: transparent !important;
+      }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none; /* IE and Edge */
+        scrollbar-width: none; /* Firefox */
+      }
+       @keyframes slideInUp {
+        from {
+          opacity: 0;
+          transform: translateY(15px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .animate-message-in {
+        animation: slideInUp 0.35s ease-out forwards;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.23.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.4",
+    "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
+    "firebase/auth": "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js",
+    "firebase/": "https://aistudiocdn.com/firebase@^12.4.0/",
+    "three": "https://unpkg.com/three@0.173.0/build/three.module.js",
+    "three/examples/jsm/controls/OrbitControls": "https://unpkg.com/three@0.173.0/examples/jsm/controls/OrbitControls.js",
+    "three/": "https://esm.sh/three@^0.182.0/",
+    "react-dom": "https://esm.sh/react-dom@^19.2.3"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-invox-dark text-white">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

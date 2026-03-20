@@ -1,0 +1,7 @@
+{
+  "name": "Invox",
+  "description": "A dynamic platform that empowers curious minds to connect, engage, and share ideas. A robust hub for thought-sharing and networking with like-minded comrades, powered by AI.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
