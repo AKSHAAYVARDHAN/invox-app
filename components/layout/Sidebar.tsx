@@ -40,22 +40,32 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHu
 
     return (
         <>
-            {/* Overlay for mobile */}
+            {/* Overlay for mobile + tablet (hidden on lg+ where sidebar is always visible) */}
             <button
-                className={`fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                className={`fixed inset-0 bg-black bg-opacity-60 z-30 lg:hidden transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                 onClick={toggleSidebar}
                 aria-label="Close sidebar"
                 tabIndex={isOpen ? 0 : -1}
             ></button>
 
-            {/* Sidebar */}
-            <aside className={`fixed top-0 left-0 h-full bg-invox-dark w-64 p-4 z-40 transform transition-transform md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'} border-r border-gray-800 flex flex-col`}>
+            {/* Sidebar — drawer on mobile/tablet, fixed visible on lg+ */}
+            <aside className={`fixed top-0 left-0 h-full bg-invox-dark w-64 p-4 z-40 transform transition-transform duration-300 ease-in-out lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'} border-r border-gray-800 flex flex-col`}>
                 <div>
-                    <div className="mb-8 flex items-center gap-3">
+                    <div className="mb-8 flex items-center justify-between">
                         <div>
                             <h1 className="text-3xl font-bold text-invox-red">Invox</h1>
                             <p className="text-sm text-gray-400">Fuel Curiosity</p>
                         </div>
+                        {/* Close button — only visible on mobile/tablet where sidebar is a drawer */}
+                        <button
+                            onClick={toggleSidebar}
+                            className="lg:hidden text-gray-400 hover:text-white transition-colors p-1 rounded-md hover:bg-gray-800"
+                            aria-label="Close sidebar"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
                     </div>
                     <nav>
                         <ul>
@@ -74,7 +84,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHu
                                                 }
                                                 document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
                                             }
-                                            // This is for mobile, it closes the sidebar after any link click.
+                                            // Close drawer on mobile/tablet after any nav click
                                             if (isOpen) {
                                                 toggleSidebar();
                                             }

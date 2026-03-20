@@ -216,9 +216,10 @@ const ProtectedLayout = () => {
     }, [rightSidebarVariant]);
 
     return (
-        <div className="min-h-screen flex bg-invox-dark text-white">
+        <div className="min-h-screen flex bg-invox-dark text-white overflow-x-hidden">
             <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} resetHub={resetHub} />
-            <div className="flex-1 md:ml-64 flex flex-col max-h-screen">
+            {/* lg:ml-64 matches when sidebar becomes permanently visible (lg breakpoint) */}
+            <div className="flex-1 lg:ml-64 flex flex-col max-h-screen min-w-0">
                 {/* Mobile-only Header */}
                 <Header toggleSidebar={toggleSidebar} pageTitle={pageTitle} />
 

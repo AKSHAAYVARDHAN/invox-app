@@ -274,7 +274,7 @@ const DiscoverSidebar: React.FC<Pick<RightSidebarProps, 'activityFilter' | 'setA
     };
 
     return (
-        <aside className="hidden lg:block w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
+        <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
             <div className="h-full flex flex-col gap-6 overflow-y-auto no-scrollbar">
                 <div className="relative px-4">
                     <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -426,7 +426,7 @@ const TrendzSidebar: React.FC<Pick<RightSidebarProps, 'followedDomainsFilter' | 
     };
 
     return (
-        <aside className="hidden lg:block w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
+        <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
             <div className="h-full flex flex-col gap-6 overflow-y-auto no-scrollbar">
                 {isFollowedView ? (
                     <>
@@ -585,7 +585,7 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
         : "Explore projects and profiles from creators across the platform.";
 
     return (
-        <aside className="hidden lg:block w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
+        <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
             <div className="h-full flex flex-col gap-6 overflow-y-auto no-scrollbar">
                 {isBrowsingView ? (
                     <>
@@ -833,7 +833,7 @@ const GoForItSidebar: React.FC<GoForItSidebarProps> = ({ filters, setFilters, se
     ];
 
     return (
-        <aside className="hidden lg:block w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
+        <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
             <div className="h-full flex flex-col gap-6 overflow-y-auto no-scrollbar">
                 <div className="relative px-4">
                     <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -984,7 +984,7 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
     const showOtherElements = !isSearchFocused && communityFilters.searchTerm.trim() === '';
 
     return (
-        <aside className="hidden lg:block w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
+        <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
             <div className="h-full flex flex-col gap-6">
                 {communityView === 'my-communities' ? (
                      <>
@@ -1261,7 +1261,7 @@ const HubConversationsSidebar: React.FC<{
     );
 
     return (
-        <aside className="hidden lg:block w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
+        <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
             <div className="h-full flex flex-col gap-4">
                 <div className="flex items-center gap-2 px-4">
                     <button onClick={onBack} className="p-2 rounded-full hover:bg-invox-dark-accent" aria-label="Back to Hub main">
@@ -1374,7 +1374,7 @@ const HubSidebar: React.FC<Pick<RightSidebarProps, 'hubView' | 'setHubView' | 'h
     ];
 
     return (
-        <aside className="hidden lg:block w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
+        <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
             <div className="h-full flex flex-col gap-3 overflow-y-auto no-scrollbar">
                 {hubView === 'stream' && (
                     <div className="flex items-center gap-2 px-4">
@@ -1422,7 +1422,7 @@ const MySpaceSidebar = () => {
     ];
 
     return (
-        <aside className="hidden lg:block w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
+        <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
             <div className="h-full flex flex-col gap-3 overflow-y-auto no-scrollbar">
                 <div className="relative px-4">
                     <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -1555,7 +1555,7 @@ const UploadsSidebar: React.FC<{ setUploadTriggerTarget: (target: string | null)
 
     return (
         <>
-            <aside className="hidden lg:block w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
+            <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
                 <div className="h-full flex flex-col gap-4">
                     <div className="px-4">
                         <button 
@@ -1633,7 +1633,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ variant, ...props }) => {
                 return <UploadsSidebar setUploadTriggerTarget={props.setUploadTriggerTarget || (() => {})} />;
             default:
                 return (
-                     <aside className="hidden lg:block w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
+                     <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
                         <div className="p-4 text-center text-gray-500">
                            <p>Contextual actions will appear here.</p>
                         </div>
