@@ -2,9 +2,12 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import type { Content } from "@google/genai";
 
-// Assume process.env.API_KEY is configured in the environment
-// FIX: Initialized GoogleGenAI with a named apiKey parameter as per guidelines.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// API key must be set as VITE_GEMINI_API_KEY in your .env file (or Vercel env vars)
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+if (!apiKey) {
+  console.warn("⚠️ VITE_GEMINI_API_KEY is not set. AI features will not work. Add it to your .env file and Vercel environment variables.");
+}
+const ai = new GoogleGenAI({ apiKey: apiKey ?? "" });
 
 export const generateFeedPost = async (idea: string): Promise<{ title: string; body: string; hashtags: string[]; imagePrompt: string } | null> => {
     try {
