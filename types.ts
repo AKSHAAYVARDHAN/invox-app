@@ -7,6 +7,39 @@ export interface User {
   photoURL: string | null;
 }
 
+export type UserRole = 'user' | 'moderator' | 'admin';
+
+export interface ReputationScores {
+  knowledge: number;
+  contribution: number;
+  innovation: number;
+  collaboration: number;
+}
+
+export interface ProfileLink {
+  label: string;
+  url: string;
+}
+
+export interface InvoxUser extends User {
+  role: UserRole;
+  emailVerified: boolean;
+  bio: string;
+  coverPhotoURL: string | null;
+  skills: string[];
+  interests: string[];
+  links: ProfileLink[];
+  followerCount: number;
+  followingCount: number;
+  savedPostCount: number;
+  savedProjectCount: number;
+  savedOpportunityCount: number;
+  reputation: ReputationScores;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+  lastSeenAt?: unknown;
+}
+
 export enum PostType {
   Feed = 'Feed',
   Thread = 'Thread',

@@ -1,0 +1,92 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownerId() {
+      return request.resource != null
+        ? request.resource.metadata.ownerId
+        : resource.metadata.ownerId;
+    }
+
+    function ownsFile() {
+      return signedIn() && ownerId() == request.auth.uid;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function isSupportedMedia() {
+      return request.resource.contentType.matches('image/.*')
+        || request.resource.contentType.matches('video/.*')
+        || request.resource.contentType == 'application/pdf';
+    }
+
+    function underSize(maxBytes) {
+      return request.resource.size <= maxBytes;
+    }
+
+    match /profileMedia/{userId}/{fileName} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && userId == request.auth.uid
+        && ownerId() == request.auth.uid
+        && isImage()
+        && underSize(10 * 1024 * 1024);
+      allow delete: if signedIn() && userId == request.auth.uid;
+    }
+
+    match /postMedia/{userId}/{fileName} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && userId == request.auth.uid
+        && ownerId() == request.auth.uid
+        && isSupportedMedia()
+        && underSize(100 * 1024 * 1024);
+      allow delete: if signedIn() && userId == request.auth.uid;
+    }
+
+    match /projectAssets/{projectId}/{fileName} {
+      allow read: if signedIn();
+      allow create, update: if ownsFile()
+        && isSupportedMedia()
+        && underSize(100 * 1024 * 1024);
+      allow delete: if ownsFile();
+    }
+
+    match /communityAssets/{communityId}/{fileName} {
+      allow read: if signedIn();
+      allow create, update: if ownsFile()
+        && isSupportedMedia()
+        && underSize(50 * 1024 * 1024);
+      allow delete: if ownsFile();
+    }
+
+    match /messageFiles/{conversationId}/{messageId}/{fileName} {
+      allow read: if signedIn();
+      allow create: if ownsFile()
+        && isSupportedMedia()
+        && underSize(100 * 1024 * 1024);
+      allow update: if false;
+      allow delete: if ownsFile();
+    }
+
+    match /applications/{userId}/{fileName} {
+      allow read: if signedIn() && userId == request.auth.uid;
+      allow create, update: if signedIn()
+        && userId == request.auth.uid
+        && ownerId() == request.auth.uid
+        && request.resource.contentType == 'application/pdf'
+        && underSize(15 * 1024 * 1024);
+      allow delete: if signedIn() && userId == request.auth.uid;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

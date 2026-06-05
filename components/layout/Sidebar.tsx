@@ -4,8 +4,7 @@ import React from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { HomeIcon, ExploreIcon, SpotlightIcon, CommunityIcon, HubIcon, LogoutIcon, TrendingUpIcon, MicrophoneIcon, CubeIcon, CometIcon } from '../ui/Icons';
 import { useAuth } from '../../contexts/AuthContext';
-import { auth } from '../../firebase';
-import { signOut } from 'firebase/auth';
+import { logout } from '../../services/authService';
 
 const navItems = [
     { name: 'Explore', path: '/explore', icon: ExploreIcon },
@@ -31,7 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHu
 
     const handleLogout = async () => {
         try {
-            await signOut(auth);
+            await logout();
             // The AuthProvider will handle navigation via ProtectedRoute
         } catch (error) {
             console.error("Failed to log out", error);
