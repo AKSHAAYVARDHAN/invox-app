@@ -18,6 +18,9 @@ import ApplicationFormPage from './pages/ApplicationFormPage';
 import ApplicationStatusPage from './pages/ApplicationStatusPage';
 import SavedApplicationsPage from './pages/SavedApplicationsPage';
 import ComingSoonPage from './pages/ComingSoon';
+import OnboardingPage from './pages/Onboarding';
+import SettingsPage from './pages/Settings';
+import ProtectedRoute from './components/auth/ProtectedRoute';
 import { AIAssistantButton, AIChatModal } from './components/ui/AIAssistant';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import GoForItFilterModal from './components/spotlight/GoForItFilterModal';
@@ -315,7 +318,10 @@ const AppRoutes = () => {
             <ReactRouterDOM.Route path="/login" element={!currentUser ? <LoginPage /> : <ReactRouterDOM.Navigate to="/explore" />} />
             <ReactRouterDOM.Route path="/signup" element={!currentUser ? <SignupPage /> : <ReactRouterDOM.Navigate to="/explore" />} />
             
-            <ReactRouterDOM.Route path="/*" element={currentUser ? <MainAppRoutes /> : <ReactRouterDOM.Navigate to="/login" />} />
+            <ReactRouterDOM.Route element={<ProtectedRoute />}>
+                <ReactRouterDOM.Route path="/onboarding" element={<OnboardingPage />} />
+                <ReactRouterDOM.Route path="/*" element={<MainAppRoutes />} />
+            </ReactRouterDOM.Route>
         </ReactRouterDOM.Routes>
     );
 };
@@ -333,6 +339,7 @@ const MainAppRoutes = () => (
             <ReactRouterDOM.Route path="/myspace/uploads" element={<UploadsPage />} />
             <ReactRouterDOM.Route path="/duppor" element={<ComingSoonPage pageName="Duppor" subtitle="16 days to go" />} />
             <ReactRouterDOM.Route path="/profile" element={<ProfilePage />} />
+            <ReactRouterDOM.Route path="/settings" element={<SettingsPage />} />
             <ReactRouterDOM.Route path="/applications" element={<ApplicationStatusPage />} />
             <ReactRouterDOM.Route path="/saved-applications" element={<SavedApplicationsPage />} />
             <ReactRouterDOM.Route path="*" element={<ReactRouterDOM.Navigate to="/explore" />} />

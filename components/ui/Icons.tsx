@@ -523,3 +523,10 @@ export const ClockIcon = ({ className = 'w-6 h-6' }: { className?: string }) => 
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 );
+
+export const CogIcon = ({ className = 'w-6 h-6' }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} aria-hidden="true" focusable="false">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M10.342 3.256l-1.393 2.126c-1.127.35-2.146.936-2.99 1.706l-2.42-1.02a1.5 1.5 0 00-1.897.63l-1.745 3.023a1.5 1.5 0 00.414 1.954l1.968 1.571c-.043.4-.067.808-.067 1.222s.024.822.067 1.222l-1.968 1.571a1.5 1.5 0 00-.414 1.954l1.745 3.023a1.5 1.5 0 001.897.63l2.42-1.02c.844.77 1.863 1.355 2.99 1.706l1.393 2.126a1.5 1.5 0 001.42.946h3.49a1.5 1.5 0 001.42-.946l1.393-2.126c1.127-.35 2.146-.936 2.99-1.706l2.42 1.02a1.5 1.5 0 001.897-.63l1.745-3.023a1.5 1.5 0 00-.414-1.954l-1.968-1.571c.043-.4.067-.808.067-1.222s-.024-.822-.067-1.222l1.968-1.571a1.5 1.5 0 00.414-1.954l-1.745-3.023a1.5 1.5 0 00-1.897-.63l-2.42 1.02c-.844-.77-1.863-1.355-2.99-1.706L13.82 3.256a1.5 1.5 0 00-1.42-.946h-3.49a1.5 1.5 0 00-1.42.946z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);

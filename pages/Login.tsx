@@ -1,7 +1,7 @@
-
 import React, { useState } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { loginWithEmail, loginWithGoogle, sendResetPasswordEmail } from '../services/authService';
+import { getFriendlyErrorMessage } from '../utils/errorHandler';
 
 const LoginPage = () => {
     const [email, setEmail] = useState('');
@@ -20,20 +20,7 @@ const LoginPage = () => {
             await loginWithEmail(email, password);
             navigate('/');
         } catch (err: any) {
-            switch (err.code) {
-                case 'auth/invalid-credential':
-                    setError('Invalid email or password. Please try again.');
-                    break;
-                case 'auth/user-disabled':
-                    setError('This account has been disabled.');
-                    break;
-                case 'auth/too-many-requests':
-                     setError('Access to this account has been temporarily disabled due to many failed login attempts. Please try again later.');
-                     break;
-                default:
-                    setError('Failed to log in. Please check your credentials.');
-                    break;
-            }
+            setError(getFriendlyErrorMessage(err));
             console.error(err);
         }
         setLoading(false);
@@ -47,7 +34,7 @@ const LoginPage = () => {
             await loginWithGoogle();
             navigate('/');
         } catch (err: any) {
-            setError(err.code === 'auth/popup-closed-by-user' ? 'Google sign-in was cancelled.' : 'Failed to sign in with Google.');
+            setError(getFriendlyErrorMessage(err));
             console.error(err);
         }
         setLoading(false);

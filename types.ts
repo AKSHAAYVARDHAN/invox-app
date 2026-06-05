@@ -22,8 +22,10 @@ export interface ProfileLink {
 }
 
 export interface InvoxUser extends User {
+  username: string;
   role: UserRole;
   emailVerified: boolean;
+  headline: string;
   bio: string;
   coverPhotoURL: string | null;
   skills: string[];
@@ -35,6 +37,8 @@ export interface InvoxUser extends User {
   savedProjectCount: number;
   savedOpportunityCount: number;
   reputation: ReputationScores;
+  onboardingCompleted: boolean;
+  profileCompletion: number;
   createdAt?: unknown;
   updatedAt?: unknown;
   lastSeenAt?: unknown;

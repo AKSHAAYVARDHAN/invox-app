@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { loginWithGoogle, registerWithEmail } from '../services/authService';
+import { getFriendlyErrorMessage } from '../utils/errorHandler';
 
 const SignupPage = () => {
     const [displayName, setDisplayName] = useState('');
@@ -17,26 +18,18 @@ const SignupPage = () => {
         if (password !== confirmPassword) {
             return setError("Passwords do not match");
         }
+        // Client-side password strength validation
+        const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/;
+        if (!passwordRegex.test(password)) {
+            return setError("Password must be at least 8 characters long and include a number and a special character.");
+        }
         setLoading(true);
         setError('');
         try {
             await registerWithEmail(email, password, displayName.trim() || undefined);
             navigate('/');
         } catch (err: any) {
-            switch (err.code) {
-                case 'auth/email-already-in-use':
-                    setError('This email address is already in use.');
-                    break;
-                case 'auth/weak-password':
-                    setError('Password should be at least 6 characters.');
-                    break;
-                case 'auth/invalid-email':
-                    setError('The email address is not valid.');
-                    break;
-                default:
-                    setError('Failed to create an account. Please try again.');
-                    break;
-            }
+            setError(getFriendlyErrorMessage(err));
             console.error(err);
         }
         setLoading(false);
@@ -49,7 +42,7 @@ const SignupPage = () => {
             await loginWithGoogle();
             navigate('/');
         } catch (err: any) {
-            setError(err.code === 'auth/popup-closed-by-user' ? 'Google sign-up was cancelled.' : 'Failed to continue with Google.');
+            setError(getFriendlyErrorMessage(err));
             console.error(err);
         }
         setLoading(false);

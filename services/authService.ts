@@ -10,6 +10,8 @@ import {
     signInWithPopup,
     signOut,
     updateProfile,
+    updateEmail as updateFirebaseEmail,
+    updatePassword as updateFirebasePassword,
 } from 'firebase/auth';
 import { doc, getDoc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -28,10 +30,12 @@ const emptyReputation = {
 const buildUserProfile = (user: FirebaseUser, overrides: Partial<InvoxUser> = {}) => ({
     uid: user.uid,
     email: user.email,
+    username: overrides.username ?? user.email?.split('@')[0] ?? 'user' + Date.now().toString().slice(-4),
     displayName: overrides.displayName ?? user.displayName ?? user.email?.split('@')[0] ?? 'Invox User',
     photoURL: overrides.photoURL ?? user.photoURL,
     role: overrides.role ?? 'user',
     emailVerified: user.emailVerified,
+    headline: overrides.headline ?? '',
     bio: overrides.bio ?? '',
     coverPhotoURL: overrides.coverPhotoURL ?? null,
     skills: overrides.skills ?? [],
@@ -43,6 +47,8 @@ const buildUserProfile = (user: FirebaseUser, overrides: Partial<InvoxUser> = {}
     savedProjectCount: overrides.savedProjectCount ?? 0,
     savedOpportunityCount: overrides.savedOpportunityCount ?? 0,
     reputation: overrides.reputation ?? emptyReputation,
+    onboardingCompleted: overrides.onboardingCompleted ?? false,
+    profileCompletion: overrides.profileCompletion ?? 0,
     createdAt: overrides.createdAt ?? serverTimestamp(),
     updatedAt: serverTimestamp(),
     lastSeenAt: serverTimestamp(),
@@ -107,4 +113,14 @@ export const subscribeUserProfile = (
         snapshot => onChange(snapshot.exists() ? snapshot.data() as InvoxUser : null),
         error => onError?.(error),
     );
+};
+
+export const updateUserEmail = async (user: FirebaseUser, newEmail: string) => {
+    await updateFirebaseEmail(user, newEmail);
+    // Sync to Firestore
+    await updateDoc(doc(db, 'users', user.uid), { email: newEmail });
+};
+
+export const updateUserPassword = async (user: FirebaseUser, newPassword: string) => {
+    await updateFirebasePassword(user, newPassword);
 };

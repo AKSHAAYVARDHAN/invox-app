@@ -1,8 +1,8 @@
 
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 // FIX: Use namespace import for react-router-dom to avoid "no exported member" issues.
 import * as ReactRouterDOM from 'react-router-dom';
-import { HomeIcon, ExploreIcon, SpotlightIcon, CommunityIcon, HubIcon, LogoutIcon, TrendingUpIcon, MicrophoneIcon, CubeIcon, CometIcon } from '../ui/Icons';
+import { HomeIcon, ExploreIcon, SpotlightIcon, CommunityIcon, HubIcon, LogoutIcon, TrendingUpIcon, MicrophoneIcon, CubeIcon, CometIcon, ProfileIcon, CogIcon } from '../ui/Icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { logout } from '../../services/authService';
 
@@ -25,16 +25,51 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHub }) => {
     const navLinkClasses = "flex items-center space-x-4 px-4 py-3 rounded-md text-invox-light-gray hover:bg-invox-dark-accent hover:text-white transition-all duration-200 transform hover:scale-105 active:scale-100";
     const activeLinkClasses = "bg-invox-dark-accent text-white";
-    const { currentUser } = useAuth();
+    const { currentUser, userProfile } = useAuth();
     const location = ReactRouterDOM.useLocation();
+    const navigate = ReactRouterDOM.useNavigate();
+    
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        };
+
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setIsDropdownOpen(false);
+            }
+        };
+
+        if (isDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+            document.addEventListener('keydown', handleEscape);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, [isDropdownOpen]);
 
     const handleLogout = async () => {
         try {
             await logout();
+            setIsDropdownOpen(false);
             // The AuthProvider will handle navigation via ProtectedRoute
         } catch (error) {
             console.error("Failed to log out", error);
         }
+    };
+
+    const handleMenuNavigation = (path: string) => {
+        navigate(path);
+        setIsDropdownOpen(false);
+        if (isOpen) toggleSidebar();
     };
 
     return (
@@ -99,18 +134,73 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHu
                 </div>
                 <div className="mt-auto">
                     {currentUser && (
-                         <div className="px-4 py-3 my-2 border-t border-b border-gray-800">
-                             <p className="text-white font-semibold truncate" title={currentUser.email || ''}>{currentUser.displayName || 'User'}</p>
-                            <p className="text-sm text-gray-400 truncate" title={currentUser.email || ''}>{currentUser.email}</p>
+                        <div className="relative" ref={dropdownRef}>
+                            <button
+                                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-800 transition-colors border-t border-b border-gray-800 text-left focus:outline-none focus:ring-2 focus:ring-invox-red focus:bg-gray-800"
+                                aria-expanded={isDropdownOpen}
+                                aria-haspopup="true"
+                            >
+                                {userProfile?.photoURL || currentUser.photoURL ? (
+                                    <img 
+                                        src={userProfile?.photoURL || currentUser.photoURL || ''} 
+                                        alt="Profile" 
+                                        className="w-10 h-10 rounded-full object-cover border border-gray-600"
+                                    />
+                                ) : (
+                                    <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center border border-gray-600 text-gray-400 shrink-0">
+                                        <ProfileIcon className="w-6 h-6" />
+                                    </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-white font-semibold truncate" title={userProfile?.displayName || currentUser.displayName || ''}>
+                                        {userProfile?.displayName || currentUser.displayName || 'User'}
+                                    </p>
+                                    <p className="text-sm text-gray-400 truncate" title={userProfile?.username ? `@${userProfile.username}` : currentUser.email || ''}>
+                                        {userProfile?.username ? `@${userProfile.username}` : currentUser.email}
+                                    </p>
+                                </div>
+                            </button>
+
+                            {/* Dropdown Menu */}
+                            {isDropdownOpen && (
+                                <div className="absolute bottom-full left-0 w-full mb-2 bg-invox-dark-accent border border-gray-700 rounded-md shadow-lg overflow-hidden z-50">
+                                    <ul className="py-1" role="menu">
+                                        <li>
+                                            <button
+                                                onClick={() => handleMenuNavigation('/profile')}
+                                                className="w-full flex items-center gap-3 px-4 py-3 text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors focus:outline-none focus:bg-gray-700"
+                                                role="menuitem"
+                                            >
+                                                <ProfileIcon className="w-5 h-5" />
+                                                <span className="font-medium">My Profile</span>
+                                            </button>
+                                        </li>
+                                        <li>
+                                            <button
+                                                onClick={() => handleMenuNavigation('/settings')}
+                                                className="w-full flex items-center gap-3 px-4 py-3 text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors focus:outline-none focus:bg-gray-700"
+                                                role="menuitem"
+                                            >
+                                                <CogIcon className="w-5 h-5" />
+                                                <span className="font-medium">Settings</span>
+                                            </button>
+                                        </li>
+                                        <li className="border-t border-gray-700 mt-1 pt-1">
+                                            <button
+                                                onClick={handleLogout}
+                                                className="w-full flex items-center gap-3 px-4 py-3 text-left text-invox-red hover:bg-gray-700 transition-colors focus:outline-none focus:bg-gray-700"
+                                                role="menuitem"
+                                            >
+                                                <LogoutIcon className="w-5 h-5" />
+                                                <span className="font-medium">Logout</span>
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </div>
+                            )}
                         </div>
                     )}
-                    <button
-                        onClick={handleLogout}
-                        className={`${navLinkClasses} w-full`}
-                    >
-                        <LogoutIcon className="w-6 h-6" />
-                        <span className="font-semibold">Logout</span>
-                    </button>
                 </div>
             </aside>
         </>
