@@ -1,46 +1,59 @@
 import React from 'react';
 
-const ProfileSkeleton = () => (
-    <div className="bg-invox-dark-accent rounded-lg border border-gray-800 animate-pulse">
-        {/* Cover */}
-        <div className="h-48 bg-gray-700 rounded-t-lg"></div>
-        <div className="p-4">
-            <div className="flex justify-between items-start">
-                {/* Avatar */}
-                <div className="-mt-24 w-32 h-32 rounded-full border-4 border-invox-dark-accent bg-gray-600"></div>
-                {/* Edit button */}
-                <div className="mt-4 h-10 w-36 bg-gray-700 rounded-full"></div>
-            </div>
+const ProfileSkeleton = () => {
+    const shimmer = "bg-gray-800 animate-pulse rounded";
 
-            {/* User Info */}
-            <div className="mt-4 space-y-3">
-                <div className="h-7 w-1/3 bg-gray-700 rounded"></div>
-                <div className="h-4 w-1/2 bg-gray-700 rounded"></div>
-                <div className="h-4 w-full bg-gray-700 rounded"></div>
-                <div className="h-4 w-3/4 bg-gray-700 rounded"></div>
-                <div className="flex gap-4 mt-2">
-                    <div className="h-4 w-24 bg-gray-700 rounded"></div>
-                    <div className="h-4 w-24 bg-gray-700 rounded"></div>
+    return (
+        <div className="text-white">
+            {/* Cover */}
+            <div className={`h-48 rounded-t-xl ${shimmer}`} />
+
+            <div className="bg-invox-dark-accent rounded-b-xl border border-gray-800 border-t-0 px-4 pb-4">
+                {/* Avatar + actions row */}
+                <div className="flex justify-between items-end -mt-12 mb-4">
+                    <div className={`w-28 h-28 rounded-full border-4 border-invox-dark-accent ${shimmer}`} />
+                    <div className={`h-9 w-32 rounded-full ${shimmer} mt-4`} />
                 </div>
-            </div>
-        </div>
 
-        {/* Tabs */}
-        <div className="border-b border-gray-800 mt-4 px-4 flex space-x-4">
-            <div className="h-10 w-16 bg-gray-700 rounded-t-md"></div>
-            <div className="h-10 w-16 bg-gray-700 rounded-t-md"></div>
-            <div className="h-10 w-16 bg-gray-700 rounded-t-md"></div>
-            <div className="h-10 w-16 bg-gray-700 rounded-t-md"></div>
-        </div>
-        
-        {/* Tab Content */}
-        <div className="p-4 min-h-[300px]">
-            <div className="flex flex-col items-center justify-center text-center py-16">
-                 <div className="h-7 w-1/2 bg-gray-700 rounded"></div>
-                 <div className="h-4 w-2/3 bg-gray-700 rounded mt-4"></div>
+                {/* Name / headline / meta */}
+                <div className="space-y-2 mb-4">
+                    <div className={`h-7 w-48 ${shimmer}`} />
+                    <div className={`h-4 w-32 ${shimmer}`} />
+                    <div className={`h-4 w-64 ${shimmer}`} />
+                    <div className="flex gap-4 mt-1">
+                        <div className={`h-4 w-24 ${shimmer}`} />
+                        <div className={`h-4 w-32 ${shimmer}`} />
+                    </div>
+                </div>
+
+                {/* Profile completion */}
+                <div className={`rounded-xl p-4 mb-4 border border-gray-800 ${shimmer} h-20`} />
+
+                {/* Two column: About + Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div className={`rounded-xl h-32 ${shimmer}`} />
+                    <div className="grid grid-cols-2 gap-3">
+                        {[...Array(4)].map((_, i) => (
+                            <div key={i} className={`rounded-xl h-14 ${shimmer}`} />
+                        ))}
+                    </div>
+                </div>
+
+                {/* Skills */}
+                <div className={`rounded-xl h-20 mb-4 ${shimmer}`} />
+
+                {/* Tabs */}
+                <div className="flex gap-4 border-b border-gray-800 mb-4 pb-2">
+                    {[...Array(4)].map((_, i) => (
+                        <div key={i} className={`h-4 w-14 ${shimmer}`} />
+                    ))}
+                </div>
+
+                {/* Content placeholder */}
+                <div className={`h-32 ${shimmer}`} />
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 export default ProfileSkeleton;

@@ -1,15 +1,62 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { ProfileIcon, PencilIcon } from '../components/ui/Icons';
+import { ProfileIcon, PencilIcon, GlobeAltIcon, CometIcon } from '../components/ui/Icons';
 import ProfileSkeleton from '../components/profile/ProfileSkeleton';
 import { handleImageError } from '../components/utils/imageUtils';
 import ImageZoomModal from '../components/ui/ImageZoomModal';
 import { useNavigate } from 'react-router-dom';
-import { getStoragePath, uploadFile } from '../services/storageService';
+import { uploadFile } from '../services/storageService';
 import { COLLECTIONS, updateDocument } from '../services/firestoreService';
 import { getFriendlyErrorMessage } from '../utils/errorHandler';
 import { updateProfile } from 'firebase/auth';
+
+/* ─── helpers ─────────────────────────────────────────────────────────────── */
+
+/** Compute a 0-100 profile completion score */
+const computeCompletion = (profile: any, photoURL: string | null): number => {
+    const checks = [
+        !!profile?.displayName,
+        !!profile?.headline,
+        !!profile?.bio,
+        !!(profile?.skills?.length),
+        !!(profile?.interests?.length),
+        !!profile?.location,
+        !!profile?.website,
+        !!photoURL,
+    ];
+    const done = checks.filter(Boolean).length;
+    return Math.round((done / checks.length) * 100);
+};
+
+/** Format a Firestore timestamp or Date to a readable month + year string */
+const formatJoinDate = (ts: any): string => {
+    if (!ts) return '';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+};
+
+/* ─── sub-components ──────────────────────────────────────────────────────── */
+
+const StatCard = ({ label, value }: { label: string; value: number | string }) => (
+    <div className="flex flex-col items-center justify-center bg-gray-800 rounded-xl border border-gray-700 p-4 gap-1">
+        <span className="text-xl font-bold text-white">{value}</span>
+        <span className="text-xs text-gray-400 text-center">{label}</span>
+    </div>
+);
+
+interface ChipProps { label: string; color?: 'default' | 'blue' }
+const Chip: React.FC<ChipProps> = ({ label, color = 'default' }) => (
+    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+        color === 'blue'
+            ? 'bg-blue-900/30 border-blue-700/50 text-blue-300'
+            : 'bg-gray-800 border-gray-700 text-gray-300'
+    }`}>
+        {label}
+    </span>
+);
+
+/* ─── main component ──────────────────────────────────────────────────────── */
 
 const ProfilePage = () => {
     const { currentUser, userProfile, loading } = useAuth();
@@ -20,47 +67,32 @@ const ProfilePage = () => {
     const [uploadingCover, setUploadingCover] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadError, setUploadError] = useState('');
-    
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'profile' | 'cover') => {
         if (!e.target.files || !e.target.files[0] || !currentUser) return;
         const file = e.target.files[0];
         setUploadError('');
         setUploadProgress(0);
-        
-        console.log(`[Upload] Starting upload for ${type}`);
-        console.log(`[Upload] File details: ${file.name} (${file.size} bytes)`);
 
         if (type === 'profile') setUploadingAvatar(true);
         else setUploadingCover(true);
 
         try {
             const path = `users/${currentUser.uid}/${type}/${Date.now()}_${file.name}`;
-            console.log(`[Upload] Storage path generated: ${path}`);
-
             const uploadedFile = await uploadFile(path, file, {
                 allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-                maxSizeBytes: 5 * 1024 * 1024, // 5MB limit
-                onProgress: (progress) => {
-                    setUploadProgress(progress);
-                }
+                maxSizeBytes: 5 * 1024 * 1024,
+                onProgress: (progress) => setUploadProgress(progress),
             });
 
-            console.log(`[Upload] Upload success for ${type}. Download URL generated:`, uploadedFile.url);
-
-            // Update Firebase Auth context so `ensureUserProfile` doesn't overwrite it on next refresh
             if (type === 'profile') {
-                console.log(`[Upload] Updating Firebase Auth profile.photoURL...`);
                 await updateProfile(currentUser, { photoURL: uploadedFile.url });
             }
 
-            console.log(`[Upload] Updating Firestore document...`);
             await updateDocument(COLLECTIONS.users, currentUser.uid, {
-                [type === 'profile' ? 'photoURL' : 'coverPhotoURL']: uploadedFile.url
+                [type === 'profile' ? 'photoURL' : 'coverPhotoURL']: uploadedFile.url,
             });
-            console.log(`[Upload] Firestore update complete for ${type}.`);
-
         } catch (err: any) {
-            console.error(`[Upload] Upload Error:`, err);
             setUploadError(getFriendlyErrorMessage(err));
         }
 
@@ -68,106 +100,274 @@ const ProfilePage = () => {
         else setUploadingCover(false);
     };
 
-    React.useEffect(() => {
-        console.log('[Profile] User profile context refreshed:', userProfile);
-    }, [userProfile]);
+    if (loading) return <ProfileSkeleton />;
+    if (!currentUser) return <div className="p-4 text-white">User not found.</div>;
 
-    if (loading) {
-        return <ProfileSkeleton />;
-    }
+    const userAvatar = userProfile?.photoURL || currentUser?.photoURL || null;
+    const coverImageUrl = userProfile?.coverPhotoURL || 'https://picsum.photos/seed/invox-cover/1200/400';
+    const displayName = userProfile?.displayName || currentUser?.displayName || 'Anonymous User';
+    const username = userProfile?.username || currentUser?.email?.split('@')[0] || '';
+    const joinDate = formatJoinDate(userProfile?.createdAt);
+    const completion = computeCompletion(userProfile, userAvatar);
 
-    if (!currentUser) {
-        return <div className="p-4 text-white">User not found.</div>;
-    }
-
-    // Use a placeholder if photoURL is not available
-    const userAvatar = userProfile?.photoURL || currentUser?.photoURL || <ProfileIcon className="w-32 h-32 text-gray-400" />;
-    const coverImageUrl = userProfile?.coverPhotoURL || 'https://picsum.photos/seed/cover/1200/400';
-    
-    console.log('[Profile] Rendered Avatar:', typeof userAvatar === 'string' ? userAvatar : 'Icon Component');
-    console.log('[Profile] Rendered Cover URL:', coverImageUrl);
+    /* completion suggestions */
+    const suggestions: { label: string; field: string }[] = [
+        { label: 'Add Headline', field: 'headline' },
+        { label: 'Add Bio', field: 'bio' },
+        { label: 'Add Skills', field: 'skills' },
+        { label: 'Add Location', field: 'location' },
+        { label: 'Add Website', field: 'website' },
+        { label: 'Add Profile Photo', field: 'photoURL' },
+    ].filter(s => {
+        if (s.field === 'skills') return !(userProfile?.skills?.length);
+        if (s.field === 'photoURL') return !userAvatar;
+        return !(userProfile as any)?.[s.field];
+    }).slice(0, 4);
 
     return (
         <>
-            <div className="text-white bg-invox-dark-accent rounded-lg border border-gray-800">
-                {uploadError && <p className="bg-red-900 text-white text-center p-3 rounded-md m-4">{uploadError}</p>}
-                
-                {/* Cover and Profile Image */}
-                <div>
-                    <div className="relative group">
-                        <div 
-                            className="h-48 bg-gray-700 bg-cover bg-center rounded-t-lg cursor-zoom-in" 
-                            style={{ backgroundImage: `url(${coverImageUrl})` }}
-                            onClick={() => setZoomedImageUrl(coverImageUrl)}
-                        ></div>
-                        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <label className="cursor-pointer bg-gray-800 bg-opacity-80 px-4 py-2 rounded-full font-semibold hover:bg-gray-700 transition-all flex flex-col items-center">
-                                {uploadingCover ? `Uploading ${uploadProgress}%` : 'Update Cover'}
-                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'cover')} disabled={uploadingCover} />
-                            </label>
-                        </div>
-                    </div>
-                    <div className="p-4">
-                        <div className="flex justify-between items-start">
-                            <div className="relative group">
-                                <div 
-                                    className="-mt-24 w-32 h-32 rounded-full border-4 border-invox-dark-accent bg-invox-dark-accent flex items-center justify-center cursor-zoom-in overflow-hidden relative"
-                                    onClick={() => {
-                                        if (typeof userAvatar === 'string') {
-                                            setZoomedImageUrl(userAvatar);
-                                        }
-                                    }}
-                                >
-                                    {typeof userAvatar === 'string' ? (
-                                        <img src={userAvatar} onError={handleImageError} alt="Profile" className="w-full h-full rounded-full object-cover" />
-                                    ) : (
-                                        userAvatar
-                                    )}
-                                    <div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <label className="cursor-pointer text-xs font-semibold hover:text-gray-300 w-full h-full flex items-center justify-center">
-                                            {uploadingAvatar ? `${uploadProgress}%` : 'Change'}
-                                            <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'profile')} disabled={uploadingAvatar} />
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                            <button onClick={() => navigate('/settings')} className="mt-4 flex items-center gap-2 border border-gray-600 px-4 py-2 rounded-full font-semibold hover:bg-gray-800 transition-all duration-200 transform hover:scale-105 active:scale-95">
-                                <PencilIcon className="w-5 h-5" />
-                                Edit Profile
-                            </button>
-                        </div>
+            {uploadError && (
+                <p className="bg-red-900 text-white text-center p-3 rounded-md mb-3 text-sm">
+                    {uploadError}
+                </p>
+            )}
 
-                        {/* User Info */}
-                        <div className="mt-4">
-                            <h1 className="text-2xl font-bold">{userProfile?.displayName || currentUser?.displayName || 'Anonymous User'}</h1>
-                            <p className="text-gray-400">@{userProfile?.username || currentUser?.email?.split('@')[0]}</p>
-                            <p className="text-white font-semibold mt-1">{userProfile?.headline}</p>
-                            <p className="text-gray-300 mt-2">{userProfile?.bio || 'No bio provided yet.'}</p>
-                            
-                            {userProfile?.skills && userProfile.skills.length > 0 && (
-                                <div className="mt-4 flex flex-wrap gap-2">
-                                    {userProfile.skills.map((skill, idx) => (
-                                        <span key={idx} className="bg-gray-800 text-gray-300 px-3 py-1 rounded-full text-sm">{skill}</span>
-                                    ))}
-                                </div>
-                            )}
+            {/* ── Identity Block ───────────────────────────────────────────── */}
+            <div className="bg-invox-dark-accent rounded-xl border border-gray-800 overflow-hidden mb-4">
 
-                            <div className="mt-4 flex gap-4 text-sm text-gray-400">
-                                <span><span className="font-bold text-white">{userProfile?.followingCount || 0}</span> Following</span>
-                                <span><span className="font-bold text-white">{userProfile?.followerCount || 0}</span> Followers</span>
-                            </div>
-                        </div>
+                {/* Cover Photo */}
+                <div className="relative group h-48">
+                    <div
+                        className="h-full w-full bg-gray-700 bg-cover bg-center cursor-zoom-in"
+                        style={{ backgroundImage: `url(${coverImageUrl})` }}
+                        onClick={() => setZoomedImageUrl(coverImageUrl)}
+                    />
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <label className="cursor-pointer bg-gray-900/80 border border-gray-600 px-4 py-2 rounded-full text-sm font-semibold hover:bg-gray-800 transition-all flex items-center gap-2">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                            {uploadingCover ? `Uploading ${uploadProgress}%` : 'Update Cover'}
+                            <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'cover')} disabled={uploadingCover} />
+                        </label>
                     </div>
                 </div>
 
-                {/* Tabs */}
-                <div className="border-b border-gray-800 mt-4">
-                    <nav className="flex space-x-4 px-4">
+                {/* Avatar + Actions Row */}
+                <div className="px-5 pb-5">
+                    <div className="flex justify-between items-end -mt-14 mb-4">
+                        {/* Avatar */}
+                        <div className="relative group">
+                            <div
+                                className="w-28 h-28 rounded-full border-4 border-invox-dark-accent bg-invox-dark-accent flex items-center justify-center cursor-zoom-in overflow-hidden"
+                                onClick={() => { if (userAvatar) setZoomedImageUrl(userAvatar); }}
+                            >
+                                {userAvatar ? (
+                                    <img src={userAvatar} onError={handleImageError} alt="Profile" className="w-full h-full object-cover" />
+                                ) : (
+                                    <ProfileIcon className="w-16 h-16 text-gray-500" />
+                                )}
+                                <div className="absolute inset-0 bg-black/50 rounded-full flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <label className="cursor-pointer text-xs font-semibold text-center w-full h-full flex items-center justify-center">
+                                        {uploadingAvatar ? `${uploadProgress}%` : 'Change'}
+                                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'profile')} disabled={uploadingAvatar} />
+                                    </label>
+                                </div>
+                            </div>
+                            {/* Online indicator */}
+                            <span className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-invox-dark-accent" />
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 mt-1">
+                            <button
+                                onClick={() => navigate('/settings')}
+                                className="flex items-center gap-2 border border-gray-600 px-4 py-2 rounded-full text-sm font-semibold hover:bg-gray-800 transition-all duration-200 hover:scale-105 active:scale-95"
+                            >
+                                <PencilIcon className="w-4 h-4" />
+                                Edit Profile
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* User Info */}
+                    <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h1 className="text-2xl font-bold tracking-tight">{displayName}</h1>
+                        </div>
+                        <p className="text-gray-400 text-sm mt-0.5">@{username}</p>
+
+                        {userProfile?.headline && (
+                            <p className="text-gray-200 font-medium mt-1.5">{userProfile.headline}</p>
+                        )}
+
+                        {/* Meta row */}
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-sm text-gray-400">
+                            {userProfile?.location && (
+                                <span className="flex items-center gap-1">
+                                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                    {userProfile.location}
+                                </span>
+                            )}
+                            {userProfile?.website && (
+                                <a
+                                    href={userProfile.website.startsWith('http') ? userProfile.website : `https://${userProfile.website}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1 text-invox-red-text hover:underline"
+                                >
+                                    <GlobeAltIcon className="w-4 h-4 flex-shrink-0" />
+                                    {userProfile.website.replace(/^https?:\/\//, '')}
+                                </a>
+                            )}
+                            {userProfile?.portfolioURL && (
+                                <a
+                                    href={userProfile.portfolioURL.startsWith('http') ? userProfile.portfolioURL : `https://${userProfile.portfolioURL}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1 text-invox-blue hover:underline"
+                                >
+                                    <CometIcon className="w-4 h-4 flex-shrink-0" />
+                                    Portfolio
+                                </a>
+                            )}
+                            {joinDate && (
+                                <span className="flex items-center gap-1">
+                                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                    Joined {joinDate}
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Follower counts */}
+                        <div className="flex gap-5 mt-3 text-sm">
+                            <span className="text-gray-400">
+                                <span className="font-bold text-white">{userProfile?.followingCount ?? 0}</span> Following
+                            </span>
+                            <span className="text-gray-400">
+                                <span className="font-bold text-white">{userProfile?.followerCount ?? 0}</span> Followers
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* ── Profile Completion Widget ─────────────────────────────────── */}
+            {completion < 100 && (
+                <div className="bg-invox-dark-accent rounded-xl border border-gray-800 p-4 mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold text-white">Profile Completion</span>
+                        <span className={`text-sm font-bold ${completion >= 70 ? 'text-green-400' : completion >= 40 ? 'text-yellow-400' : 'text-invox-red-text'}`}>
+                            {completion}%
+                        </span>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden mb-3">
+                        <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{
+                                width: `${completion}%`,
+                                background: completion >= 70
+                                    ? 'linear-gradient(90deg, #16a34a, #4ade80)'
+                                    : completion >= 40
+                                    ? 'linear-gradient(90deg, #ca8a04, #facc15)'
+                                    : 'linear-gradient(90deg, #E50914, #FF4747)',
+                            }}
+                        />
+                    </div>
+                    {/* Suggestions */}
+                    {suggestions.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                            <span className="text-xs text-gray-500 w-full">Suggested:</span>
+                            {suggestions.map(s => (
+                                <button
+                                    key={s.field}
+                                    onClick={() => navigate('/settings')}
+                                    className="text-xs px-3 py-1.5 rounded-full border border-gray-700 bg-gray-800 text-gray-300 hover:border-invox-red hover:text-white transition-all duration-150"
+                                >
+                                    + {s.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── About + Stats row ─────────────────────────────────────────── */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+                {/* About */}
+                <div className="md:col-span-3 bg-invox-dark-accent rounded-xl border border-gray-800 p-5">
+                    <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">About</h2>
+                    {userProfile?.bio ? (
+                        <p className="text-gray-200 leading-relaxed text-sm whitespace-pre-line">{userProfile.bio}</p>
+                    ) : (
+                        <p className="text-gray-500 italic text-sm leading-relaxed">
+                            Tell the Invox community about your expertise, interests, projects, and goals.
+                        </p>
+                    )}
+                    {!userProfile?.bio && (
+                        <button
+                            onClick={() => navigate('/settings')}
+                            className="mt-3 text-xs text-invox-red-text hover:underline"
+                        >
+                            + Add bio
+                        </button>
+                    )}
+                </div>
+
+                {/* Professional Stats */}
+                <div className="md:col-span-2 grid grid-cols-2 gap-3">
+                    <StatCard label="Projects Published" value={0} />
+                    <StatCard label="Knowledge Posts" value={0} />
+                    <StatCard label="Communities Joined" value={userProfile?.savedPostCount ?? 0} />
+                    <StatCard label="Collaborations" value={0} />
+                </div>
+            </div>
+
+            {/* ── Skills & Interests ────────────────────────────────────────── */}
+            {((userProfile?.skills?.length ?? 0) > 0 || (userProfile?.interests?.length ?? 0) > 0) ? (
+                <div className="bg-invox-dark-accent rounded-xl border border-gray-800 p-5 mb-4">
+                    {(userProfile?.skills?.length ?? 0) > 0 && (
+                        <div className="mb-4">
+                            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Skills</h2>
+                            <div className="flex flex-wrap gap-2">
+                                {userProfile!.skills.map((skill, idx) => (
+                                    <Chip key={idx} label={skill} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {(userProfile?.interests?.length ?? 0) > 0 && (
+                        <div>
+                            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Interests</h2>
+                            <div className="flex flex-wrap gap-2">
+                                {userProfile!.interests.map((interest, idx) => (
+                                    <Chip key={idx} label={interest} color="blue" />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="bg-invox-dark-accent rounded-xl border border-gray-800 p-5 mb-4">
+                    <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Skills & Interests</h2>
+                    <p className="text-gray-500 italic text-sm">No skills or interests added yet.</p>
+                    <button
+                        onClick={() => navigate('/settings')}
+                        className="mt-2 text-xs text-invox-red-text hover:underline"
+                    >
+                        + Add skills & interests
+                    </button>
+                </div>
+            )}
+
+            {/* ── Activity Tabs ─────────────────────────────────────────────── */}
+            <div className="bg-invox-dark-accent rounded-xl border border-gray-800 overflow-hidden">
+                <div className="border-b border-gray-800">
+                    <nav className="flex px-4 gap-1">
                         {['Posts', 'Replies', 'Media', 'Likes'].map((tab) => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
-                                className={`py-3 px-1 font-semibold border-b-2 transition-all duration-200 transform hover:-translate-y-px ${
+                                className={`py-3.5 px-4 text-sm font-semibold border-b-2 transition-all duration-200 hover:-translate-y-px ${
                                     activeTab === tab
                                         ? 'border-invox-red text-white'
                                         : 'border-transparent text-gray-400 hover:text-white'
@@ -178,18 +378,28 @@ const ProfilePage = () => {
                         ))}
                     </nav>
                 </div>
-                
-                {/* Tab Content */}
-                <div className="p-4 min-h-[300px]">
-                    <div className="flex flex-col items-center justify-center text-center py-16">
-                        <h2 className="text-2xl font-bold">No {activeTab} Yet</h2>
-                        <p className="text-gray-400 mt-2">When you create {activeTab.toLowerCase()}, they'll show up here.</p>
+
+                <div className="p-6 min-h-[220px]">
+                    <div className="flex flex-col items-center justify-center text-center py-12">
+                        <div className="w-14 h-14 rounded-2xl bg-gray-800 flex items-center justify-center mb-4">
+                            <svg className="w-7 h-7 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-lg font-bold text-white mb-1">No {activeTab} Yet</h3>
+                        <p className="text-gray-400 text-sm max-w-xs leading-relaxed">
+                            {activeTab === 'Posts'
+                                ? 'Share knowledge, projects, and ideas with the community. Publish your first contribution and begin building your professional presence.'
+                                : `When you create ${activeTab.toLowerCase()}, they'll appear here.`
+                            }
+                        </p>
                     </div>
                 </div>
             </div>
-            <ImageZoomModal 
-                isOpen={!!zoomedImageUrl} 
-                onClose={() => setZoomedImageUrl(null)} 
+
+            <ImageZoomModal
+                isOpen={!!zoomedImageUrl}
+                onClose={() => setZoomedImageUrl(null)}
                 imageUrl={zoomedImageUrl || ''}
             />
         </>

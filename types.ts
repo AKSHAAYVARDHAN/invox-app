@@ -31,6 +31,9 @@ export interface InvoxUser extends User {
   skills: string[];
   interests: string[];
   links: ProfileLink[];
+  location: string;
+  website: string;
+  portfolioURL: string;
   followerCount: number;
   followingCount: number;
   savedPostCount: number;
