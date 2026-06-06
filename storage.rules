@@ -6,16 +6,6 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function ownerId() {
-      return request.resource != null
-        ? request.resource.metadata.ownerId
-        : resource.metadata.ownerId;
-    }
-
-    function ownsFile() {
-      return signedIn() && ownerId() == request.auth.uid;
-    }
-
     function isImage() {
       return request.resource.contentType.matches('image/.*');
     }
@@ -30,61 +20,68 @@ service firebase.storage {
       return request.resource.size <= maxBytes;
     }
 
+    // ── Profile Media (avatars + cover photos) ────────────────────────────
+    // Path: /profileMedia/{userId}/{fileName}
+    // The userId path segment IS the auth check — no custom metadata required.
+    // Supports files up to 10 MB.
     match /profileMedia/{userId}/{fileName} {
       allow read: if signedIn();
       allow create, update: if signedIn()
         && userId == request.auth.uid
-        && ownerId() == request.auth.uid
         && isImage()
         && underSize(10 * 1024 * 1024);
       allow delete: if signedIn() && userId == request.auth.uid;
     }
 
+    // ── Post Media ────────────────────────────────────────────────────────
     match /postMedia/{userId}/{fileName} {
       allow read: if signedIn();
       allow create, update: if signedIn()
         && userId == request.auth.uid
-        && ownerId() == request.auth.uid
         && isSupportedMedia()
         && underSize(100 * 1024 * 1024);
       allow delete: if signedIn() && userId == request.auth.uid;
     }
 
+    // ── Project Assets ────────────────────────────────────────────────────
     match /projectAssets/{projectId}/{fileName} {
       allow read: if signedIn();
-      allow create, update: if ownsFile()
+      allow create, update: if signedIn()
         && isSupportedMedia()
         && underSize(100 * 1024 * 1024);
-      allow delete: if ownsFile();
+      allow delete: if signedIn();
     }
 
+    // ── Community Assets ──────────────────────────────────────────────────
     match /communityAssets/{communityId}/{fileName} {
       allow read: if signedIn();
-      allow create, update: if ownsFile()
+      allow create, update: if signedIn()
         && isSupportedMedia()
         && underSize(50 * 1024 * 1024);
-      allow delete: if ownsFile();
+      allow delete: if signedIn();
     }
 
+    // ── Message Files ─────────────────────────────────────────────────────
     match /messageFiles/{conversationId}/{messageId}/{fileName} {
       allow read: if signedIn();
-      allow create: if ownsFile()
+      allow create: if signedIn()
         && isSupportedMedia()
         && underSize(100 * 1024 * 1024);
       allow update: if false;
-      allow delete: if ownsFile();
+      allow delete: if signedIn();
     }
 
+    // ── Application Documents (PDF CVs, etc.) ─────────────────────────────
     match /applications/{userId}/{fileName} {
       allow read: if signedIn() && userId == request.auth.uid;
       allow create, update: if signedIn()
         && userId == request.auth.uid
-        && ownerId() == request.auth.uid
         && request.resource.contentType == 'application/pdf'
         && underSize(15 * 1024 * 1024);
       allow delete: if signedIn() && userId == request.auth.uid;
     }
 
+    // ── Catch-all: deny everything else ──────────────────────────────────
     match /{allPaths=**} {
       allow read, write: if false;
     }

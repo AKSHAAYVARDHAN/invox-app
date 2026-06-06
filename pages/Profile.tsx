@@ -70,12 +70,13 @@ const ProfilePage = () => {
         if (type === 'profile') setLocalAvatarUrl(objectUrl);
         else setLocalCoverUrl(objectUrl);
 
+        const logTag = type === 'profile' ? '[AVATAR_UPLOAD]' : '[COVER_UPLOAD]';
+
         try {
-            /*
-             * BUG FIX: Path must match storage.rules: /profileMedia/{userId}/{fileName}
-             * Old path `users/{uid}/profile/…` had no matching rule → denied by catch-all.
-             */
+            // Storage path: /profileMedia/{userId}/{fileName}
+            // Auth gate: userId path segment == request.auth.uid (enforced by storage.rules)
             const path = `profileMedia/${currentUser.uid}/${type}_${Date.now()}_${file.name}`;
+            console.log(`${logTag} Starting upload. Path: ${path}`);
 
             const uploadedFile = await uploadFile(path, file, {
                 allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
@@ -83,7 +84,9 @@ const ProfilePage = () => {
                 onProgress: progress => setUploadProgress(progress),
             });
 
-            // Replace ephemeral object URL with the permanent Firebase URL
+            console.log(`${logTag} Upload success. URL: ${uploadedFile.url}`);
+
+            // Replace ephemeral blob URL with the permanent Firebase Storage URL
             if (type === 'profile') {
                 await updateProfile(currentUser, { photoURL: uploadedFile.url });
                 setLocalAvatarUrl(uploadedFile.url);
@@ -93,11 +96,13 @@ const ProfilePage = () => {
 
             // Write to Firestore — triggers subscribeUserProfile → AuthContext refresh
             const firestoreField = type === 'profile' ? 'photoURL' : 'coverPhotoURL';
+            console.log(`${logTag} [FIRESTORE_WRITE] users/${currentUser.uid} → { ${firestoreField}: "${uploadedFile.url}" }`);
             await updateDocument(COLLECTIONS.users, currentUser.uid, {
                 [firestoreField]: uploadedFile.url,
             });
+            console.log(`${logTag} [PROFILE_SAVE_SUCCESS] Firestore updated: ${firestoreField}`);
 
-            // Persist updated completion score
+            // Recompute and persist profile completion score
             const pct = computeProfileCompletion({
                 ...userProfile,
                 [firestoreField]: uploadedFile.url,
@@ -105,7 +110,8 @@ const ProfilePage = () => {
             await updateDocument(COLLECTIONS.users, currentUser.uid, { profileCompletion: pct });
 
         } catch (err: any) {
-            // Revert preview on failure
+            // Revert optimistic preview on failure
+            console.error(`${logTag} [PROFILE_SAVE_ERROR] Upload/save failed:`, err);
             if (type === 'profile') setLocalAvatarUrl(null);
             else setLocalCoverUrl(null);
             setUploadError(getFriendlyErrorMessage(err));

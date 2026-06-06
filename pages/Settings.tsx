@@ -272,13 +272,15 @@ const SettingsPage = () => {
         setPersonalLoading(true);
         setPersonalMessage({ type: '', text: '' });
         try {
-            await updateDocument(COLLECTIONS.users, currentUser.uid, {
-                displayName, username, headline, bio,
-            });
+            const payload = { displayName, username, headline, bio };
+            console.log(`[FIRESTORE_WRITE] Personal info — users/${currentUser.uid}:`, payload);
+            await updateDocument(COLLECTIONS.users, currentUser.uid, payload);
+            console.log(`[PROFILE_SAVE_SUCCESS] Personal info saved for users/${currentUser.uid}`);
             await persistCompletion({ displayName, headline, bio });
             setPersonalMessage({ type: 'success', text: 'Personal information updated successfully.' });
             personalTouched.current = false; // allow future context refreshes to sync
         } catch (err: any) {
+            console.error(`[PROFILE_SAVE_ERROR] Personal info failed for users/${currentUser.uid}:`, err);
             setPersonalMessage({ type: 'error', text: getFriendlyErrorMessage(err) });
         }
         setPersonalLoading(false);
@@ -290,13 +292,15 @@ const SettingsPage = () => {
         setProfessionalLoading(true);
         setProfessionalMessage({ type: '', text: '' });
         try {
-            await updateDocument(COLLECTIONS.users, currentUser.uid, {
-                skills, interests, website, portfolioURL, location,
-            });
+            const payload = { skills, interests, website, portfolioURL, location };
+            console.log(`[FIRESTORE_WRITE] Professional info — users/${currentUser.uid}:`, payload);
+            await updateDocument(COLLECTIONS.users, currentUser.uid, payload);
+            console.log(`[PROFILE_SAVE_SUCCESS] Professional info saved for users/${currentUser.uid}`);
             await persistCompletion({ skills, interests, location, website });
             setProfessionalMessage({ type: 'success', text: 'Professional information updated successfully.' });
             professionalTouched.current = false;
         } catch (err: any) {
+            console.error(`[PROFILE_SAVE_ERROR] Professional info failed for users/${currentUser.uid}:`, err);
             setProfessionalMessage({ type: 'error', text: getFriendlyErrorMessage(err) });
         }
         setProfessionalLoading(false);
@@ -315,13 +319,13 @@ const SettingsPage = () => {
         if (type === 'profile') setLocalAvatarUrl(objectUrl);
         else setLocalCoverUrl(objectUrl);
 
+        const logTag = type === 'profile' ? '[AVATAR_UPLOAD]' : '[COVER_UPLOAD]';
+
         try {
-            /*
-             * BUG FIX: Storage path must match security rules.
-             * The rules allow: /profileMedia/{userId}/{fileName}
-             * Old (broken) path was: users/{uid}/profile/… — denied by catch-all rule.
-             */
+            // Storage path: /profileMedia/{userId}/{fileName}
+            // Auth gate: userId path segment == request.auth.uid (enforced by storage.rules)
             const path = `profileMedia/${currentUser.uid}/${type}_${Date.now()}_${file.name}`;
+            console.log(`${logTag} Starting upload. Path: ${path}`);
 
             const uploaded = await uploadFile(path, file, {
                 allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
@@ -329,30 +333,34 @@ const SettingsPage = () => {
                 onProgress: p => type === 'profile' ? setAvatarProgress(p) : setCoverProgress(p),
             });
 
-            // Update Firebase Auth photoURL for profile images
+            console.log(`${logTag} Upload success. Download URL: ${uploaded.url}`);
+
+            // Update Firebase Auth photoURL for avatar uploads
             if (type === 'profile') {
                 await updateProfile(currentUser, { photoURL: uploaded.url });
-                setLocalAvatarUrl(uploaded.url); // replace object URL with permanent URL
+                setLocalAvatarUrl(uploaded.url); // replace blob URL with permanent URL
             } else {
                 setLocalCoverUrl(uploaded.url);
             }
 
-            // Persist to Firestore — this triggers subscribeUserProfile → AuthContext update
+            // Persist to Firestore — triggers subscribeUserProfile → AuthContext update
+            const firestoreField = type === 'profile' ? 'photoURL' : 'coverPhotoURL';
+            console.log(`${logTag} [FIRESTORE_WRITE] users/${currentUser.uid} → { ${firestoreField}: "${uploaded.url}" }`);
             await updateDocument(COLLECTIONS.users, currentUser.uid, {
-                [type === 'profile' ? 'photoURL' : 'coverPhotoURL']: uploaded.url,
+                [firestoreField]: uploaded.url,
             });
+            console.log(`${logTag} [PROFILE_SAVE_SUCCESS] Firestore updated: ${firestoreField}`);
 
-            // Update completion since a photo was added
-            await persistCompletion({
-                [type === 'profile' ? 'photoURL' : 'coverPhotoURL']: uploaded.url,
-            });
+            // Recompute and persist profile completion score
+            await persistCompletion({ [firestoreField]: uploaded.url });
 
             setMediaMessage({
                 type: 'success',
                 text: `${type === 'profile' ? 'Profile photo' : 'Cover photo'} updated successfully.`,
             });
         } catch (err: any) {
-            // Revert preview on failure
+            // Revert optimistic local preview on any failure
+            console.error(`${logTag} [PROFILE_SAVE_ERROR] Upload/save failed:`, err);
             if (type === 'profile') setLocalAvatarUrl(null);
             else setLocalCoverUrl(null);
             setMediaMessage({ type: 'error', text: getFriendlyErrorMessage(err) });
@@ -365,9 +373,16 @@ const SettingsPage = () => {
     const handleRemoveCover = async () => {
         if (!currentUser) return;
         setLocalCoverUrl(null);
-        await updateDocument(COLLECTIONS.users, currentUser.uid, { coverPhotoURL: null });
-        await persistCompletion({ coverPhotoURL: null });
-        setMediaMessage({ type: 'success', text: 'Cover photo removed.' });
+        try {
+            console.log(`[COVER_UPLOAD] [FIRESTORE_WRITE] Removing cover — users/${currentUser.uid}`);
+            await updateDocument(COLLECTIONS.users, currentUser.uid, { coverPhotoURL: null });
+            await persistCompletion({ coverPhotoURL: null });
+            setMediaMessage({ type: 'success', text: 'Cover photo removed.' });
+            console.log('[COVER_UPLOAD] [PROFILE_SAVE_SUCCESS] Cover removed.');
+        } catch (err: any) {
+            console.error('[COVER_UPLOAD] [PROFILE_SAVE_ERROR] Remove cover failed:', err);
+            setMediaMessage({ type: 'error', text: getFriendlyErrorMessage(err) });
+        }
     };
 
     const handleAccountSubmit = async (e: React.FormEvent) => {
