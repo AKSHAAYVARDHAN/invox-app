@@ -1,4 +1,4 @@
-import React, { useState, useRef, KeyboardEvent } from 'react';
+import React, { useState, useEffect, useRef, KeyboardEvent } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { updateUserEmail, updateUserPassword } from '../services/authService';
 import { COLLECTIONS, updateDocument } from '../services/firestoreService';
@@ -7,6 +7,37 @@ import { uploadFile } from '../services/storageService';
 import { updateProfile } from 'firebase/auth';
 import { handleImageError } from '../components/utils/imageUtils';
 import { ProfileIcon } from '../components/ui/Icons';
+
+/* ─── Profile Completion Calculator ──────────────────────────────────────── */
+
+/**
+ * Centralised computation of profile completion percentage.
+ * Called both in-memory (UI) and written to Firestore on every save.
+ */
+export const computeProfileCompletion = (p: {
+    displayName?: string | null;
+    headline?: string;
+    bio?: string;
+    skills?: string[];
+    interests?: string[];
+    location?: string;
+    website?: string;
+    photoURL?: string | null;
+    coverPhotoURL?: string | null;
+}): number => {
+    const checks = [
+        !!(p.displayName),
+        !!(p.headline),
+        !!(p.bio),
+        !!(p.skills?.length),
+        !!(p.interests?.length),
+        !!(p.location),
+        !!(p.website),
+        !!(p.photoURL),
+        !!(p.coverPhotoURL),
+    ];
+    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+};
 
 /* ─── Chip Input Component ────────────────────────────────────────────────── */
 
@@ -18,7 +49,9 @@ interface ChipInputProps {
     color?: 'default' | 'blue';
 }
 
-const ChipInput: React.FC<ChipInputProps> = ({ label, chips, onChange, placeholder = 'Type and press Enter', color = 'default' }) => {
+const ChipInput: React.FC<ChipInputProps> = ({
+    label, chips, onChange, placeholder = 'Type and press Enter', color = 'default',
+}) => {
     const [inputValue, setInputValue] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -39,9 +72,7 @@ const ChipInput: React.FC<ChipInputProps> = ({ label, chips, onChange, placehold
         }
     };
 
-    const removeChip = (idx: number) => {
-        onChange(chips.filter((_, i) => i !== idx));
-    };
+    const removeChip = (idx: number) => onChange(chips.filter((_, i) => i !== idx));
 
     return (
         <div>
@@ -62,7 +93,7 @@ const ChipInput: React.FC<ChipInputProps> = ({ label, chips, onChange, placehold
                         {chip}
                         <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); removeChip(idx); }}
+                            onClick={e => { e.stopPropagation(); removeChip(idx); }}
                             className="text-gray-400 hover:text-white ml-0.5 leading-none"
                         >
                             ×
@@ -73,7 +104,7 @@ const ChipInput: React.FC<ChipInputProps> = ({ label, chips, onChange, placehold
                     ref={inputRef}
                     type="text"
                     value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
+                    onChange={e => setInputValue(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onBlur={() => { if (inputValue) addChip(inputValue); }}
                     placeholder={chips.length === 0 ? placeholder : ''}
@@ -85,7 +116,7 @@ const ChipInput: React.FC<ChipInputProps> = ({ label, chips, onChange, placehold
     );
 };
 
-/* ─── Section Header Component ────────────────────────────────────────────── */
+/* ─── Shared small components ────────────────────────────────────────────── */
 
 const SectionHeader = ({ title, description }: { title: string; description?: string }) => (
     <div className="mb-6 pb-4 border-b border-gray-800">
@@ -94,8 +125,6 @@ const SectionHeader = ({ title, description }: { title: string; description?: st
     </div>
 );
 
-/* ─── Form Field Component ────────────────────────────────────────────────── */
-
 const FormField = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <div>
         <label className="block text-invox-light-gray mb-2 text-sm font-medium">{label}</label>
@@ -103,58 +132,137 @@ const FormField = ({ label, children }: { label: string; children: React.ReactNo
     </div>
 );
 
-const inputClass = "w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-invox-red focus:border-invox-red text-white placeholder-gray-500 transition-all";
+const inputClass = 'w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-invox-red focus:border-invox-red text-white placeholder-gray-500 transition-all';
 const textareaClass = `${inputClass} resize-none`;
 
-/* ─── Tab config ──────────────────────────────────────────────────────────── */
+const StatusMessage = ({ msg }: { msg: { type: string; text: string } }) =>
+    msg.text ? (
+        <div className={`mb-5 p-3 rounded-lg text-sm font-medium ${
+            msg.type === 'success'
+                ? 'bg-green-900/60 border border-green-700 text-green-300'
+                : 'bg-red-900/60 border border-red-700 text-red-300'
+        }`}>
+            {msg.text}
+        </div>
+    ) : null;
+
+const SaveButton = ({ loading, label = 'Save Changes' }: { loading: boolean; label?: string }) => (
+    <button
+        type="submit"
+        disabled={loading}
+        className="bg-invox-red text-white px-6 py-2.5 rounded-lg text-sm font-bold hover:bg-invox-red-hover disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 active:scale-95"
+    >
+        {loading ? 'Saving…' : label}
+    </button>
+);
+
+/* ─── Tab config ─────────────────────────────────────────────────────────── */
 
 const TABS = [
-    { id: 'personal', label: 'Personal Info', icon: '👤' },
-    { id: 'professional', label: 'Professional', icon: '💼' },
-    { id: 'media', label: 'Profile Media', icon: '🖼️' },
-    { id: 'account', label: 'Account', icon: '🔑' },
-    { id: 'privacy', label: 'Privacy', icon: '🔒' },
+    { id: 'personal',      label: 'Personal Info',  icon: '👤' },
+    { id: 'professional',  label: 'Professional',   icon: '💼' },
+    { id: 'media',         label: 'Profile Media',  icon: '🖼️' },
+    { id: 'account',       label: 'Account',        icon: '🔑' },
+    { id: 'privacy',       label: 'Privacy',        icon: '🔒' },
 ];
 
-/* ─── Main Component ──────────────────────────────────────────────────────── */
+/* ─── Main Component ─────────────────────────────────────────────────────── */
 
 const SettingsPage = () => {
     const { currentUser, userProfile } = useAuth();
     const [activeTab, setActiveTab] = useState('personal');
 
-    /* ── Personal form state ── */
-    const [displayName, setDisplayName] = useState(userProfile?.displayName || '');
-    const [username, setUsername] = useState(userProfile?.username || '');
-    const [headline, setHeadline] = useState(userProfile?.headline || '');
-    const [bio, setBio] = useState(userProfile?.bio || '');
+    /* ── Personal fields ── */
+    const [displayName, setDisplayName]   = useState('');
+    const [username,    setUsername]       = useState('');
+    const [headline,    setHeadline]       = useState('');
+    const [bio,         setBio]            = useState('');
     const [personalLoading, setPersonalLoading] = useState(false);
     const [personalMessage, setPersonalMessage] = useState({ type: '', text: '' });
 
-    /* ── Professional form state ── */
-    const [skills, setSkills] = useState<string[]>(userProfile?.skills || []);
-    const [interests, setInterests] = useState<string[]>(userProfile?.interests || []);
-    const [website, setWebsite] = useState((userProfile as any)?.website || '');
-    const [portfolioURL, setPortfolioURL] = useState((userProfile as any)?.portfolioURL || '');
-    const [location, setLocation] = useState((userProfile as any)?.location || '');
+    /* ── Professional fields ── */
+    const [skills,       setSkills]       = useState<string[]>([]);
+    const [interests,    setInterests]    = useState<string[]>([]);
+    const [website,      setWebsite]      = useState('');
+    const [portfolioURL, setPortfolioURL] = useState('');
+    const [location,     setLocation]     = useState('');
     const [professionalLoading, setProfessionalLoading] = useState(false);
     const [professionalMessage, setProfessionalMessage] = useState({ type: '', text: '' });
 
-    /* ── Media form state ── */
+    /* ── Media fields ── */
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
-    const [uploadingCover, setUploadingCover] = useState(false);
-    const [avatarProgress, setAvatarProgress] = useState(0);
-    const [coverProgress, setCoverProgress] = useState(0);
+    const [uploadingCover,  setUploadingCover]  = useState(false);
+    const [avatarProgress,  setAvatarProgress]  = useState(0);
+    const [coverProgress,   setCoverProgress]   = useState(0);
+    // Local preview URLs for immediate display after upload
+    const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null);
+    const [localCoverUrl,  setLocalCoverUrl]  = useState<string | null>(null);
     const [mediaMessage, setMediaMessage] = useState({ type: '', text: '' });
 
-    /* ── Account form state ── */
-    const [newEmail, setNewEmail] = useState('');
-    const [newPassword, setNewPassword] = useState('');
+    /* ── Account fields ── */
+    const [newEmail,       setNewEmail]       = useState('');
+    const [newPassword,    setNewPassword]    = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [accountLoading, setAccountLoading] = useState(false);
     const [accountMessage, setAccountMessage] = useState({ type: '', text: '' });
 
-    const userAvatar = userProfile?.photoURL || currentUser?.photoURL || null;
-    const coverImageUrl = userProfile?.coverPhotoURL || null;
+    /* ── BUG FIX: Sync form state from userProfile whenever it arrives/changes ──
+     *
+     *  Problem: useState(userProfile?.x) runs once at mount. If userProfile is still
+     *  null (AuthContext still loading), all inputs initialise as ''. The real data
+     *  from Firestore arrives later via subscribeUserProfile but useState ignores it.
+     *
+     *  Fix: useEffect re-syncs every field when userProfile becomes available.
+     *  We only overwrite if the user has NOT started editing (tracked per-form with
+     *  the "touched" refs), so typing is never interrupted by a context refresh.
+     */
+    const personalTouched = useRef(false);
+    const professionalTouched = useRef(false);
+
+    useEffect(() => {
+        if (!userProfile) return;
+
+        // Only pre-fill personal fields if the user has not started editing them
+        if (!personalTouched.current) {
+            setDisplayName(userProfile.displayName || '');
+            setUsername(userProfile.username || '');
+            setHeadline(userProfile.headline || '');
+            setBio(userProfile.bio || '');
+        }
+
+        // Only pre-fill professional fields if the user has not started editing them
+        if (!professionalTouched.current) {
+            setSkills(userProfile.skills || []);
+            setInterests(userProfile.interests || []);
+            setWebsite((userProfile as any).website || '');
+            setPortfolioURL((userProfile as any).portfolioURL || '');
+            setLocation((userProfile as any).location || '');
+        }
+    }, [userProfile]);
+
+    /* ── Derived display values ── */
+    const userAvatar  = localAvatarUrl || userProfile?.photoURL    || currentUser?.photoURL || null;
+    const coverImage  = localCoverUrl  || userProfile?.coverPhotoURL || null;
+
+    /* ── Helpers ── */
+
+    /** Write profileCompletion to Firestore using the current merged state */
+    const persistCompletion = async (overrides: Record<string, any> = {}) => {
+        if (!currentUser) return;
+        const merged = {
+            displayName:   overrides.displayName   ?? displayName,
+            headline:      overrides.headline      ?? headline,
+            bio:           overrides.bio           ?? bio,
+            skills:        overrides.skills        ?? skills,
+            interests:     overrides.interests     ?? interests,
+            location:      overrides.location      ?? location,
+            website:       overrides.website       ?? website,
+            photoURL:      overrides.photoURL      ?? userAvatar,
+            coverPhotoURL: overrides.coverPhotoURL ?? coverImage,
+        };
+        const pct = computeProfileCompletion(merged);
+        await updateDocument(COLLECTIONS.users, currentUser.uid, { profileCompletion: pct });
+    };
 
     /* ── Handlers ── */
 
@@ -167,7 +275,9 @@ const SettingsPage = () => {
             await updateDocument(COLLECTIONS.users, currentUser.uid, {
                 displayName, username, headline, bio,
             });
-            setPersonalMessage({ type: 'success', text: 'Personal information updated.' });
+            await persistCompletion({ displayName, headline, bio });
+            setPersonalMessage({ type: 'success', text: 'Personal information updated successfully.' });
+            personalTouched.current = false; // allow future context refreshes to sync
         } catch (err: any) {
             setPersonalMessage({ type: 'error', text: getFriendlyErrorMessage(err) });
         }
@@ -183,7 +293,9 @@ const SettingsPage = () => {
             await updateDocument(COLLECTIONS.users, currentUser.uid, {
                 skills, interests, website, portfolioURL, location,
             });
-            setProfessionalMessage({ type: 'success', text: 'Professional information updated.' });
+            await persistCompletion({ skills, interests, location, website });
+            setProfessionalMessage({ type: 'success', text: 'Professional information updated successfully.' });
+            professionalTouched.current = false;
         } catch (err: any) {
             setProfessionalMessage({ type: 'error', text: getFriendlyErrorMessage(err) });
         }
@@ -198,26 +310,64 @@ const SettingsPage = () => {
         if (type === 'profile') setUploadingAvatar(true);
         else setUploadingCover(true);
 
+        // Show instant local preview while uploading
+        const objectUrl = URL.createObjectURL(file);
+        if (type === 'profile') setLocalAvatarUrl(objectUrl);
+        else setLocalCoverUrl(objectUrl);
+
         try {
-            const path = `users/${currentUser.uid}/${type}/${Date.now()}_${file.name}`;
+            /*
+             * BUG FIX: Storage path must match security rules.
+             * The rules allow: /profileMedia/{userId}/{fileName}
+             * Old (broken) path was: users/{uid}/profile/… — denied by catch-all rule.
+             */
+            const path = `profileMedia/${currentUser.uid}/${type}_${Date.now()}_${file.name}`;
+
             const uploaded = await uploadFile(path, file, {
                 allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
                 maxSizeBytes: 5 * 1024 * 1024,
-                onProgress: (p) => type === 'profile' ? setAvatarProgress(p) : setCoverProgress(p),
+                onProgress: p => type === 'profile' ? setAvatarProgress(p) : setCoverProgress(p),
             });
+
+            // Update Firebase Auth photoURL for profile images
             if (type === 'profile') {
                 await updateProfile(currentUser, { photoURL: uploaded.url });
+                setLocalAvatarUrl(uploaded.url); // replace object URL with permanent URL
+            } else {
+                setLocalCoverUrl(uploaded.url);
             }
+
+            // Persist to Firestore — this triggers subscribeUserProfile → AuthContext update
             await updateDocument(COLLECTIONS.users, currentUser.uid, {
                 [type === 'profile' ? 'photoURL' : 'coverPhotoURL']: uploaded.url,
             });
-            setMediaMessage({ type: 'success', text: `${type === 'profile' ? 'Profile photo' : 'Cover photo'} updated successfully.` });
+
+            // Update completion since a photo was added
+            await persistCompletion({
+                [type === 'profile' ? 'photoURL' : 'coverPhotoURL']: uploaded.url,
+            });
+
+            setMediaMessage({
+                type: 'success',
+                text: `${type === 'profile' ? 'Profile photo' : 'Cover photo'} updated successfully.`,
+            });
         } catch (err: any) {
+            // Revert preview on failure
+            if (type === 'profile') setLocalAvatarUrl(null);
+            else setLocalCoverUrl(null);
             setMediaMessage({ type: 'error', text: getFriendlyErrorMessage(err) });
         }
 
-        if (type === 'profile') setUploadingAvatar(false);
-        else setUploadingCover(false);
+        if (type === 'profile') { setUploadingAvatar(false); setAvatarProgress(0); }
+        else { setUploadingCover(false); setCoverProgress(0); }
+    };
+
+    const handleRemoveCover = async () => {
+        if (!currentUser) return;
+        setLocalCoverUrl(null);
+        await updateDocument(COLLECTIONS.users, currentUser.uid, { coverPhotoURL: null });
+        await persistCompletion({ coverPhotoURL: null });
+        setMediaMessage({ type: 'success', text: 'Cover photo removed.' });
     };
 
     const handleAccountSubmit = async (e: React.FormEvent) => {
@@ -234,46 +384,29 @@ const SettingsPage = () => {
             if (newPassword) {
                 const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/;
                 if (!passwordRegex.test(newPassword)) {
-                    throw new Error('Password must be at least 8 characters long and include a number and a special character.');
+                    throw new Error('Password must be at least 8 characters and include a number and special character.');
                 }
                 await updateUserPassword(currentUser, newPassword);
             }
             setAccountMessage({ type: 'success', text: 'Account updated successfully.' });
-            setNewEmail('');
-            setNewPassword('');
-            setConfirmPassword('');
+            setNewEmail(''); setNewPassword(''); setConfirmPassword('');
         } catch (err: any) {
             const msg = err.code === 'auth/requires-recent-login'
-                ? 'This operation requires recent authentication. Please log out and log in again before trying this request.'
+                ? 'This action requires recent login. Please log out and log back in, then try again.'
                 : getFriendlyErrorMessage(err);
             setAccountMessage({ type: 'error', text: msg });
         }
         setAccountLoading(false);
     };
 
-    /* ── StatusMessage helper ── */
-    const StatusMessage = ({ msg }: { msg: { type: string; text: string } }) =>
-        msg.text ? (
-            <div className={`mb-5 p-3 rounded-lg text-sm font-medium ${msg.type === 'success' ? 'bg-green-900/60 border border-green-700 text-green-300' : 'bg-red-900/60 border border-red-700 text-red-300'}`}>
-                {msg.text}
-            </div>
-        ) : null;
-
-    const SaveButton = ({ loading, label = 'Save Changes' }: { loading: boolean; label?: string }) => (
-        <button
-            type="submit"
-            disabled={loading}
-            className="bg-invox-red text-white px-6 py-2.5 rounded-lg text-sm font-bold hover:bg-invox-red-hover disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 active:scale-95"
-        >
-            {loading ? 'Saving…' : label}
-        </button>
-    );
+    /* ── Render ─────────────────────────────────────────────────────────── */
 
     return (
         <div className="text-white">
             <h1 className="text-3xl font-bold mb-6">Settings</h1>
 
             <div className="flex flex-col md:flex-row gap-6">
+
                 {/* ── Sidebar ── */}
                 <div className="md:w-56 flex-shrink-0">
                     <nav className="flex flex-col gap-1">
@@ -294,7 +427,7 @@ const SettingsPage = () => {
                     </nav>
                 </div>
 
-                {/* ── Content ── */}
+                {/* ── Content Panel ── */}
                 <div className="flex-1 bg-invox-dark-accent rounded-xl border border-gray-800 p-6 md:p-8">
 
                     {/* ── Personal Info ── */}
@@ -305,7 +438,11 @@ const SettingsPage = () => {
                                 description="Update how your name and identity appear on Invox."
                             />
                             <StatusMessage msg={personalMessage} />
-                            <form onSubmit={handlePersonalSubmit} className="space-y-5">
+                            <form
+                                onSubmit={handlePersonalSubmit}
+                                className="space-y-5"
+                                onChange={() => { personalTouched.current = true; }}
+                            >
                                 <FormField label="Display Name">
                                     <input
                                         type="text"
@@ -315,6 +452,7 @@ const SettingsPage = () => {
                                         className={inputClass}
                                     />
                                 </FormField>
+
                                 <FormField label="Username">
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">@</span>
@@ -327,6 +465,7 @@ const SettingsPage = () => {
                                         />
                                     </div>
                                 </FormField>
+
                                 <FormField label="Professional Headline">
                                     <input
                                         type="text"
@@ -336,6 +475,7 @@ const SettingsPage = () => {
                                         className={inputClass}
                                     />
                                 </FormField>
+
                                 <FormField label="Bio">
                                     <textarea
                                         value={bio}
@@ -343,9 +483,11 @@ const SettingsPage = () => {
                                         rows={5}
                                         placeholder="Tell the community about yourself, your expertise, and what you're building…"
                                         className={textareaClass}
+                                        maxLength={500}
                                     />
                                     <p className="mt-1 text-xs text-gray-500">{bio.length} / 500 characters</p>
                                 </FormField>
+
                                 <div className="pt-2">
                                     <SaveButton loading={personalLoading} />
                                 </div>
@@ -361,20 +503,25 @@ const SettingsPage = () => {
                                 description="Showcase your skills, interests, and professional links."
                             />
                             <StatusMessage msg={professionalMessage} />
-                            <form onSubmit={handleProfessionalSubmit} className="space-y-5">
+                            <form
+                                onSubmit={handleProfessionalSubmit}
+                                className="space-y-5"
+                                onChange={() => { professionalTouched.current = true; }}
+                            >
                                 <ChipInput
                                     label="Skills"
                                     chips={skills}
-                                    onChange={setSkills}
+                                    onChange={chips => { professionalTouched.current = true; setSkills(chips); }}
                                     placeholder="e.g. React, TypeScript, Firebase…"
                                 />
                                 <ChipInput
                                     label="Interests"
                                     chips={interests}
-                                    onChange={setInterests}
+                                    onChange={chips => { professionalTouched.current = true; setInterests(chips); }}
                                     placeholder="e.g. AI, Space, Startups…"
                                     color="blue"
                                 />
+
                                 <FormField label="Location">
                                     <input
                                         type="text"
@@ -384,24 +531,27 @@ const SettingsPage = () => {
                                         className={inputClass}
                                     />
                                 </FormField>
+
                                 <FormField label="Website">
                                     <input
-                                        type="url"
+                                        type="text"
                                         value={website}
                                         onChange={e => setWebsite(e.target.value)}
                                         placeholder="https://yourwebsite.com"
                                         className={inputClass}
                                     />
                                 </FormField>
+
                                 <FormField label="Portfolio URL">
                                     <input
-                                        type="url"
+                                        type="text"
                                         value={portfolioURL}
                                         onChange={e => setPortfolioURL(e.target.value)}
                                         placeholder="https://yourportfolio.com"
                                         className={inputClass}
                                     />
                                 </FormField>
+
                                 <div className="pt-2">
                                     <SaveButton loading={professionalLoading} />
                                 </div>
@@ -414,26 +564,40 @@ const SettingsPage = () => {
                         <div>
                             <SectionHeader
                                 title="Profile Media"
-                                description="Upload your profile photo and cover image."
+                                description="Upload your profile photo and cover image. Changes are saved instantly."
                             />
                             <StatusMessage msg={mediaMessage} />
                             <div className="space-y-8">
+
                                 {/* Profile Photo */}
                                 <div>
                                     <p className="text-sm font-medium text-invox-light-gray mb-4">Profile Photo</p>
                                     <div className="flex items-center gap-6">
-                                        <div className="w-24 h-24 rounded-full border-2 border-gray-700 overflow-hidden flex items-center justify-center bg-gray-800 flex-shrink-0">
+                                        <div className="w-24 h-24 rounded-full border-2 border-gray-700 overflow-hidden flex items-center justify-center bg-gray-800 flex-shrink-0 relative">
                                             {userAvatar ? (
                                                 <img src={userAvatar} onError={handleImageError} alt="Avatar" className="w-full h-full object-cover" />
                                             ) : (
                                                 <ProfileIcon className="w-12 h-12 text-gray-500" />
                                             )}
+                                            {uploadingAvatar && (
+                                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-full">
+                                                    <span className="text-white text-xs font-bold">{avatarProgress}%</span>
+                                                </div>
+                                            )}
                                         </div>
                                         <div>
                                             <label className="cursor-pointer inline-flex items-center gap-2 bg-invox-red hover:bg-invox-red-hover text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                                </svg>
                                                 {uploadingAvatar ? `Uploading ${avatarProgress}%` : 'Upload Photo'}
-                                                <input type="file" className="hidden" accept="image/*" onChange={e => handleMediaUpload(e, 'profile')} disabled={uploadingAvatar} />
+                                                <input
+                                                    type="file"
+                                                    className="hidden"
+                                                    accept="image/jpeg,image/png,image/gif,image/webp"
+                                                    onChange={e => handleMediaUpload(e, 'profile')}
+                                                    disabled={uploadingAvatar}
+                                                />
                                             </label>
                                             <p className="text-xs text-gray-500 mt-2">JPG, PNG, GIF, WebP · Max 5MB</p>
                                         </div>
@@ -445,21 +609,59 @@ const SettingsPage = () => {
                                 {/* Cover Photo */}
                                 <div>
                                     <p className="text-sm font-medium text-invox-light-gray mb-4">Cover Photo</p>
+
+                                    {/* Preview */}
                                     <div
-                                        className="w-full h-32 rounded-xl border-2 border-gray-700 bg-gray-800 bg-cover bg-center mb-4 overflow-hidden"
-                                        style={coverImageUrl ? { backgroundImage: `url(${coverImageUrl})` } : {}}
+                                        className="w-full h-36 rounded-xl border-2 border-gray-700 bg-gray-800 bg-cover bg-center mb-4 overflow-hidden relative"
+                                        style={coverImage ? { backgroundImage: `url(${coverImage})` } : {}}
                                     >
-                                        {!coverImageUrl && (
-                                            <div className="h-full flex items-center justify-center text-gray-600 text-sm">
+                                        {!coverImage && (
+                                            <div className="h-full flex flex-col items-center justify-center text-gray-600 text-sm gap-2">
+                                                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                </svg>
                                                 No cover photo set
                                             </div>
                                         )}
+                                        {uploadingCover && (
+                                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                                <div className="text-center">
+                                                    <div className="w-32 h-1.5 bg-gray-700 rounded-full overflow-hidden mb-2">
+                                                        <div
+                                                            className="h-full bg-invox-red rounded-full transition-all"
+                                                            style={{ width: `${coverProgress}%` }}
+                                                        />
+                                                    </div>
+                                                    <span className="text-white text-xs font-bold">{coverProgress}%</span>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                    <label className="cursor-pointer inline-flex items-center gap-2 border border-gray-600 bg-gray-800 hover:bg-gray-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                                        {uploadingCover ? `Uploading ${coverProgress}%` : 'Upload Cover'}
-                                        <input type="file" className="hidden" accept="image/*" onChange={e => handleMediaUpload(e, 'cover')} disabled={uploadingCover} />
-                                    </label>
+
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                        <label className="cursor-pointer inline-flex items-center gap-2 border border-gray-600 bg-gray-800 hover:bg-gray-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                            </svg>
+                                            {uploadingCover ? `Uploading ${coverProgress}%` : 'Upload Cover'}
+                                            <input
+                                                type="file"
+                                                className="hidden"
+                                                accept="image/jpeg,image/png,image/gif,image/webp"
+                                                onChange={e => handleMediaUpload(e, 'cover')}
+                                                disabled={uploadingCover}
+                                            />
+                                        </label>
+                                        {coverImage && (
+                                            <button
+                                                type="button"
+                                                onClick={handleRemoveCover}
+                                                className="inline-flex items-center gap-2 border border-red-800/50 text-red-400 hover:text-red-300 hover:border-red-600 text-sm font-semibold px-4 py-2.5 rounded-lg transition-all"
+                                            >
+                                                Remove Cover
+                                            </button>
+                                        )}
+                                    </div>
                                     <p className="text-xs text-gray-500 mt-2">Recommended: 1200 × 400px · JPG, PNG · Max 5MB</p>
                                 </div>
                             </div>
@@ -507,10 +709,7 @@ const SettingsPage = () => {
                                     />
                                 </FormField>
                                 <div className="pt-2">
-                                    <SaveButton
-                                        loading={accountLoading}
-                                        label="Update Account"
-                                    />
+                                    <SaveButton loading={accountLoading} label="Update Account" />
                                 </div>
                             </form>
                         </div>
@@ -525,17 +724,19 @@ const SettingsPage = () => {
                             />
                             <div className="space-y-4">
                                 {[
-                                    { title: 'Profile Visibility', desc: 'Control who can view your full profile.' },
-                                    { title: 'Activity Status', desc: 'Show or hide your online status.' },
-                                    { title: 'Direct Messages', desc: 'Manage who can send you direct messages.' },
-                                    { title: 'Data & Analytics', desc: 'Control how your data is used to personalize your experience.' },
+                                    { title: 'Profile Visibility',  desc: 'Control who can view your full profile.' },
+                                    { title: 'Activity Status',     desc: 'Show or hide your online status.' },
+                                    { title: 'Direct Messages',     desc: 'Manage who can send you direct messages.' },
+                                    { title: 'Data & Analytics',    desc: 'Control how your data is used to personalize your experience.' },
                                 ].map(item => (
                                     <div key={item.title} className="flex items-center justify-between p-4 rounded-xl bg-gray-800/40 border border-gray-800">
                                         <div>
                                             <p className="text-sm font-semibold text-white">{item.title}</p>
                                             <p className="text-xs text-gray-400 mt-0.5">{item.desc}</p>
                                         </div>
-                                        <span className="text-xs text-gray-500 bg-gray-800 border border-gray-700 px-3 py-1 rounded-full">Coming Soon</span>
+                                        <span className="text-xs text-gray-500 bg-gray-800 border border-gray-700 px-3 py-1 rounded-full">
+                                            Coming Soon
+                                        </span>
                                     </div>
                                 ))}
                             </div>

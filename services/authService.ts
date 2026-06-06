@@ -41,6 +41,9 @@ const buildUserProfile = (user: FirebaseUser, overrides: Partial<InvoxUser> = {}
     skills: overrides.skills ?? [],
     interests: overrides.interests ?? [],
     links: overrides.links ?? [],
+    location: overrides.location ?? '',
+    website: overrides.website ?? '',
+    portfolioURL: overrides.portfolioURL ?? '',
     followerCount: overrides.followerCount ?? 0,
     followingCount: overrides.followingCount ?? 0,
     savedPostCount: overrides.savedPostCount ?? 0,
@@ -65,10 +68,16 @@ export const ensureUserProfile = async (user: FirebaseUser, overrides: Partial<I
         return;
     }
 
+    // On subsequent logins, only sync fields that Firestore doesn't own yet.
+    // Never overwrite displayName or photoURL that the user has explicitly saved —
+    // the Firestore document is the source of truth for profile data.
+    const existing = snapshot.data();
     await updateDoc(userRef, {
         email: user.email,
-        displayName: user.displayName ?? snapshot.data().displayName,
-        photoURL: user.photoURL ?? snapshot.data().photoURL ?? null,
+        // Prefer the stored displayName; only fall back to Auth if Firestore has nothing
+        displayName: existing.displayName || user.displayName || existing.displayName,
+        // Prefer stored photoURL; only use Auth photoURL if Firestore has nothing
+        photoURL: existing.photoURL || user.photoURL || null,
         emailVerified: user.emailVerified,
         updatedAt: serverTimestamp(),
         lastSeenAt: serverTimestamp(),
