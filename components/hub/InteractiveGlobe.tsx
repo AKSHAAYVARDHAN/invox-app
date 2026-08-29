@@ -1,7 +1,7 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 // FIX: Added missing import for GlobeAltIcon to fix the "Cannot find name" error.
 import { GlobeAltIcon } from '../ui/Icons';
 

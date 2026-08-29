@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef, KeyboardEvent } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { updateUserEmail, updateUserPassword } from '../services/authService';
+import { updateUserEmail, updateUserPassword, updateUserAuthProfile } from '../services/authService';
 import { COLLECTIONS, updateDocument } from '../services/firestoreService';
 import { getFriendlyErrorMessage } from '../utils/errorHandler';
 import { uploadFile } from '../services/storageService';
-import { updateProfile } from 'firebase/auth';
 import { handleImageError } from '../components/utils/imageUtils';
 import { ProfileIcon } from '../components/ui/Icons';
 
@@ -337,7 +336,7 @@ const SettingsPage = () => {
 
             // Update Firebase Auth photoURL for avatar uploads
             if (type === 'profile') {
-                await updateProfile(currentUser, { photoURL: uploaded.url });
+                await updateUserAuthProfile(currentUser, { photoURL: uploaded.url });
                 setLocalAvatarUrl(uploaded.url); // replace blob URL with permanent URL
             } else {
                 setLocalCoverUrl(uploaded.url);

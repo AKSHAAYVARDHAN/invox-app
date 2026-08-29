@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { SparklesIcon, ChevronDownIcon, ClockIcon, CheckIcon, GlobeAltIcon } from '../components/ui/Icons';
 
 type Timeframe = '7d' | '1m' | '1y' | 'all';

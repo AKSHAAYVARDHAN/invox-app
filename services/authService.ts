@@ -138,32 +138,100 @@ export const ensureUserProfile = async (
 };
 
 export const registerWithEmail = async (email: string, password: string, displayName?: string) => {
-    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    const trimmedEmail = email.trim();
+    console.log('[AUTH_LOGIN] Attempting email registration for:', trimmedEmail);
+    try {
+        const credential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+        console.log('[AUTH_LOGIN] Email registration successful, uid:', credential.user.uid);
 
-    if (displayName) {
-        await updateProfile(credential.user, { displayName });
+        if (displayName) {
+            try {
+                await updateProfile(credential.user, { displayName: displayName.trim() });
+            } catch (profileErr) {
+                console.warn('[AUTH] Could not update profile display name:', profileErr);
+            }
+        }
+
+        try {
+            await ensureUserProfile(credential.user, { displayName: displayName?.trim() });
+        } catch (profileErr) {
+            console.warn('[AUTH] ensureUserProfile after register deferred to AuthContext:', profileErr);
+        }
+
+        try {
+            await sendEmailVerification(credential.user);
+        } catch (verifyErr) {
+            console.warn('[AUTH] Could not send email verification:', verifyErr);
+        }
+
+        return credential.user;
+    } catch (err: any) {
+        console.error('[AUTH_ERROR] registerWithEmail failed:', err?.code || err?.message || err);
+        throw err;
     }
-
-    await ensureUserProfile(credential.user, { displayName });
-    await sendEmailVerification(credential.user);
-    return credential.user;
 };
 
 export const loginWithEmail = async (email: string, password: string) => {
-    const credential = await signInWithEmailAndPassword(auth, email, password);
-    await ensureUserProfile(credential.user);
-    return credential.user;
+    const trimmedEmail = email.trim();
+    console.log('[AUTH_LOGIN] Attempting email sign-in for:', trimmedEmail);
+    try {
+        const credential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
+        console.log('[AUTH_LOGIN] Email sign-in successful, uid:', credential.user.uid);
+        try {
+            await ensureUserProfile(credential.user);
+        } catch (profileErr) {
+            console.warn('[AUTH] ensureUserProfile after login deferred to AuthContext:', profileErr);
+        }
+        return credential.user;
+    } catch (err: any) {
+        console.error('[AUTH_ERROR] loginWithEmail failed:', err?.code || err?.message || err);
+        throw err;
+    }
 };
 
 export const loginWithGoogle = async () => {
-    const credential = await signInWithPopup(auth, googleProvider);
-    await ensureUserProfile(credential.user);
-    return credential.user;
+    console.log('[AUTH_GOOGLE] Initiating Google sign-in popup...');
+    try {
+        const credential = await signInWithPopup(auth, googleProvider);
+        console.log('[AUTH_GOOGLE] Google sign-in successful, uid:', credential.user.uid);
+        try {
+            await ensureUserProfile(credential.user);
+        } catch (profileErr) {
+            console.warn('[AUTH] ensureUserProfile after Google login deferred to AuthContext:', profileErr);
+        }
+        return credential.user;
+    } catch (err: any) {
+        console.error('[AUTH_ERROR] loginWithGoogle failed:', err?.code || err?.message || err);
+        throw err;
+    }
 };
 
-export const sendResetPasswordEmail = (email: string) => sendPasswordResetEmail(auth, email);
+export const updateUserAuthProfile = (user: FirebaseUser, profile: { displayName?: string; photoURL?: string }) => {
+    return updateProfile(user, profile);
+};
 
-export const logout = () => signOut(auth);
+export const sendResetPasswordEmail = async (email: string) => {
+    const trimmedEmail = email.trim();
+    console.log('[AUTH_LOGIN] Sending password reset email to:', trimmedEmail);
+    try {
+        await sendPasswordResetEmail(auth, trimmedEmail);
+        console.log('[AUTH_LOGIN] Password reset email sent successfully.');
+    } catch (err: any) {
+        console.error('[AUTH_ERROR] sendResetPasswordEmail failed:', err?.code || err?.message || err);
+        throw err;
+    }
+};
+
+export const logout = async () => {
+    console.log('[AUTH_LOGIN] Signing out...');
+    try {
+        await signOut(auth);
+        console.log('[AUTH_LOGIN] Sign-out completed.');
+    } catch (err: any) {
+        console.error('[AUTH_ERROR] Sign-out failed:', err?.code || err?.message || err);
+        throw err;
+    }
+};
 
 /**
  * Subscribe to real-time updates on users/{uid}.

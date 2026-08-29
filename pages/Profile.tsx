@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { uploadFile } from '../services/storageService';
 import { COLLECTIONS, updateDocument } from '../services/firestoreService';
 import { getFriendlyErrorMessage } from '../utils/errorHandler';
-import { updateProfile } from 'firebase/auth';
+import { updateUserAuthProfile } from '../services/authService';
 import { computeProfileCompletion } from './Settings';
 
 /* ─── helpers ─────────────────────────────────────────────────────────────── */
@@ -88,7 +88,7 @@ const ProfilePage = () => {
 
             // Replace ephemeral blob URL with the permanent Firebase Storage URL
             if (type === 'profile') {
-                await updateProfile(currentUser, { photoURL: uploadedFile.url });
+                await updateUserAuthProfile(currentUser, { photoURL: uploadedFile.url });
                 setLocalAvatarUrl(uploadedFile.url);
             } else {
                 setLocalCoverUrl(uploadedFile.url);
