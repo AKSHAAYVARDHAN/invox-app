@@ -1,39 +1,19 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 
-const requiredEnv = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-};
-
-const missingEnv = Object.entries(requiredEnv)
-  .filter(([, value]) => !value)
-  .map(([key]) => `VITE_FIREBASE_${key.replace(/[A-Z]/g, letter => `_${letter}`).toUpperCase()}`);
-
-if (missingEnv.length > 0) {
-  console.warn(
-    `[Firebase] Missing Firebase environment variables: ${missingEnv.join(', ')}. ` +
-    `Ensure these are defined in your environment (.env.local for local development, or Vercel Project Settings for production).`
-  );
-}
-
-const activeProjectId = requiredEnv.projectId || 'invox-7';
+const activeProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'invox-7';
 
 const firebaseConfig = {
-  apiKey: requiredEnv.apiKey || '',
-  authDomain: requiredEnv.authDomain || `${activeProjectId}.firebaseapp.com`,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || `${activeProjectId}.firebaseapp.com`,
   projectId: activeProjectId,
-  storageBucket: requiredEnv.storageBucket || `${activeProjectId}.firebasestorage.app`,
-  messagingSenderId: requiredEnv.messagingSenderId || '',
-  appId: requiredEnv.appId || '',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || `${activeProjectId}.firebasestorage.app`,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
   databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || `https://${activeProjectId}-default-rtdb.firebaseio.com`,
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || undefined,
 };
@@ -45,9 +25,19 @@ if (typeof window !== 'undefined') {
   console.log('[AUTH_INIT] Firebase initialized for project:', activeProjectId, '| authDomain:', firebaseConfig.authDomain);
 }
 
-export const db = getFirestore(app);
+// Connect to default Firestore database on invox-7
+export const db = (() => {
+  try {
+    return initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true,
+    });
+  } catch {
+    return getFirestore(app);
+  }
+})();
+
 export const storage = getStorage(app);
-export const functions = getFunctions(app, import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'us-central1');
+export const functions = getFunctions(app, import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'asia-southeast1');
 
 const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY;
 
@@ -57,3 +47,4 @@ export const appCheck = typeof window !== 'undefined' && appCheckSiteKey
       isTokenAutoRefreshEnabled: true,
     })
   : null;
+

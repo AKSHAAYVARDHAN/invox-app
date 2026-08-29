@@ -68,6 +68,12 @@ service cloud.firestore {
       }
     }
 
+    match /channels/{channelId} {
+      allow read: if signedIn();
+      allow create: if owns('ownerId');
+      allow update, delete: if existingOwner('ownerId') || isModerator();
+    }
+
     match /posts/{postId} {
       allow read: if signedIn();
       allow create: if owns('authorId');

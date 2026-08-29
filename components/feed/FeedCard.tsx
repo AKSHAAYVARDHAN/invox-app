@@ -25,6 +25,8 @@ import { useLazyLoad } from '../hooks/useLazyLoad';
 import AspectRatioBox from '../ui/AspectRatioBox';
 import ImageZoomModal from '../ui/ImageZoomModal';
 import { useAIAssistant } from '../../contexts/AIAssistantContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { toggleLikePost, toggleBookmarkPost, incrementPostView } from '../../services/postService';
 
 
 const formatNumber = (num: number) => {
@@ -67,6 +69,96 @@ export const FeedCard: React.FC<{ post: Post }> = ({ post }) => {
     const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
     const [mediaContainerRef, isVisible] = useLazyLoad<HTMLDivElement>();
     
+    const { currentUser } = useAuth();
+    const [isLiked, setIsLiked] = useState(false);
+    const [likeCount, setLikeCount] = useState(post.stats.likes);
+    const [isSaved, setIsSaved] = useState(false);
+    const [isSpeaking, setIsSpeaking] = useState(false);
+    const [copied, setCopied] = useState(false);
+
+    // Increment view once on mount / visibility
+    useEffect(() => {
+        if (isVisible) {
+            incrementPostView(post.id);
+        }
+    }, [isVisible, post.id]);
+
+    const handleLikeClick = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!currentUser) return;
+        
+        // Optimistic update
+        const nextLiked = !isLiked;
+        setIsLiked(nextLiked);
+        setLikeCount(prev => nextLiked ? prev + 1 : Math.max(0, prev - 1));
+
+        try {
+            await toggleLikePost(post.id);
+        } catch (err) {
+            console.error('Like action failed', err);
+            // Revert
+            setIsLiked(!nextLiked);
+            setLikeCount(prev => nextLiked ? Math.max(0, prev - 1) : prev + 1);
+        }
+    };
+
+    const handleSaveClick = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!currentUser) return;
+        
+        const nextSaved = !isSaved;
+        setIsSaved(nextSaved);
+        try {
+            await toggleBookmarkPost(post.id);
+        } catch (err) {
+            console.error('Save action failed', err);
+            setIsSaved(!nextSaved);
+        }
+    };
+
+    const handleToggleSpeech = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!('speechSynthesis' in window)) return;
+
+        if (isSpeaking) {
+            window.speechSynthesis.cancel();
+            setIsSpeaking(false);
+        } else {
+            window.speechSynthesis.cancel();
+            const textToSpeak = `${post.aiSummary}. ${post.content}`;
+            const utterance = new SpeechSynthesisUtterance(textToSpeak);
+            utterance.onend = () => setIsSpeaking(false);
+            utterance.onerror = () => setIsSpeaking(false);
+            window.speechSynthesis.speak(utterance);
+            setIsSpeaking(true);
+        }
+    };
+
+    const handleShareClick = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const shareData = {
+            title: post.aiSummary || 'Invox Signal',
+            text: post.content,
+            url: window.location.href,
+        };
+
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+            } catch (err) {
+                // user canceled or not supported
+            }
+        } else {
+            try {
+                await navigator.clipboard.writeText(`${post.aiSummary}\n\n${post.content}`);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            } catch (err) {
+                console.warn('Clipboard write failed:', err);
+            }
+        }
+    };
+
     const handleAIAssistantClick = (e: React.MouseEvent) => {
         e.stopPropagation();
         openModal({
@@ -180,9 +272,17 @@ export const FeedCard: React.FC<{ post: Post }> = ({ post }) => {
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <img src={post.author.avatarUrl} onError={handleImageError} alt={post.author.name} className="w-10 h-10 rounded-full object-cover" />
-                        <div className="flex items-center gap-1">
-                            <p className="font-bold text-white">{post.author.name}</p>
-                            {post.author.isVerified && <CheckBadgeIcon className="w-5 h-5 text-blue-500" />}
+                        <div>
+                            <div className="flex items-center gap-1">
+                                <p className="font-bold text-white">{post.author.name}</p>
+                                {post.author.isVerified && <CheckBadgeIcon className="w-5 h-5 text-blue-500" />}
+                            </div>
+                            {post.channelName && (
+                                <p className="text-xs text-invox-light-gray flex items-center gap-1">
+                                    <span>in</span>
+                                    <span className="text-invox-red font-medium">{post.channelName}</span>
+                                </p>
+                            )}
                         </div>
                     </div>
                     <div className="flex items-center gap-2 text-invox-light-gray">
@@ -293,26 +393,59 @@ export const FeedCard: React.FC<{ post: Post }> = ({ post }) => {
                 
                 {/* Action Bar */}
                 <div className="mt-4 border border-gray-800 rounded-lg px-4 py-2 flex justify-around items-center">
-                    <button className="flex items-center gap-1.5 text-invox-light-gray hover:text-invox-red transition-all duration-200 transform hover:scale-110 active:scale-100">
-                        <HeartIcon className="w-5 h-5" />
-                        <span className="text-sm font-semibold">{formatNumber(post.stats.likes)}</span>
+                    <button 
+                        onClick={handleLikeClick}
+                        className={`flex items-center gap-1.5 transition-all duration-200 transform hover:scale-110 active:scale-100 ${
+                            isLiked ? 'text-invox-red font-bold' : 'text-invox-light-gray hover:text-invox-red'
+                        }`}
+                        title={isLiked ? 'Unlike' : 'Like'}
+                    >
+                        <HeartIcon className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
+                        <span className="text-sm font-semibold">{formatNumber(likeCount)}</span>
                     </button>
-                    <div className="flex items-center gap-1.5 text-invox-light-gray">
+                    <div className="flex items-center gap-1.5 text-invox-light-gray" title="Total Views">
                         <TrendingUpIcon className="w-5 h-5" />
                         <span className="text-sm font-semibold">{formatNumber(post.stats.views)}</span>
                     </div>
-                    <button className="flex items-center gap-1.5 text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100">
+                    <button 
+                        onClick={handleAIAssistantClick}
+                        className="flex items-center gap-1.5 text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100"
+                        title="Comments & Insights"
+                    >
                         <ChatBubbleBottomCenterTextIcon className="w-5 h-5" />
                         <span className="text-sm font-semibold">{formatNumber(post.stats.comments)}</span>
                     </button>
-                    <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100">
+                    <button 
+                        onClick={handleToggleSpeech}
+                        className={`transition-all duration-200 transform hover:scale-110 active:scale-100 ${
+                            isSpeaking ? 'text-invox-blue animate-pulse' : 'text-invox-light-gray hover:text-white'
+                        }`}
+                        title={isSpeaking ? 'Stop Audio Reading' : 'Listen with Audio Voice'}
+                    >
                         <SoundWaveIcon className="w-5 h-5" />
                     </button>
-                    <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100">
+                    <button 
+                        onClick={handleShareClick}
+                        className={`transition-all duration-200 transform hover:scale-110 active:scale-100 relative ${
+                            copied ? 'text-green-400' : 'text-invox-light-gray hover:text-white'
+                        }`}
+                        title={copied ? 'Copied to clipboard!' : 'Share Broadcast'}
+                    >
                         <ForwardIcon className="w-5 h-5" />
+                        {copied && (
+                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black/90 text-green-400 text-[10px] px-1.5 py-0.5 rounded uppercase font-black whitespace-nowrap">
+                                Copied
+                            </span>
+                        )}
                     </button>
-                    <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100">
-                        <BookmarkIcon className="w-5 h-5" />
+                    <button 
+                        onClick={handleSaveClick}
+                        className={`transition-all duration-200 transform hover:scale-110 active:scale-100 ${
+                            isSaved ? 'text-invox-red' : 'text-invox-light-gray hover:text-white'
+                        }`}
+                        title={isSaved ? 'Remove Bookmark' : 'Save to My Space'}
+                    >
+                        <BookmarkIcon className={`w-5 h-5 ${isSaved ? 'fill-current' : ''}`} />
                     </button>
                 </div>
             </div>

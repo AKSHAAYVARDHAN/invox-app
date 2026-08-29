@@ -1,0 +1,73 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role, metrics, and metadata.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "description": "User email" },
+        "name": { "type": "string", "description": "Display name" },
+        "avatarUrl": { "type": "string", "description": "Profile picture URL" },
+        "role": { "type": "string", "enum": ["user", "moderator", "admin"] },
+        "followerCount": { "type": "number" },
+        "followingCount": { "type": "number" },
+        "savedPostCount": { "type": "number" },
+        "savedProjectCount": { "type": "number" },
+        "savedOpportunityCount": { "type": "number" },
+        "reputation": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "Feed, Query, or Thread item with multimedia content and AI summary.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string", "description": "Author UID" },
+        "author": { "type": "object", "description": "Author metadata" },
+        "content": { "type": "string", "description": "Post text content" },
+        "aiSummary": { "type": "string", "description": "AI-generated summary" },
+        "category": { "type": "string", "description": "Post category" },
+        "domain": { "type": "string", "description": "Associated domain" },
+        "type": { "type": "string", "enum": ["Feed", "Thread", "Query"] },
+        "mediaUrl": { "type": "string", "description": "Uploaded media URL" },
+        "mediaType": { "type": "string", "enum": ["image", "video"] },
+        "thumbnailUrl": { "type": "string" },
+        "stats": { "type": "object", "description": "Likes, views, comments counts" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "content", "createdAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Collaborative project listing in the workspace.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "published", "archived"] },
+        "category": { "type": "string" },
+        "tags": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "title", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User documents containing profile and system roles."
+    },
+    "/posts/{postId}": {
+      "schema": "Post",
+      "description": "Public and user posts including feeds, queries, and threads."
+    },
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Collaborative projects and venture briefs."
+    }
+  }
+}

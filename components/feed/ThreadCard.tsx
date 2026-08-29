@@ -24,6 +24,8 @@ import { useLazyLoad } from '../hooks/useLazyLoad';
 import AspectRatioBox from '../ui/AspectRatioBox';
 import ImageZoomModal from '../ui/ImageZoomModal';
 import { useAIAssistant } from '../../contexts/AIAssistantContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { toggleLikePost, toggleBookmarkPost, incrementPostView } from '../../services/postService';
 
 const formatNumber = (num: number) => {
     if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
@@ -64,6 +66,63 @@ export const ThreadCard: React.FC<{ post: Post }> = ({ post }) => {
     const { isFullscreen, toggleFullscreen } = useFullscreen(videoContainerRef);
     const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
     const [mediaContainerRef, isVisible] = useLazyLoad<HTMLDivElement>();
+
+    const { currentUser } = useAuth();
+    const [isLiked, setIsLiked] = useState(false);
+    const [likeCount, setLikeCount] = useState(post.stats.likes);
+    const [isSaved, setIsSaved] = useState(false);
+    const [copied, setCopied] = useState(false);
+
+    useEffect(() => {
+        if (isVisible) {
+            incrementPostView(post.id);
+        }
+    }, [isVisible, post.id]);
+
+    const handleLikeClick = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!currentUser) return;
+        const nextLiked = !isLiked;
+        setIsLiked(nextLiked);
+        setLikeCount(prev => nextLiked ? prev + 1 : Math.max(0, prev - 1));
+        try {
+            await toggleLikePost(post.id);
+        } catch (err) {
+            setIsLiked(!nextLiked);
+            setLikeCount(prev => nextLiked ? Math.max(0, prev - 1) : prev + 1);
+        }
+    };
+
+    const handleSaveClick = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!currentUser) return;
+        const nextSaved = !isSaved;
+        setIsSaved(nextSaved);
+        try {
+            await toggleBookmarkPost(post.id);
+        } catch (err) {
+            setIsSaved(!nextSaved);
+        }
+    };
+
+    const handleShareClick = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: post.aiSummary || 'Invox Thread',
+                    text: post.content,
+                    url: window.location.href,
+                });
+            } catch (err) {}
+        } else {
+            try {
+                await navigator.clipboard.writeText(`${post.aiSummary}\n\n${post.content}`);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            } catch (err) {}
+        }
+    };
 
     const handleAIAssistantClick = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -294,29 +353,59 @@ export const ThreadCard: React.FC<{ post: Post }> = ({ post }) => {
 
                 {/* Stats Bar */}
                 <div className="mt-4 border border-gray-800 rounded-lg px-4 py-2 flex justify-around items-center">
-                    <button className="flex items-center gap-1.5 text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label="Upvote thread">
-                        <ArrowUpIcon className="w-5 h-5" />
-                        <span className="text-sm font-semibold">{formatNumber(post.stats.likes)}</span>
+                    <button 
+                        onClick={handleLikeClick}
+                        className={`flex items-center gap-1.5 transition-all duration-200 transform hover:scale-110 active:scale-100 ${
+                            isLiked ? 'text-invox-red font-bold' : 'text-invox-light-gray hover:text-white'
+                        }`}
+                        aria-label="Upvote thread"
+                    >
+                        <ArrowUpIcon className={`w-5 h-5 ${isLiked ? 'stroke-[2.5]' : ''}`} />
+                        <span className="text-sm font-semibold">{formatNumber(likeCount)}</span>
                     </button>
                     <div className="flex items-center gap-1.5 text-invox-light-gray" role="status" aria-label={`${formatNumber(post.stats.views)} views`}>
                         <TrendingUpIcon className="w-5 h-5" />
                         <span className="text-sm font-semibold">{formatNumber(post.stats.views)}</span>
                     </div>
-                    <button className="flex items-center gap-1.5 text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label="View comments">
+                    <button 
+                        onClick={handleAIAssistantClick}
+                        className="flex items-center gap-1.5 text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100" 
+                        aria-label="View comments"
+                    >
                         <PresentationChartBarIcon className="w-5 h-5" />
                         <span className="text-sm font-semibold">{formatNumber(post.stats.comments)}</span>
                     </button>
-                    <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label="Share thread">
+                    <button 
+                        onClick={handleShareClick}
+                        className={`transition-all duration-200 transform hover:scale-110 active:scale-100 relative ${
+                            copied ? 'text-green-400' : 'text-invox-light-gray hover:text-white'
+                        }`}
+                        aria-label="Share thread"
+                    >
                         <ForwardIcon className="w-5 h-5" />
+                        {copied && (
+                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black/90 text-green-400 text-[10px] px-1.5 py-0.5 rounded uppercase font-black whitespace-nowrap">
+                                Copied
+                            </span>
+                        )}
                     </button>
-                    <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label="Save thread">
-                        <BookmarkIcon className="w-5 h-5" />
+                    <button 
+                        onClick={handleSaveClick}
+                        className={`transition-all duration-200 transform hover:scale-110 active:scale-100 ${
+                            isSaved ? 'text-invox-red' : 'text-invox-light-gray hover:text-white'
+                        }`}
+                        aria-label="Save thread"
+                    >
+                        <BookmarkIcon className={`w-5 h-5 ${isSaved ? 'fill-current' : ''}`} />
                     </button>
                 </div>
 
                 {/* Action Button */}
                 <div className="mt-4">
-                    <button className="w-full bg-invox-dark-accent border border-gray-700 text-white font-semibold py-2.5 rounded-lg hover:bg-gray-800 transition-all duration-200 transform hover:scale-[1.02] active:scale-100">
+                    <button 
+                        onClick={handleAIAssistantClick}
+                        className="w-full bg-invox-dark-accent border border-gray-700 text-white font-semibold py-2.5 rounded-lg hover:bg-gray-800 transition-all duration-200 transform hover:scale-[1.02] active:scale-100"
+                    >
                         Comment
                     </button>
                 </div>

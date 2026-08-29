@@ -54,14 +54,40 @@ export enum PostType {
   Poll = 'Poll',
 }
 
+export interface Channel {
+  id: string;
+  name: string;
+  description: string;
+  handle?: string;
+  domain?: string;
+  category?: string;
+  avatarUrl?: string;
+  bannerUrl?: string;
+  ownerId: string;
+  authorId?: string;
+  authorName: string;
+  authorAvatarUrl?: string;
+  subscriberCount: number;
+  followersCount?: number;
+  postCount: number;
+  createdAt: Date | any;
+  updatedAt?: Date | any;
+}
+
 export interface Post {
   id: string;
+  channelId?: string;
+  channelName?: string;
+  channelAvatarUrl?: string;
+  authorId?: string;
   author: {
-    name:string;
+    name: string;
     avatarUrl: string;
+    username?: string;
     isVerified?: boolean;
   };
   aiSummary: string;
+  oneLine?: string;
   content: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'video';
@@ -71,9 +97,17 @@ export interface Post {
     views: number;
     comments: number;
   };
+  likeCount?: number;
+  viewCount?: number;
+  commentCount?: number;
+  saveCount?: number;
   type: PostType;
+  postType?: string;
   category: string;
+  tags?: string[];
+  visibility?: string;
   createdAt: Date;
+  updatedAt?: Date;
   userCommented?: boolean;
   userSharedInsight?: boolean;
 }

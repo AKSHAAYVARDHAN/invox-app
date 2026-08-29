@@ -4,6 +4,10 @@ import * as ReactRouterDOM from 'react-router-dom';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { SparklesIcon, ChevronDownIcon, ClockIcon, CheckIcon, GlobeAltIcon } from '../components/ui/Icons';
+import { useAuth } from '../contexts/AuthContext';
+import { useAIAssistant } from '../contexts/AIAssistantContext';
+import { subscribeToUserPosts } from '../services/postService';
+import type { Post } from '../types';
 
 type Timeframe = '7d' | '1m' | '1y' | 'all';
 
@@ -322,12 +326,85 @@ const TimeframeDropdown: React.FC<{ current: Timeframe; onChange: (t: Timeframe)
 };
 
 const MySpacePage = () => {
+    const { currentUser } = useAuth();
+    const { openModal } = useAIAssistant();
+    const [userPosts, setUserPosts] = useState<Post[]>([]);
     const { setRightSidebarVariant } = ReactRouterDOM.useOutletContext<{
         setRightSidebarVariant: (variant: string) => void;
     }>();
 
     const [currentTimeframe, setCurrentTimeframe] = useState<Timeframe>('all');
-    const currentMetrics = useMemo(() => METRICS_BY_TIMEFRAME[currentTimeframe], [currentTimeframe]);
+
+    // Subscribe to current user's uploads from Firestore
+    useEffect(() => {
+        if (!currentUser?.uid) return;
+        const unsubscribe = subscribeToUserPosts(
+            currentUser.uid,
+            (posts) => {
+                setUserPosts(posts);
+            },
+            (err) => {
+                console.warn('[MY_SPACE_USER_POSTS_WARN]', err);
+            }
+        );
+        return () => unsubscribe();
+    }, [currentUser?.uid]);
+
+    // Calculate dynamic metrics with graceful fallback
+    const currentMetrics = useMemo(() => {
+        const base = METRICS_BY_TIMEFRAME[currentTimeframe];
+        if (!currentUser || userPosts.length === 0) {
+            return base;
+        }
+
+        const now = Date.now();
+        const timeframeDurations: Record<Timeframe, number> = {
+            '7d': 7 * 24 * 60 * 60 * 1000,
+            '1m': 30 * 24 * 60 * 60 * 1000,
+            '1y': 365 * 24 * 60 * 60 * 1000,
+            'all': Infinity,
+        };
+
+        const maxAge = timeframeDurations[currentTimeframe];
+        const filteredUserPosts = userPosts.filter(p => {
+            const postTime = p.createdAt ? new Date(p.createdAt).getTime() : now;
+            return now - postTime <= maxAge;
+        });
+
+        const totalUserUploads = filteredUserPosts.length;
+        const totalLikes = filteredUserPosts.reduce((acc, p) => acc + (p.stats?.likes || 0), 0);
+        const totalViews = filteredUserPosts.reduce((acc, p) => acc + (p.stats?.views || 0), 0);
+
+        // Compute dynamic score between 7.5 and 9.9
+        const computedScore = totalUserUploads > 0
+            ? Math.min(9.9, Math.max(7.5, 8.0 + (totalLikes * 0.1) + (totalUserUploads * 0.2)))
+            : base.score;
+
+        let activityLevel = 'Low';
+        if (totalUserUploads >= 5 || totalViews > 100) activityLevel = 'High';
+        else if (totalUserUploads >= 2 || totalViews > 20) activityLevel = 'Medium';
+
+        return {
+            uploads: totalUserUploads > 0 ? totalUserUploads : base.uploads,
+            score: Number(computedScore.toFixed(1)),
+            activity: totalUserUploads > 0 ? activityLevel : base.activity
+        };
+    }, [currentTimeframe, currentUser, userPosts]);
+
+    const handleDeepInsightClick = () => {
+        openModal({
+            id: 'myspace-insight',
+            title: `My Space Analytics Insight (${timeframeLabels[currentTimeframe]})`,
+            content: `User Intelligence Footprint Overview:
+- Total Published Signals: ${currentMetrics.uploads}
+- Network Clarity Score: ${currentMetrics.score}/10
+- Dynamic Activity Flow: ${currentMetrics.activity}
+- Active Timeframe Window: ${timeframeLabels[currentTimeframe]}
+
+Ask anything to synthesize your signals, spot trends in your audience engagement, or generate your next high-impact broadcast idea!`,
+            author: currentUser?.displayName || currentUser?.email || 'Invox Core'
+        });
+    };
 
     useEffect(() => {
         if (setRightSidebarVariant) {
@@ -402,7 +479,10 @@ const MySpacePage = () => {
                     />
                     
                     <div className="ml-auto pointer-events-auto hidden sm:block">
-                        <button className="flex items-center gap-3 bg-white/5 hover:bg-white/10 backdrop-blur-xl border border-white/10 px-8 py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all duration-300 group shadow-2xl">
+                        <button 
+                            onClick={handleDeepInsightClick}
+                            className="flex items-center gap-3 bg-white/5 hover:bg-white/10 backdrop-blur-xl border border-white/10 px-8 py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all duration-300 group shadow-2xl active:scale-95"
+                        >
                             <SparklesIcon className="w-5 h-5 text-invox-blue group-hover:scale-125 transition-transform" />
                             <span>Deep Insight</span>
                         </button>

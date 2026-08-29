@@ -1,26 +1,23 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { PlusIcon, SparklesIcon, HeartIcon, TrendingUpIcon, ChatBubbleBottomCenterTextIcon } from '../components/ui/Icons';
+import { PlusIcon, SparklesIcon, HeartIcon, TrendingUpIcon, ChatBubbleBottomCenterTextIcon, TrashIcon } from '../components/ui/Icons';
 import CreateFeedModal from '../components/uploads/CreateFeedModal';
 import { handleImageError } from '../components/utils/imageUtils';
-
-interface UserUpload {
-    id: string;
-    oneLine: string;
-    description: string;
-    previewUrl: string | null;
-    timestamp: Date;
-    category: string;
-}
+import { useAuth } from '../contexts/AuthContext';
+import { createPost, deletePost, subscribeToUserPosts } from '../services/postService';
+import { Post } from '../types';
 
 const UploadsPage = () => {
+    const { currentUser, userProfile } = useAuth();
     const [activeTab, setActiveTab] = useState<'Explore' | 'Spotlight' | 'Hub'>('Explore');
     const [exploreSubTab, setExploreSubTab] = useState<'Feeds' | 'Discover'>('Feeds');
     const [spotlightSubTab, setSpotlightSubTab] = useState<'Showcase' | 'Collabs'>('Showcase');
     const [hubSubTab, setHubSubTab] = useState<'Stills' | 'Tapes' | 'Knacks'>('Stills');
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [publishedItems, setPublishedItems] = useState<UserUpload[]>([]);
+    const [userPosts, setUserPosts] = useState<Post[]>([]);
+    const [loading, setLoading] = useState(true);
     const [overrideContextName, setOverrideContextName] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
     
     const { setRightSidebarVariant, uploadTriggerTarget, setUploadTriggerTarget } = ReactRouterDOM.useOutletContext<{
         setRightSidebarVariant: (variant: string) => void;
@@ -38,6 +35,29 @@ const UploadsPage = () => {
             }
         };
     }, [setRightSidebarVariant]);
+
+    // Real-time Firestore subscription to user's uploaded content
+    useEffect(() => {
+        if (!currentUser?.uid) {
+            setLoading(false);
+            return;
+        }
+
+        setLoading(true);
+        const unsubscribe = subscribeToUserPosts(
+            currentUser.uid,
+            (posts) => {
+                setUserPosts(posts);
+                setLoading(false);
+            },
+            (err) => {
+                console.error('[UPLOADS_FETCH_ERROR]', err);
+                setLoading(false);
+            }
+        );
+
+        return () => unsubscribe();
+    }, [currentUser?.uid]);
 
     // Handle quick access triggers from the right sidebar
     useEffect(() => {
@@ -71,21 +91,60 @@ const UploadsPage = () => {
     // Use override if set (from quick access), otherwise use tab-based name
     const currentContextName = overrideContextName || name;
 
-    // Filter items to only show those that belong to the currently active sub-section
+    // Filter items to show those that belong to the active category/type
     const filteredItems = useMemo(() => {
-        return publishedItems.filter(item => item.category === name);
-    }, [publishedItems, name]);
+        const targetCategory = name.toLowerCase();
+        return userPosts.filter(item => {
+            const cat = (item.category || '').toLowerCase();
+            const postType = (item.type || '').toLowerCase();
+            return cat === targetCategory || postType === targetCategory || (targetCategory === 'feed' && (cat === 'general' || cat === 'feed' || postType === 'feed'));
+        });
+    }, [userPosts, name]);
 
-    const handlePublish = (data: { oneLine: string; description: string; previewUrl: string | null; type: string }) => {
-        const newItem: UserUpload = {
-            id: `usr-${Date.now()}`,
-            ...data,
-            timestamp: new Date(),
-            category: data.type // This is the 'type' which is currentContextName
-        };
-        setPublishedItems(prev => [newItem, ...prev]);
+    const handlePublish = async (data: {
+        oneLine: string;
+        description: string;
+        previewUrl: string | null;
+        mediaFile?: File | null;
+        type: string;
+        channelId?: string;
+        channelName?: string;
+        channelAvatarUrl?: string;
+    }) => {
+        if (!currentUser) return;
+
+        await createPost({
+            channelId: data.channelId,
+            channelName: data.channelName,
+            channelAvatarUrl: data.channelAvatarUrl,
+            oneLine: data.oneLine,
+            content: data.description,
+            mediaFile: data.mediaFile,
+            mediaUrl: data.previewUrl,
+            type: data.type,
+            category: data.type,
+            authorProfile: userProfile ? {
+                displayName: userProfile.displayName || currentUser.displayName || undefined,
+                username: userProfile.username || undefined,
+                photoURL: userProfile.photoURL || currentUser.photoURL || undefined,
+                role: userProfile.role,
+            } : undefined,
+        });
+
         setIsModalOpen(false);
         setOverrideContextName(null);
+    };
+
+    const handleDelete = async (postId: string) => {
+        if (!window.confirm('Are you sure you want to delete this broadcast?')) return;
+        setDeletingId(postId);
+        try {
+            await deletePost(postId);
+        } catch (err) {
+            console.error('Failed to delete post:', err);
+        } finally {
+            setDeletingId(null);
+        }
     };
 
     const handleCloseModal = () => {
@@ -136,7 +195,11 @@ const UploadsPage = () => {
 
             {/* Content Area */}
             <div className="flex-grow">
-                {filteredItems.length === 0 ? (
+                {loading ? (
+                    <div className="py-20 flex justify-center items-center">
+                        <div className="w-10 h-10 border-4 border-invox-red border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                ) : filteredItems.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-24 px-4">
                         <div className="text-center max-w-sm w-full">
                             <h2 className="text-4xl font-black text-white mb-4 tracking-tighter uppercase">Create your first {name}</h2>
@@ -146,7 +209,7 @@ const UploadsPage = () => {
                                     <PlusIcon className="w-5 h-5 text-invox-red" />
                                     <span>Create {name}</span>
                                 </button>
-                                <button className="w-full flex items-center justify-center gap-3 bg-[#111111] hover:bg-[#161616] text-white font-black uppercase tracking-widest py-5 rounded-xl border border-[#1E1E1E] transition-all group">
+                                <button onClick={() => { setOverrideContextName(name); setIsModalOpen(true); }} className="w-full flex items-center justify-center gap-3 bg-[#111111] hover:bg-[#161616] text-white font-black uppercase tracking-widest py-5 rounded-xl border border-[#1E1E1E] transition-all group">
                                     <SparklesIcon className="w-5 h-5 text-[#3B82F6] group-hover:scale-125 transition-transform" />
                                     <span>Smart Create {name}</span>
                                 </button>
@@ -164,24 +227,47 @@ const UploadsPage = () => {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {filteredItems.map(item => (
-                                <div key={item.id} className="bg-invox-dark-accent border border-gray-800 rounded-2xl overflow-hidden flex flex-col group hover:border-gray-600 transition-all">
-                                    {item.previewUrl && (
-                                        <div className="aspect-video bg-black overflow-hidden">
-                                            <img src={item.previewUrl} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500" onError={handleImageError} />
+                                <div key={item.id} className="bg-invox-dark-accent border border-gray-800 rounded-2xl overflow-hidden flex flex-col group hover:border-gray-600 transition-all relative">
+                                    {item.mediaUrl && (
+                                        <div className="aspect-video bg-black overflow-hidden relative">
+                                            {item.mediaType === 'video' ? (
+                                                <video src={item.mediaUrl} className="w-full h-full object-cover" controls />
+                                            ) : (
+                                                <img src={item.mediaUrl} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500" onError={handleImageError} alt="Media" />
+                                            )}
                                         </div>
                                     )}
                                     <div className="p-5 flex-grow">
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="text-[10px] font-black text-invox-red uppercase tracking-widest">{item.category}</span>
-                                            <span className="text-[10px] font-bold text-gray-500">{item.timestamp.toLocaleDateString()}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-black text-invox-red uppercase tracking-widest">{item.category}</span>
+                                                {item.channelName && (
+                                                    <span className="text-[10px] font-semibold text-gray-400">· {item.channelName}</span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-bold text-gray-500">{new Date(item.createdAt).toLocaleDateString()}</span>
+                                                <button
+                                                    onClick={() => handleDelete(item.id)}
+                                                    disabled={deletingId === item.id}
+                                                    className="text-gray-500 hover:text-red-400 p-1 transition-colors"
+                                                    title="Delete signal"
+                                                >
+                                                    {deletingId === item.id ? (
+                                                        <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
+                                                    ) : (
+                                                        <TrashIcon className="w-3.5 h-3.5" />
+                                                    )}
+                                                </button>
+                                            </div>
                                         </div>
-                                        <h4 className="text-lg font-bold text-white mb-2 leading-tight">{item.oneLine}</h4>
-                                        <p className="text-sm text-gray-500 line-clamp-2">{item.description}</p>
+                                        <h4 className="text-lg font-bold text-white mb-2 leading-tight">{item.aiSummary}</h4>
+                                        <p className="text-sm text-gray-400 line-clamp-3">{item.content}</p>
                                     </div>
                                     <div className="p-4 border-t border-gray-800/50 flex items-center justify-around text-gray-500">
-                                        <div className="flex items-center gap-1.5"><HeartIcon className="w-4 h-4" /> <span className="text-xs font-bold">0</span></div>
-                                        <div className="flex items-center gap-1.5"><TrendingUpIcon className="w-4 h-4" /> <span className="text-xs font-bold">0</span></div>
-                                        <div className="flex items-center gap-1.5"><ChatBubbleBottomCenterTextIcon className="w-4 h-4" /> <span className="text-xs font-bold">0</span></div>
+                                        <div className="flex items-center gap-1.5"><HeartIcon className="w-4 h-4" /> <span className="text-xs font-bold">{item.stats.likes}</span></div>
+                                        <div className="flex items-center gap-1.5"><TrendingUpIcon className="w-4 h-4" /> <span className="text-xs font-bold">{item.stats.views}</span></div>
+                                        <div className="flex items-center gap-1.5"><ChatBubbleBottomCenterTextIcon className="w-4 h-4" /> <span className="text-xs font-bold">{item.stats.comments}</span></div>
                                     </div>
                                 </div>
                             ))}

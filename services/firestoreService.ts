@@ -17,6 +17,7 @@ import { db } from '../firebase';
 
 export const COLLECTIONS = {
     users: 'users',
+    channels: 'channels',
     posts: 'posts',
     likes: 'likes',
     comments: 'comments',

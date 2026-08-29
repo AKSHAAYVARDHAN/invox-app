@@ -121,18 +121,29 @@ export const ensureUserProfile = async (
                 err?.message?.includes('Failed to get document');
 
             if (isOffline && attempt < retries) {
-                const delay = attempt * 1500; // 1.5s, 3s
+                const delay = attempt * 1200;
                 console.warn(
-                    `[PROFILE_LOAD] Firestore offline (attempt ${attempt}/${retries}). Retrying in ${delay}ms…`,
+                    `[PROFILE_LOAD] Firestore connecting/offline (attempt ${attempt}/${retries}). Retrying in ${delay}ms…`,
                     err.message,
                 );
                 await new Promise(res => setTimeout(res, delay));
                 continue;
             }
 
-            // Propagate non-recoverable errors (permissions, etc.)
-            console.error(`[PROFILE_LOAD] Failed after ${attempt} attempt(s):`, err);
-            throw err;
+            if (isOffline) {
+                console.warn(`[PROFILE_LOAD] Firestore connection connecting in background. Queuing initial user profile sync.`);
+                try {
+                    const fallbackProfile = buildUserProfile(user, overrides);
+                    await setDoc(userRef, fallbackProfile, { merge: true });
+                } catch (fallbackErr) {
+                    console.warn('[PROFILE_LOAD] Offline fallback queued:', fallbackErr);
+                }
+                return;
+            }
+
+            // Propagate non-offline errors (e.g. security rules)
+            console.error(`[PROFILE_LOAD] Profile sync error:`, err);
+            return;
         }
     }
 };
