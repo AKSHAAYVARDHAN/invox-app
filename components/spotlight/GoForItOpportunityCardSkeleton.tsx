@@ -2,29 +2,29 @@
 import React from 'react';
 
 const GoForItOpportunityCardSkeleton: React.FC = () => (
-    <div className="bg-invox-dark-accent p-4 rounded-lg border border-gray-800 flex flex-col sm:flex-row gap-4 animate-pulse">
-        <div className="w-16 h-16 rounded-lg bg-gray-700 flex-shrink-0"></div>
+    <div className="bg-[#0c0c0e] p-4 border border-zinc-800 flex flex-col sm:flex-row gap-4 animate-pulse">
+        <div className="w-14 h-14 bg-zinc-800 flex-shrink-0"></div>
         <div className="flex-1">
             <div className="flex justify-between items-start">
                 <div className="space-y-2">
-                    <div className="h-5 w-24 bg-gray-700 rounded"></div>
-                    <div className="h-6 w-48 bg-gray-700 rounded"></div>
-                    <div className="h-4 w-32 bg-gray-700 rounded"></div>
+                    <div className="h-3 w-24 bg-zinc-800"></div>
+                    <div className="h-4 w-48 bg-zinc-800"></div>
+                    <div className="h-3 w-32 bg-zinc-850"></div>
                 </div>
-                <div className="w-5 h-5 bg-gray-700 rounded-full"></div>
+                <div className="w-4 h-4 bg-zinc-800"></div>
             </div>
-            <div className="space-y-2 mt-3">
-                <div className="h-4 w-full bg-gray-700 rounded"></div>
-                <div className="h-4 w-5/6 bg-gray-700 rounded"></div>
+            <div className="space-y-1.5 mt-3">
+                <div className="h-3 w-full bg-zinc-850"></div>
+                <div className="h-3 w-5/6 bg-zinc-850"></div>
             </div>
-            <div className="flex gap-2 mt-3">
-                <div className="h-6 w-16 bg-gray-700 rounded-md"></div>
-                <div className="h-6 w-20 bg-gray-700 rounded-md"></div>
-                <div className="h-6 w-14 bg-gray-700 rounded-md"></div>
+            <div className="flex gap-1.5 mt-3">
+                <div className="h-5 w-16 bg-zinc-800"></div>
+                <div className="h-5 w-20 bg-zinc-800"></div>
+                <div className="h-5 w-14 bg-zinc-800"></div>
             </div>
-             <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-800">
-                <div className="h-4 w-20 bg-gray-700 rounded"></div>
-                <div className="h-10 w-24 bg-gray-700 rounded-lg"></div>
+             <div className="flex justify-between items-center mt-4 pt-3 border-t border-zinc-850">
+                <div className="h-3 w-20 bg-zinc-800"></div>
+                <div className="h-7 w-24 bg-zinc-800"></div>
              </div>
         </div>
     </div>

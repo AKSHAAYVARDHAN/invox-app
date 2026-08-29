@@ -54,70 +54,70 @@ const GoForItFilterModal: React.FC<GoForItFilterModalProps> = ({ isOpen, onClose
         setFilters(cleared);
     };
 
-    const formElementClass = "w-full bg-invox-dark border border-gray-800 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-invox-red text-white";
-    const labelClass = "block text-invox-light-gray mb-2 text-sm font-semibold";
+    const formElementClass = "w-full bg-black border border-zinc-800 p-2.5 font-mono text-xs text-white focus:outline-none focus:border-zinc-500 transition-colors";
+    const labelClass = "block text-zinc-400 mb-1.5 font-mono text-xs uppercase tracking-wider";
 
     return (
         <div 
-            className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex justify-center items-center z-50 transition-opacity duration-300" 
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 transition-opacity duration-300" 
             onClick={onClose}
             aria-modal="true"
             role="dialog"
             aria-labelledby="filter-modal-title"
         >
             <div 
-                className="bg-invox-dark-accent rounded-xl shadow-2xl w-full max-w-2xl flex flex-col border border-gray-800 m-4 max-h-[90vh]" 
+                className="bg-[#0c0c0e] shadow-2xl w-full max-w-2xl flex flex-col border border-zinc-800 m-4 max-h-[90vh]" 
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="flex justify-between items-center p-4 border-b border-gray-800 flex-shrink-0">
-                    <h2 id="filter-modal-title" className="text-xl font-bold text-white">Filter Opportunities</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100" aria-label="Close filter modal">
-                        <CloseIcon />
+                <div className="flex justify-between items-center p-4 border-b border-zinc-800 bg-black flex-shrink-0">
+                    <h2 id="filter-modal-title" className="font-mono text-xs font-bold text-white uppercase tracking-wider">// FILTER_OPPORTUNITIES</h2>
+                    <button onClick={onClose} className="text-zinc-400 hover:text-white transition-colors" aria-label="Close filter modal">
+                        <CloseIcon className="w-5 h-5" />
                     </button>
                 </div>
 
                 {/* Body - The form */}
-                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 overflow-y-auto">
+                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 overflow-y-auto font-mono">
                     <div>
-                        <label htmlFor="opportunityType" className={labelClass}>Opportunity Type</label>
+                        <label htmlFor="opportunityType" className={labelClass}>TYPE</label>
                         <select id="opportunityType" name="opportunityType" value={localFilters.opportunityType} onChange={handleInputChange} className={formElementClass}>
-                            {opportunityTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                            {opportunityTypes.map(type => <option key={type} value={type} className="bg-black text-white">{type}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label htmlFor="category" className={labelClass}>Category / Domain</label>
+                        <label htmlFor="category" className={labelClass}>CATEGORY / DOMAIN</label>
                         <select id="category" name="category" value={localFilters.category} onChange={handleInputChange} className={formElementClass}>
-                            {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                            {categories.map(cat => <option key={cat} value={cat} className="bg-black text-white">{cat}</option>)}
                         </select>
                     </div>
                     <div className="md:col-span-2">
-                        <label htmlFor="experienceLevel" className={labelClass}>Experience Level</label>
+                        <label htmlFor="experienceLevel" className={labelClass}>EXPERIENCE LEVEL</label>
                         <select id="experienceLevel" name="experienceLevel" value={localFilters.experienceLevel} onChange={handleInputChange} className={formElementClass}>
-                            {experienceLevels.map(level => <option key={level} value={level}>{level.charAt(0).toUpperCase() + level.slice(1)}</option>)}
+                            {experienceLevels.map(level => <option key={level} value={level} className="bg-black text-white">{level.charAt(0).toUpperCase() + level.slice(1)}</option>)}
                         </select>
                     </div>
                     <div className="relative">
-                        <label htmlFor="company" className={labelClass}>Posted By (Company)</label>
-                        <BuildingOffice2Icon className="absolute left-3 top-10 w-5 h-5 text-gray-400 pointer-events-none" />
-                        <input id="company" type="text" name="company" placeholder="e.g., Google" value={localFilters.company} onChange={handleInputChange} className={`${formElementClass} pl-10`} />
+                        <label htmlFor="company" className={labelClass}>POSTED BY (COMPANY)</label>
+                        <BuildingOffice2Icon className="absolute left-3 top-9 w-4 h-4 text-zinc-500 pointer-events-none" />
+                        <input id="company" type="text" name="company" placeholder="e.g. Google" value={localFilters.company} onChange={handleInputChange} className={`${formElementClass} pl-9`} />
                     </div>
                     <div className="relative">
-                        <label htmlFor="location" className={labelClass}>Location</label>
-                        <MapPinIcon className="absolute left-3 top-10 w-5 h-5 text-gray-400 pointer-events-none" />
-                        <input id="location" type="text" name="location" placeholder="e.g., Remote" value={localFilters.location} onChange={handleInputChange} className={`${formElementClass} pl-10`} />
+                        <label htmlFor="location" className={labelClass}>LOCATION</label>
+                        <MapPinIcon className="absolute left-3 top-9 w-4 h-4 text-zinc-500 pointer-events-none" />
+                        <input id="location" type="text" name="location" placeholder="e.g. Remote" value={localFilters.location} onChange={handleInputChange} className={`${formElementClass} pl-9`} />
                     </div>
                     <div className="md:col-span-2 relative">
-                        <label htmlFor="skills" className={labelClass}>Skills Required</label>
-                        <BriefcaseIcon className="absolute left-3 top-10 w-5 h-5 text-gray-400 pointer-events-none" />
-                        <input id="skills" type="text" name="skills" value={localFilters.skills} onChange={handleInputChange} className={`${formElementClass} pl-10`} placeholder="e.g., React, Node.js, Python" />
+                        <label htmlFor="skills" className={labelClass}>REQUIRED SKILLS</label>
+                        <BriefcaseIcon className="absolute left-3 top-9 w-4 h-4 text-zinc-500 pointer-events-none" />
+                        <input id="skills" type="text" name="skills" value={localFilters.skills} onChange={handleInputChange} className={`${formElementClass} pl-9`} placeholder="e.g. React, Node.js, Python" />
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="flex-shrink-0 flex justify-end items-center gap-4 p-4 border-t border-gray-800 bg-invox-dark rounded-b-xl">
-                    <button onClick={handleClear} className="bg-invox-dark border border-gray-800 px-6 py-2 rounded-lg font-semibold hover:bg-gray-700 transition-all duration-200 transform hover:scale-105 active:scale-95">Clear</button>
-                    <button onClick={handleApply} className="bg-invox-red px-8 py-2 rounded-lg font-semibold hover:bg-invox-red-hover transition-all duration-200 transform hover:scale-105 active:scale-95">Apply Filters</button>
+                <div className="flex-shrink-0 flex justify-end items-center gap-3 p-4 border-t border-zinc-800 bg-black">
+                    <button onClick={handleClear} className="bg-black border border-zinc-800 px-5 py-2 font-mono text-xs text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors uppercase">RESET</button>
+                    <button onClick={handleApply} className="bg-white text-black px-6 py-2 font-mono text-xs font-bold hover:bg-zinc-200 transition-colors uppercase">APPLY_FILTERS</button>
                 </div>
             </div>
         </div>

@@ -162,33 +162,39 @@ const MomentCard: React.FC<{ moment: StreamMoment }> = ({ moment }) => {
 
     return (
         <>
-            <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4 mb-4">
+            <div className="bg-[#0c0c0e] border border-zinc-800 p-4 mb-4">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <img src={moment.author.avatarUrl} onError={handleImageError} alt={moment.author.name} className="w-10 h-10 rounded-full object-cover" />
-                        <div className="flex items-center gap-1">
-                            <p className="font-bold text-white">{moment.author.name}</p>
-                            {moment.author.isVerified && <CheckBadgeIcon className="w-5 h-5 text-blue-500" />}
+                        <img src={moment.author.avatarUrl} onError={handleImageError} alt={moment.author.name} className="w-9 h-9 object-cover border border-zinc-700" />
+                        <div>
+                            <div className="flex items-center gap-1.5">
+                                <p className="font-bold text-white text-xs font-mono uppercase tracking-wider">{moment.author.name}</p>
+                                {moment.author.isVerified && <CheckBadgeIcon className="w-4 h-4 text-blue-400" />}
+                            </div>
+                            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">// {moment.type}</span>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 text-invox-light-gray">
-                        <button className="hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100"><EllipsisVerticalIcon className="w-6 h-6" /></button>
+                    <div className="flex items-center gap-2 text-zinc-400">
+                        <button className="hover:text-white transition-colors p-1"><EllipsisVerticalIcon className="w-5 h-5" /></button>
                     </div>
                 </div>
 
                 {/* AI Summary */}
-                <div className="mt-4">
-                    <p className="text-xl font-semibold italic text-white">"{moment.aiSummary}"</p>
-                </div>
+                {moment.aiSummary && (
+                    <div className="mt-3 bg-zinc-950 border border-zinc-800/80 p-2.5">
+                        <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-500 block mb-1">// AI_SUMMARY</span>
+                        <p className="text-xs font-mono text-zinc-300">"{moment.aiSummary}"</p>
+                    </div>
+                )}
 
                 {/* Media */}
                 {moment.mediaUrl && (
-                    <div className="mt-4">
+                    <div className="mt-3">
                         <AspectRatioBox
                             ref={mediaContainerRef}
                             ratio="video"
-                            className={`rounded-2xl border border-gray-800 bg-invox-dark group ${!isVisible || (!isVideo ? 'cursor-zoom-in' : 'cursor-pointer')}`}
+                            className={`border border-zinc-800 bg-black group ${!isVisible || (!isVideo ? 'cursor-zoom-in' : 'cursor-pointer')}`}
                             onMouseEnter={() => setIsControlsVisible(true)}
                             onMouseLeave={() => setIsControlsVisible(false)}
                             onClick={isVisible ? (isVideo ? togglePlayPause : () => setZoomedImageUrl(moment.mediaUrl || null)) : undefined}
@@ -277,35 +283,35 @@ const MomentCard: React.FC<{ moment: StreamMoment }> = ({ moment }) => {
                 )}
                 
                 {/* Action Bar */}
-                <div className="mt-4 border border-gray-800 rounded-lg px-4 py-2 flex justify-around items-center">
-                    <button className="flex items-center gap-1.5 text-invox-light-gray hover:text-invox-red transition-all duration-200 transform hover:scale-110 active:scale-100">
-                        <HeartIcon className="w-5 h-5" />
-                        <span className="text-sm font-semibold">{formatNumber(moment.stats.likes)}</span>
-                    </button>
-                    <div className="flex items-center gap-1.5 text-invox-light-gray">
-                        <TrendingUpIcon className="w-5 h-5" />
-                        <span className="text-sm font-semibold">{formatNumber(moment.stats.views)}</span>
+                <div className="mt-3 border-t border-zinc-800/80 pt-3 flex justify-between items-center text-zinc-400 font-mono text-xs">
+                    <div className="flex items-center space-x-4">
+                        <button className="flex items-center space-x-1.5 hover:text-white transition-colors">
+                            <HeartIcon className="w-4 h-4" />
+                            <span>{formatNumber(moment.stats.likes)}</span>
+                        </button>
+                        <div className="flex items-center space-x-1.5 text-zinc-500">
+                            <TrendingUpIcon className="w-4 h-4" />
+                            <span>{formatNumber(moment.stats.views)}</span>
+                        </div>
+                        <button className="flex items-center space-x-1.5 hover:text-white transition-colors">
+                            <ChatBubbleBottomCenterTextIcon className="w-4 h-4" />
+                            <span>{formatNumber(moment.stats.comments)}</span>
+                        </button>
                     </div>
-                    <button className="flex items-center gap-1.5 text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100">
-                        <ChatBubbleBottomCenterTextIcon className="w-5 h-5" />
-                        <span className="text-sm font-semibold">{formatNumber(moment.stats.comments)}</span>
-                    </button>
-                    <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100">
-                        <ForwardIcon className="w-5 h-5" />
-                    </button>
-                    <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100">
-                        <BookmarkIcon className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center space-x-2">
+                        <button className="hover:text-white transition-colors p-1"><ForwardIcon className="w-4 h-4" /></button>
+                        <button className="hover:text-white transition-colors p-1"><BookmarkIcon className="w-4 h-4" /></button>
+                    </div>
                 </div>
 
                 {/* Content */}
-                <div className="mt-4">
-                    <p className="text-invox-light-gray">
+                <div className="mt-3">
+                    <p className="text-zinc-300 font-mono text-xs leading-relaxed">
                         {isLongContent ? (
                             <>
                                 {showMore ? moment.content : `${moment.content.substring(0, 150)}...`}
-                                <button onClick={() => setShowMore(!showMore)} className="text-invox-red font-semibold ml-1 hover:underline">
-                                    {showMore ? 'Show less' : 'Show more'}
+                                <button onClick={() => setShowMore(!showMore)} className="text-white underline font-bold ml-1.5 hover:text-zinc-300">
+                                    {showMore ? 'LESS' : 'MORE'}
                                 </button>
                             </>
                         ) : (

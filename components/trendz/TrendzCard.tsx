@@ -179,38 +179,50 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick }) => {
 
     return (
         <>
-            <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4 mb-4">
+            <div className="bg-[#0c0c0e] border border-zinc-800/90 hover:border-zinc-700/80 p-4 mb-4 transition-all duration-150">
                 {/* Header */}
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-invox-dark flex items-center justify-center border border-gray-800">
-                            <trend.domain.icon className="w-6 h-6 text-invox-light-gray" />
+                        <div className="w-8 h-8 rounded-none bg-zinc-900 flex items-center justify-center border border-zinc-700">
+                            <trend.domain.icon className="w-4 h-4 text-zinc-300" />
                         </div>
-                        <div className="flex items-center gap-1">
-                            <p className="font-bold text-white">{trend.details.publishedBy}</p>
+                        <div>
+                            <p className="font-mono text-xs font-bold text-white uppercase tracking-wider">{trend.details.publishedBy}</p>
+                            <p className="font-mono text-[10px] text-zinc-500">// DOMAIN: {trend.domain.name.toUpperCase()}</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 text-invox-light-gray">
-                        <button onClick={onClick} className="hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100" aria-label="View trend details">
-                            <InformationCircleIcon className="w-6 h-6" />
+                    <div className="flex items-center gap-2 text-zinc-400">
+                        <button 
+                            onClick={onClick} 
+                            className="p-1.5 border border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-800 hover:text-white transition-colors" 
+                            aria-label="View trend details"
+                        >
+                            <InformationCircleIcon className="w-4 h-4" />
                         </button>
-                        <button onClick={handleAIAssistantClick} className="hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100" aria-label="AI summary">
-                            <SparklesIcon className="w-6 h-6" />
+                        <button 
+                            onClick={handleAIAssistantClick} 
+                            className="p-1.5 border border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-800 hover:text-white transition-colors" 
+                            aria-label="AI summary"
+                        >
+                            <SparklesIcon className="w-4 h-4" />
                         </button>
-                        <button className="hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100" aria-label="More options">
-                            <EllipsisVerticalIcon className="w-6 h-6" />
+                        <button 
+                            className="p-1.5 border border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-800 hover:text-white transition-colors" 
+                            aria-label="More options"
+                        >
+                            <EllipsisVerticalIcon className="w-4 h-4" />
                         </button>
                     </div>
                 </div>
 
                 {/* Content */}
-                <div className="mt-4">
-                    <h2 className="text-xl font-semibold italic text-white">"{trend.title}"</h2>
-                    <p className="text-invox-light-gray mt-2">
+                <div className="mt-3.5">
+                    <h2 className="text-base font-semibold font-mono text-white tracking-tight">"{trend.title}"</h2>
+                    <p className="text-zinc-400 text-xs sm:text-sm mt-2 leading-relaxed font-sans">
                         {showFullContent ? trend.fullContent : trend.summary}
                         {' '}
-                        <button onClick={() => setShowFullContent(prev => !prev)} className="text-invox-red font-semibold ml-1 hover:underline">
-                            {showFullContent ? 'Show less' : 'Show more'}
+                        <button onClick={() => setShowFullContent(prev => !prev)} className="text-white font-mono text-xs uppercase underline ml-1 hover:text-zinc-300">
+                            {showFullContent ? '[LESS]' : '[MORE]'}
                         </button>
                     </p>
                 </div>
@@ -219,7 +231,7 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick }) => {
                 <AspectRatioBox
                     ref={mediaContainerRef}
                     ratio="video"
-                    className={`mt-4 rounded-2xl border border-gray-800 group bg-invox-dark ${!isVisible || (isVideo ? 'cursor-pointer' : 'cursor-zoom-in')}`}
+                    className={`mt-3.5 border border-zinc-800 group bg-black ${!isVisible || (isVideo ? 'cursor-pointer' : 'cursor-zoom-in')}`}
                     onMouseEnter={() => setIsControlsVisible(true)}
                     onMouseLeave={() => setIsControlsVisible(false)}
                     onClick={isVisible ? (isVideo ? togglePlayPause : () => setZoomedImageUrl(trend.mediaUrl)) : undefined}
@@ -241,13 +253,13 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick }) => {
                                     className="w-full h-full object-cover"
                                 />
                                 
-                                <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${!isPlaying ? 'opacity-100' : 'opacity-0'} bg-black/30 pointer-events-none`}>
-                                    <div className="w-20 h-20 bg-black/50 rounded-full flex items-center justify-center backdrop-blur-sm">
-                                        <PlayIcon className="w-10 h-10 text-white" />
+                                <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${!isPlaying ? 'opacity-100' : 'opacity-0'} bg-black/40 pointer-events-none`}>
+                                    <div className="w-14 h-14 bg-black/80 border border-white/20 flex items-center justify-center backdrop-blur-sm">
+                                        <PlayIcon className="w-6 h-6 text-white" />
                                     </div>
                                 </div>
                                 
-                                <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 transition-opacity duration-300 ${isControlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0'}`} onClick={(e) => e.stopPropagation()}>
+                                <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-2.5 transition-opacity duration-200 ${isControlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0'}`} onClick={(e) => e.stopPropagation()}>
                                     <div className="w-full mb-2">
                                         <input
                                             type="range"
@@ -256,17 +268,17 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick }) => {
                                             value={progress}
                                             onChange={handleSeek}
                                             onPointerDown={handleProgressPointerDown}
-                                            className="w-full h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-invox-red"
+                                            className="w-full h-1 bg-zinc-700 appearance-none cursor-pointer accent-white"
                                         />
                                     </div>
-                                    <div className="flex items-center justify-between gap-4 text-white">
-                                        <div className="flex items-center gap-3">
-                                            <button onClick={togglePlayPause} className="p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100">
-                                                {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
+                                    <div className="flex items-center justify-between gap-3 text-white">
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={togglePlayPause} className="p-1 border border-zinc-700 bg-black/60 hover:bg-zinc-800 transition-colors">
+                                                {isPlaying ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4" />}
                                             </button>
-                                            <div className="flex items-center gap-2 group/volume">
-                                                <button onClick={toggleMute} className="p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100">
-                                                    {isMuted || volume === 0 ? <VolumeOffIcon className="w-6 h-6" /> : <VolumeUpIcon className="w-6 h-6" />}
+                                            <div className="flex items-center gap-1 group/volume">
+                                                <button onClick={toggleMute} className="p-1 border border-zinc-700 bg-black/60 hover:bg-zinc-800 transition-colors">
+                                                    {isMuted || volume === 0 ? <VolumeOffIcon className="w-4 h-4" /> : <VolumeUpIcon className="w-4 h-4" />}
                                                 </button>
                                                 <input
                                                     type="range"
@@ -275,18 +287,18 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick }) => {
                                                     step="0.01"
                                                     value={isMuted ? 0 : volume}
                                                     onChange={handleVolumeChange}
-                                                    className="w-0 h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-invox-red transition-all duration-300 opacity-0 group-hover/volume:opacity-100 group-hover/volume:w-20"
+                                                    className="w-0 h-1 bg-zinc-700 appearance-none cursor-pointer accent-white transition-all duration-200 opacity-0 group-hover/volume:opacity-100 group-hover/volume:w-16"
                                                 />
                                             </div>
                                         </div>
                                         
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs font-mono w-24 text-center">{formatTime(progress)} / {formatTime(duration)}</span>
-                                            <button onClick={cyclePlaybackRate} className="text-xs font-bold w-14 text-center p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100">
+                                        <div className="flex items-center gap-2 font-mono text-[11px]">
+                                            <span className="text-zinc-300 tracking-wider">[{formatTime(progress)} / {formatTime(duration)}]</span>
+                                            <button onClick={cyclePlaybackRate} className="px-1.5 py-0.5 border border-zinc-700 bg-black/60 hover:bg-zinc-800 text-[10px] font-bold">
                                                 {playbackRate.toFixed(2)}x
                                             </button>
-                                            <button onClick={toggleFullScreen} className="p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100">
-                                                {isFullscreen ? <ArrowsPointingInIcon className="w-6 h-6" /> : <ArrowsPointingOutIcon className="w-6 h-6" />}
+                                            <button onClick={toggleFullScreen} className="p-1 border border-zinc-700 bg-black/60 hover:bg-zinc-800">
+                                                {isFullscreen ? <ArrowsPointingInIcon className="w-4 h-4" /> : <ArrowsPointingOutIcon className="w-4 h-4" />}
                                             </button>
                                         </div>
                                     </div>
@@ -300,24 +312,23 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick }) => {
                     )}
                 </AspectRatioBox>
 
-
                 {/* Action Bar */}
-                <div className="mt-4 border border-gray-800 rounded-lg px-4 py-2 flex justify-around items-center">
-                    <button className="flex items-center gap-1.5 text-invox-light-gray hover:text-invox-red transition-all duration-200 transform hover:scale-110 active:scale-100">
-                        <ArrowUpIcon className="w-5 h-5" />
-                        <span className="text-sm font-semibold">{formatNumber(trend.stats.likes)}</span>
+                <div className="mt-4 border-t border-zinc-800/80 pt-3 flex justify-between items-center font-mono text-xs text-zinc-400">
+                    <button className="flex items-center gap-1.5 px-2 py-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors">
+                        <ArrowUpIcon className="w-4 h-4" />
+                        <span>{formatNumber(trend.stats.likes)}</span>
                     </button>
-                    <div className="flex items-center gap-1.5 text-invox-light-gray">
-                        <TrendingUpIcon className="w-5 h-5" />
-                        <span className="text-sm font-semibold">{formatNumber(trend.stats.views)}</span>
+                    <div className="flex items-center gap-1.5 px-2 py-1 text-zinc-500">
+                        <TrendingUpIcon className="w-4 h-4" />
+                        <span>{formatNumber(trend.stats.views)}</span>
                     </div>
-                    <button className="flex items-center gap-1.5 text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100">
-                        <ChatBubbleBottomCenterTextIcon className="w-5 h-5" />
-                        <span className="text-sm font-semibold">{formatNumber(trend.stats.comments)}</span>
+                    <button className="flex items-center gap-1.5 px-2 py-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors">
+                        <ChatBubbleBottomCenterTextIcon className="w-4 h-4" />
+                        <span>{formatNumber(trend.stats.comments)}</span>
                     </button>
-                    <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100"><SoundWaveIcon className="w-5 h-5" /></button>
-                    <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100"><ForwardIcon className="w-5 h-5" /></button>
-                    <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100"><BookmarkIcon className="w-5 h-5" /></button>
+                    <button className="p-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors"><SoundWaveIcon className="w-4 h-4" /></button>
+                    <button className="p-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors"><ForwardIcon className="w-4 h-4" /></button>
+                    <button className="p-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors"><BookmarkIcon className="w-4 h-4" /></button>
                 </div>
             </div>
             <ImageZoomModal 

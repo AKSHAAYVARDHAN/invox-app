@@ -94,48 +94,46 @@ const formatNumber = (num: number) => {
 };
 
 const PodiumCard = ({ community, rank }: { community: Community, rank?: number }) => {
-    const cardStyle = "border-gray-800 shadow-lg";
-
     return (
-        <div className={`relative bg-invox-dark-accent p-4 rounded-lg border-2 ${cardStyle} transition-all duration-300 mb-4`}>
+        <div className="relative bg-[#0c0c0e] p-4 border border-zinc-800 hover:border-zinc-700 transition-all duration-200 mb-4">
              {rank && (
-                <div className="absolute top-2 right-4 text-4xl font-black text-white/10">
-                    #{rank}
+                <div className="absolute top-2 right-3 font-mono text-xs font-bold text-zinc-600">
+                    // #{rank.toString().padStart(2, '0')}
                 </div>
             )}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     {community.avatarUrl ? (
-                        <img src={community.avatarUrl} onError={handleImageError} alt={community.name} className="w-10 h-10 rounded-full object-cover" />
+                        <img src={community.avatarUrl} onError={handleImageError} alt={community.name} className="w-10 h-10 border border-zinc-800 object-cover" />
                     ) : (
-                        <div className="w-10 h-10 rounded-full bg-invox-dark flex items-center justify-center">
-                           <UsersIcon className="w-6 h-6 text-gray-400" />
+                        <div className="w-10 h-10 bg-zinc-950 border border-zinc-800 flex items-center justify-center">
+                           <UsersIcon className="w-5 h-5 text-zinc-500" />
                         </div>
                     )}
                     <div>
-                        <p className="font-bold text-white flex items-center gap-1.5">{community.name} {community.isVerified && <ShieldCheckIcon className="w-4 h-4 text-blue-400" />}</p>
-                        <p className="text-sm text-gray-500">@{community.name.toLowerCase().replace(/\s+/g, '')}</p>
+                        <p className="font-mono font-bold text-white text-sm flex items-center gap-1.5">{community.name} {community.isVerified && <ShieldCheckIcon className="w-3.5 h-3.5 text-zinc-400" />}</p>
+                        <p className="text-[11px] font-mono text-zinc-500">@{community.name.toLowerCase().replace(/\s+/g, '')}</p>
                     </div>
                 </div>
             </div>
-            <hr className="my-4 border-gray-800" />
-            <div className="flex justify-between items-center text-sm">
+            <div className="my-3 border-t border-zinc-800" />
+            <div className="grid grid-cols-3 gap-2 text-xs font-mono">
                 <div>
-                    <p className="text-gray-500 uppercase text-xs font-semibold">Members</p>
-                    <p className="font-bold text-white text-lg">{formatNumber(community.members)}</p>
+                    <p className="text-zinc-500 uppercase text-[10px]">Members</p>
+                    <p className="font-bold text-white text-sm mt-0.5">{formatNumber(community.members)}</p>
                 </div>
                 <div>
-                    <p className="text-gray-500 uppercase text-xs font-semibold">Rating</p>
-                    <p className="font-bold text-white text-lg flex items-center gap-1">{community.rating.toFixed(1)} <StarIcon className="w-4 h-4 text-yellow-400" /></p>
+                    <p className="text-zinc-500 uppercase text-[10px]">Rating</p>
+                    <p className="font-bold text-white text-sm mt-0.5 flex items-center gap-1">{community.rating.toFixed(1)} <StarIcon className="w-3.5 h-3.5 text-white" /></p>
                 </div>
                  <div>
-                    <p className="text-gray-500 uppercase text-xs font-semibold">Category</p>
-                    <p className="font-bold text-white text-lg">{community.category}</p>
+                    <p className="text-zinc-500 uppercase text-[10px]">Category</p>
+                    <p className="font-bold text-white text-xs mt-0.5 truncate">{community.category}</p>
                 </div>
             </div>
-             <div className="mt-4">
-                <button className="w-full bg-invox-dark text-white font-semibold py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200">
-                    Join
+             <div className="mt-3.5 pt-3 border-t border-zinc-850">
+                <button className="w-full bg-white text-black font-mono text-xs font-bold uppercase py-2 hover:bg-zinc-200 transition-colors">
+                    Join Community
                 </button>
             </div>
         </div>
@@ -144,36 +142,36 @@ const PodiumCard = ({ community, rank }: { community: Community, rank?: number }
 
 const CommunitySuggestionCard: React.FC<{ community: Community }> = ({ community }) => {
     return (
-        <div className="bg-invox-dark-accent p-4 rounded-lg border border-gray-800 w-96 flex-shrink-0 flex flex-col h-full min-h-[12rem]">
+        <div className="bg-[#0c0c0e] p-4 border border-zinc-800 hover:border-zinc-700 w-96 flex-shrink-0 flex flex-col h-full min-h-[12rem] transition-colors font-mono">
             <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center gap-3">
                     {community.avatarUrl ? (
-                        <img src={community.avatarUrl} onError={handleImageError} alt={community.name} className="w-10 h-10 rounded-full object-cover" />
+                        <img src={community.avatarUrl} onError={handleImageError} alt={community.name} className="w-10 h-10 border border-zinc-800 object-cover" />
                     ) : (
-                        <div className="w-10 h-10 rounded-full bg-invox-dark flex items-center justify-center border border-gray-800">
-                            <UsersIcon className="w-6 h-6 text-gray-400" />
+                        <div className="w-10 h-10 bg-zinc-950 border border-zinc-800 flex items-center justify-center">
+                            <UsersIcon className="w-5 h-5 text-zinc-500" />
                         </div>
                     )}
-                    <div className="flex items-center gap-2">
-                        <p className="font-bold text-white text-lg">{community.name}</p>
-                        {community.isVerified && <ShieldCheckIcon className="w-5 h-5 text-blue-500" />}
+                    <div className="flex items-center gap-1.5">
+                        <p className="font-bold text-white text-sm">{community.name}</p>
+                        {community.isVerified && <ShieldCheckIcon className="w-3.5 h-3.5 text-zinc-400" />}
                     </div>
                 </div>
-                <button className="bg-invox-dark text-white px-6 py-1.5 rounded-lg text-sm font-semibold hover:bg-gray-700 self-start transition-all transform hover:scale-105 active:scale-95">
+                <button className="bg-white text-black px-4 py-1 font-mono text-xs font-bold uppercase hover:bg-zinc-200 transition-colors">
                     Join
                 </button>
             </div>
             <div className="flex-grow">
-                <p className="text-sm text-invox-light-gray line-clamp-2">{community.description}</p>
+                <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">{community.description}</p>
             </div>
             <div className="mt-auto">
-                <hr className="border-gray-800 mb-3" />
-                <div className="flex justify-between items-center">
-                    <p className="font-semibold text-white">
-                        Members : <span className="text-yellow-400">{formatNumber(community.members)}</span>
+                <div className="border-t border-zinc-800 mb-2.5" />
+                <div className="flex justify-between items-center text-xs">
+                    <p className="text-zinc-500">
+                        MEMBERS: <span className="font-bold text-white">{formatNumber(community.members)}</span>
                     </p>
-                    <div className="flex items-center gap-1">
-                        <StarIcon className="w-5 h-5 text-yellow-400" />
+                    <div className="flex items-center gap-1 text-zinc-300">
+                        <StarIcon className="w-3.5 h-3.5 text-white" />
                         <span className="font-bold text-white">{community.rating.toFixed(1)}</span>
                     </div>
                 </div>
@@ -183,21 +181,21 @@ const CommunitySuggestionCard: React.FC<{ community: Community }> = ({ community
 };
 
 const CommunitySearchResultSkeleton = () => (
-    <div className="bg-invox-dark-accent p-4 rounded-lg border-2 border-gray-800 animate-pulse mb-4">
+    <div className="bg-[#0c0c0e] p-4 border border-zinc-800 animate-pulse mb-4">
         <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gray-700"></div>
+            <div className="w-10 h-10 bg-zinc-800"></div>
             <div>
-                <div className="h-5 w-32 bg-gray-700 rounded"></div>
-                <div className="h-4 w-24 bg-gray-700 rounded mt-2"></div>
+                <div className="h-4 w-32 bg-zinc-800"></div>
+                <div className="h-3 w-24 bg-zinc-850 mt-1.5"></div>
             </div>
         </div>
-        <hr className="my-4 border-gray-800" />
-        <div className="flex justify-between items-center">
-            <div className="h-6 w-20 bg-gray-700 rounded"></div>
-            <div className="h-6 w-20 bg-gray-700 rounded"></div>
-            <div className="h-6 w-20 bg-gray-700 rounded"></div>
+        <div className="my-3 border-t border-zinc-800" />
+        <div className="grid grid-cols-3 gap-2">
+            <div className="h-4 bg-zinc-800"></div>
+            <div className="h-4 bg-zinc-800"></div>
+            <div className="h-4 bg-zinc-800"></div>
         </div>
-        <div className="mt-4 h-9 w-full bg-gray-700 rounded-lg"></div>
+        <div className="mt-3.5 h-8 w-full bg-zinc-800"></div>
     </div>
 );
 
@@ -298,38 +296,41 @@ const CommunitiesPage = () => {
             searchResults = mockCommunities.filter(
                 community => community.category.toLowerCase() === searchTermLower
             );
-            searchResultTitle = `Showing communities in the "${matchingDomain.name}" domain`;
+            searchResultTitle = `COMMUNITIES IN "${matchingDomain.name.toUpperCase()}"`;
         } else {
             // Filter by community name (partial match)
             searchResults = mockCommunities.filter(community =>
                 community.name.toLowerCase().includes(searchTermLower)
             );
-            searchResultTitle = `Based on your search for "${communityFilters.searchTerm}"`;
+            searchResultTitle = `SEARCH RESULTS FOR "${communityFilters.searchTerm.toUpperCase()}"`;
         }
 
         return (
-            <div>
+            <div className="space-y-4">
                 <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                        <button onClick={handleBackToLeaderboard} className="text-invox-light-gray hover:text-white p-1 rounded-full hover:bg-invox-dark-accent transition-colors" aria-label="Back to communities">
-                            <ArrowLeftIcon className="w-6 h-6" />
+                    <div className="flex items-center gap-3">
+                        <button onClick={handleBackToLeaderboard} className="p-1.5 text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 transition-colors" aria-label="Back to communities">
+                            <ArrowLeftIcon className="w-4 h-4" />
                         </button>
-                        <h1 className="text-2xl font-bold text-white">
-                            {searchResultTitle}
-                        </h1>
+                        <div>
+                            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">// SEARCH_RESULTS</span>
+                            <h1 className="text-base font-bold font-mono uppercase text-white">
+                                {searchResultTitle}
+                            </h1>
+                        </div>
                     </div>
                     {matchingDomain && (
-                        <button className="flex-shrink-0 flex items-center gap-2 bg-invox-dark-accent border border-gray-800 rounded-lg px-4 py-2 text-sm text-white font-semibold hover:bg-gray-700 transition-all duration-200">
-                            <FilterIcon className="w-5 h-5 text-gray-400" />
+                        <button className="flex-shrink-0 flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1.5 font-mono text-xs text-zinc-300 uppercase hover:text-white hover:border-zinc-600 transition-colors">
+                            <FilterIcon className="w-4 h-4 text-zinc-500" />
                             <span>Filter by</span>
-                            <ChevronDownIcon className="w-5 h-5 text-gray-400" />
+                            <ChevronDownIcon className="w-4 h-4 text-zinc-500" />
                         </button>
                     )}
                 </div>
-                <hr className="border-gray-800 my-4" />
+                <div className="border-t border-zinc-800 my-4" />
 
                 {loading ? (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                         <CommunitySearchResultSkeleton />
                         <CommunitySearchResultSkeleton />
                     </div>
@@ -342,8 +343,8 @@ const CommunitiesPage = () => {
                         ))}
                     </div>
                 ) : (
-                    <div className="text-center py-16 text-gray-400">
-                        <p>No communities found matching your search.</p>
+                    <div className="text-center py-16 text-zinc-500 font-mono text-xs border border-dashed border-zinc-800">
+                        <p>NO COMMUNITIES FOUND MATCHING SEARCH DIRECTIVE.</p>
                     </div>
                 )}
             </div>
@@ -388,21 +389,29 @@ const CommunitiesPage = () => {
     ];
 
     return (
-        <div className="space-y-8">
-            <div className="flex justify-between items-center">
+        <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-4xl font-bold text-white">Leaderboard</h1>
-                    <p className="text-gray-400 mt-1">Top communities on the platform</p>
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">// INDEX_LEADERBOARD</span>
+                    <h1 className="text-xl font-bold font-mono uppercase tracking-wide text-white">COMMUNITIES</h1>
+                    <p className="text-zinc-400 font-mono text-xs mt-0.5">Top ranked technical ecosystems</p>
                 </div>
-                <div className="inline-flex bg-invox-dark-accent p-1 rounded-lg border border-gray-800 space-x-1">
-                    <button onClick={() => setActiveTimeframe('All Time')} className={`px-4 py-2 text-sm rounded-md font-semibold transition-colors duration-200 ${activeTimeframe === 'All Time' ? 'bg-invox-dark text-white' : 'text-gray-400 hover:bg-gray-800'}`}>All Time</button>
-                    <button onClick={() => setActiveTimeframe('Daily')} className={`px-4 py-2 text-sm rounded-md font-semibold transition-colors duration-200 ${activeTimeframe === 'Daily' ? 'bg-invox-dark text-white' : 'text-gray-400 hover:bg-gray-800'}`}>Daily</button>
-                    <button onClick={() => setActiveTimeframe('Weekly')} className={`px-4 py-2 text-sm rounded-md font-semibold transition-colors duration-200 ${activeTimeframe === 'Weekly' ? 'bg-invox-dark text-white' : 'text-gray-400 hover:bg-gray-800'}`}>Weekly</button>
-                    <button onClick={() => setActiveTimeframe('Monthly')} className={`px-4 py-2 text-sm rounded-md font-semibold transition-colors duration-200 ${activeTimeframe === 'Monthly' ? 'bg-invox-dark text-white' : 'text-gray-400 hover:bg-gray-800'}`}>Monthly</button>
+                <div className="inline-flex bg-black p-1 border border-zinc-800 space-x-1">
+                    {(['All Time', 'Daily', 'Weekly', 'Monthly'] as const).map(tf => (
+                        <button 
+                            key={tf}
+                            onClick={() => setActiveTimeframe(tf)} 
+                            className={`px-3 py-1 font-mono text-xs uppercase font-bold transition-colors ${
+                                activeTimeframe === tf ? 'bg-white text-black' : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                            }`}
+                        >
+                            {tf}
+                        </button>
+                    ))}
                 </div>
             </div>
 
-            <hr className="border-gray-800" />
+            <div className="border-t border-zinc-800" />
             
             <DomainFilter
                 buttonText="Filter Leaderboard by Domain"
@@ -416,54 +425,54 @@ const CommunitiesPage = () => {
             />
 
             {/* Podium Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
                 {topThree[1] && <PodiumCard community={topThree[1]} rank={2} />}
-                {topThree[0] && <div className="lg:scale-110 z-10"><PodiumCard community={topThree[0]} rank={1} /></div>}
+                {topThree[0] && <PodiumCard community={topThree[0]} rank={1} />}
                 {topThree[2] && <PodiumCard community={topThree[2]} rank={3} />}
             </div>
             
             {/* Full Leaderboard Table */}
-            <div className="bg-invox-dark-accent backdrop-blur-sm rounded-xl border border-gray-800 overflow-hidden">
-                <div className="grid grid-cols-12 items-center text-gray-400 font-semibold uppercase text-xs border-b border-gray-800 px-4 py-3">
-                    <div className="col-span-1 text-left">Rank</div>
-                    <div className="col-span-6 text-left">Community</div>
-                    <div className="col-span-2 text-center">Members</div>
-                    <div className="col-span-3 text-right">Rating</div>
+            <div className="bg-[#0c0c0e] border border-zinc-800 overflow-hidden font-mono">
+                <div className="grid grid-cols-12 items-center text-zinc-500 font-bold uppercase text-[10px] tracking-wider border-b border-zinc-800 px-4 py-2.5 bg-black/40">
+                    <div className="col-span-1 text-left">RANK</div>
+                    <div className="col-span-6 text-left">COMMUNITY</div>
+                    <div className="col-span-2 text-center">MEMBERS</div>
+                    <div className="col-span-3 text-right">RATING</div>
                 </div>
-                <div ref={leaderboardItemsContainerRef} className="divide-y divide-gray-800">
+                <div ref={leaderboardItemsContainerRef} className="divide-y divide-zinc-900">
                     {restOfLeaderboard.slice(0, visibleCount).map((community, index) => (
                          <div 
                             key={community.id} 
-                            className="grid grid-cols-12 items-center py-3 px-4 hover:bg-invox-dark/30 transition-colors duration-200"
+                            className="grid grid-cols-12 items-center py-2.5 px-4 hover:bg-zinc-950 transition-colors text-xs"
                         >
-                            <div className="col-span-1 text-left font-bold text-lg text-gray-400">{index + 4}</div>
+                            <div className="col-span-1 text-left font-bold text-zinc-500">#{(index + 4).toString().padStart(2, '0')}</div>
                             <div className="col-span-6 text-left">
                                 <div className="flex items-center gap-3">
                                     {community.avatarUrl ? (
-                                        <img src={community.avatarUrl} onError={handleImageError} alt={community.name} className="w-8 h-8 rounded-full object-cover" />
+                                        <img src={community.avatarUrl} onError={handleImageError} alt={community.name} className="w-7 h-7 border border-zinc-800 object-cover" />
                                     ) : (
-                                        <div className="w-8 h-8 rounded-full bg-invox-dark flex items-center justify-center">
-                                            <UsersIcon className="w-5 h-5 text-gray-400" />
+                                        <div className="w-7 h-7 bg-zinc-950 border border-zinc-800 flex items-center justify-center">
+                                            <UsersIcon className="w-4 h-4 text-zinc-500" />
                                         </div>
                                     )}
-                                    <div>
-                                        <p className="font-semibold text-white flex items-center gap-1.5">{community.name} {community.isVerified && <ShieldCheckIcon className="w-4 h-4 text-blue-400" />}</p>
+                                    <div className="overflow-hidden">
+                                        <p className="font-bold text-white truncate flex items-center gap-1.5">{community.name} {community.isVerified && <ShieldCheckIcon className="w-3.5 h-3.5 text-zinc-400" />}</p>
                                     </div>
                                 </div>
                             </div>
-                            <div className="col-span-2 text-center font-semibold text-white">{formatNumber(community.members)}</div>
-                            <div className="col-span-3 text-right font-semibold text-white flex items-center justify-end gap-1">
-                                {community.rating.toFixed(1)} <StarIcon className="w-4 h-4 text-yellow-400" />
+                            <div className="col-span-2 text-center font-bold text-white">{formatNumber(community.members)}</div>
+                            <div className="col-span-3 text-right font-bold text-white flex items-center justify-end gap-1">
+                                {community.rating.toFixed(1)} <StarIcon className="w-3.5 h-3.5 text-white" />
                             </div>
                         </div>
                     ))}
                 </div>
                  {(visibleCount < restOfLeaderboard.length || visibleCount > 10) && (
-                    <div className="p-4 text-center flex justify-center items-center gap-4">
+                    <div className="p-3 border-t border-zinc-800 bg-black/40 text-center flex justify-center items-center gap-3 font-mono">
                         {visibleCount > 10 && (
                              <button 
                                 onClick={handleViewLess} 
-                                className="bg-invox-dark text-white font-semibold py-2 px-6 rounded-lg hover:bg-gray-700 hover:bg-opacity-70 transition-colors"
+                                className="bg-zinc-900 border border-zinc-800 text-zinc-300 font-mono text-xs uppercase px-5 py-2 hover:bg-zinc-800 hover:text-white transition-colors"
                             >
                                 View Less
                             </button>
@@ -471,7 +480,7 @@ const CommunitiesPage = () => {
                         {visibleCount < restOfLeaderboard.length && (
                             <button 
                                 onClick={handleLoadMore} 
-                                className="bg-invox-red text-white font-semibold py-2 px-6 rounded-lg hover:bg-invox-red-hover transition-colors"
+                                className="bg-white text-black font-mono text-xs font-bold uppercase px-6 py-2 hover:bg-zinc-200 transition-colors"
                             >
                                 Load More
                             </button>
@@ -481,25 +490,28 @@ const CommunitiesPage = () => {
             </div>
 
             {/* Suggestions Section */}
-            <div className="space-y-8 mt-12">
+            <div className="space-y-6 mt-10">
                 <div className="flex justify-between items-center">
-                    <h2 className="text-2xl font-bold text-white">Suggestions</h2>
-                    <button className="flex items-center gap-2 bg-invox-dark-accent border border-gray-800 rounded-lg px-4 py-2 text-sm text-white font-semibold hover:bg-gray-700 transition-all duration-200">
-                        <FilterIcon className="w-5 h-5 text-gray-400" />
+                    <div>
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">// DISCOVER</span>
+                        <h2 className="text-sm font-bold font-mono uppercase tracking-wide text-white">Suggested Networks</h2>
+                    </div>
+                    <button className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1.5 font-mono text-xs text-zinc-300 uppercase hover:text-white hover:border-zinc-600 transition-colors">
+                        <FilterIcon className="w-4 h-4 text-zinc-500" />
                         <span>Filter by</span>
-                        <ChevronDownIcon className="w-5 h-5 text-gray-400" />
+                        <ChevronDownIcon className="w-4 h-4 text-zinc-500" />
                     </button>
                 </div>
                 {suggestionData.map(categoryData => (
                   <div key={categoryData.category} className="mb-6">
-                    <h3 className="text-lg font-semibold text-invox-light-gray mb-3 border-b border-gray-800 pb-2">{categoryData.category}</h3>
-                    <div className="flex overflow-x-auto space-x-4 pb-2 no-scrollbar items-stretch">
+                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 mb-3 border-b border-zinc-800 pb-1.5">{categoryData.category}</h3>
+                    <div className="flex overflow-x-auto space-x-3 pb-2 no-scrollbar items-stretch">
                       {categoryData.communities.map(community => (
                         <CommunitySuggestionCard key={community.id} community={community} />
                       ))}
-                       <button className="flex-shrink-0 w-40 h-auto bg-invox-dark-accent border border-gray-800 rounded-lg flex flex-col items-center justify-center text-invox-light-gray hover:bg-gray-700 hover:text-white transition-all duration-200 transform hover:scale-105 active:scale-95">
-                          <ForwardIcon className="w-8 h-8 mb-2" />
-                          <span className="font-semibold">Load More</span>
+                       <button className="flex-shrink-0 w-36 bg-[#0c0c0e] border border-zinc-800 flex flex-col items-center justify-center text-zinc-400 hover:border-zinc-600 hover:text-white transition-colors">
+                          <ForwardIcon className="w-6 h-6 mb-2 text-zinc-500" />
+                          <span className="font-mono text-xs uppercase font-semibold">Load More</span>
                       </button>
                     </div>
                   </div>

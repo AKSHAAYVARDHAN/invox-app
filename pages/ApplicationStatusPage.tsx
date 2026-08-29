@@ -39,29 +39,33 @@ const ApplicationTracker: React.FC<{ status: ApplicationStatus }> = ({ status })
 
     if (status === 'Rejected') {
         return (
-            <div className="flex items-center gap-2 text-invox-red bg-invox-red/10 p-3 rounded-lg border border-invox-red/20">
-                <XCircleIcon className="w-6 h-6 flex-shrink-0" />
-                <span className="font-semibold">Application Rejected</span>
+            <div className="flex items-center gap-2 text-red-400 bg-red-950/30 p-3 border border-red-900/50 font-mono text-xs">
+                <XCircleIcon className="w-4 h-4 flex-shrink-0" />
+                <span className="font-bold tracking-wider uppercase">// PIPELINE_STATUS: APPLICATION REJECTED</span>
             </div>
         );
     }
 
     return (
-        <div className="flex items-center w-full">
+        <div className="flex items-center w-full font-mono">
             {stages.map((stage, index) => (
                 <React.Fragment key={stage}>
                     <div className="flex flex-col items-center text-center">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-colors ${index <= currentStageIndex ? 'bg-green-500 border-green-500' : 'bg-gray-700 border-gray-600'}`}>
+                        <div className={`w-6 h-6 flex items-center justify-center border text-[10px] transition-colors ${
+                            index <= currentStageIndex 
+                                ? 'bg-white text-black border-white font-bold' 
+                                : 'bg-zinc-950 border-zinc-800 text-zinc-600'
+                        }`}>
                             {index < currentStageIndex ? (
-                                <CheckIcon className="w-5 h-5 text-white" />
+                                <CheckIcon className="w-3.5 h-3.5 text-black" />
                             ) : (
-                                <div className={`w-3 h-3 rounded-full transition-colors ${index === currentStageIndex ? 'bg-white animate-pulse' : 'bg-gray-500'}`}></div>
+                                <span>0{index + 1}</span>
                             )}
                         </div>
-                        <p className={`mt-2 text-xs font-semibold max-w-[70px] ${index <= currentStageIndex ? 'text-white' : 'text-gray-500'}`}>{stage}</p>
+                        <p className={`mt-1.5 text-[9px] uppercase tracking-wider max-w-[70px] ${index <= currentStageIndex ? 'text-white font-bold' : 'text-zinc-600'}`}>{stage}</p>
                     </div>
                     {index < stages.length - 1 && (
-                        <div className={`flex-1 h-1 mx-2 transition-colors ${index < currentStageIndex ? 'bg-green-500' : 'bg-gray-600'}`}></div>
+                        <div className={`flex-1 h-px mx-2 transition-colors ${index < currentStageIndex ? 'bg-white' : 'bg-zinc-800'}`}></div>
                     )}
                 </React.Fragment>
             ))}
@@ -75,17 +79,17 @@ const ApplicationCard: React.FC<{ application: AppliedApplication }> = ({ applic
     if (!offer) return null;
 
     return (
-        <div className="bg-invox-dark-accent p-4 rounded-lg border border-gray-800">
+        <div className="bg-[#0c0c0e] p-4 border border-zinc-800 font-mono">
             <div className="flex items-start gap-4">
-                <img src={offer.companyAvatarUrl} onError={handleImageError} alt={offer.companyName} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
-                <div className="flex-1">
-                    <p className="font-bold text-white">{offer.companyName}</p>
-                    <h4 className="font-semibold text-lg text-gray-200 mt-1">{offer.title}</h4>
-                    <p className="text-sm text-gray-500 mt-1">Applied {application.appliedDate}</p>
+                <img src={offer.companyAvatarUrl} onError={handleImageError} alt={offer.companyName} className="w-11 h-11 border border-zinc-700 object-cover flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">// {offer.companyName}</span>
+                    <h4 className="font-bold text-sm text-white uppercase tracking-wider truncate">{offer.title}</h4>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">LOGGED: {application.appliedDate}</p>
                 </div>
             </div>
-            <div className="mt-4 pt-4 border-t border-gray-700/50">
-                <h5 className="text-sm font-semibold text-gray-400 mb-3">Status</h5>
+            <div className="mt-4 pt-3 border-t border-zinc-800">
+                <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest block mb-2">// PIPELINE_PROGRESS</span>
                 <ApplicationTracker status={application.status} />
             </div>
         </div>
@@ -158,26 +162,34 @@ const ApplicationStatusPage = () => {
     });
 
     return (
-        <div className="p-4">
-            <div className="flex items-center justify-between gap-4 mb-4">
-                <div className="flex items-center gap-4">
-                    <button onClick={() => navigate('/spotlight?tab=Leap&subTab=GoForIt')} className="text-invox-light-gray hover:text-white transition-transform duration-200 transform hover:scale-105 active:scale-100">
-                        <ArrowLeftIcon className="w-6 h-6" />
+        <div className="w-full">
+            {/* Header / Sub-nav */}
+            <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <button 
+                        onClick={() => navigate('/spotlight?tab=Leap&subTab=GoForIt')} 
+                        className="text-zinc-400 hover:text-white transition-colors"
+                        aria-label="Back"
+                    >
+                        <ArrowLeftIcon className="w-4 h-4" />
                     </button>
-                    <h1 className="text-2xl font-bold text-white">Application Status</h1>
+                    <div>
+                        <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest block leading-none">// PIPELINE_TRACKER</span>
+                        <h1 className="text-xs font-bold font-mono text-white tracking-wider uppercase mt-0.5">Application Status</h1>
+                    </div>
                 </div>
                 
                 {/* Sort Dropdown */}
                 <div className="relative" ref={sortDropdownRef}>
                     <button 
                         onClick={() => setSortMenuOpen(!sortMenuOpen)}
-                        className="flex items-center gap-2 bg-invox-dark-accent border border-gray-700 rounded-lg px-4 py-2 text-sm text-white font-semibold hover:bg-gray-800 transition-all duration-200 transform hover:scale-105 active:scale-95"
+                        className="flex items-center gap-2 bg-[#0c0c0e] border border-zinc-700 px-3 py-1.5 text-xs font-mono text-zinc-300 hover:text-white transition-all uppercase tracking-wider"
                     >
-                        <span>Sort by</span>
-                        <ChevronDownIcon className={`w-5 h-5 text-gray-400 transition-transform ${sortMenuOpen ? 'rotate-180' : ''}`} />
+                        <span>Sort</span>
+                        <ChevronDownIcon className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${sortMenuOpen ? 'rotate-180' : ''}`} />
                     </button>
                     {sortMenuOpen && (
-                        <div className="absolute right-0 mt-2 w-48 bg-invox-dark-accent border border-gray-700 rounded-lg shadow-lg z-10">
+                        <div className="absolute right-0 mt-1 w-44 bg-[#0c0c0e] border border-zinc-800 shadow-xl z-20 font-mono text-xs">
                             <ul className="py-1">
                                 {sortOptions.map(option => (
                                     <li key={option.value}>
@@ -186,7 +198,7 @@ const ApplicationStatusPage = () => {
                                                 setSortBy(option.value);
                                                 setSortMenuOpen(false);
                                             }}
-                                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-700/50 ${sortBy === option.value ? 'text-invox-red font-semibold' : 'text-white'}`}
+                                            className={`w-full text-left px-3 py-1.5 uppercase tracking-wider hover:bg-zinc-900 ${sortBy === option.value ? 'text-white font-bold bg-zinc-900/60' : 'text-zinc-400'}`}
                                         >
                                             {option.label}
                                         </button>
@@ -197,9 +209,8 @@ const ApplicationStatusPage = () => {
                     )}
                 </div>
             </div>
-            <hr className="border-gray-700 mb-6" />
 
-            <div className="space-y-4">
+            <div className="p-4 space-y-3">
                 {loading ? (
                     <>
                         <ApplicationCardSkeleton />
@@ -211,8 +222,9 @@ const ApplicationStatusPage = () => {
                         <ApplicationCard key={app.id} application={app} />
                     ))
                 ) : (
-                    <div className="text-center py-16 text-gray-400">
-                        <p>You haven't applied to any opportunities yet.</p>
+                    <div className="border border-zinc-800 bg-[#0c0c0e] p-8 text-center font-mono">
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest block mb-1">// NULL_RECORDS</span>
+                        <p className="text-zinc-400 text-xs uppercase tracking-wider">No active applications in pipeline</p>
                     </div>
                 )}
             </div>

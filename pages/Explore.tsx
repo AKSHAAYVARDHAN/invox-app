@@ -287,20 +287,20 @@ const ExplorePage = () => {
     }, [combinedPosts, activityFilter, activeTab, activeCategory, discoverFilter]);
 
     return (
-        <div className="p-4">
+        <div className="py-2">
             {/* Conditional Header: Filters change based on active main tab */}
             {activeTab === 'Feeds' ? (
                 <>
                     {/* Row 1: Category Buttons for Feeds */}
-                    <div className="flex items-center space-x-2 overflow-x-auto pb-3 mb-4 no-scrollbar">
+                    <div className="flex items-center space-x-1.5 overflow-x-auto pb-3 mb-3 no-scrollbar">
                         {categoryFilters.map(category => (
                             <button
                                 key={category}
                                 onClick={() => setActiveCategory(category)}
-                                className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                                className={`px-3 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider whitespace-nowrap transition-all duration-150 border ${
                                     activeCategory === category
-                                        ? 'bg-invox-red text-white'
-                                        : 'bg-invox-dark-accent text-gray-300 hover:bg-gray-700'
+                                        ? 'bg-white text-black border-white font-bold'
+                                        : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
                                 }`}
                             >
                                 {category}
@@ -323,12 +323,16 @@ const ExplorePage = () => {
                         onSelectionChange={(domains) => setDomainSelection('explore', domains)}
                     />
                     {/* Row 2: Sub-filters for Discover */}
-                     <div className="flex space-x-2 border border-gray-800 rounded-lg p-1 bg-invox-dark-accent mb-4">
+                     <div className="flex space-x-1 border border-zinc-800 bg-[#0c0c0e] p-1 mb-4">
                         {discoverFilters.map(filter => (
                             <button 
                                 key={filter}
                                 onClick={() => setDiscoverFilter(filter)}
-                                className={`flex-1 py-2 rounded-md transition-all duration-200 ${discoverFilter === filter ? 'bg-invox-red text-white font-semibold' : 'text-gray-400 hover:text-white hover:bg-gray-700'}`}
+                                className={`flex-1 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider transition-all duration-150 ${
+                                    discoverFilter === filter 
+                                        ? 'bg-zinc-800 text-white font-bold border border-zinc-700' 
+                                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent'
+                                }`}
                             >
                                 {filter}
                             </button>
@@ -338,30 +342,47 @@ const ExplorePage = () => {
             )}
 
             {/* Main Tabs: Feeds/Discover */}
-            <div className="flex border-b border-gray-800 mb-4">
+            <div className="flex border-b border-zinc-800 mb-5">
                 <button 
                     onClick={() => setActiveTab('Feeds')} 
-                    className={`w-1/2 text-center py-3 font-semibold transition-all duration-200 transform hover:-translate-y-px ${activeTab === 'Feeds' ? 'border-b-2 border-invox-red text-white' : 'text-gray-400 hover:text-white'}`}
+                    className={`w-1/2 text-center py-2.5 text-xs font-mono uppercase tracking-widest transition-all duration-150 flex items-center justify-center gap-2 ${
+                        activeTab === 'Feeds' 
+                            ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                            : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                    }`}
                 >
-                    Feeds
+                    <span className="w-1.5 h-1.5 bg-white opacity-0 transition-opacity" style={{ opacity: activeTab === 'Feeds' ? 1 : 0 }}></span>
+                    <span>// Feeds</span>
                 </button>
                 <button 
                     onClick={() => setActiveTab('Discover')}
-                    className={`w-1/2 text-center py-3 font-semibold transition-all duration-200 transform hover:-translate-y-px ${activeTab === 'Discover' ? 'border-b-2 border-invox-red text-white' : 'text-gray-400 hover:text-white'}`}
+                    className={`w-1/2 text-center py-2.5 text-xs font-mono uppercase tracking-widest transition-all duration-150 flex items-center justify-center gap-2 ${
+                        activeTab === 'Discover' 
+                            ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                            : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                    }`}
                 >
-                    Discover
+                    <span className="w-1.5 h-1.5 bg-white opacity-0 transition-opacity" style={{ opacity: activeTab === 'Discover' ? 1 : 0 }}></span>
+                    <span>// Discover</span>
                 </button>
             </div>
 
             {activityFilter && (
-                <div className="bg-invox-dark-accent p-3 rounded-lg border border-gray-800 mb-4">
-                    <h2 className="font-semibold text-white text-center">
+                <div className="bg-[#0c0c0e] p-3 border border-zinc-800 mb-4 flex items-center justify-between">
+                    <p className="font-mono text-xs text-zinc-300">
+                        <span className="text-zinc-500">// ACTIVE_FILTER: </span>
                         {`Showing ${activityFilter === 'threads' ? "threads you've commented on" : "queries you've shared insights on"}`}
-                    </h2>
+                    </p>
+                    <button 
+                        onClick={() => setActivityFilter?.(null)} 
+                        className="text-[10px] font-mono text-zinc-400 hover:text-white uppercase tracking-wider px-2 py-0.5 border border-zinc-800 hover:border-zinc-600"
+                    >
+                        Clear [ESC]
+                    </button>
                 </div>
             )}
 
-            <div>
+            <div className="space-y-4">
                 {loading ? (
                     <>
                         <FeedCardSkeleton />
@@ -402,8 +423,8 @@ const ExplorePage = () => {
                         );
                     })
                 ) : (
-                    <div className="text-center py-16 text-gray-400">
-                        <p>No posts found for this filter.</p>
+                    <div className="text-center py-16 border border-dashed border-zinc-800 bg-[#0c0c0e] p-8">
+                        <p className="font-mono text-xs text-zinc-500 tracking-wider uppercase">// NO RECORDS FOUND FOR THIS FILTER</p>
                     </div>
                 )}
             </div>

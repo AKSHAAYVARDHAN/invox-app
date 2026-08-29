@@ -153,104 +153,183 @@ const UploadsPage = () => {
     };
 
     return (
-        <div className="animate-fadeInUp flex flex-col">
-            {/* Top Navigation Bar - Fixed height items */}
-            <div className="flex-shrink-0">
-                <div className="flex space-x-2 border border-gray-800 rounded-lg p-1 bg-invox-dark-accent mb-4">
+        <div className="space-y-4">
+            {/* Top Navigation Bar */}
+            <div>
+                <div className="flex border-b border-zinc-800 mb-3">
                     {tabs.map(tab => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
-                            className={`flex-1 py-2 rounded-md transition-all duration-200 ${
-                                activeTab === tab ? 'bg-invox-red text-white font-semibold' : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                            className={`flex-1 text-center py-2.5 text-xs font-mono uppercase tracking-widest transition-all duration-150 flex items-center justify-center gap-2 ${
+                                activeTab === tab 
+                                    ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                    : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
                             }`}
                         >
-                            {tab}
+                            <span className="w-1.5 h-1.5 bg-white opacity-0 transition-opacity" style={{ opacity: activeTab === tab ? 1 : 0 }}></span>
+                            <span>// {tab}</span>
                         </button>
                     ))}
                 </div>
 
-                <div className="flex border-b border-gray-800 mb-8">
+                <div className="flex border-b border-zinc-800/80 mb-5">
                     {activeTab === 'Explore' && (
                         <>
-                            <button onClick={() => setExploreSubTab('Feeds')} className={`w-1/2 text-center py-3 font-semibold transition-all ${exploreSubTab === 'Feeds' ? 'border-b-2 border-invox-red text-white' : 'text-gray-400'}`}>Feeds</button>
-                            <button onClick={() => setExploreSubTab('Discover')} className={`w-1/2 text-center py-3 font-semibold transition-all ${exploreSubTab === 'Discover' ? 'border-b-2 border-invox-red text-white' : 'text-gray-400'}`}>Discover</button>
+                            <button 
+                                onClick={() => setExploreSubTab('Feeds')} 
+                                className={`w-1/2 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                    exploreSubTab === 'Feeds' 
+                                        ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                        : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                                }`}
+                            >
+                                <span>// Feeds</span>
+                            </button>
+                            <button 
+                                onClick={() => setExploreSubTab('Discover')} 
+                                className={`w-1/2 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                    exploreSubTab === 'Discover' 
+                                        ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                        : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                                }`}
+                            >
+                                <span>// Discover</span>
+                            </button>
                         </>
                     )}
                     {activeTab === 'Spotlight' && (
                         <>
-                            <button onClick={() => setSpotlightSubTab('Showcase')} className={`w-1/2 text-center py-3 font-semibold transition-all ${spotlightSubTab === 'Showcase' ? 'border-b-2 border-invox-red text-white' : 'text-gray-400'}`}>Showcase</button>
-                            <button onClick={() => setSpotlightSubTab('Collabs')} className={`w-1/2 text-center py-3 font-semibold transition-all ${spotlightSubTab === 'Collabs' ? 'border-b-2 border-invox-red text-white' : 'text-gray-400'}`}>Collabs</button>
+                            <button 
+                                onClick={() => setSpotlightSubTab('Showcase')} 
+                                className={`w-1/2 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                    spotlightSubTab === 'Showcase' 
+                                        ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                        : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                                }`}
+                            >
+                                <span>// Showcase</span>
+                            </button>
+                            <button 
+                                onClick={() => setSpotlightSubTab('Collabs')} 
+                                className={`w-1/2 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                    spotlightSubTab === 'Collabs' 
+                                        ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                        : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                                }`}
+                            >
+                                <span>// Collabs</span>
+                            </button>
                         </>
                     )}
                     {activeTab === 'Hub' && (
                         <>
-                            <button onClick={() => setHubSubTab('Stills')} className={`w-1/3 text-center py-3 font-semibold transition-all ${hubSubTab === 'Stills' ? 'border-b-2 border-invox-red text-white' : 'text-gray-400'}`}>Stills</button>
-                            <button onClick={() => setHubSubTab('Tapes')} className={`w-1/3 text-center py-3 font-semibold transition-all ${hubSubTab === 'Tapes' ? 'border-b-2 border-invox-red text-white' : 'text-gray-400'}`}>Tapes</button>
-                            <button onClick={() => setHubSubTab('Knacks')} className={`w-1/3 text-center py-3 font-semibold transition-all ${hubSubTab === 'Knacks' ? 'border-b-2 border-invox-red text-white' : 'text-gray-400'}`}>Knacks</button>
+                            <button 
+                                onClick={() => setHubSubTab('Stills')} 
+                                className={`w-1/3 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                    hubSubTab === 'Stills' 
+                                        ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                        : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                                }`}
+                            >
+                                <span>// Stills</span>
+                            </button>
+                            <button 
+                                onClick={() => setHubSubTab('Tapes')} 
+                                className={`w-1/3 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                    hubSubTab === 'Tapes' 
+                                        ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                        : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                                }`}
+                            >
+                                <span>// Tapes</span>
+                            </button>
+                            <button 
+                                onClick={() => setHubSubTab('Knacks')} 
+                                className={`w-1/3 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                    hubSubTab === 'Knacks' 
+                                        ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                        : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                                }`}
+                            >
+                                <span>// Knacks</span>
+                            </button>
                         </>
                     )}
                 </div>
             </div>
 
             {/* Content Area */}
-            <div className="flex-grow">
+            <div>
                 {loading ? (
                     <div className="py-20 flex justify-center items-center">
-                        <div className="w-10 h-10 border-4 border-invox-red border-t-transparent rounded-full animate-spin"></div>
+                        <div className="w-8 h-8 border-2 border-zinc-500 border-t-white rounded-full animate-spin"></div>
                     </div>
                 ) : filteredItems.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-24 px-4">
-                        <div className="text-center max-w-sm w-full">
-                            <h2 className="text-4xl font-black text-white mb-4 tracking-tighter uppercase">Create your first {name}</h2>
-                            <p className="text-gray-500 text-lg mb-12 leading-relaxed font-medium">Share your ideas with the {section} community.</p>
-                            <div className="space-y-4 max-w-xs mx-auto">
-                                <button onClick={() => { setOverrideContextName(name); setIsModalOpen(true); }} className="w-full flex items-center justify-center gap-3 bg-invox-dark-accent hover:bg-gray-800 text-white font-black uppercase tracking-widest py-5 rounded-xl border border-gray-800 transition-all shadow-2xl active:scale-95">
-                                    <PlusIcon className="w-5 h-5 text-invox-red" />
+                    <div className="flex flex-col items-center justify-center py-16 px-4 bg-[#0c0c0e] border border-zinc-800">
+                        <div className="text-center max-w-md w-full">
+                            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block mb-2">// BROADCAST_INITIALIZER</span>
+                            <h2 className="text-xl font-bold font-mono text-white mb-2 tracking-wider uppercase">Create Your First {name}</h2>
+                            <p className="text-zinc-400 text-xs font-mono mb-8 leading-relaxed">Publish and stream your transmissions to the {section} community.</p>
+                            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                                <button 
+                                    onClick={() => { setOverrideContextName(name); setIsModalOpen(true); }} 
+                                    className="flex items-center justify-center gap-2 bg-white hover:bg-zinc-200 text-black font-mono text-xs uppercase font-bold tracking-wider py-3 px-6 transition-all"
+                                >
+                                    <PlusIcon className="w-4 h-4" />
                                     <span>Create {name}</span>
                                 </button>
-                                <button onClick={() => { setOverrideContextName(name); setIsModalOpen(true); }} className="w-full flex items-center justify-center gap-3 bg-[#111111] hover:bg-[#161616] text-white font-black uppercase tracking-widest py-5 rounded-xl border border-[#1E1E1E] transition-all group">
-                                    <SparklesIcon className="w-5 h-5 text-[#3B82F6] group-hover:scale-125 transition-transform" />
+                                <button 
+                                    onClick={() => { setOverrideContextName(name); setIsModalOpen(true); }} 
+                                    className="flex items-center justify-center gap-2 bg-[#0c0c0e] hover:bg-zinc-900 text-zinc-300 hover:text-white font-mono text-xs uppercase tracking-wider py-3 px-6 border border-zinc-700 transition-all"
+                                >
+                                    <SparklesIcon className="w-4 h-4 text-zinc-400" />
                                     <span>Smart Create {name}</span>
                                 </button>
                             </div>
                         </div>
                     </div>
                 ) : (
-                    <div className="space-y-6 pb-10">
-                        <div className="flex items-center justify-between px-2">
-                            <h3 className="text-xl font-black text-white uppercase tracking-tighter">Your {name}s</h3>
-                            <button onClick={() => { setOverrideContextName(name); setIsModalOpen(true); }} className="flex items-center gap-2 bg-invox-red px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest hover:bg-invox-red-hover transition-all">
-                                <PlusIcon className="w-4 h-4" />
+                    <div className="space-y-4 pb-10">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">// USER_SIGNALS</span>
+                                <h3 className="text-xs font-mono font-bold text-white uppercase tracking-wider">Your {name}s ({filteredItems.length})</h3>
+                            </div>
+                            <button 
+                                onClick={() => { setOverrideContextName(name); setIsModalOpen(true); }} 
+                                className="flex items-center gap-1.5 bg-white text-black px-3.5 py-1.5 text-xs font-mono uppercase font-bold tracking-wider hover:bg-zinc-200 transition-all"
+                            >
+                                <PlusIcon className="w-3.5 h-3.5" />
                                 <span>New {name}</span>
                             </button>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {filteredItems.map(item => (
-                                <div key={item.id} className="bg-invox-dark-accent border border-gray-800 rounded-2xl overflow-hidden flex flex-col group hover:border-gray-600 transition-all relative">
+                                <div key={item.id} className="bg-[#0c0c0e] border border-zinc-800 flex flex-col group hover:border-zinc-700 transition-all relative">
                                     {item.mediaUrl && (
-                                        <div className="aspect-video bg-black overflow-hidden relative">
+                                        <div className="aspect-video bg-black overflow-hidden relative border-b border-zinc-800">
                                             {item.mediaType === 'video' ? (
                                                 <video src={item.mediaUrl} className="w-full h-full object-cover" controls />
                                             ) : (
-                                                <img src={item.mediaUrl} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500" onError={handleImageError} alt="Media" />
+                                                <img src={item.mediaUrl} className="w-full h-full object-cover" onError={handleImageError} alt="Media" />
                                             )}
                                         </div>
                                     )}
-                                    <div className="p-5 flex-grow">
+                                    <div className="p-4 flex-grow">
                                         <div className="flex items-center justify-between mb-2">
                                             <div className="flex items-center gap-2">
-                                                <span className="text-[10px] font-black text-invox-red uppercase tracking-widest">{item.category}</span>
+                                                <span className="text-[10px] font-mono font-bold text-white uppercase tracking-widest border border-zinc-700 px-1.5 py-0.5 bg-zinc-900/50">{item.category}</span>
                                                 {item.channelName && (
-                                                    <span className="text-[10px] font-semibold text-gray-400">· {item.channelName}</span>
+                                                    <span className="text-[10px] font-mono text-zinc-400">· {item.channelName}</span>
                                                 )}
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-[10px] font-bold text-gray-500">{new Date(item.createdAt).toLocaleDateString()}</span>
+                                                <span className="text-[10px] font-mono text-zinc-500">{new Date(item.createdAt).toLocaleDateString()}</span>
                                                 <button
                                                     onClick={() => handleDelete(item.id)}
                                                     disabled={deletingId === item.id}
-                                                    className="text-gray-500 hover:text-red-400 p-1 transition-colors"
+                                                    className="text-zinc-500 hover:text-red-400 p-1 transition-colors"
                                                     title="Delete signal"
                                                 >
                                                     {deletingId === item.id ? (
@@ -261,13 +340,13 @@ const UploadsPage = () => {
                                                 </button>
                                             </div>
                                         </div>
-                                        <h4 className="text-lg font-bold text-white mb-2 leading-tight">{item.aiSummary}</h4>
-                                        <p className="text-sm text-gray-400 line-clamp-3">{item.content}</p>
+                                        <h4 className="text-sm font-bold font-mono text-white mb-2 leading-tight uppercase tracking-wider">{item.aiSummary || item.oneLine}</h4>
+                                        <p className="text-xs text-zinc-400 font-mono line-clamp-3 leading-relaxed">{item.content}</p>
                                     </div>
-                                    <div className="p-4 border-t border-gray-800/50 flex items-center justify-around text-gray-500">
-                                        <div className="flex items-center gap-1.5"><HeartIcon className="w-4 h-4" /> <span className="text-xs font-bold">{item.stats.likes}</span></div>
-                                        <div className="flex items-center gap-1.5"><TrendingUpIcon className="w-4 h-4" /> <span className="text-xs font-bold">{item.stats.views}</span></div>
-                                        <div className="flex items-center gap-1.5"><ChatBubbleBottomCenterTextIcon className="w-4 h-4" /> <span className="text-xs font-bold">{item.stats.comments}</span></div>
+                                    <div className="p-3 border-t border-zinc-800/80 flex items-center justify-around text-zinc-400 text-xs font-mono">
+                                        <div className="flex items-center gap-1.5"><HeartIcon className="w-3.5 h-3.5" /> <span>{item.stats.likes}</span></div>
+                                        <div className="flex items-center gap-1.5"><TrendingUpIcon className="w-3.5 h-3.5" /> <span>{item.stats.views}</span></div>
+                                        <div className="flex items-center gap-1.5"><ChatBubbleBottomCenterTextIcon className="w-3.5 h-3.5" /> <span>{item.stats.comments}</span></div>
                                     </div>
                                 </div>
                             ))}

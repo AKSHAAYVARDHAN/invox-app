@@ -20,58 +20,63 @@ const StreamCard: React.FC<StreamCardProps> = ({ moment }) => {
 
     return (
         <>
-            <div className="bg-invox-dark-accent rounded-lg overflow-hidden border border-gray-800 p-4 mb-4">
+            <div className="bg-[#0c0c0e] border border-zinc-800 p-4 mb-4">
                 <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
-                        <img src={moment.author.avatarUrl} onError={handleImageError} alt={moment.author.name} className="w-10 h-10 rounded-full object-cover" />
-                        <p className="font-bold text-white">{moment.author.name}</p>
+                        <img src={moment.author.avatarUrl} onError={handleImageError} alt={moment.author.name} className="w-9 h-9 object-cover border border-zinc-700" />
+                        <div>
+                            <p className="font-bold text-white text-xs font-mono uppercase tracking-wider">{moment.author.name}</p>
+                            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">// {moment.type}</span>
+                        </div>
                     </div>
-                    <button className="text-invox-light-gray hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100">
-                        <EllipsisVerticalIcon className="w-6 h-6" />
+                    <button className="text-zinc-400 hover:text-white transition-colors p-1">
+                        <EllipsisVerticalIcon className="w-5 h-5" />
                     </button>
                 </div>
 
                 <AspectRatioBox 
                     ratio="video" 
-                    className="rounded-lg mb-4 group bg-invox-dark cursor-zoom-in"
-                    // FIX: Changed moment.imageUrl to moment.mediaUrl to match the StreamMoment type.
+                    className="mb-3 group bg-black cursor-zoom-in border border-zinc-800"
                     onClick={() => setZoomedImageUrl(moment.mediaUrl)}
                 >
-                    {/* FIX: Changed moment.imageUrl to moment.mediaUrl to match the StreamMoment type. */}
                     <img src={moment.mediaUrl} onError={handleImageError} alt={`${moment.type} by ${moment.author.name}`} className="w-full h-full object-cover" />
                     {moment.type === 'Tapes' && (
-                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center pointer-events-none">
-                            <PlayIcon className="w-16 h-16 text-white" />
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
+                            <div className="w-14 h-14 bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center">
+                                <PlayIcon className="w-8 h-8 text-white" />
+                            </div>
                         </div>
                     )}
-                    <div className="absolute bottom-4 right-4 flex flex-col gap-2">
-                        <button className="bg-black/50 backdrop-blur-sm rounded-full p-3 text-white hover:bg-invox-red transition-all duration-200 transform hover:scale-110 active:scale-100">
-                            <ChatBubbleBottomCenterTextIcon className="w-6 h-6" />
+                    <div className="absolute bottom-3 right-3 flex flex-col gap-2">
+                        <button className="bg-black/80 backdrop-blur-sm border border-zinc-700 p-2.5 text-white hover:bg-zinc-800 transition-colors">
+                            <ChatBubbleBottomCenterTextIcon className="w-5 h-5" />
                         </button>
-                        <button className="bg-invox-red rounded-full p-3 text-white hover:bg-invox-red-hover transition-all duration-200 transform hover:scale-110 active:scale-100">
-                            <PencilSwooshIcon className="w-6 h-6" />
+                        <button className="bg-white text-black border border-white p-2.5 hover:bg-zinc-200 transition-colors">
+                            <PencilSwooshIcon className="w-5 h-5" />
                         </button>
                     </div>
                 </AspectRatioBox>
+
+                <p className="text-xs text-zinc-300 font-mono mb-3 leading-relaxed">{moment.content}</p>
                 
-                <div className="flex justify-between items-center text-invox-light-gray">
+                <div className="flex justify-between items-center text-zinc-400 text-xs font-mono border-t border-zinc-800/80 pt-3">
                     <div className="flex items-center space-x-4">
-                        <button className="flex items-center space-x-1 hover:text-invox-red transition-all duration-200 transform hover:scale-110 active:scale-100">
-                            <HeartIcon className="w-5 h-5" />
+                        <button className="flex items-center space-x-1.5 hover:text-white transition-colors">
+                            <HeartIcon className="w-4 h-4" />
                             <span>{formatNumber(moment.stats.likes)}</span>
                         </button>
-                        <div className="flex items-center space-x-1">
-                            <TrendingUpIcon className="w-5 h-5" />
+                        <div className="flex items-center space-x-1.5 text-zinc-500">
+                            <TrendingUpIcon className="w-4 h-4" />
                             <span>{formatNumber(moment.stats.views)}</span>
                         </div>
-                        <button className="flex items-center space-x-1 hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100">
-                            <ChatIcon className="w-5 h-5" />
+                        <button className="flex items-center space-x-1.5 hover:text-white transition-colors">
+                            <ChatIcon className="w-4 h-4" />
                             <span>{formatNumber(moment.stats.comments)}</span>
                         </button>
                     </div>
                     <div className="flex items-center space-x-2">
-                        <button className="hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100"><ShareIcon className="w-5 h-5" /></button>
-                        <button className="hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100"><BookmarkIcon className="w-5 h-5" /></button>
+                        <button className="hover:text-white transition-colors p-1"><ShareIcon className="w-4 h-4" /></button>
+                        <button className="hover:text-white transition-colors p-1"><BookmarkIcon className="w-4 h-4" /></button>
                     </div>
                 </div>
             </div>
@@ -83,5 +88,7 @@ const StreamCard: React.FC<StreamCardProps> = ({ moment }) => {
         </>
     );
 };
+
+export default StreamCard;
 
 export default StreamCard;

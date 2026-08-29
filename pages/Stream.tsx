@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-// FIX: Use namespace import for react-router-dom to resolve missing member errors.
 import * as ReactRouterDOM from 'react-router-dom';
 import type { StreamMoment, StreamLoop } from '../types';
 import StreamCard from '../components/stream/StreamCard';
@@ -9,13 +8,9 @@ import LoopCardSkeleton from '../components/stream/LoopCardSkeleton';
 import { ArrowLeftIcon } from '../components/ui/Icons';
 
 const mockMoments: StreamMoment[] = [
-    // FIX: Replaced 'imageUrl' with 'mediaUrl' to match the StreamMoment type.
     { id: 'm1', author: { name: 'Richard', avatarUrl: 'https://picsum.photos/seed/richard/200' }, type: 'Stills', content: 'A beautiful landscape.', aiSummary: "A beautiful landscape.", mediaUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070&auto=format&fit=crop', mediaType: 'image', stats: { likes: 87200, views: 42300000, comments: 11200 } },
-    // FIX: Replaced 'imageUrl' with 'mediaUrl' to match the StreamMoment type.
     { id: 'm2', author: { name: 'Richard', avatarUrl: 'https://picsum.photos/seed/richard/200' }, type: 'Stills', content: 'Calm lake waters.', aiSummary: "Calm lake waters.", mediaUrl: 'https://images.unsplash.com/photo-1532274402911-5a369e4c4bb5?q=80&w=2070&auto=format&fit=crop', mediaType: 'image', stats: { likes: 75000, views: 31000000, comments: 9800 } },
-    // FIX: Replaced 'imageUrl' with 'mediaUrl' to match the StreamMoment type.
     { id: 'm3', author: { name: 'Richard', avatarUrl: 'https://picsum.photos/seed/richard/200' }, type: 'Tapes', content: 'A concert crowd.', aiSummary: "A concert crowd.", mediaUrl: 'https://images.unsplash.com/photo-1524368535928-5b5e00ddc76b?q=80&w=2070&auto=format&fit=crop', mediaType: 'image', stats: { likes: 120000, views: 65000000, comments: 25000 } },
-    // FIX: Replaced 'imageUrl' with 'mediaUrl' to match the StreamMoment type.
     { id: 'm4', author: { name: 'Richard', avatarUrl: 'https://picsum.photos/seed/richard/200' }, type: 'Knacks', content: 'Vintage photo style.', aiSummary: "Vintage photo style.", mediaUrl: 'https://images.unsplash.com/photo-1547826039-bfc35e0f1ea8?q=80&w=1972&auto=format&fit=crop', mediaType: 'image', stats: { likes: 95000, views: 48000000, comments: 18000 } },
 ];
 
@@ -48,7 +43,7 @@ const StreamPage = () => {
         if (activeMainTab === 'Moments') {
             const filteredMoments = mockMoments.filter(m => activeSubTab === 'All' || m.type === activeSubTab);
             return (
-                <div>
+                <div className="space-y-4">
                     {loading ? (
                         <>
                            <StreamCardSkeleton />
@@ -70,35 +65,57 @@ const StreamPage = () => {
                         </>
                     ) : mockLoops.map(loop => <LoopCard key={loop.id} loop={loop} />)}
                 </div>
-            )
+            );
         }
         return null;
     };
 
     return (
-        <div className="p-4">
-             <button onClick={() => navigate('/hub')} className="flex items-center gap-2 mb-4 text-invox-light-gray hover:text-white transition-transform duration-200 transform hover:scale-105 active:scale-100">
-                <ArrowLeftIcon className="w-6 h-6" />
-            </button>
-             <div className="flex space-x-2 border border-gray-700 rounded-lg p-1 bg-invox-dark-accent mb-4">
+        <div className="space-y-4">
+            <div className="flex items-center gap-3 mb-2">
+                <button 
+                    onClick={() => navigate('/hub')} 
+                    className="p-1.5 bg-[#0c0c0e] border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors"
+                    title="Back to Hub"
+                >
+                    <ArrowLeftIcon className="w-5 h-5" />
+                </button>
+                <div>
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">// STREAM_TRANSMISSION</span>
+                    <h1 className="text-sm font-bold font-mono uppercase tracking-wider text-white">Live Broadcast Feed</h1>
+                </div>
+            </div>
+
+            {/* Main Tabs */}
+            <div className="flex border-b border-zinc-800">
                 {mainTabs.map(tab => (
                     <button 
                         key={tab}
                         onClick={() => setActiveMainTab(tab)}
-                        className={`w-1/2 py-2 rounded-md transition-all duration-200 transform hover:scale-105 active:scale-95 ${activeMainTab === tab ? 'bg-invox-red text-white' : 'text-gray-400 hover:text-white'}`}
+                        className={`flex-1 text-center py-2.5 text-xs font-mono uppercase tracking-widest transition-all duration-150 flex items-center justify-center gap-2 ${
+                            activeMainTab === tab 
+                                ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                        }`}
                     >
-                        {tab}
+                        <span className="w-1.5 h-1.5 bg-white opacity-0 transition-opacity" style={{ opacity: activeMainTab === tab ? 1 : 0 }}></span>
+                        <span>// {tab}</span>
                     </button>
                 ))}
             </div>
 
+            {/* Sub-tabs for Moments */}
             {activeMainTab === 'Moments' && (
-                <div className="flex space-x-2 border border-gray-700 rounded-lg p-1 bg-invox-dark-accent mb-4">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
                     {subTabs.map(tab => (
                         <button 
                             key={tab}
                             onClick={() => setActiveSubTab(tab)}
-                            className={`flex-1 py-2 rounded-md transition-all duration-200 transform hover:scale-105 active:scale-95 text-sm ${activeSubTab === tab ? 'bg-invox-red text-white' : 'text-gray-400 hover:text-white'}`}
+                            className={`px-3 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider whitespace-nowrap transition-all duration-150 border ${
+                                activeSubTab === tab 
+                                    ? 'bg-white text-black border-white font-bold' 
+                                    : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
+                            }`}
                         >
                             {tab}
                         </button>

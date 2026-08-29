@@ -231,26 +231,45 @@ export const ThreadCard: React.FC<{ post: Post }> = ({ post }) => {
 
     return (
         <>
-            <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4 mb-4">
+            <div className="bg-[#0c0c0e] border border-zinc-800/90 hover:border-zinc-700/80 p-4 mb-4 transition-all duration-150">
                 {/* Header */}
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">
                     <div className="flex items-center gap-3">
-                        <img src={post.author.avatarUrl} onError={handleImageError} alt={post.author.name} className="w-10 h-10 rounded-full" />
-                        <div className="flex items-center gap-1">
-                            <p className="font-bold text-white">{post.author.name}</p>
-                            {post.author.isVerified && <CheckBadgeIcon className="w-5 h-5 text-blue-500" />}
+                        <img 
+                            src={post.author.avatarUrl} 
+                            onError={handleImageError} 
+                            alt={post.author.name} 
+                            className="w-9 h-9 rounded-none object-cover border border-zinc-700" 
+                        />
+                        <div>
+                            <div className="flex items-center gap-1.5">
+                                <p className="font-mono text-xs font-bold text-white uppercase tracking-wider">{post.author.name}</p>
+                                {post.author.isVerified && <CheckBadgeIcon className="w-3.5 h-3.5 text-zinc-400" />}
+                            </div>
+                            <p className="text-[10px] font-mono text-zinc-500 mt-0.5">// TYPE: THREAD</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 text-invox-light-gray">
-                        <button onClick={handleAIAssistantClick} className="hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100" aria-label="Ask AI about this post"><SparklesIcon className="w-6 h-6" /></button>
-                        <button className="hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100" aria-label="More options"><EllipsisVerticalIcon className="w-6 h-6" /></button>
+                    <div className="flex items-center gap-2 text-zinc-400">
+                        <button 
+                            onClick={handleAIAssistantClick} 
+                            className="p-1.5 border border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-800 hover:text-white transition-colors" 
+                            aria-label="Ask AI about this post"
+                        >
+                            <SparklesIcon className="w-4 h-4" />
+                        </button>
+                        <button 
+                            className="p-1.5 border border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-800 hover:text-white transition-colors" 
+                            aria-label="More options"
+                        >
+                            <EllipsisVerticalIcon className="w-4 h-4" />
+                        </button>
                     </div>
                 </div>
 
                 {/* Content */}
-                <div className="mt-4">
-                    <p className="text-xl font-semibold italic text-white">"{post.aiSummary}"</p>
-                    <p className="text-invox-light-gray mt-2">{post.content}</p>
+                <div className="mt-3.5">
+                    <p className="text-base font-semibold font-mono text-white tracking-tight">"{post.aiSummary}"</p>
+                    <p className="text-zinc-400 text-xs sm:text-sm mt-2 leading-relaxed font-sans">{post.content}</p>
                 </div>
 
                 {/* Media */}
@@ -258,7 +277,7 @@ export const ThreadCard: React.FC<{ post: Post }> = ({ post }) => {
                     <AspectRatioBox
                         ref={mediaContainerRef}
                         ratio="video"
-                        className={`mt-4 rounded-2xl border border-gray-800 bg-invox-dark group ${!isVisible || (!isVideo ? 'cursor-zoom-in' : 'cursor-pointer')}`}
+                        className={`mt-3.5 border border-zinc-800 bg-black group ${!isVisible || (!isVideo ? 'cursor-zoom-in' : 'cursor-pointer')}`}
                         onMouseEnter={() => setIsControlsVisible(true)}
                         onMouseLeave={() => setIsControlsVisible(false)}
                         onClick={isVisible ? (isVideo ? togglePlayPause : () => setZoomedImageUrl(post.mediaUrl || null)) : undefined}
@@ -281,13 +300,13 @@ export const ThreadCard: React.FC<{ post: Post }> = ({ post }) => {
                                         className="w-full h-full object-cover"
                                     />
                                     
-                                    <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${!isPlaying ? 'opacity-100' : 'opacity-0'} bg-black/30 pointer-events-none`}>
-                                        <div className="w-20 h-20 bg-black/50 rounded-full flex items-center justify-center backdrop-blur-sm">
-                                            <PlayIcon className="w-10 h-10 text-white" />
+                                    <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${!isPlaying ? 'opacity-100' : 'opacity-0'} bg-black/40 pointer-events-none`}>
+                                        <div className="w-14 h-14 bg-black/80 border border-white/20 flex items-center justify-center backdrop-blur-sm">
+                                            <PlayIcon className="w-6 h-6 text-white" />
                                         </div>
                                     </div>
                                     
-                                    <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 transition-opacity duration-300 ${isControlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0'}`} onClick={(e) => e.stopPropagation()}>
+                                    <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-2.5 transition-opacity duration-200 ${isControlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0'}`} onClick={(e) => e.stopPropagation()}>
                                         <div className="w-full mb-2">
                                             <input
                                                 type="range"
@@ -297,17 +316,17 @@ export const ThreadCard: React.FC<{ post: Post }> = ({ post }) => {
                                                 onChange={handleSeek}
                                                 onPointerDown={handleProgressPointerDown}
                                                 aria-label="Video progress"
-                                                className="w-full h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-invox-red"
+                                                className="w-full h-1 bg-zinc-700 appearance-none cursor-pointer accent-white"
                                             />
                                         </div>
-                                        <div className="flex items-center justify-between gap-4 text-white">
-                                            <div className="flex items-center gap-3">
-                                                <button onClick={togglePlayPause} className="p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label={isPlaying ? 'Pause video' : 'Play video'}>
-                                                    {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
+                                        <div className="flex items-center justify-between gap-3 text-white">
+                                            <div className="flex items-center gap-2">
+                                                <button onClick={togglePlayPause} className="p-1 border border-zinc-700 bg-black/60 hover:bg-zinc-800 transition-colors" aria-label={isPlaying ? 'Pause video' : 'Play video'}>
+                                                    {isPlaying ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4" />}
                                                 </button>
-                                                <div className="flex items-center gap-2 group/volume">
-                                                    <button onClick={toggleMute} className="p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label={isMuted ? 'Unmute video' : 'Mute video'}>
-                                                        {isMuted || volume === 0 ? <VolumeOffIcon className="w-6 h-6" /> : <VolumeUpIcon className="w-6 h-6" />}
+                                                <div className="flex items-center gap-1 group/volume">
+                                                    <button onClick={toggleMute} className="p-1 border border-zinc-700 bg-black/60 hover:bg-zinc-800 transition-colors" aria-label={isMuted ? 'Unmute video' : 'Mute video'}>
+                                                        {isMuted || volume === 0 ? <VolumeOffIcon className="w-4 h-4" /> : <VolumeUpIcon className="w-4 h-4" />}
                                                     </button>
                                                     <input
                                                         type="range"
@@ -317,18 +336,18 @@ export const ThreadCard: React.FC<{ post: Post }> = ({ post }) => {
                                                         value={isMuted ? 0 : volume}
                                                         onChange={handleVolumeChange}
                                                         aria-label="Volume control"
-                                                        className="w-0 h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-invox-red transition-all duration-300 opacity-0 group-hover/volume:opacity-100 group-hover/volume:w-20"
+                                                        className="w-0 h-1 bg-zinc-700 appearance-none cursor-pointer accent-white transition-all duration-200 opacity-0 group-hover/volume:opacity-100 group-hover/volume:w-16"
                                                     />
                                                 </div>
                                             </div>
                                             
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-mono w-24 text-center">{formatTime(progress)} / {formatTime(duration)}</span>
-                                                <button onClick={cyclePlaybackRate} className="text-xs font-bold w-14 text-center p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label="Change playback speed">
+                                            <div className="flex items-center gap-2 font-mono text-[11px]">
+                                                <span className="text-zinc-300 tracking-wider">[{formatTime(progress)} / {formatTime(duration)}]</span>
+                                                <button onClick={cyclePlaybackRate} className="px-1.5 py-0.5 border border-zinc-700 bg-black/60 hover:bg-zinc-800 text-[10px] font-bold" aria-label="Change playback speed">
                                                     {playbackRate.toFixed(2)}x
                                                 </button>
-                                                <button onClick={toggleFullScreen} className="p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}>
-                                                    {isFullscreen ? <ArrowsPointingInIcon className="w-6 h-6" /> : <ArrowsPointingOutIcon className="w-6 h-6" />}
+                                                <button onClick={toggleFullScreen} className="p-1 border border-zinc-700 bg-black/60 hover:bg-zinc-800" aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}>
+                                                    {isFullscreen ? <ArrowsPointingInIcon className="w-4 h-4" /> : <ArrowsPointingOutIcon className="w-4 h-4" />}
                                                 </button>
                                             </div>
                                         </div>
@@ -343,70 +362,62 @@ export const ThreadCard: React.FC<{ post: Post }> = ({ post }) => {
                     </AspectRatioBox>
                 )}
 
-
-                {/* Carousel Dots */}
-                <div className="flex justify-center items-center gap-1.5 mt-3">
-                    <div className="w-2.5 h-2.5 bg-gray-400 rounded-full"></div>
-                    <div className="w-2.5 h-2.5 bg-gray-700 rounded-full"></div>
-                    <div className="w-2.5 h-2.5 bg-gray-700 rounded-full"></div>
-                </div>
-
                 {/* Stats Bar */}
-                <div className="mt-4 border border-gray-800 rounded-lg px-4 py-2 flex justify-around items-center">
+                <div className="mt-4 border-t border-zinc-800/80 pt-3 flex justify-between items-center font-mono text-xs text-zinc-400">
                     <button 
                         onClick={handleLikeClick}
-                        className={`flex items-center gap-1.5 transition-all duration-200 transform hover:scale-110 active:scale-100 ${
-                            isLiked ? 'text-invox-red font-bold' : 'text-invox-light-gray hover:text-white'
+                        className={`flex items-center gap-1.5 px-2 py-1 border border-transparent hover:border-zinc-800 transition-colors ${
+                            isLiked ? 'text-rose-500 font-bold border-zinc-800 bg-zinc-900/60' : 'hover:text-white'
                         }`}
                         aria-label="Upvote thread"
                     >
-                        <ArrowUpIcon className={`w-5 h-5 ${isLiked ? 'stroke-[2.5]' : ''}`} />
-                        <span className="text-sm font-semibold">{formatNumber(likeCount)}</span>
+                        <ArrowUpIcon className={`w-4 h-4 ${isLiked ? 'stroke-[2.5]' : ''}`} />
+                        <span>{formatNumber(likeCount)}</span>
                     </button>
-                    <div className="flex items-center gap-1.5 text-invox-light-gray" role="status" aria-label={`${formatNumber(post.stats.views)} views`}>
-                        <TrendingUpIcon className="w-5 h-5" />
-                        <span className="text-sm font-semibold">{formatNumber(post.stats.views)}</span>
+                    <div className="flex items-center gap-1.5 px-2 py-1 text-zinc-500" role="status" aria-label={`${formatNumber(post.stats.views)} views`}>
+                        <TrendingUpIcon className="w-4 h-4" />
+                        <span>{formatNumber(post.stats.views)}</span>
                     </div>
                     <button 
                         onClick={handleAIAssistantClick}
-                        className="flex items-center gap-1.5 text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100" 
+                        className="flex items-center gap-1.5 px-2 py-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors" 
                         aria-label="View comments"
                     >
-                        <PresentationChartBarIcon className="w-5 h-5" />
-                        <span className="text-sm font-semibold">{formatNumber(post.stats.comments)}</span>
+                        <PresentationChartBarIcon className="w-4 h-4" />
+                        <span>{formatNumber(post.stats.comments)}</span>
                     </button>
                     <button 
                         onClick={handleShareClick}
-                        className={`transition-all duration-200 transform hover:scale-110 active:scale-100 relative ${
-                            copied ? 'text-green-400' : 'text-invox-light-gray hover:text-white'
+                        className={`p-1 border border-transparent hover:border-zinc-800 transition-colors relative ${
+                            copied ? 'text-emerald-400 border-zinc-800 bg-zinc-900' : 'hover:text-white'
                         }`}
                         aria-label="Share thread"
                     >
-                        <ForwardIcon className="w-5 h-5" />
+                        <ForwardIcon className="w-4 h-4" />
                         {copied && (
-                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black/90 text-green-400 text-[10px] px-1.5 py-0.5 rounded uppercase font-black whitespace-nowrap">
+                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black border border-emerald-500 text-emerald-400 text-[9px] px-1 py-0.5 uppercase font-mono whitespace-nowrap">
                                 Copied
                             </span>
                         )}
                     </button>
                     <button 
                         onClick={handleSaveClick}
-                        className={`transition-all duration-200 transform hover:scale-110 active:scale-100 ${
-                            isSaved ? 'text-invox-red' : 'text-invox-light-gray hover:text-white'
+                        className={`p-1 border border-transparent hover:border-zinc-800 transition-colors ${
+                            isSaved ? 'text-white border-zinc-700 bg-zinc-800' : 'hover:text-white'
                         }`}
                         aria-label="Save thread"
                     >
-                        <BookmarkIcon className={`w-5 h-5 ${isSaved ? 'fill-current' : ''}`} />
+                        <BookmarkIcon className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
                     </button>
                 </div>
 
                 {/* Action Button */}
-                <div className="mt-4">
+                <div className="mt-3">
                     <button 
                         onClick={handleAIAssistantClick}
-                        className="w-full bg-invox-dark-accent border border-gray-700 text-white font-semibold py-2.5 rounded-lg hover:bg-gray-800 transition-all duration-200 transform hover:scale-[1.02] active:scale-100"
+                        className="w-full bg-zinc-900/60 border border-zinc-700/80 text-white font-mono text-xs uppercase tracking-wider py-2.5 hover:bg-zinc-800 hover:border-zinc-500 transition-all duration-150 flex items-center justify-center gap-2"
                     >
-                        Comment
+                        <span>// COMMENT</span>
                     </button>
                 </div>
             </div>

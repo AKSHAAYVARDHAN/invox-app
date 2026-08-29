@@ -630,38 +630,38 @@ const pinnedUserNames = [
 ];
 
 const SuggestionCardSkeleton = () => (
-    <div className="bg-invox-dark-accent p-4 rounded-lg border border-gray-800 flex gap-4 min-h-48 animate-pulse">
+    <div className="bg-[#0c0c0e] p-4 border border-zinc-800 flex gap-4 min-h-48 animate-pulse">
         <div className="flex-1 flex flex-col">
             <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-gray-700"></div>
-                <div className="h-4 w-24 bg-gray-700 rounded"></div>
+                <div className="w-8 h-8 rounded-full bg-zinc-800"></div>
+                <div className="h-4 w-24 bg-zinc-800"></div>
             </div>
             <div className="mt-3 space-y-2 flex-grow">
-                <div className="h-4 w-full bg-gray-700 rounded"></div>
-                <div className="h-4 w-5/6 bg-gray-700 rounded"></div>
+                <div className="h-4 w-full bg-zinc-800"></div>
+                <div className="h-4 w-5/6 bg-zinc-800"></div>
             </div>
-            <div className="h-4 w-20 bg-gray-700 rounded mt-3"></div>
+            <div className="h-4 w-20 bg-zinc-800 mt-3"></div>
         </div>
-        <div className="w-40 h-40 rounded-md bg-gray-700 self-center"></div>
+        <div className="w-40 h-40 bg-zinc-800 self-center"></div>
     </div>
 );
 
 const ProfileSuggestionCardSkeleton = () => (
-    <div className="bg-invox-dark-accent p-4 rounded-lg border border-gray-800 flex flex-col min-h-48 animate-pulse">
+    <div className="bg-[#0c0c0e] p-4 border border-zinc-800 flex flex-col min-h-48 animate-pulse">
         <div className="flex justify-between items-start mb-3">
             <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gray-700"></div>
-                <div className="h-6 w-24 bg-gray-700 rounded"></div>
+                <div className="w-10 h-10 rounded-full bg-zinc-800"></div>
+                <div className="h-6 w-24 bg-zinc-800"></div>
             </div>
-            <div className="w-24 h-8 bg-gray-700 rounded-lg"></div>
+            <div className="w-24 h-8 bg-zinc-800"></div>
         </div>
         <div className="flex-grow space-y-2">
-            <div className="h-4 w-full bg-gray-700 rounded"></div>
-            <div className="h-4 w-5/6 bg-gray-700 rounded"></div>
+            <div className="h-4 w-full bg-zinc-800"></div>
+            <div className="h-4 w-5/6 bg-zinc-800"></div>
         </div>
         <div className="flex justify-between items-center mt-auto pt-3">
-            <div className="h-4 w-20 bg-gray-700 rounded"></div>
-            <div className="h-4 w-20 bg-gray-700 rounded"></div>
+            <div className="h-4 w-20 bg-zinc-800"></div>
+            <div className="h-4 w-20 bg-zinc-800"></div>
         </div>
     </div>
 );
@@ -671,15 +671,15 @@ const MediaPlaceholder: React.FC<{ thumbnailUrl?: string; isVideo: boolean }> = 
         return (
             <>
                 <img src={thumbnailUrl} onError={handleImageError} alt="Video poster" className="w-full h-full object-cover" />
-                <div className="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none">
-                     <div className="w-20 h-20 bg-black/50 rounded-full flex items-center justify-center backdrop-blur-sm">
-                        <PlayIcon className="w-10 h-10 text-white" />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
+                     <div className="w-16 h-16 bg-black/80 border border-zinc-700 flex items-center justify-center backdrop-blur-sm">
+                        <PlayIcon className="w-8 h-8 text-white" />
                     </div>
                 </div>
             </>
         );
     }
-    return <div className="w-full h-full bg-gray-700"></div>;
+    return <div className="w-full h-full bg-zinc-900"></div>;
 };
 
 const MessagingModal: React.FC<{
@@ -715,7 +715,6 @@ const MessagingModal: React.FC<{
         setInput('');
         setIsReplying(true);
 
-        // Simulate a reply for demonstration purposes
         setTimeout(() => {
             const replyMessage: ChatMessage = { role: 'recipient', text: "Thank you for your message. We have received it and a representative will get back to you shortly." };
             setMessages(prev => [...prev, replyMessage]);
@@ -724,90 +723,92 @@ const MessagingModal: React.FC<{
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-            <div className="bg-invox-dark-accent rounded-lg shadow-xl w-full max-w-2xl h-[80vh] flex flex-col p-4 border border-gray-800">
-                <div className="flex justify-between items-center">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4" onClick={onClose}>
+            <div className="bg-[#0c0c0e] border border-zinc-800 shadow-2xl w-full max-w-2xl h-[80vh] flex flex-col p-5" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center pb-3 border-b border-zinc-800">
                     <div className="flex items-center gap-3">
-                        <img src={offer.companyAvatarUrl} onError={handleImageError} alt={offer.companyName} className="w-10 h-10 rounded-lg object-cover" />
-                        <h2 className="text-xl font-bold text-white">{isInfoVisible ? "Offer Information" : offer.companyName}</h2>
+                        <img src={offer.companyAvatarUrl} onError={handleImageError} alt={offer.companyName} className="w-9 h-9 border border-zinc-700 object-cover" />
+                        <div>
+                            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">// DIRECT_COMMS</span>
+                            <h2 className="text-base font-bold font-mono text-white">{isInfoVisible ? "OFFER_SPECIFICATION" : offer.companyName}</h2>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
                         {showViewButton && (
                             <button
                                 onClick={() => setIsInfoVisible(!isInfoVisible)}
-                                className="p-2 rounded-full text-gray-300 hover:bg-gray-700 hover:text-white transition-all duration-200 transform hover:scale-105 active:scale-95"
+                                className="p-1.5 text-zinc-400 hover:text-white hover:border-zinc-600 border border-zinc-800 transition-colors"
                                 aria-label={isInfoVisible ? "Back to chat" : "View offer information"}
                             >
-                               {isInfoVisible ? <ChatIcon className="w-6 h-6" /> : <InformationCircleIcon className="w-6 h-6" />}
+                               {isInfoVisible ? <ChatIcon className="w-5 h-5" /> : <InformationCircleIcon className="w-5 h-5" />}
                             </button>
                         )}
-                        <button onClick={onClose} className="text-gray-400 hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100">
+                        <button onClick={onClose} className="p-1.5 text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 transition-colors" aria-label="Close modal">
                             <CloseIcon />
                         </button>
                     </div>
                 </div>
-                <hr className="border-gray-800 my-4" />
 
                 {isInfoVisible ? (
-                    <div className="flex-grow overflow-y-auto pr-2 space-y-6 text-gray-300 p-4 bg-invox-dark rounded-lg border border-gray-800">
+                    <div className="flex-grow overflow-y-auto pr-2 space-y-6 text-zinc-300 p-4 bg-black border border-zinc-800 my-4">
                         {/* Main Role Info */}
-                        <div className="pb-4 border-b border-gray-800">
+                        <div className="pb-4 border-b border-zinc-800">
                             <div className="flex items-start gap-4">
-                                <img src={offer.companyAvatarUrl} onError={handleImageError} alt={offer.companyName} className="w-14 h-14 rounded-lg object-cover" />
+                                <img src={offer.companyAvatarUrl} onError={handleImageError} alt={offer.companyName} className="w-12 h-12 border border-zinc-700 object-cover" />
                                 <div>
-                                    <h3 className="text-2xl font-bold text-white leading-tight">{offer.title}</h3>
-                                    <p className="text-gray-300 text-lg">{offer.companyName}</p>
+                                    <h3 className="text-xl font-bold font-mono text-white leading-tight">{offer.title}</h3>
+                                    <p className="text-zinc-400 font-mono text-sm">{offer.companyName}</p>
                                 </div>
                             </div>
                         </div>
 
                         {/* Job Details Grid */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-                            <div className="flex items-start gap-3">
-                                <CubeIcon className="w-5 h-5 text-gray-400 mt-1 flex-shrink-0" />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-xs">
+                            <div className="flex items-start gap-3 bg-zinc-950 p-3 border border-zinc-800/80">
+                                <CubeIcon className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
                                 <div>
-                                    <p className="text-sm text-gray-400">Job Type</p>
-                                    <p className="font-semibold text-white">{offer.type}</p>
+                                    <p className="text-[10px] uppercase text-zinc-500 tracking-wider">Job Type</p>
+                                    <p className="font-semibold text-white mt-0.5">{offer.type}</p>
                                 </div>
                             </div>
-                            <div className="flex items-start gap-3">
-                                <MapPinIcon className="w-5 h-5 text-gray-400 mt-1 flex-shrink-0" />
+                            <div className="flex items-start gap-3 bg-zinc-950 p-3 border border-zinc-800/80">
+                                <MapPinIcon className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
                                 <div>
-                                    <p className="text-sm text-gray-400">Location</p>
-                                    <p className="font-semibold text-white">{offer.location || 'N/A'}</p>
+                                    <p className="text-[10px] uppercase text-zinc-500 tracking-wider">Location</p>
+                                    <p className="font-semibold text-white mt-0.5">{offer.location || 'N/A'}</p>
                                 </div>
                             </div>
-                             <div className="flex items-start gap-3">
-                                <AcademicCapIcon className="w-5 h-5 text-gray-400 mt-1 flex-shrink-0" />
+                            <div className="flex items-start gap-3 bg-zinc-950 p-3 border border-zinc-800/80">
+                                <AcademicCapIcon className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
                                 <div>
-                                    <p className="text-sm text-gray-400">Experience Level</p>
-                                    <p className="font-semibold text-white">{offer.experienceLevel || 'N/A'}</p>
+                                    <p className="text-[10px] uppercase text-zinc-500 tracking-wider">Experience Level</p>
+                                    <p className="font-semibold text-white mt-0.5">{offer.experienceLevel || 'N/A'}</p>
                                 </div>
                             </div>
-                            <div className="flex items-start gap-3">
-                                <CubeIcon className="w-5 h-5 text-gray-400 mt-1 flex-shrink-0" />
+                            <div className="flex items-start gap-3 bg-zinc-950 p-3 border border-zinc-800/80">
+                                <CubeIcon className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
                                 <div>
-                                    <p className="text-sm text-gray-400">Category</p>
-                                    <p className="font-semibold text-white">{offer.category || 'N/A'}</p>
+                                    <p className="text-[10px] uppercase text-zinc-500 tracking-wider">Category</p>
+                                    <p className="font-semibold text-white mt-0.5">{offer.category || 'N/A'}</p>
                                 </div>
                             </div>
                         </div>
                         
-                        <hr className="border-gray-800" />
+                        <div className="border-t border-zinc-800" />
 
                         {/* Description */}
                         <div>
-                            <h3 className="text-lg font-semibold text-white mb-2">Job Description</h3>
-                            <p className="whitespace-pre-wrap leading-relaxed">{offer.description}</p>
+                            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block mb-2">// DESCRIPTION</span>
+                            <p className="whitespace-pre-wrap leading-relaxed text-xs text-zinc-300 font-mono">{offer.description}</p>
                         </div>
 
                         {/* Skills */}
                         {offer.skills && offer.skills.length > 0 && (
                             <div>
-                                <h3 className="text-lg font-semibold text-white mb-2">Skills Required</h3>
-                                <div className="flex flex-wrap gap-2">
+                                <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block mb-2">// REQUIRED_SKILLS</span>
+                                <div className="flex flex-wrap gap-1.5">
                                     {offer.skills.map(skill => (
-                                        <span key={skill} className="bg-gray-800/50 text-gray-300 px-3 py-1.5 rounded-md text-sm font-medium border border-gray-800">
+                                        <span key={skill} className="bg-zinc-900 text-zinc-300 px-2.5 py-1 text-[11px] font-mono border border-zinc-800">
                                             {skill}
                                         </span>
                                     ))}
@@ -815,29 +816,21 @@ const MessagingModal: React.FC<{
                             </div>
                         )}
                         
-                        {(offer.createdAt || offer.acceptedAt) && <hr className="border-gray-800" />}
-
-                        {/* Timeline */}
                         {(offer.createdAt || offer.acceptedAt) && (
                             <div>
-                                <h4 className="font-semibold text-white mb-3 text-base">Timeline</h4>
-                                <div className="space-y-4">
+                                <div className="border-t border-zinc-800 my-3" />
+                                <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block mb-2">// TIMELINE</span>
+                                <div className="space-y-2 font-mono text-xs">
                                     {offer.createdAt && (
-                                        <div className="flex items-center gap-3">
-                                            <CalendarDaysIcon className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                                            <div>
-                                                <p className="text-sm text-gray-400">Offer Received</p>
-                                                <p className="font-semibold text-white">{offer.createdAt}</p>
-                                            </div>
+                                        <div className="flex items-center gap-2 text-zinc-400">
+                                            <CalendarDaysIcon className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+                                            <span>Received: <span className="text-white">{offer.createdAt}</span></span>
                                         </div>
                                     )}
                                     {offer.acceptedAt && (
-                                        <div className="flex items-center gap-3">
-                                            <CalendarDaysIcon className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                                            <div>
-                                                <p className="text-sm text-gray-400">Offer Accepted</p>
-                                                <p className="font-semibold text-white">{offer.acceptedAt}</p>
-                                            </div>
+                                        <div className="flex items-center gap-2 text-zinc-400">
+                                            <CalendarDaysIcon className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+                                            <span>Accepted: <span className="text-white">{offer.acceptedAt}</span></span>
                                         </div>
                                     )}
                                 </div>
@@ -845,21 +838,22 @@ const MessagingModal: React.FC<{
                         )}
                     </div>
                 ) : (
-                    <div className="flex-grow overflow-y-auto pr-2 space-y-4">
+                    <div className="flex-grow overflow-y-auto pr-2 space-y-3 my-4">
                         {messages.map((msg, index) => (
                             <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-md p-3 rounded-lg ${msg.role === 'user' ? 'bg-invox-red text-white' : 'bg-gray-700 text-invox-light-gray'}`}>
+                                <div className={`max-w-md p-3 font-mono text-xs ${msg.role === 'user' ? 'bg-white text-black font-semibold' : 'bg-zinc-900 border border-zinc-800 text-zinc-300'}`}>
                                     <p>{msg.text}</p>
                                 </div>
                             </div>
                         ))}
                         {isReplying && (
                             <div className="flex justify-start">
-                                <div className="max-w-md p-3 rounded-lg bg-gray-700 text-invox-light-gray">
-                                    <div className="flex items-center space-x-2">
-                                        <div className="w-2 h-2 bg-invox-light-gray rounded-full animate-pulse delay-75"></div>
-                                        <div className="w-2 h-2 bg-invox-light-gray rounded-full animate-pulse delay-150"></div>
-                                        <div className="w-2 h-2 bg-invox-light-gray rounded-full animate-pulse delay-300"></div>
+                                <div className="p-3 bg-zinc-900 border border-zinc-800 text-zinc-400 font-mono text-xs flex items-center gap-2">
+                                    <span>Incoming</span>
+                                    <div className="flex items-center space-x-1">
+                                        <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-pulse"></div>
+                                        <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-pulse delay-150"></div>
+                                        <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-pulse delay-300"></div>
                                     </div>
                                 </div>
                             </div>
@@ -869,18 +863,22 @@ const MessagingModal: React.FC<{
                 )}
                 
                 {!isInfoVisible && (
-                    <div className="mt-4 flex">
+                    <div className="pt-3 border-t border-zinc-800 flex gap-2">
                         <input
                             type="text"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                            placeholder="Type your message..."
-                            className="flex-grow bg-gray-700 border border-gray-800 rounded-l-md p-3 focus:outline-none focus:ring-2 focus:ring-invox-red text-white"
+                            placeholder="Type a message..."
+                            className="flex-grow bg-black border border-zinc-800 p-2.5 font-mono text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
                             disabled={isReplying}
                         />
-                        <button onClick={handleSend} disabled={isReplying} className="bg-invox-red text-white px-4 rounded-r-md hover:bg-invox-red-hover disabled:bg-gray-500 flex items-center justify-center transition-transform duration-200 transform hover:scale-105 active:scale-95">
-                            <SendIcon className="w-5 h-5"/>
+                        <button 
+                            onClick={handleSend} 
+                            disabled={isReplying || !input.trim()} 
+                            className="bg-white text-black px-4 font-mono text-xs font-bold uppercase hover:bg-zinc-200 disabled:opacity-40 disabled:hover:bg-white flex items-center justify-center transition-colors"
+                        >
+                            <SendIcon className="w-4 h-4"/>
                         </button>
                     </div>
                 )}
@@ -988,7 +986,7 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
             const newMutedState = !videoRef.current.muted;
             videoRef.current.muted = newMutedState;
             if (!newMutedState && volume === 0) {
-                setVolume(1); // Unmute to full volume if it was 0
+                setVolume(1);
                 videoRef.current.volume = 1;
             }
         }
@@ -1015,29 +1013,32 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
 
     return (
         <>
-            <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4 mb-4">
+            <div className="bg-[#0c0c0e] border border-zinc-800 p-5 mb-4 hover:border-zinc-700 transition-colors">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <img src={project.author.avatarUrl} onError={handleImageError} alt={project.author.name} className="w-10 h-10 rounded-full object-cover" />
-                        <div className="flex items-center gap-1">
-                            <p className="font-bold text-white">{project.author.name}</p>
-                            {project.author.isVerified && <CheckBadgeIcon className="w-5 h-5 text-blue-500" />}
+                        <img src={project.author.avatarUrl} onError={handleImageError} alt={project.author.name} className="w-10 h-10 border border-zinc-750 object-cover" />
+                        <div>
+                            <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-bold text-sm text-white uppercase">{project.author.name}</span>
+                                {project.author.isVerified && <CheckBadgeIcon className="w-4 h-4 text-zinc-400" />}
+                            </div>
+                            <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-500 block">{project.category}</span>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 text-invox-light-gray">
-                        <button onClick={handleAIAssistantClick} className="hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100"><SparklesIcon className="w-6 h-6" /></button>
-                        <button className="hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100"><EllipsisVerticalIcon className="w-6 h-6" /></button>
+                    <div className="flex items-center gap-2 text-zinc-500">
+                        <button onClick={handleAIAssistantClick} className="p-1.5 hover:text-white hover:border-zinc-600 border border-transparent transition-colors" title="AI Summary"><SparklesIcon className="w-5 h-5" /></button>
+                        <button className="p-1.5 hover:text-white hover:border-zinc-600 border border-transparent transition-colors"><EllipsisVerticalIcon className="w-5 h-5" /></button>
                     </div>
                 </div>
     
                 {/* Content */}
-                <div className="mt-4">
-                    <p className="text-xl font-semibold italic text-white">"{project.aiSummary}"</p>
-                    <p className="text-invox-light-gray mt-2">
+                <div className="mt-3.5">
+                    <p className="text-base font-mono text-zinc-100 font-semibold leading-snug">"{project.aiSummary}"</p>
+                    <p className="text-xs font-mono text-zinc-400 mt-2 leading-relaxed">
                         {showMore ? project.description : `${project.description.substring(0, 150)}...`}
-                        <button onClick={() => setShowMore(!showMore)} className="text-invox-red font-semibold ml-1 hover:underline">
-                            {showMore ? 'Show Less' : 'Show More'}
+                        <button onClick={() => setShowMore(!showMore)} className="text-white font-mono text-xs underline ml-1.5 hover:text-zinc-300 cursor-pointer">
+                            {showMore ? '[less]' : '[more]'}
                         </button>
                     </p>
                 </div>
@@ -1048,7 +1049,7 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
                         <AspectRatioBox
                             ref={mediaContainerRef}
                             ratio="video"
-                            className={`rounded-2xl border border-gray-800 bg-invox-dark group ${!isVisible || (!isVideo ? 'cursor-zoom-in' : 'cursor-pointer')}`}
+                            className={`border border-zinc-800 bg-black group ${!isVisible || (!isVideo ? 'cursor-zoom-in' : 'cursor-pointer')}`}
                             onMouseEnter={() => setIsControlsVisible(true)}
                             onMouseLeave={() => setIsControlsVisible(false)}
                             onClick={isVisible ? (isVideo ? togglePlayPause : () => setZoomedImageUrl(project.mediaUrl || null)) : undefined}
@@ -1070,13 +1071,13 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
                                             className="w-full h-full object-cover"
                                         />
                                         
-                                        <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${!isPlaying ? 'opacity-100' : 'opacity-0'} bg-black/30 pointer-events-none`}>
-                                            <div className="w-20 h-20 bg-black/50 rounded-full flex items-center justify-center backdrop-blur-sm">
-                                                <PlayIcon className="w-10 h-10 text-white" />
+                                        <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${!isPlaying ? 'opacity-100' : 'opacity-0'} bg-black/40 pointer-events-none`}>
+                                            <div className="w-14 h-14 bg-black/80 border border-zinc-700 flex items-center justify-center backdrop-blur-sm">
+                                                <PlayIcon className="w-7 h-7 text-white" />
                                             </div>
                                         </div>
                                         
-                                        <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 transition-opacity duration-300 ${isControlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0'}`} onClick={(e) => e.stopPropagation()}>
+                                        <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-3 transition-opacity duration-300 ${isControlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0'}`} onClick={(e) => e.stopPropagation()}>
                                             <div className="w-full mb-2">
                                                  <input
                                                     type="range"
@@ -1085,17 +1086,17 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
                                                     value={progress}
                                                     onChange={handleSeek}
                                                     onPointerDown={handleProgressPointerDown}
-                                                    className="w-full h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-invox-red"
+                                                    className="w-full h-1 bg-zinc-800 appearance-none cursor-pointer accent-white"
                                                 />
                                             </div>
                                             <div className="flex items-center justify-between gap-4 text-white">
                                                 <div className="flex items-center gap-3">
-                                                    <button onClick={togglePlayPause} className="p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100">
-                                                        {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
+                                                    <button onClick={togglePlayPause} className="p-1 hover:text-zinc-300 transition-colors">
+                                                        {isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5" />}
                                                     </button>
                                                     <div className="flex items-center gap-2 group/volume">
-                                                        <button onClick={toggleMute} className="p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100">
-                                                            {isMuted || volume === 0 ? <VolumeOffIcon className="w-6 h-6" /> : <VolumeUpIcon className="w-6 h-6" />}
+                                                        <button onClick={toggleMute} className="p-1 hover:text-zinc-300 transition-colors">
+                                                            {isMuted || volume === 0 ? <VolumeOffIcon className="w-5 h-5" /> : <VolumeUpIcon className="w-5 h-5" />}
                                                         </button>
                                                         <input
                                                             type="range"
@@ -1104,18 +1105,18 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
                                                             step="0.01"
                                                             value={isMuted ? 0 : volume}
                                                             onChange={handleVolumeChange}
-                                                            className="w-0 h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-invox-red transition-all duration-300 opacity-0 group-hover/volume:opacity-100 group-hover/volume:w-20"
+                                                            className="w-0 h-1 bg-zinc-800 appearance-none cursor-pointer accent-white transition-all duration-300 opacity-0 group-hover/volume:opacity-100 group-hover/volume:w-20"
                                                         />
                                                     </div>
                                                 </div>
                                                 
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xs font-mono w-24 text-center">{formatTime(progress)} / {formatTime(duration)}</span>
-                                                    <button onClick={cyclePlaybackRate} className="text-xs font-bold w-14 text-center p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100">
+                                                <div className="flex items-center gap-2 font-mono text-xs">
+                                                    <span className="text-zinc-400 w-24 text-center">{formatTime(progress)} / {formatTime(duration)}</span>
+                                                    <button onClick={cyclePlaybackRate} className="font-bold w-12 text-center p-1 border border-zinc-800 bg-black/60 hover:border-zinc-600 transition-colors">
                                                         {playbackRate.toFixed(2)}x
                                                     </button>
-                                                    <button onClick={toggleFullScreen} className="p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100">
-                                                        {isFullscreen ? <ArrowsPointingInIcon className="w-6 h-6" /> : <ArrowsPointingOutIcon className="w-6 h-6" />}
+                                                    <button onClick={toggleFullScreen} className="p-1 hover:text-zinc-300 transition-colors">
+                                                        {isFullscreen ? <ArrowsPointingInIcon className="w-5 h-5" /> : <ArrowsPointingOutIcon className="w-5 h-5" />}
                                                     </button>
                                                 </div>
                                             </div>
@@ -1128,35 +1129,30 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
                                 <MediaPlaceholder thumbnailUrl={project.thumbnailUrl} isVideo={isVideo} />
                             )}
                         </AspectRatioBox>
-                        <div className="flex justify-center items-center gap-1.5 mt-2">
-                            <div className="w-2 h-2 bg-white rounded-full"></div>
-                            <div className="w-2 h-2 bg-gray-600 rounded-full"></div>
-                            <div className="w-2 h-2 bg-gray-600 rounded-full"></div>
-                        </div>
                     </div>
                 )}
                 
                 {/* Action Bar */}
-                <div className="mt-4 border border-gray-800 rounded-lg px-4 py-2 flex justify-around items-center">
-                    <button className="flex items-center gap-1.5 text-invox-light-gray hover:text-invox-red transition-all duration-200 transform hover:scale-110 active:scale-100">
-                        <HeartIcon className="w-5 h-5" />
-                        <span className="text-sm font-semibold">{formatNumber(project.stats.likes)}</span>
+                <div className="mt-4 border border-zinc-800 bg-black/60 px-4 py-2 flex justify-around items-center font-mono text-xs text-zinc-400">
+                    <button className="flex items-center gap-1.5 hover:text-white transition-colors">
+                        <HeartIcon className="w-4 h-4" />
+                        <span className="font-bold">{formatNumber(project.stats.likes)}</span>
                     </button>
-                    <div className="flex items-center gap-1.5 text-invox-light-gray">
-                        <TrendingUpIcon className="w-5 h-5" />
-                        <span className="text-sm font-semibold">{formatNumber(project.stats.views)}</span>
+                    <div className="flex items-center gap-1.5">
+                        <TrendingUpIcon className="w-4 h-4 text-zinc-500" />
+                        <span>{formatNumber(project.stats.views)}</span>
                     </div>
-                    <button className="flex items-center gap-1.5 text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100">
-                        <ChatBubbleBottomCenterTextIcon className="w-5 h-5" />
-                        <span className="text-sm font-semibold">{formatNumber(project.stats.comments)}</span>
+                    <button className="flex items-center gap-1.5 hover:text-white transition-colors">
+                        <ChatBubbleBottomCenterTextIcon className="w-4 h-4" />
+                        <span>{formatNumber(project.stats.comments)}</span>
                     </button>
-                    <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100"><ForwardIcon className="w-5 h-5" /></button>
-                    <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100"><BookmarkIcon className="w-5 h-5" /></button>
+                    <button className="hover:text-white transition-colors"><ForwardIcon className="w-4 h-4" /></button>
+                    <button className="hover:text-white transition-colors"><BookmarkIcon className="w-4 h-4" /></button>
                 </div>
     
                  {/* Connect Button */}
-                <div className="mt-2">
-                    <button className="w-full bg-invox-dark-accent border border-gray-800 text-white font-semibold py-2.5 rounded-lg hover:bg-gray-700 transition-all duration-200 transform hover:scale-[1.02] active:scale-100">
+                <div className="mt-3">
+                    <button className="w-full bg-zinc-900 border border-zinc-750 text-white font-mono text-xs uppercase tracking-wider py-2.5 font-bold hover:bg-zinc-800 hover:border-zinc-600 transition-colors">
                         Connect
                     </button>
                 </div>
@@ -1178,11 +1174,11 @@ const PinnedHighlightsView: React.FC<{ loading: boolean }> = ({ loading }) => {
     return (
         <div>
             <div className="relative mb-4">
-                <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                 <input 
                     type="search" 
                     placeholder="Search Profiles You Follow" 
-                    className="w-full bg-invox-dark-accent border border-gray-800 rounded-lg p-3 pl-11 focus:outline-none text-white" 
+                    className="w-full bg-black border border-zinc-800 p-2.5 pl-10 font-mono text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500" 
                 />
             </div>
             <DomainFilter 
@@ -1190,8 +1186,11 @@ const PinnedHighlightsView: React.FC<{ loading: boolean }> = ({ loading }) => {
                 selectedDomains={domainSelections['spotlight-pinned'] || []}
                 onSelectionChange={(domains) => setDomainSelection('spotlight-pinned', domains)}
             />
-            <h2 className="text-2xl font-bold text-white mb-4">Pinned Highlights</h2>
-            <p className="text-invox-light-gray mb-6">Showing projects from your pinned profiles.</p>
+            <div className="my-4">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">// PINNED_FEED</span>
+                <h2 className="text-xl font-bold font-mono text-white">PINNED_HIGHLIGHTS</h2>
+                <p className="text-xs font-mono text-zinc-400 mt-1">Showing verified projects from profiles you track.</p>
+            </div>
             {loading ? (
                 <>
                     <ProjectCardSkeleton />
@@ -1200,8 +1199,8 @@ const PinnedHighlightsView: React.FC<{ loading: boolean }> = ({ loading }) => {
             ) : highlightedProjects.length > 0 ? (
                 highlightedProjects.map(project => <ProjectCard key={project.id} project={project} />)
             ) : (
-                <div className="text-center py-16 text-gray-400">
-                    <p>No projects found from your pinned profiles.</p>
+                <div className="text-center py-16 text-zinc-500 font-mono text-xs border border-zinc-800 bg-[#0c0c0e]">
+                    <p>// NO_PROJECTS_FOUND_FROM_PINNED_PROFILES</p>
                 </div>
             )}
         </div>
@@ -1244,79 +1243,80 @@ export const SpotlightPage = () => {
     
         return (
             <div 
-                className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex justify-center items-center z-50 transition-opacity duration-300" 
+                className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4 transition-opacity duration-300" 
                 onClick={onClose}
                 aria-modal="true"
                 role="dialog"
                 aria-labelledby="opportunity-detail-title"
             >
                 <div 
-                    className="bg-invox-dark-accent rounded-xl shadow-2xl w-full max-w-3xl flex flex-col border border-gray-800 m-4 max-h-[90vh]" 
+                    className="bg-[#0c0c0e] border border-zinc-800 shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]" 
                     onClick={e => e.stopPropagation()}
                 >
                     {/* Header */}
-                    <div className="flex justify-between items-start p-6 border-b border-gray-800 flex-shrink-0">
+                    <div className="flex justify-between items-start p-5 border-b border-zinc-800 flex-shrink-0">
                         <div className="flex items-center gap-4">
-                            <img src={offer.companyAvatarUrl} onError={handleImageError} alt={offer.companyName} className="w-16 h-16 rounded-lg object-cover" />
+                            <img src={offer.companyAvatarUrl} onError={handleImageError} alt={offer.companyName} className="w-14 h-14 border border-zinc-700 object-cover" />
                             <div>
-                                <h2 id="opportunity-detail-title" className="text-2xl font-bold text-white">{offer.title}</h2>
-                                <p className="text-gray-400 text-lg">{offer.companyName}</p>
+                                <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">// OPPORTUNITY_DETAILS</span>
+                                <h2 id="opportunity-detail-title" className="text-xl font-bold font-mono text-white">{offer.title}</h2>
+                                <p className="text-zinc-400 font-mono text-sm">{offer.companyName}</p>
                             </div>
                         </div>
-                        <button onClick={onClose} className="text-gray-400 hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100" aria-label="Close opportunity details">
+                        <button onClick={onClose} className="p-1.5 text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 transition-colors" aria-label="Close opportunity details">
                             <CloseIcon />
                         </button>
                     </div>
     
                     {/* Body */}
-                    <div className="p-6 overflow-y-auto text-gray-300 space-y-6">
+                    <div className="p-6 overflow-y-auto text-zinc-300 space-y-6">
                         {/* Job Details Grid */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-                            <div className="flex items-start gap-3">
-                                <CubeIcon className="w-5 h-5 text-gray-400 mt-1 flex-shrink-0" />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-xs">
+                            <div className="flex items-start gap-3 bg-zinc-950 p-3 border border-zinc-800/80">
+                                <CubeIcon className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
                                 <div>
-                                    <p className="text-sm text-gray-400">Job Type</p>
-                                    <p className="font-semibold text-white">{offer.type}</p>
+                                    <p className="text-[10px] uppercase text-zinc-500 tracking-wider">Job Type</p>
+                                    <p className="font-semibold text-white mt-0.5">{offer.type}</p>
                                 </div>
                             </div>
-                            <div className="flex items-start gap-3">
-                                <MapPinIcon className="w-5 h-5 text-gray-400 mt-1 flex-shrink-0" />
+                            <div className="flex items-start gap-3 bg-zinc-950 p-3 border border-zinc-800/80">
+                                <MapPinIcon className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
                                 <div>
-                                    <p className="text-sm text-gray-400">Location</p>
-                                    <p className="font-semibold text-white">{offer.location || 'N/A'}</p>
+                                    <p className="text-[10px] uppercase text-zinc-500 tracking-wider">Location</p>
+                                    <p className="font-semibold text-white mt-0.5">{offer.location || 'N/A'}</p>
                                 </div>
                             </div>
-                            <div className="flex items-start gap-3">
-                                <AcademicCapIcon className="w-5 h-5 text-gray-400 mt-1 flex-shrink-0" />
+                            <div className="flex items-start gap-3 bg-zinc-950 p-3 border border-zinc-800/80">
+                                <AcademicCapIcon className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
                                 <div>
-                                    <p className="text-sm text-gray-400">Experience Level</p>
-                                    <p className="font-semibold text-white">{offer.experienceLevel || 'N/A'}</p>
+                                    <p className="text-[10px] uppercase text-zinc-500 tracking-wider">Experience Level</p>
+                                    <p className="font-semibold text-white mt-0.5">{offer.experienceLevel || 'N/A'}</p>
                                 </div>
                             </div>
-                             <div className="flex items-start gap-3">
-                                <CubeIcon className="w-5 h-5 text-gray-400 mt-1 flex-shrink-0" />
+                            <div className="flex items-start gap-3 bg-zinc-950 p-3 border border-zinc-800/80">
+                                <CubeIcon className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
                                 <div>
-                                    <p className="text-sm text-gray-400">Category</p>
-                                    <p className="font-semibold text-white">{offer.category || 'N/A'}</p>
+                                    <p className="text-[10px] uppercase text-zinc-500 tracking-wider">Category</p>
+                                    <p className="font-semibold text-white mt-0.5">{offer.category || 'N/A'}</p>
                                 </div>
                             </div>
                         </div>
                         
-                        <hr className="border-gray-800" />
+                        <div className="border-t border-zinc-800" />
                         
                         {/* Description */}
                         <div>
-                            <h3 className="text-lg font-semibold text-white mb-2">Job Description</h3>
-                            <p className="whitespace-pre-wrap leading-relaxed">{offer.description}</p>
+                            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block mb-2">// JOB_DESCRIPTION</span>
+                            <p className="whitespace-pre-wrap leading-relaxed font-mono text-xs text-zinc-300">{offer.description}</p>
                         </div>
     
                         {/* Skills */}
                         {offer.skills && offer.skills.length > 0 && (
                             <div>
-                                <h3 className="text-lg font-semibold text-white mb-2">Skills Required</h3>
-                                 <div className="flex flex-wrap gap-2">
+                                <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block mb-2">// REQUIRED_SKILLS</span>
+                                <div className="flex flex-wrap gap-1.5">
                                     {offer.skills.map(skill => (
-                                        <span key={skill} className="bg-gray-800/50 text-gray-300 px-3 py-1.5 rounded-md text-sm font-medium border border-gray-800">
+                                        <span key={skill} className="bg-zinc-900 text-zinc-300 px-2.5 py-1 text-[11px] font-mono border border-zinc-800">
                                             {skill}
                                         </span>
                                     ))}
@@ -1324,29 +1324,21 @@ export const SpotlightPage = () => {
                             </div>
                         )}
                         
-                        {(offer.createdAt || offer.acceptedAt) && <hr className="border-gray-800" />}
-
-                        {/* Timeline */}
                         {(offer.createdAt || offer.acceptedAt) && (
                             <div>
-                                <h4 className="font-semibold text-white mb-3 text-base">Timeline</h4>
-                                <div className="space-y-4">
+                                <div className="border-t border-zinc-800 my-3" />
+                                <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block mb-2">// TIMELINE</span>
+                                <div className="space-y-2 font-mono text-xs">
                                     {offer.createdAt && (
-                                        <div className="flex items-center gap-3">
-                                            <CalendarDaysIcon className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                                            <div>
-                                                <p className="text-sm text-gray-400">Offer Received</p>
-                                                <p className="font-semibold text-white">{offer.createdAt}</p>
-                                            </div>
+                                        <div className="flex items-center gap-2 text-zinc-400">
+                                            <CalendarDaysIcon className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+                                            <span>Offer Received: <span className="text-white">{offer.createdAt}</span></span>
                                         </div>
                                     )}
                                     {offer.acceptedAt && (
-                                        <div className="flex items-center gap-3">
-                                            <CalendarDaysIcon className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                                            <div>
-                                                <p className="text-sm text-gray-400">Offer Accepted</p>
-                                                <p className="font-semibold text-white">{offer.acceptedAt}</p>
-                                            </div>
+                                        <div className="flex items-center gap-2 text-zinc-400">
+                                            <CalendarDaysIcon className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+                                            <span>Offer Accepted: <span className="text-white">{offer.acceptedAt}</span></span>
                                         </div>
                                     )}
                                 </div>
@@ -1355,22 +1347,18 @@ export const SpotlightPage = () => {
                     </div>
     
                     {/* Footer */}
-                    <div className="flex-shrink-0 flex justify-between items-center gap-4 p-4 border-t border-gray-800 bg-invox-dark rounded-b-xl">
-                        <span className="text-sm text-gray-500">Posted {offer.createdAt}</span>
+                    <div className="flex-shrink-0 flex justify-between items-center gap-4 p-4 border-t border-zinc-800 bg-black">
+                        <span className="text-xs font-mono text-zinc-500">Posted {offer.createdAt}</span>
                         {showActions && (
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-3">
                                 <button
                                     onClick={() => toggleSaveOffer(offer.id)}
-                                    className={`flex items-center gap-2 border px-6 py-2.5 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 active:scale-95 ${
-                                        isSaved
-                                        ? 'bg-invox-dark-accent border-gray-800 text-white hover:bg-gray-700'
-                                        : 'bg-invox-dark-accent border-gray-800 text-white hover:bg-gray-700'
-                                    }`}
+                                    className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 text-white font-mono text-xs uppercase px-5 py-2.5 hover:bg-zinc-800 transition-colors"
                                 >
-                                    {isSaved ? <BookmarkIconSolid className="w-5 h-5" /> : <BookmarkIcon className="w-5 h-5" />}
+                                    {isSaved ? <BookmarkIconSolid className="w-4 h-4" /> : <BookmarkIcon className="w-4 h-4" />}
                                     {isSaved ? 'Saved' : 'Save'}
                                 </button>
-                                <button onClick={handleApply} className="bg-green-600 px-8 py-2.5 rounded-lg font-semibold text-white text-center hover:bg-green-700 transition-all duration-200 transform hover:scale-105 active:scale-95 inline-block">
+                                <button onClick={handleApply} className="bg-white text-black font-mono text-xs uppercase font-bold hover:bg-zinc-200 px-7 py-2.5 transition-colors">
                                     Apply Now
                                 </button>
                             </div>
@@ -1530,22 +1518,22 @@ export const SpotlightPage = () => {
     const SuggestionCard: React.FC<{ project: Suggestion }> = ({ project }) => {
       const [imageRef, isVisible] = useLazyLoad<HTMLImageElement>();
       return (
-        <div className="bg-invox-dark-accent p-4 rounded-lg border border-gray-800 flex gap-4 min-h-48">
+        <div className="bg-[#0c0c0e] p-4 border border-zinc-800 flex gap-4 min-h-48 hover:border-zinc-700 transition-colors">
           <div className="flex-1 flex flex-col">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center border border-gray-800">
-                <ProfileIcon className="w-5 h-5 text-gray-400" />
+              <div className="w-8 h-8 bg-zinc-900 flex items-center justify-center border border-zinc-800">
+                <ProfileIcon className="w-4 h-4 text-zinc-400" />
               </div>
-              <p className="font-bold text-white text-base">{project.author.name}</p>
-              {project.author.isVerified && <CheckBadgeIcon className="w-5 h-5 text-blue-500" />}
+              <p className="font-bold text-white font-mono text-sm">{project.author.name}</p>
+              {project.author.isVerified && <CheckBadgeIcon className="w-4 h-4 text-zinc-400" />}
             </div>
-            <p className="text-sm text-invox-light-gray mt-3 flex-grow">{project.description}</p>
-            <hr className="border-gray-800 my-3" />
-            <p className="text-base font-semibold text-invox-light-gray">
-              Upvotes : <span className="text-yellow-400">{formatNumber(project.upvotes)}</span>
+            <p className="text-xs font-mono text-zinc-400 mt-3 flex-grow leading-relaxed">{project.description}</p>
+            <div className="border-t border-zinc-800 my-3" />
+            <p className="text-xs font-mono text-zinc-400">
+              UPVOTES : <span className="text-white font-bold">{formatNumber(project.upvotes)}</span>
             </p>
           </div>
-          <div ref={imageRef} className="w-40 h-40 rounded-md bg-gray-700 self-center">
+          <div ref={imageRef} className="w-40 h-40 bg-zinc-900 border border-zinc-800 self-center flex-shrink-0">
             {isVisible && <img src={project.imageUrl} onError={handleImageError} alt={project.author.name} className="w-full h-full object-cover" />}
           </div>
         </div>
@@ -1553,30 +1541,30 @@ export const SpotlightPage = () => {
     };
     
     const ProfileSuggestionCard: React.FC<{ profile: ProfileSuggestion }> = ({ profile }) => (
-        <div className="bg-invox-dark-accent p-4 rounded-lg border border-gray-800 flex flex-col min-h-48">
+        <div className="bg-[#0c0c0e] p-4 border border-zinc-800 flex flex-col min-h-48 hover:border-zinc-700 transition-colors">
             <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center gap-3">
-                    <img src={profile.author.avatarUrl} onError={handleImageError} alt={profile.author.name} className="w-10 h-10 rounded-full object-cover" />
-                    <div className="flex items-center gap-2">
-                        <p className="font-bold text-white text-lg">{profile.author.name}</p>
-                        {profile.author.isVerified && <CheckBadgeIcon className="w-5 h-5 text-blue-500" />}
+                    <img src={profile.author.avatarUrl} onError={handleImageError} alt={profile.author.name} className="w-10 h-10 border border-zinc-700 object-cover" />
+                    <div className="flex items-center gap-1.5">
+                        <p className="font-bold text-white font-mono text-sm">{profile.author.name}</p>
+                        {profile.author.isVerified && <CheckBadgeIcon className="w-4 h-4 text-zinc-400" />}
                     </div>
                 </div>
-                <button className="bg-invox-dark text-white px-6 py-1.5 rounded-lg text-sm font-semibold hover:bg-gray-700 self-start transition-all transform hover:scale-105 active:scale-95">
+                <button className="bg-zinc-900 border border-zinc-800 text-white px-4 py-1.5 font-mono text-xs uppercase font-bold hover:bg-zinc-800 transition-colors">
                     View
                 </button>
             </div>
             <div className="flex-grow">
-                <p className="text-sm text-invox-light-gray line-clamp-3">{profile.description}</p>
+                <p className="text-xs font-mono text-zinc-400 line-clamp-3 leading-relaxed">{profile.description}</p>
             </div>
             <div className="mt-auto">
-                <hr className="border-gray-800 mb-3" />
-                <div className="flex justify-between items-center">
-                    <p className="font-semibold text-white">
-                        Projects : <span className="text-yellow-400">{profile.stats.projects}</span>
+                <div className="border-t border-zinc-800 my-3" />
+                <div className="flex justify-between items-center font-mono text-xs">
+                    <p className="text-zinc-400">
+                        PROJECTS : <span className="text-white font-bold">{profile.stats.projects}</span>
                     </p>
-                    <p className="font-semibold text-white">
-                        Links : <span className="text-yellow-400">{formatNumber(profile.stats.links)}</span>
+                    <p className="text-zinc-400">
+                        LINKS : <span className="text-white font-bold">{formatNumber(profile.stats.links)}</span>
                     </p>
                 </div>
             </div>
@@ -1708,28 +1696,28 @@ export const SpotlightPage = () => {
     
         return (
             <>
-                <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4 mb-4">
+                <div className="bg-[#0c0c0e] border border-zinc-800 p-5 mb-4 hover:border-zinc-700 transition-colors">
                     {/* Header */}
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <img src={project.author.avatarUrl} onError={handleImageError} alt={project.author.name} className="w-10 h-10 rounded-full object-cover" />
-                            <div className="flex items-center gap-1">
-                                <p className="font-bold text-white">{project.author.name}</p>
-                                {project.author.isVerified && <CheckBadgeIcon className="w-5 h-5 text-blue-500" />}
+                            <img src={project.author.avatarUrl} onError={handleImageError} alt={project.author.name} className="w-10 h-10 border border-zinc-700 object-cover" />
+                            <div className="flex items-center gap-1.5">
+                                <p className="font-bold text-white font-mono text-sm">{project.author.name}</p>
+                                {project.author.isVerified && <CheckBadgeIcon className="w-4 h-4 text-zinc-400" />}
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 text-invox-light-gray">
-                            <button onClick={handleAIAssistantClick} className="hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100"><SparklesIcon className="w-6 h-6" /></button>
-                            <button className="hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100"><EllipsisVerticalIcon className="w-6 h-6" /></button>
+                        <div className="flex items-center gap-1 text-zinc-400">
+                            <button onClick={handleAIAssistantClick} className="p-1.5 hover:text-white border border-transparent hover:border-zinc-800 transition-colors"><SparklesIcon className="w-5 h-5" /></button>
+                            <button className="p-1.5 hover:text-white border border-transparent hover:border-zinc-800 transition-colors"><EllipsisVerticalIcon className="w-5 h-5" /></button>
                         </div>
                     </div>
         
                     {/* Content */}
                     <div className="mt-4">
-                        <p className="text-xl font-semibold italic text-white">"{project.aiSummary}"</p>
-                        <p className="text-invox-light-gray mt-2">
+                        <p className="text-base font-mono font-semibold text-zinc-100">"{project.aiSummary}"</p>
+                        <p className="text-zinc-400 font-mono text-xs mt-2 leading-relaxed">
                             {showMore ? project.description : `${project.description.substring(0, 150)}...`}
-                            <button onClick={() => setShowMore(!showMore)} className="text-invox-red font-semibold ml-1 hover:underline">
+                            <button onClick={() => setShowMore(!showMore)} className="text-white font-semibold ml-1 underline hover:text-zinc-300">
                                 {showMore ? 'Show Less' : 'Show More'}
                             </button>
                         </p>
@@ -1741,7 +1729,7 @@ export const SpotlightPage = () => {
                             <AspectRatioBox
                                 ref={mediaContainerRef}
                                 ratio="video"
-                                className={`rounded-2xl border border-gray-800 bg-invox-dark group ${!isVisible || (!isVideo ? 'cursor-zoom-in' : 'cursor-pointer')}`}
+                                className={`border border-zinc-800 bg-black group ${!isVisible || (!isVideo ? 'cursor-zoom-in' : 'cursor-pointer')}`}
                                 onMouseEnter={() => setIsControlsVisible(true)}
                                 onMouseLeave={() => setIsControlsVisible(false)}
                                 onClick={isVisible ? (isVideo ? togglePlayPause : () => setZoomedImageUrl(project.mediaUrl || null)) : undefined}
@@ -1763,13 +1751,13 @@ export const SpotlightPage = () => {
                                                 className="w-full h-full object-cover"
                                             />
                                             
-                                            <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${!isPlaying ? 'opacity-100' : 'opacity-0'} bg-black/30 pointer-events-none`}>
-                                                <div className="w-20 h-20 bg-black/50 rounded-full flex items-center justify-center backdrop-blur-sm">
-                                                    <PlayIcon className="w-10 h-10 text-white" />
+                                            <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${!isPlaying ? 'opacity-100' : 'opacity-0'} bg-black/40 pointer-events-none`}>
+                                                <div className="w-16 h-16 bg-black/80 border border-zinc-700 flex items-center justify-center backdrop-blur-sm">
+                                                    <PlayIcon className="w-8 h-8 text-white" />
                                                 </div>
                                             </div>
                                             
-                                            <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 transition-opacity duration-300 ${isControlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0'}`} onClick={(e) => e.stopPropagation()}>
+                                            <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-3 transition-opacity duration-300 ${isControlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0'}`} onClick={(e) => e.stopPropagation()}>
                                                 <div className="w-full mb-2">
                                                      <input
                                                         type="range"
@@ -1778,17 +1766,17 @@ export const SpotlightPage = () => {
                                                         value={progress}
                                                         onChange={handleSeek}
                                                         onPointerDown={handleProgressPointerDown}
-                                                        className="w-full h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-invox-red"
+                                                        className="w-full h-1 bg-zinc-800 appearance-none cursor-pointer accent-white"
                                                     />
                                                 </div>
-                                                <div className="flex items-center justify-between gap-4 text-white">
+                                                <div className="flex items-center justify-between gap-4 text-white font-mono">
                                                     <div className="flex items-center gap-3">
-                                                        <button onClick={togglePlayPause} className="p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100">
-                                                            {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
+                                                        <button onClick={togglePlayPause} className="p-1 hover:text-zinc-300 transition-colors">
+                                                            {isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5" />}
                                                         </button>
                                                         <div className="flex items-center gap-2 group/volume">
-                                                            <button onClick={toggleMute} className="p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100">
-                                                                {isMuted || volume === 0 ? <VolumeOffIcon className="w-6 h-6" /> : <VolumeUpIcon className="w-6 h-6" />}
+                                                            <button onClick={toggleMute} className="p-1 hover:text-zinc-300 transition-colors">
+                                                                {isMuted || volume === 0 ? <VolumeOffIcon className="w-5 h-5" /> : <VolumeUpIcon className="w-5 h-5" />}
                                                             </button>
                                                             <input
                                                                 type="range"
@@ -1797,18 +1785,18 @@ export const SpotlightPage = () => {
                                                                 step="0.01"
                                                                 value={isMuted ? 0 : volume}
                                                                 onChange={handleVolumeChange}
-                                                                className="w-0 h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-invox-red transition-all duration-300 opacity-0 group-hover/volume:opacity-100 group-hover/volume:w-20"
+                                                                className="w-0 h-1 bg-zinc-800 appearance-none cursor-pointer accent-white transition-all duration-300 opacity-0 group-hover/volume:opacity-100 group-hover/volume:w-20"
                                                             />
                                                         </div>
                                                     </div>
                                                     
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs font-mono w-24 text-center">{formatTime(progress)} / {formatTime(duration)}</span>
-                                                        <button onClick={cyclePlaybackRate} className="text-xs font-bold w-14 text-center p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100">
+                                                    <div className="flex items-center gap-2 text-xs">
+                                                        <span className="font-mono text-[11px] text-zinc-400 w-24 text-center">{formatTime(progress)} / {formatTime(duration)}</span>
+                                                        <button onClick={cyclePlaybackRate} className="text-[11px] font-bold w-12 text-center p-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors">
                                                             {playbackRate.toFixed(2)}x
                                                         </button>
-                                                        <button onClick={toggleFullScreen} className="p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100">
-                                                            {isFullscreen ? <ArrowsPointingInIcon className="w-6 h-6" /> : <ArrowsPointingOutIcon className="w-6 h-6" />}
+                                                        <button onClick={toggleFullScreen} className="p-1 hover:text-zinc-300 transition-colors">
+                                                            {isFullscreen ? <ArrowsPointingInIcon className="w-5 h-5" /> : <ArrowsPointingOutIcon className="w-5 h-5" />}
                                                         </button>
                                                     </div>
                                                 </div>
@@ -1821,35 +1809,35 @@ export const SpotlightPage = () => {
                                     <MediaPlaceholder thumbnailUrl={project.thumbnailUrl} isVideo={isVideo} />
                                 )}
                             </AspectRatioBox>
-                            <div className="flex justify-center items-center gap-1.5 mt-2">
-                                <div className="w-2 h-2 bg-white rounded-full"></div>
-                                <div className="w-2 h-2 bg-gray-600 rounded-full"></div>
-                                <div className="w-2 h-2 bg-gray-600 rounded-full"></div>
+                            <div className="flex justify-center items-center gap-1 mt-2">
+                                <div className="w-1.5 h-1.5 bg-white"></div>
+                                <div className="w-1.5 h-1.5 bg-zinc-700"></div>
+                                <div className="w-1.5 h-1.5 bg-zinc-700"></div>
                             </div>
                         </div>
                     )}
                     
                     {/* Action Bar */}
-                    <div className="mt-4 border border-gray-800 rounded-lg px-4 py-2 flex justify-around items-center">
-                        <button className="flex items-center gap-1.5 text-invox-light-gray hover:text-invox-red transition-all duration-200 transform hover:scale-110 active:scale-100">
-                            <ArrowUpIcon className="w-5 h-5" />
-                            <span className="text-sm font-semibold">{formatNumber(project.stats.likes)}</span>
+                    <div className="mt-4 border border-zinc-800 px-4 py-2 flex justify-around items-center bg-black font-mono text-xs">
+                        <button className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors">
+                            <ArrowUpIcon className="w-4 h-4" />
+                            <span className="font-semibold">{formatNumber(project.stats.likes)}</span>
                         </button>
-                        <div className="flex items-center gap-1.5 text-invox-light-gray">
-                            <TrendingUpIcon className="w-5 h-5" />
-                            <span className="text-sm font-semibold">{formatNumber(project.stats.views)}</span>
+                        <div className="flex items-center gap-1.5 text-zinc-400">
+                            <TrendingUpIcon className="w-4 h-4" />
+                            <span className="font-semibold">{formatNumber(project.stats.views)}</span>
                         </div>
-                        <button className="flex items-center gap-1.5 text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100">
-                            <ChatBubbleBottomCenterTextIcon className="w-5 h-5" />
-                            <span className="text-sm font-semibold">{formatNumber(project.stats.comments)}</span>
+                        <button className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors">
+                            <ChatBubbleBottomCenterTextIcon className="w-4 h-4" />
+                            <span className="font-semibold">{formatNumber(project.stats.comments)}</span>
                         </button>
-                        <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100"><ForwardIcon className="w-5 h-5" /></button>
-                        <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100"><BookmarkIcon className="w-5 h-5" /></button>
+                        <button className="text-zinc-400 hover:text-white transition-colors"><ForwardIcon className="w-4 h-4" /></button>
+                        <button className="text-zinc-400 hover:text-white transition-colors"><BookmarkIcon className="w-4 h-4" /></button>
                     </div>
         
                      {/* Collaborate Button */}
-                    <div className="mt-2">
-                        <button className="w-full bg-invox-dark-accent border border-gray-800 text-white font-semibold py-2.5 rounded-lg hover:bg-gray-700 transition-all duration-200 transform hover:scale-[1.02] active:scale-100">
+                    <div className="mt-3">
+                        <button className="w-full bg-zinc-900 border border-zinc-800 text-white font-mono text-xs uppercase font-bold py-2.5 hover:bg-zinc-800 transition-colors">
                             Collaborate
                         </button>
                     </div>
@@ -1924,7 +1912,7 @@ export const SpotlightPage = () => {
                 const viewLetterButton = (
                     <button 
                         onClick={() => onView(offer)} 
-                        className="bg-invox-dark border border-gray-800 px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-gray-700 transition-all duration-200 transform hover:scale-105 active:scale-95"
+                        className="bg-zinc-900 border border-zinc-800 text-white font-mono text-xs uppercase px-4 py-1.5 hover:bg-zinc-800 transition-colors"
                     >
                         View Letter
                     </button>
@@ -1934,17 +1922,17 @@ export const SpotlightPage = () => {
                     case 'New':
                         return (
                             <>
-                                <button onClick={() => onView(offer)} className="bg-invox-red px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-invox-red-hover transition-transform duration-200 transform hover:scale-105 active:scale-95">View Offer</button>
+                                <button onClick={() => onView(offer)} className="bg-white text-black font-mono text-xs font-bold uppercase px-4 py-1.5 hover:bg-zinc-200 transition-colors">View Offer</button>
                             </>
                         );
                     case 'Active':
                         return (
                             <>
-                                <span className="bg-green-900/50 text-green-400 px-3 py-1 rounded-full text-xs font-medium">Accepted</span>
+                                <span className="bg-zinc-900 border border-zinc-700 text-zinc-300 font-mono text-[10px] uppercase px-2.5 py-1">Accepted</span>
                                 {viewLetterButton}
                                 <button
                                     onClick={() => onOpenMessageModal(offer)}
-                                    className="bg-invox-dark border border-gray-800 px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-gray-700 transition-all duration-200 transform hover:scale-105 active:scale-95"
+                                    className="bg-zinc-900 border border-zinc-800 text-white font-mono text-xs uppercase px-4 py-1.5 hover:bg-zinc-800 transition-colors"
                                 >
                                     Message
                                 </button>
@@ -1953,7 +1941,7 @@ export const SpotlightPage = () => {
                     case 'Expired':
                          return (
                             <>
-                                <span className="bg-gray-700 text-gray-400 px-3 py-1 rounded-full text-xs font-medium">Expired</span>
+                                <span className="bg-zinc-950 border border-zinc-800 text-zinc-500 font-mono text-[10px] uppercase px-2.5 py-1">Expired</span>
                                 {viewLetterButton}
                             </>
                          );
@@ -1963,28 +1951,28 @@ export const SpotlightPage = () => {
             };
             
             return (
-              <div className={`bg-invox-dark-accent p-4 rounded-lg border transition-all duration-300 ${
-                offer.status === 'New' && !isViewed ? 'border-invox-red/50' : 'border-gray-800'
-              }`}>
+              <div className={`bg-[#0c0c0e] p-4 border transition-all duration-300 ${
+                offer.status === 'New' && !isViewed ? 'border-zinc-500' : 'border-zinc-800'
+              } hover:border-zinc-700`}>
                 <div className="flex items-start gap-4">
-                  <img src={offer.companyAvatarUrl} onError={handleImageError} alt={offer.companyName} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
+                  <img src={offer.companyAvatarUrl} onError={handleImageError} alt={offer.companyName} className="w-12 h-12 border border-zinc-700 object-cover flex-shrink-0" />
                   <div className="flex-1">
-                    <p className="font-bold text-white">{offer.companyName}</p>
-                    <h4 className="font-semibold text-lg text-gray-200 mt-1">{offer.title}</h4>
+                    <p className="font-bold text-white font-mono text-sm">{offer.companyName}</p>
+                    <h4 className="font-mono font-semibold text-base text-zinc-200 mt-0.5">{offer.title}</h4>
                   </div>
                   <button
                       onClick={() => setInfoModalOffer(offer)}
-                      className="p-1 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                      className="p-1 text-zinc-500 hover:text-white transition-colors flex-shrink-0"
                       aria-label="View offer details"
                   >
-                      <InformationCircleIcon className="w-6 h-6" />
+                      <InformationCircleIcon className="w-5 h-5" />
                   </button>
                 </div>
-                <p className="text-sm text-gray-400 mt-2 line-clamp-2">
+                <p className="text-xs font-mono text-zinc-400 mt-2 line-clamp-2 leading-relaxed">
                     {offer.description}
                 </p>
-                <div className="flex justify-end items-center gap-3 mt-4 pt-4 border-t border-gray-800">
-                   <span className="text-xs text-gray-500 mr-auto">Received {offer.createdAt}</span>
+                <div className="flex justify-end items-center gap-3 mt-4 pt-3 border-t border-zinc-800">
+                   <span className="text-[11px] font-mono text-zinc-500 mr-auto">Received {offer.createdAt}</span>
                    {renderButtons()}
                 </div>
               </div>
@@ -1994,20 +1982,20 @@ export const SpotlightPage = () => {
         return (
           <div className="text-white">
             <div className="flex items-center gap-4 mb-4">
-                <button onClick={onBack} className="text-invox-light-gray hover:text-white transition-transform duration-200 transform hover:scale-105 active:scale-100">
-                    <ArrowLeftIcon className="w-6 h-6" />
+                <button onClick={onBack} className="p-1.5 text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 transition-colors">
+                    <ArrowLeftIcon className="w-5 h-5" />
                 </button>
-                <h2 className="text-2xl font-bold">{offerType}</h2>
+                <h2 className="text-xl font-bold font-mono uppercase tracking-wide">{offerType}</h2>
             </div>
-            <hr className="border-gray-800 mb-4" />
+            <div className="border-t border-zinc-800 mb-4" />
       
-            <div className="flex space-x-2 border border-gray-800 rounded-lg p-1 bg-invox-dark-accent mb-6">
+            <div className="flex space-x-1 border border-zinc-800 p-1 bg-black mb-6">
                 {offerStatuses.map(status => (
                     <button
                         key={status}
                         onClick={() => setActiveOfferStatusTab(status as 'New' | 'Active' | 'Expired')}
-                        className={`flex-1 py-2 rounded-md transition-all duration-200 ${
-                            activeOfferStatusTab === status ? 'bg-invox-red text-white font-semibold' : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                        className={`flex-1 py-2 font-mono text-xs uppercase transition-colors ${
+                            activeOfferStatusTab === status ? 'bg-white text-black font-bold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
                         }`}
                     >
                         {status}
@@ -2015,7 +2003,7 @@ export const SpotlightPage = () => {
                 ))}
             </div>
       
-            <div className="space-y-4">
+            <div className="space-y-3">
                 {loading ? (
                     <>
                         <OfferCardSkeleton />
@@ -2024,8 +2012,8 @@ export const SpotlightPage = () => {
                 ) : filteredOffers.length > 0 ? (
                     filteredOffers.map(offer => <OfferCard key={offer.id} offer={offer} onView={openOfferModal} isViewed={viewedOfferIds.includes(offer.id)} />)
                 ) : (
-                    <div className="text-center py-16 text-gray-400">
-                        <p>No {activeOfferStatusTab.toLowerCase()} offers found in {offerType}.</p>
+                    <div className="text-center py-16 text-zinc-500 font-mono text-xs">
+                        <p>NO {activeOfferStatusTab.toUpperCase()} OFFERS FOUND IN {offerType.toUpperCase()}.</p>
                     </div>
                 )}
             </div>
@@ -2094,89 +2082,92 @@ export const SpotlightPage = () => {
         };
     
         return (
-            <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex justify-center items-center z-50 transition-opacity duration-300" onClick={onClose}>
-                <div className="bg-invox-dark-accent rounded-xl shadow-xl w-full max-w-3xl flex flex-col border border-gray-800 mx-4" onClick={e => e.stopPropagation()}>
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4 transition-opacity duration-300" onClick={onClose}>
+                <div className="bg-[#0c0c0e] border border-zinc-800 shadow-2xl w-full max-w-3xl flex flex-col mx-4" onClick={e => e.stopPropagation()}>
                     {/* Header */}
-                    <div className="flex justify-between items-center p-4 border-b border-gray-800">
+                    <div className="flex justify-between items-center p-5 border-b border-zinc-800">
                         <div className="flex items-center gap-4">
-                            <img src={offer.companyAvatarUrl} onError={handleImageError} alt={offer.companyName} className="w-12 h-12 rounded-lg object-cover" />
+                            <img src={offer.companyAvatarUrl} onError={handleImageError} alt={offer.companyName} className="w-12 h-12 border border-zinc-700 object-cover" />
                             <div>
-                                <h2 className="text-xl font-bold text-white">{offer.title}</h2>
-                                <p className="text-gray-400">{offer.companyName}</p>
+                                <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">// OFFER_LETTER</span>
+                                <h2 className="text-lg font-bold font-mono text-white">{offer.title}</h2>
+                                <p className="text-zinc-400 font-mono text-xs">{offer.companyName}</p>
                             </div>
                         </div>
-                        <button onClick={onClose} className="text-gray-400 hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100">
+                        <button onClick={onClose} className="p-1.5 text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 transition-colors">
                             <CloseIcon />
                         </button>
                     </div>
     
                     {/* Body */}
-                    <div className="p-8 overflow-y-auto max-h-[70vh] text-gray-300 font-serif">
-                        <p className="mb-6">Dear {userName || 'User'},</p>
+                    <div className="p-8 overflow-y-auto max-h-[65vh] text-zinc-300 font-mono text-xs leading-relaxed space-y-4">
+                        <p>DEAR {userName ? userName.toUpperCase() : 'CANDIDATE'},</p>
                         
-                        <p className="mb-1 font-sans font-bold text-white">Subject: An Invitation to Collaboration: {offer.title} at {offer.companyName}</p>
-                        <div className="w-full border-t border-gray-800 mb-6"></div>
+                        <p className="font-bold text-white text-sm">SUBJECT: INVITATION TO COLLABORATION: {offer.title.toUpperCase()} AT {offer.companyName.toUpperCase()}</p>
+                        <div className="w-full border-t border-zinc-800" />
 
-                        <p className="mb-6 leading-relaxed">
-                            We've been following your work on Invox and are particularly impressed with the projects you've showcased. Your skills and creativity seem like a perfect match for an opportunity we have.
+                        <p>
+                            We have been following your work on Invox and are particularly impressed with the projects you have showcased. Your skills and technical background seem like a strong match for an active opportunity we have available.
                         </p>
     
-                        <p className="mb-6 leading-relaxed whitespace-pre-wrap">{offer.description}</p>
+                        <p className="whitespace-pre-wrap bg-zinc-950 p-4 border border-zinc-800/80 text-zinc-300">{offer.description}</p>
                         
-                        <p className="mb-4">
-                            We believe you would be a great asset to our team for this role. If this opportunity interests you, please accept this offer to proceed to the next steps. We are excited about the possibility of collaborating with you.
+                        <p>
+                            We believe you would be an exceptional asset to our team for this role. If this opportunity interests you, please accept this offer to proceed to the next technical steps.
                         </p>
                         
-                        <p className="mt-10 mb-1">Sincerely,</p>
-                        <p className="font-sans font-semibold text-white">{offer.companyName}</p>
+                        <div className="pt-4 border-t border-zinc-800">
+                            <p className="text-zinc-500">SINCERELY,</p>
+                            <p className="font-bold text-white mt-1">{offer.companyName.toUpperCase()}</p>
+                        </div>
                     </div>
                     
                     {/* Footer */}
-                    <div className="flex justify-end items-center gap-4 p-4 border-t border-gray-800 bg-invox-dark rounded-b-xl min-h-[72px]">
-                        <span className="text-xs text-gray-500 mr-auto">Received {offer.createdAt}</span>
+                    <div className="flex justify-end items-center gap-3 p-4 border-t border-zinc-800 bg-black min-h-[64px]">
+                        <span className="text-[11px] font-mono text-zinc-500 mr-auto">Received {offer.createdAt}</span>
                         {offer.status === 'Active' ? (
-                            <div className="flex items-center gap-2 text-green-400">
-                                <CheckCircleIcon className="w-6 h-6"/>
-                                <span className="font-semibold">Offer Accepted!</span>
+                            <div className="flex items-center gap-2 text-zinc-300 font-mono text-xs">
+                                <CheckCircleIcon className="w-5 h-5 text-white"/>
+                                <span className="font-bold">OFFER ACCEPTED</span>
                             </div>
                         ) : offer.status === 'Expired' ? (
-                            <div className="flex items-center gap-2 text-gray-500">
-                                <XCircleIcon className="w-6 h-6" />
-                                <span className="font-semibold">Offer Expired</span>
+                            <div className="flex items-center gap-2 text-zinc-500 font-mono text-xs">
+                                <XCircleIcon className="w-5 h-5" />
+                                <span>OFFER EXPIRED</span>
                             </div>
                         ) : isAccepted ? (
-                            <div className="flex items-center gap-2 text-green-400 animate-pulse">
-                                <CheckBadgeIcon className="w-6 h-6"/>
-                                <span className="font-semibold">Offer Accepted!</span>
+                            <div className="flex items-center gap-2 text-white font-mono text-xs animate-pulse">
+                                <CheckBadgeIcon className="w-5 h-5"/>
+                                <span className="font-bold">OFFER ACCEPTED</span>
                             </div>
                         ) : isDeclined ? (
-                            <div className="flex items-center gap-2 text-red-400 animate-pulse">
-                                <InformationCircleIcon className="w-6 h-6"/>
-                                <span className="font-semibold">Offer Declined.</span>
+                            <div className="flex items-center gap-2 text-zinc-400 font-mono text-xs animate-pulse">
+                                <InformationCircleIcon className="w-5 h-5"/>
+                                <span>OFFER DECLINED</span>
                             </div>
                         ) : confirmationAction ? (
-                            <div className="w-full flex justify-between items-center">
-                                <p className="text-sm text-white">
-                                    Are you sure you want to {confirmationAction} this offer?
+                            <div className="w-full flex justify-between items-center font-mono text-xs">
+                                <p className="text-zinc-300">
+                                    Confirm {confirmationAction} offer?
                                 </p>
-                                <div className="flex items-center gap-3">
-                                    <button onClick={handleCancel} className="bg-invox-dark border border-gray-800 px-4 py-1.5 rounded-lg font-semibold hover:bg-gray-700 transition-all duration-200 transform hover:scale-105 active:scale-95">
+                                <div className="flex items-center gap-2">
+                                    <button onClick={handleCancel} className="bg-zinc-900 border border-zinc-800 px-4 py-1.5 text-zinc-300 uppercase hover:text-white transition-colors">
                                         Cancel
                                     </button>
                                     <button
                                         onClick={handleConfirm}
-                                        className={`px-4 py-1.5 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 active:scale-95 ${
-                                            confirmationAction === 'accept' ? 'bg-green-600 hover:bg-green-700' : 'bg-invox-red hover:bg-invox-red-hover'
+                                        className={`px-4 py-1.5 uppercase font-bold transition-colors ${
+                                            confirmationAction === 'accept' ? 'bg-white text-black hover:bg-zinc-200' : 'bg-zinc-800 text-white hover:bg-zinc-700'
                                         }`}
                                     >
-                                        Yes, {confirmationAction === 'accept' ? 'Accept' : 'Decline'}
+                                        Yes, {confirmationAction}
                                     </button>
                                 </div>
                             </div>
                         ) : (
                             <>
-                                <button onClick={handleDeclineClick} className="bg-invox-dark border border-gray-800 px-6 py-2 rounded-lg font-semibold hover:bg-gray-700 transition-all duration-200 transform hover:scale-105 active:scale-95">Decline</button>
-                                <button onClick={handleAcceptClick} className="bg-green-600 px-6 py-2 rounded-lg font-semibold hover:bg-green-700 transition-all duration-200 transform hover:scale-105 active:scale-95">Accept</button>
+                                <button onClick={handleDeclineClick} className="bg-black border border-zinc-800 text-zinc-400 font-mono text-xs uppercase px-5 py-2 hover:text-white hover:border-zinc-600 transition-colors">Decline</button>
+                                <button onClick={handleAcceptClick} className="bg-white text-black font-mono text-xs uppercase font-bold px-6 py-2 hover:bg-zinc-200 transition-colors">Accept</button>
                             </>
                         )}
                     </div>
@@ -2187,18 +2178,18 @@ export const SpotlightPage = () => {
     
     
     const OfferCardSkeleton = () => (
-        <div className="bg-invox-dark-accent p-4 rounded-lg border border-gray-800 animate-pulse">
+        <div className="bg-[#0c0c0e] p-4 border border-zinc-800 animate-pulse">
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-lg bg-gray-700 flex-shrink-0"></div>
+            <div className="w-12 h-12 bg-zinc-800 flex-shrink-0"></div>
             <div className="flex-1 space-y-2">
-              <div className="h-5 w-1/3 bg-gray-700 rounded"></div>
-              <div className="h-4 w-3/4 bg-gray-700 rounded"></div>
-              <div className="h-3 w-1/4 bg-gray-700 rounded"></div>
+              <div className="h-4 w-1/3 bg-zinc-800"></div>
+              <div className="h-4 w-3/4 bg-zinc-800"></div>
+              <div className="h-3 w-1/4 bg-zinc-800"></div>
             </div>
           </div>
-          <div className="flex justify-end items-center gap-3 mt-4 pt-4 border-t border-gray-800">
-             <div className="h-3 w-16 bg-gray-700 rounded mr-auto"></div>
-             <div className="h-8 w-20 bg-gray-700 rounded-lg"></div>
+          <div className="flex justify-end items-center gap-3 mt-4 pt-4 border-t border-zinc-800">
+             <div className="h-3 w-16 bg-zinc-800 mr-auto"></div>
+             <div className="h-7 w-20 bg-zinc-800"></div>
           </div>
         </div>
     );
@@ -2248,12 +2239,15 @@ export const SpotlightPage = () => {
         });
     
         return (
-            <div className="text-white">
+            <div className="text-white space-y-6">
                 {/* Offers section */}
-                <h3 className="text-xl font-bold mb-2">Offers</h3>
-                <div className="w-full border-t border-gray-800 mb-4"></div>
-    
-                <div className="bg-invox-dark-accent p-3 rounded-2xl border border-gray-800 mb-6">
+                <div>
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">// INBOUND_OFFERS</span>
+                        <h3 className="text-sm font-bold font-mono uppercase tracking-wide">Category Directives</h3>
+                    </div>
+                    <div className="w-full border-t border-zinc-800 mb-4" />
+        
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {offersData.map(offer => (
                             <button
@@ -2262,22 +2256,23 @@ export const SpotlightPage = () => {
                                     setSelectedOfferType(offer.name as 'Full-Time' | 'Invites' | 'Gigs' | 'Others');
                                     setInitialOfferStatus('New');
                                 }}
-                                className={`w-full text-left relative bg-invox-dark rounded-xl border p-4 flex items-center justify-between h-24 overflow-hidden hover:border-invox-red/50 transition-all duration-200 group transform hover:scale-[1.02] ${
-                                    offer.hasNotification ? 'border-invox-red/50' : 'border-gray-800'
+                                className={`w-full text-left relative bg-[#0c0c0e] border p-4 flex items-center justify-between h-20 transition-all duration-200 group ${
+                                    offer.hasNotification ? 'border-zinc-500 hover:border-zinc-300' : 'border-zinc-800 hover:border-zinc-600'
                                 }`}
                             >
                                 <div className="flex items-center">
-                                    <div className="flex-shrink-0 relative w-16 h-16 flex items-center justify-center">
-                                        <div className="absolute inset-0 bg-red-800/30 rounded-full blur-lg opacity-70"></div>
-                                        <img src={offer.imageUrl} onError={handleImageError} alt={offer.name} className="relative z-10 w-12 h-12 object-contain rounded-full" />
+                                    <div className="flex-shrink-0 relative w-12 h-12 flex items-center justify-center border border-zinc-800 bg-zinc-950">
+                                        <img src={offer.imageUrl} onError={handleImageError} alt={offer.name} className="relative z-10 w-9 h-9 object-contain" />
                                     </div>
-                                    <span className="text-lg font-semibold text-white ml-4">{offer.name}</span>
+                                    <div className="ml-3">
+                                        <span className="text-sm font-mono font-bold text-white uppercase block">{offer.name}</span>
+                                        <span className="text-[10px] font-mono text-zinc-500 uppercase">View Status</span>
+                                    </div>
                                 </div>
                                 {offer.hasNotification && (
-                                    <div className="flex items-end gap-1.5 h-6">
-                                        <span className="w-1.5 h-3 bg-invox-red rounded-full wave-bar" style={{ animationDelay: '0s' }}></span>
-                                        <span className="w-1.5 h-5 bg-invox-red rounded-full wave-bar" style={{ animationDelay: '0.2s' }}></span>
-                                        <span className="w-1.5 h-2 bg-invox-red rounded-full wave-bar" style={{ animationDelay: '0.4s' }}></span>
+                                    <div className="flex items-center gap-1.5 px-2 py-1 bg-zinc-900 border border-zinc-700">
+                                        <span className="w-1.5 h-1.5 bg-white animate-ping"></span>
+                                        <span className="text-[9px] font-mono font-bold text-white uppercase tracking-wider">NEW</span>
                                     </div>
                                 )}
                             </button>
@@ -2286,91 +2281,102 @@ export const SpotlightPage = () => {
                 </div>
     
                 {/* Actives section */}
-                <h3 className="text-xl font-bold mb-2">Actives</h3>
-                <div className="w-full border-t border-gray-800 mb-4"></div>
-    
-                <div className="relative mb-4">
-                    <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input 
-                        type="search" 
-                        placeholder="Search Accepted Offers" 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full bg-invox-dark-accent border border-gray-800 rounded-lg p-3 pl-11 focus:outline-none text-white" 
-                    />
-                </div>
-                
-                <div className="grid gap-2 mb-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))' }}>
-                    {offerTypeFilters.map(filter => (
-                        <button
-                            key={filter}
-                            onClick={() => setActiveOfferFilter(filter)}
-                            className={`text-center px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all duration-200 transform hover:scale-105 active:scale-95 ${
-                                activeOfferFilter === filter
-                                    ? 'bg-invox-red text-white'
-                                    : 'bg-invox-dark-accent text-gray-300 hover:bg-gray-700 border border-gray-800'
-                            }`}
-                        >
-                            {filter}
-                        </button>
-                    ))}
-                </div>
-    
-                <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2 no-scrollbar">
-                    {loading ? (
-                        <>
-                           <PingCardSkeleton />
-                           <PingCardSkeleton />
-                           <PingCardSkeleton />
-                           <PingCardSkeleton />
-                        </>
-                    ) : filteredActiveOffers.map(offer => (
-                        <div 
-                            key={offer.id} 
-                            onClick={() => handleOpenMessageModal(offer)}
-                            className="bg-invox-dark-accent p-3 rounded-lg border border-gray-800 flex items-center justify-between gap-3 transition-colors duration-200 cursor-pointer hover:bg-gray-700/50"
-                        >
-                            <div className="flex items-center gap-3 overflow-hidden">
-                                <div className="w-12 h-12 rounded-lg bg-gray-700 flex items-center justify-center border border-gray-800 flex-shrink-0">
-                                    <img src={offer.companyAvatarUrl} onError={handleImageError} alt={offer.companyName} className="w-12 h-12 rounded-lg object-cover" />
+                <div>
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">// ACTIVE_ENGAGEMENTS</span>
+                        <h3 className="text-sm font-bold font-mono uppercase tracking-wide">Accepted Pipeline</h3>
+                    </div>
+                    <div className="w-full border-t border-zinc-800 mb-4" />
+        
+                    <div className="relative mb-3">
+                        <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                        <input 
+                            type="search" 
+                            placeholder="SEARCH ACCEPTED OFFERS..." 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-10 font-mono text-xs focus:border-zinc-500 focus:outline-none text-white placeholder:text-zinc-600" 
+                        />
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                        {offerTypeFilters.map(filter => (
+                            <button
+                                key={filter}
+                                onClick={() => setActiveOfferFilter(filter)}
+                                className={`px-3 py-1 font-mono text-xs uppercase transition-colors ${
+                                    activeOfferFilter === filter
+                                        ? 'bg-white text-black font-bold'
+                                        : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600'
+                                }`}
+                            >
+                                {filter}
+                            </button>
+                        ))}
+                    </div>
+        
+                    <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1 no-scrollbar">
+                        {loading ? (
+                            <>
+                               <PingCardSkeleton />
+                               <PingCardSkeleton />
+                               <PingCardSkeleton />
+                               <PingCardSkeleton />
+                            </>
+                        ) : filteredActiveOffers.length > 0 ? (
+                            filteredActiveOffers.map(offer => (
+                                <div 
+                                    key={offer.id} 
+                                    onClick={() => handleOpenMessageModal(offer)}
+                                    className="bg-[#0c0c0e] p-3 border border-zinc-800 flex items-center justify-between gap-3 transition-colors cursor-pointer hover:border-zinc-600 hover:bg-zinc-950"
+                                >
+                                    <div className="flex items-center gap-3 overflow-hidden">
+                                        <div className="w-10 h-10 bg-zinc-900 flex items-center justify-center border border-zinc-800 flex-shrink-0">
+                                            <img src={offer.companyAvatarUrl} onError={handleImageError} alt={offer.companyName} className="w-10 h-10 object-cover" />
+                                        </div>
+                                        <div className="overflow-hidden">
+                                            <p className="font-mono font-bold text-xs truncate text-white uppercase">{offer.companyName}</p>
+                                            <p className="font-mono text-xs text-zinc-400 truncate mt-0.5">{offer.title}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-end flex-shrink-0">
+                                        <p className="text-[10px] font-mono text-zinc-500 mb-1 whitespace-nowrap">{offer.createdAt}</p>
+                                        <div className="flex items-center justify-end h-5">
+                                            {offer.hasNewMessage && (
+                                                <span className="w-2 h-2 bg-white animate-pulse"></span>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="overflow-hidden">
-                                    <p className="font-semibold truncate text-lg leading-tight">{offer.companyName}</p>
-                                    <p className="text-base text-gray-400 truncate leading-snug mt-1">{offer.title}</p>
-                                </div>
+                            ))
+                        ) : (
+                            <div className="text-center py-12 text-zinc-500 font-mono text-xs border border-dashed border-zinc-800">
+                                <p>NO ACTIVE ENGAGEMENTS MATCHING CRITERIA.</p>
                             </div>
-                            <div className="flex flex-col items-end flex-shrink-0">
-                                <p className="text-sm text-invox-light-gray mb-1.5 whitespace-nowrap">{offer.createdAt}</p>
-                                <div className="flex items-center justify-end h-7 w-16">
-                                    {offer.hasNewMessage && (
-                                        <span className="w-3 h-3 bg-invox-red rounded-full animate-pulse"></span>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    ))}
+                        )}
+                    </div>
                 </div>
             </div>
         );
     };
     
     const BrowseProjectsView = () => (
-        <div>
-            <div className="relative mb-6">
-                <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <div className="space-y-4">
+            <div className="relative">
+                <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                 <input 
                     type="search" 
-                    placeholder="Search Projects by name, category, or creator" 
-                    className="w-full bg-invox-dark-accent border border-gray-800 rounded-lg p-3 pl-11 focus:outline-none text-white" 
+                    placeholder="SEARCH PROJECTS BY NAME, CATEGORY, OR CREATOR..." 
+                    className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-10 font-mono text-xs focus:border-zinc-500 focus:outline-none text-white placeholder:text-zinc-600" 
                 />
             </div>
             <div>
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-white">Suggestions</h3>
-                    <button className="flex items-center gap-2 bg-invox-dark-accent border border-gray-800 rounded-lg px-4 py-2 text-sm text-white font-semibold hover:bg-gray-700 transition-all duration-200 transform hover:scale-105 active:scale-95">
-                        <FilterIcon className="w-5 h-5 text-gray-400" />
+                <div className="flex justify-between items-center mb-3">
+                    <span className="text-xs font-bold font-mono uppercase tracking-wide text-zinc-300">EXPLORE_SUGGESTIONS</span>
+                    <button className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-xs text-zinc-300 font-mono uppercase hover:text-white hover:border-zinc-600 transition-colors">
+                        <FilterIcon className="w-4 h-4 text-zinc-500" />
                         <span>Filter by</span>
-                        <ChevronDownIcon className="w-5 h-5 text-gray-400" />
+                        <ChevronDownIcon className="w-4 h-4 text-zinc-500" />
                     </button>
                 </div>
                 
@@ -2379,13 +2385,13 @@ export const SpotlightPage = () => {
                     <div className="space-y-6">
                         {[...Array(3)].map((_, index) => (
                             <div key={index}>
-                                <div className="h-6 w-1/3 bg-gray-700 rounded mb-3 animate-pulse"></div>
-                                <div className="flex overflow-x-auto space-x-4 pb-2 no-scrollbar items-center">
+                                <div className="h-4 w-1/4 bg-zinc-800 mb-3 animate-pulse"></div>
+                                <div className="flex overflow-x-auto space-x-3 pb-2 no-scrollbar items-center">
                                     <div className="w-96 flex-shrink-0"><SuggestionCardSkeleton /></div>
                                     <div className="w-96 flex-shrink-0"><SuggestionCardSkeleton /></div>
-                                    <div className="flex-shrink-0 w-40 h-48 bg-invox-dark-accent border border-gray-800 rounded-lg flex flex-col items-center justify-center">
-                                        <div className="w-8 h-8 bg-gray-700 rounded-lg mb-2"></div>
-                                        <div className="h-4 w-20 bg-gray-700 rounded"></div>
+                                    <div className="flex-shrink-0 w-36 h-48 bg-[#0c0c0e] border border-zinc-800 flex flex-col items-center justify-center">
+                                        <div className="w-6 h-6 bg-zinc-800 mb-2"></div>
+                                        <div className="h-3 w-16 bg-zinc-800"></div>
                                     </div>
                                 </div>
                             </div>
@@ -2394,16 +2400,16 @@ export const SpotlightPage = () => {
                   ) : (
                     suggestionData.map((categoryData, index) => (
                       <div key={`${categoryData.category}-${index}`} className="mb-6">
-                        <h4 className="text-lg font-semibold text-invox-light-gray mb-3 border-b border-gray-800 pb-2">{categoryData.category}</h4>
-                        <div className="flex overflow-x-auto space-x-4 pb-2 no-scrollbar items-center">
+                        <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 mb-3 border-b border-zinc-800 pb-1.5">{categoryData.category}</h4>
+                        <div className="flex overflow-x-auto space-x-3 pb-2 no-scrollbar items-center">
                           {categoryData.projects.map(project => (
                             <div key={project.id} className="w-96 flex-shrink-0">
                                 <SuggestionCard project={project} />
                             </div>
                           ))}
-                           <button className="flex-shrink-0 w-40 h-48 bg-invox-dark-accent border border-gray-800 rounded-lg flex flex-col items-center justify-center text-invox-light-gray hover:bg-gray-700 hover:text-white transition-all duration-200 transform hover:scale-105 active:scale-95">
-                              <ForwardIcon className="w-8 h-8 mb-2" />
-                              <span className="font-semibold">Load More</span>
+                           <button className="flex-shrink-0 w-36 h-48 bg-[#0c0c0e] border border-zinc-800 flex flex-col items-center justify-center text-zinc-400 hover:border-zinc-600 hover:text-white transition-colors">
+                              <ForwardIcon className="w-6 h-6 mb-2 text-zinc-500" />
+                              <span className="font-mono text-xs uppercase font-semibold">Load More</span>
                           </button>
                         </div>
                       </div>
@@ -2415,22 +2421,22 @@ export const SpotlightPage = () => {
     );
     
     const BrowseProfilesView = () => (
-        <div>
-            <div className="relative mb-6">
-                <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <div className="space-y-4">
+            <div className="relative">
+                <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                 <input 
                     type="search" 
-                    placeholder="Search Profiles by name or domain" 
-                    className="w-full bg-invox-dark-accent border border-gray-800 rounded-lg p-3 pl-11 focus:outline-none text-white" 
+                    placeholder="SEARCH PROFILES BY NAME OR DOMAIN..." 
+                    className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-10 font-mono text-xs focus:border-zinc-500 focus:outline-none text-white placeholder:text-zinc-600" 
                 />
             </div>
             <div>
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-white">Suggestions</h3>
-                    <button className="flex items-center gap-2 bg-invox-dark-accent border border-gray-800 rounded-lg px-4 py-2 text-sm text-white font-semibold hover:bg-gray-700 transition-all duration-200 transform hover:scale-105 active:scale-95">
-                        <FilterIcon className="w-5 h-5 text-gray-400" />
+                <div className="flex justify-between items-center mb-3">
+                    <span className="text-xs font-bold font-mono uppercase tracking-wide text-zinc-300">EXPLORE_PROFILES</span>
+                    <button className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-xs text-zinc-300 font-mono uppercase hover:text-white hover:border-zinc-600 transition-colors">
+                        <FilterIcon className="w-4 h-4 text-zinc-500" />
                         <span>Filter by</span>
-                        <ChevronDownIcon className="w-5 h-5 text-gray-400" />
+                        <ChevronDownIcon className="w-4 h-4 text-zinc-500" />
                     </button>
                 </div>
                 
@@ -2439,13 +2445,13 @@ export const SpotlightPage = () => {
                     <div className="space-y-6">
                         {[...Array(2)].map((_, index) => (
                             <div key={index}>
-                                <div className="h-6 w-1/3 bg-gray-700 rounded mb-3 animate-pulse"></div>
-                                <div className="flex overflow-x-auto space-x-4 pb-2 no-scrollbar items-center">
+                                <div className="h-4 w-1/4 bg-zinc-800 mb-3 animate-pulse"></div>
+                                <div className="flex overflow-x-auto space-x-3 pb-2 no-scrollbar items-center">
                                     <div className="w-96 flex-shrink-0"><ProfileSuggestionCardSkeleton /></div>
                                     <div className="w-96 flex-shrink-0"><ProfileSuggestionCardSkeleton /></div>
-                                    <div className="flex-shrink-0 w-40 h-48 bg-invox-dark-accent border border-gray-800 rounded-lg flex flex-col items-center justify-center">
-                                        <div className="w-8 h-8 bg-gray-700 rounded-lg mb-2"></div>
-                                        <div className="h-4 w-20 bg-gray-700 rounded"></div>
+                                    <div className="flex-shrink-0 w-36 h-48 bg-[#0c0c0e] border border-zinc-800 flex flex-col items-center justify-center">
+                                        <div className="w-6 h-6 bg-zinc-800 mb-2"></div>
+                                        <div className="h-3 w-16 bg-zinc-800"></div>
                                     </div>
                                 </div>
                             </div>
@@ -2454,16 +2460,16 @@ export const SpotlightPage = () => {
                   ) : (
                     profileSuggestionData.map((categoryData, index) => (
                       <div key={`${categoryData.category}-${index}`} className="mb-6">
-                        <h4 className="text-lg font-semibold text-invox-light-gray mb-3 border-b border-gray-800 pb-2">{categoryData.category}</h4>
-                        <div className="flex overflow-x-auto space-x-4 pb-2 no-scrollbar items-center">
+                        <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 mb-3 border-b border-zinc-800 pb-1.5">{categoryData.category}</h4>
+                        <div className="flex overflow-x-auto space-x-3 pb-2 no-scrollbar items-center">
                           {categoryData.profiles.map(profile => (
                             <div key={profile.id} className="w-96 flex-shrink-0">
                                 <ProfileSuggestionCard profile={profile} />
                             </div>
                           ))}
-                          <button className="flex-shrink-0 w-40 h-48 bg-invox-dark-accent border border-gray-800 rounded-lg flex flex-col items-center justify-center text-invox-light-gray hover:bg-gray-700 hover:text-white transition-all duration-200 transform hover:scale-105 active:scale-95">
-                              <ForwardIcon className="w-8 h-8 mb-2" />
-                              <span className="font-semibold">Load More</span>
+                          <button className="flex-shrink-0 w-36 h-48 bg-[#0c0c0e] border border-zinc-800 flex flex-col items-center justify-center text-zinc-400 hover:border-zinc-600 hover:text-white transition-colors">
+                              <ForwardIcon className="w-6 h-6 mb-2 text-zinc-500" />
+                              <span className="font-mono text-xs uppercase font-semibold">Load More</span>
                           </button>
                         </div>
                       </div>
@@ -2539,8 +2545,8 @@ export const SpotlightPage = () => {
                         />
                     ))
                 ) : (
-                    <div className="text-center py-16 text-gray-400">
-                        <p>No opportunities match your current filters.</p>
+                    <div className="text-center py-16 text-zinc-500 font-mono text-xs border border-dashed border-zinc-800">
+                        <p>NO OPPORTUNITIES MATCH CURRENT FILTER CONSTRAINTS.</p>
                     </div>
                 )}
                 {viewingOffer && (
@@ -2604,21 +2610,21 @@ export const SpotlightPage = () => {
     
 
     return (
-        <div className="p-4">
+        <div className="space-y-4">
             {/* Conditional Filters & Main Tabs */}
             {!selectedOfferType && !showPinnedHighlights && (
                 <>
                     {activeTab !== 'Leap' && !spotlightBrowseState && (
                         <>
-                             <div className="flex items-center space-x-2 overflow-x-auto pb-3 mb-4 no-scrollbar">
+                             <div className="flex items-center gap-1.5 overflow-x-auto pb-3 mb-3 no-scrollbar">
                                 {categoryFilters.map(category => (
                                     <button
                                         key={category}
                                         onClick={() => setActiveCategory(category)}
-                                        className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                                        className={`px-3 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider whitespace-nowrap transition-all duration-150 border ${
                                             activeCategory === category
-                                                ? 'bg-invox-red text-white'
-                                                : 'bg-invox-dark-accent text-gray-300 hover:bg-gray-700'
+                                                ? 'bg-white text-black border-white font-bold'
+                                                : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
                                         }`}
                                     >
                                         {category}
@@ -2635,14 +2641,19 @@ export const SpotlightPage = () => {
                     )}
     
                     {!spotlightBrowseState && (
-                        <div className="flex space-x-2 border border-gray-800 rounded-lg p-1 bg-invox-dark-accent mb-4">
+                        <div className="flex border-b border-zinc-800 mb-5">
                             {mainTabs.map(tab => (
                                 <button
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
-                                    className={`flex-1 py-2 rounded-md transition-all duration-200 ${activeTab === tab ? 'bg-invox-red text-white font-semibold' : 'text-gray-400 hover:text-white hover:bg-gray-700'}`}
+                                    className={`flex-1 text-center py-2.5 text-xs font-mono uppercase tracking-widest transition-all duration-150 flex items-center justify-center gap-2 ${
+                                        activeTab === tab 
+                                            ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                            : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                                    }`}
                                 >
-                                    {tab}
+                                    <span className="w-1.5 h-1.5 bg-white opacity-0 transition-opacity" style={{ opacity: activeTab === tab ? 1 : 0 }}></span>
+                                    <span>// {tab}</span>
                                 </button>
                             ))}
                         </div>
@@ -2652,18 +2663,28 @@ export const SpotlightPage = () => {
            
             {/* Sub-tabs for Leap */}
             {activeTab === 'Leap' && !selectedOfferType && !showPinnedHighlights && (
-                <div className="flex border-b border-gray-800 mb-4">
+                <div className="flex border-b border-zinc-800 mb-5">
                     <button
                         onClick={() => setActiveLeapTab('GoForIt')}
-                        className={`w-1/2 text-center py-3 font-semibold transition-all duration-200 transform hover:-translate-y-px ${activeLeapTab === 'GoForIt' ? 'border-b-2 border-invox-red text-white' : 'text-gray-400 hover:text-white'}`}
+                        className={`w-1/2 text-center py-2.5 text-xs font-mono uppercase tracking-widest transition-all duration-150 flex items-center justify-center gap-2 ${
+                            activeLeapTab === 'GoForIt' 
+                                ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                        }`}
                     >
-                        GoForIt
+                        <span className="w-1.5 h-1.5 bg-white opacity-0 transition-opacity" style={{ opacity: activeLeapTab === 'GoForIt' ? 1 : 0 }}></span>
+                        <span>// Opportunities (GoForIt)</span>
                     </button>
                     <button
                         onClick={() => setActiveLeapTab('Pings')}
-                        className={`w-1/2 text-center py-3 font-semibold transition-all duration-200 transform hover:-translate-y-px ${activeLeapTab === 'Pings' ? 'border-b-2 border-invox-red text-white' : 'text-gray-400 hover:text-white'}`}
+                        className={`w-1/2 text-center py-2.5 text-xs font-mono uppercase tracking-widest transition-all duration-150 flex items-center justify-center gap-2 ${
+                            activeLeapTab === 'Pings' 
+                                ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                        }`}
                     >
-                        Pings
+                        <span className="w-1.5 h-1.5 bg-white opacity-0 transition-opacity" style={{ opacity: activeLeapTab === 'Pings' ? 1 : 0 }}></span>
+                        <span>// Inbound Pings</span>
                     </button>
                 </div>
             )}

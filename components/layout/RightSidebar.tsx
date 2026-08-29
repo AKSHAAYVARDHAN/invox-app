@@ -106,14 +106,13 @@ const trackedChannels = [
     { id: '5', name: 'Market Movers', avatarUrl: 'https://picsum.photos/seed/market/200', category: 'Finance', isLive: false },
 ];
 
-// Data duplicated from Trendz.tsx to avoid complex state passing
 const mockTrends: Trend[] = [
     {
         id: '1',
         domain: { name: 'Health Care', icon: ShieldCheckIcon, isFollowed: true },
         title: "Super Skin Heals Wounds 90% In 4 Hours",
         summary: "Super skin, an advanced wound-healing technology, accelerates recovery by 90% within just 4 hours and fully repairs the tissue in 24, ensuring faster and more effective healing.",
-        fullContent: "Super skin, an advanced wound-healing technology, accelerates recovery by 90% within just 4 hours and fully repairs the tissue in 24, ensuring faster and more effective healing. It enhances the natural healing process, repairing wounds up to 90% within just 4 hours. Whether for minor cuts, surgical recovery, or injuries, super skin promotes rapid repair, minimizes scarring, and promotes healthier skin regeneration in record time.",
+        fullContent: "Super skin, an advanced wound-healing technology, accelerates recovery by 90% within just 4 hours and fully repairs the tissue in 24, ensuring faster and more effective healing.",
         mediaUrl: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?q=80&w=2070&auto=format&fit=crop',
         mediaType: 'image',
         mediaOverlayUrl: 'https://images.unsplash.com/photo-1612536539035-1a8335aa8823?q=80&w=1974&auto=format&fit=crop',
@@ -125,12 +124,12 @@ const mockTrends: Trend[] = [
         },
         createdAt: new Date(),
     },
-     {
+    {
         id: '2',
         domain: { name: 'Health Care', icon: ShieldCheckIcon, isFollowed: true },
         title: "AI Achieved 99% Accuracy Detecting Cancer",
-        summary: "A Global Team Of Scientist Created An AI Model That Can Now Detect Cancer With 99.2% Accuracy Beating Even Doctors And Current Tools. It was trained on thousands of microscope images, covering everything from normal tissue.",
-        fullContent: "A Global Team Of Scientist Created An AI Model That Can Now Detect Cancer With 99.2% Accuracy Beating Even Doctors And Current Tools. It was trained on thousands of microscope images, covering everything from normal tissue to malignant cells. This breakthrough promises earlier diagnosis, more effective treatment planning, and a significant step forward in the fight against cancer.",
+        summary: "A Global Team Of Scientist Created An AI Model That Can Now Detect Cancer With 99.2% Accuracy Beating Even Doctors And Current Tools.",
+        fullContent: "A Global Team Of Scientist Created An AI Model That Can Now Detect Cancer With 99.2% Accuracy Beating Even Doctors And Current Tools.",
         mediaUrl: 'https://images.unsplash.com/photo-1554734867-bf3c00a49371?q=80&w=2070&auto=format&fit=crop',
         mediaType: 'image',
         mediaOverlayUrl: 'https://images.unsplash.com/photo-1526253752538-345100688942?q=80&w=2070&auto=format&fit=crop',
@@ -146,8 +145,8 @@ const mockTrends: Trend[] = [
         id: '3',
         domain: { name: 'Technology', icon: CodeBracketIcon, isFollowed: true },
         title: "Quantum Computing Achieves New Milestone",
-        summary: "Researchers have successfully maintained quantum coherence for a record-breaking duration, paving the way for more stable and powerful quantum computers.",
-        fullContent: "In a significant leap for quantum computing, researchers at a leading institute have successfully maintained quantum coherence in a qubit system for a record-breaking duration. This breakthrough addresses one of the primary obstacles in building functional quantum computers, paving the way for more stable, powerful, and error-resistant machines capable of solving problems far beyond the reach of classical computers.",
+        summary: "Researchers have successfully maintained quantum coherence for a record-breaking duration.",
+        fullContent: "In a significant leap for quantum computing, researchers at a leading institute have successfully maintained quantum coherence in a qubit system.",
         mediaUrl: 'https://images.unsplash.com/photo-1617854818583-09e7f077a156?q=80&w=2070&auto=format&fit=crop',
         mediaType: 'image',
         mediaOverlayUrl: 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?q=80&w=1964&auto=format&fit=crop',
@@ -155,40 +154,6 @@ const mockTrends: Trend[] = [
         details: {
             publishedBy: 'Tech Frontiers',
             publishedOn: '09-03-2025',
-            link: 'https://x.com/Invox'
-        },
-        createdAt: new Date(),
-    },
-    {
-        id: '4',
-        domain: { name: 'Trading', icon: ShieldCheckIcon, isFollowed: false },
-        title: "AI-Powered Trading Bots Outperform Market",
-        summary: "A new study reveals that advanced AI-powered trading bots are consistently outperforming traditional market benchmarks, leveraging real-time data analysis.",
-        fullContent: "A new comprehensive study has revealed that advanced AI-powered trading bots are consistently outperforming traditional market benchmarks. By leveraging sophisticated algorithms and real-time data analysis, these bots can identify and act on market opportunities faster than human traders, marking a significant shift in the landscape of financial trading and investment strategies.",
-        mediaUrl: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=2070&auto=format&fit=crop',
-        mediaType: 'image',
-        mediaOverlayUrl: 'https://images.unsplash.com/photo-1640286599723-3a479a3243c2?q=80&w=1964&auto=format&fit=crop',
-        stats: { likes: 78000, views: 32000000, comments: 9500 },
-        details: {
-            publishedBy: 'FinTech Today',
-            publishedOn: '08-03-2025',
-            link: 'https://x.com/Invox'
-        },
-        createdAt: new Date(),
-    },
-    {
-        id: '5',
-        domain: { name: 'Stock Market', icon: PresentationChartBarIcon, isFollowed: false },
-        title: "Green Energy Stocks Surge on New Policy",
-        summary: "Following the announcement of new global green energy policies, stocks in the renewable energy sector have seen an unprecedented surge, attracting significant investor interest.",
-        fullContent: "Following the announcement of new global green energy policies, stocks in the renewable energy sector have experienced an unprecedented surge. This rally is attracting significant investor interest, as companies specializing in solar, wind, and other sustainable technologies are expected to see massive growth, signaling a major shift in market dynamics towards sustainability.",
-        mediaUrl: 'https://images.unsplash.com/photo-1466611653911-95081537e5b7?q=80&w=2070&auto=format&fit=crop',
-        mediaType: 'image',
-        mediaOverlayUrl: 'https://images.unsplash.com/photo-1623352013854-a65c275a59a6?q=80&w=1965&auto=format&fit=crop',
-        stats: { likes: 91000, views: 41000000, comments: 11200 },
-        details: {
-            publishedBy: 'Market Watch',
-            publishedOn: '07-03-2025',
             link: 'https://x.com/Invox'
         },
         createdAt: new Date(),
@@ -202,12 +167,6 @@ const mockMyCommunities: MyCommunity[] = [
     { id: 'mc4', name: 'CodeFrel Start', latestMessage: 'Welcome to all the new members! Feel free to introduce yourselves.', timestamp: '3d ago', hasNotification: false, avatarUrl: 'https://picsum.photos/seed/codefrel-start/200', category: 'Coding' },
     { id: 'mc5', name: 'AI ClubTech', latestMessage: 'Join our weekly discussion on LLMs.', timestamp: '4d ago', hasNotification: false, avatarUrl: 'https://picsum.photos/seed/ai-clubtech/200', category: 'Artificial Intelligence' },
     { id: 'mc6', name: 'JS Junkies', latestMessage: 'React 19 is out! What are your thoughts?', timestamp: '4d ago', hasNotification: true, avatarUrl: 'https://picsum.photos/seed/js-junkies/200', category: 'Coding' },
-    { id: 'mc7', name: 'Market Movers', latestMessage: 'Interesting trend in the renewable energy sector.', timestamp: '5d ago', hasNotification: false, avatarUrl: 'https://picsum.photos/seed/market-movers/200', category: 'Business' },
-    { id: 'mc8', name: 'Creative Canvas', latestMessage: 'New design challenge posted!', timestamp: '5d ago', hasNotification: false, avatarUrl: 'https://picsum.photos/seed/creative-canvas/200', category: 'Design' },
-    { id: 'mc9', name: 'DevOps Den', latestMessage: 'Check out this new CI/CD pipeline setup.', timestamp: '6d ago', hasNotification: true, avatarUrl: 'https://picsum.photos/seed/devops-den/200', category: 'Coding' },
-    { id: 'mc10', name: 'Data Mavericks', latestMessage: 'Anyone working with Polars instead of Pandas?', timestamp: '1w ago', hasNotification: false, avatarUrl: 'https://picsum.photos/seed/data-mavericks/200', category: 'Artificial Intelligence' },
-    { id: 'mc11', name: 'Growth Hackers Inc.', latestMessage: 'We just passed 10,000 members!', timestamp: '1w ago', hasNotification: false, avatarUrl: 'https://picsum.photos/seed/growth-hackers/200', category: 'Business' },
-    { id: 'mc12', name: 'Sales Superstars', latestMessage: 'What are your go-to closing techniques?', timestamp: '2w ago', hasNotification: false, avatarUrl: 'https://picsum.photos/seed/sales-superstars/200', category: 'Business' },
 ];
 
 const communityPageDomains = [
@@ -223,7 +182,6 @@ const mockConferences: Conference[] = [
     { id: 'conf1', title: 'AI in 2025: The Future', date: 'Oct 26', time: '10:00 AM', timezone: 'PST', communityName: 'AI ClubTech', communityAvatarUrl: 'https://picsum.photos/seed/ai-clubtech/200', type: 'Online' },
     { id: 'conf2', title: 'Design Systems Summit', date: 'Nov 02', time: '1:00 PM', timezone: 'EST', communityName: 'UI/UX Guild', communityAvatarUrl: 'https://picsum.photos/seed/ui-ux-guild/200', type: 'Offline' },
     { id: 'conf3', title: 'React Forward Conf', date: 'Nov 15', time: '9:00 AM', timezone: 'GMT', communityName: 'JS Junkies', communityAvatarUrl: 'https://picsum.photos/seed/js-junkies/200', type: 'Online' },
-    { id: 'conf4', title: 'The Pythonic Web', date: 'Nov 20', time: '11:00 AM', timezone: 'PST', communityName: 'Pythonic Geeks', communityAvatarUrl: 'https://picsum.photos/seed/pythonic-geeks/200', type: 'Online' },
 ];
 
 const mockEvents: Event[] = [
@@ -274,39 +232,40 @@ const DiscoverSidebar: React.FC<Pick<RightSidebarProps, 'activityFilter' | 'setA
     };
 
     return (
-        <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
-            <div className="h-full flex flex-col gap-6 overflow-y-auto no-scrollbar">
+        <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
+            <div className="h-full flex flex-col gap-5 overflow-y-auto no-scrollbar">
                 <div className="relative px-4">
-                    <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                     <input
                         type="search"
-                        placeholder="Search Threads and Queries"
-                        className="w-full bg-invox-dark-accent border border-gray-800 rounded-lg p-3 pl-10 focus:outline-none text-white"
+                        placeholder="SEARCH_THREADS_QUERIES..."
+                        className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
                     />
                 </div>
 
                 {isActivityView ? (
                     <>
                         <div className="flex items-center justify-between px-4">
-                            <button onClick={handleBackFromActivity} className="flex items-center gap-2 text-invox-light-gray hover:text-white transition-colors">
-                                <ArrowLeftIcon className="w-5 h-5" />
-                                <h3 className="font-bold text-lg text-white">Activity</h3>
+                            <button onClick={handleBackFromActivity} className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors">
+                                <ArrowLeftIcon className="w-4 h-4" />
+                                <span>// BACK_TO_DISCOVER</span>
                             </button>
                         </div>
-                        <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4 mx-4">
-                            <p className="text-sm text-gray-400 mb-4">View your commented threads and shared insights.</p>
+                        <div className="bg-[#0c0c0e] border border-zinc-800 p-4 mx-4">
+                            <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider mb-2">// ACTIVITY_LOGS</h3>
+                            <p className="text-xs text-zinc-400 font-mono mb-4">View commented threads and shared insights.</p>
                             <div className="space-y-2">
                                 <button
                                     onClick={() => setActivityFilter('threads')}
-                                    className={`w-full text-left p-3 rounded-md font-semibold transition-colors ${activityFilter === 'threads' ? 'bg-invox-red text-white' : 'bg-invox-dark text-gray-300 hover:bg-gray-700'}`}
+                                    className={`w-full text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${activityFilter === 'threads' ? 'bg-white text-black border-white font-bold' : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600'}`}
                                 >
-                                    Threads
+                                    &gt; THREADS
                                 </button>
                                 <button
                                     onClick={() => setActivityFilter('queries')}
-                                    className={`w-full text-left p-3 rounded-md font-semibold transition-colors ${activityFilter === 'queries' ? 'bg-invox-red text-white' : 'bg-invox-dark text-gray-300 hover:bg-gray-700'}`}
+                                    className={`w-full text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${activityFilter === 'queries' ? 'bg-white text-black border-white font-bold' : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600'}`}
                                 >
-                                    Queries
+                                    &gt; QUERIES
                                 </button>
                             </div>
                         </div>
@@ -316,71 +275,65 @@ const DiscoverSidebar: React.FC<Pick<RightSidebarProps, 'activityFilter' | 'setA
                         <div className="px-4">
                             <button
                                 onClick={() => setIsActivityView(true)}
-                                className="w-full flex items-center justify-center gap-2 bg-invox-dark-accent border border-gray-800 rounded-lg p-3 text-white font-semibold hover:bg-gray-700 transition-colors"
-                                title="Activity"
+                                className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors"
                             >
-                                <PencilIcon className="w-5 h-5" />
-                                <span>Activity</span>
+                                <div className="flex items-center gap-2">
+                                    <PencilIcon className="w-4 h-4 text-zinc-500" />
+                                    <span>// ACTIVITY</span>
+                                </div>
+                                <span className="text-zinc-600">&gt;&gt;</span>
                             </button>
                         </div>
 
                         <div>
-                            {/* Suggestions Card with improved themed profile images */}
-                            <div className="bg-invox-dark-accent rounded-xl border border-gray-800 mx-4 overflow-hidden flex flex-col shadow-2xl">
+                            {/* Suggestions Card */}
+                            <div className="bg-[#0c0c0e] border border-zinc-800 mx-4 flex flex-col">
                                 {/* Header */}
-                                <div className="flex items-center justify-between p-5 pb-4">
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="text-lg font-bold text-white">Suggestions</h3>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="h-6 w-px bg-gray-800/50"></div>
-                                        <button className="p-1 text-gray-400 hover:text-white transition-colors">
-                                            <EllipsisVerticalIcon className="w-5 h-5" />
-                                        </button>
-                                    </div>
+                                <div className="flex items-center justify-between p-3.5 border-b border-zinc-800">
+                                    <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// SUGGESTIONS</h3>
+                                    <EllipsisVerticalIcon className="w-4 h-4 text-zinc-500 cursor-pointer hover:text-white transition-colors" />
                                 </div>
 
-                                {/* Divider */}
-                                <div className="h-px bg-gray-800 mx-5"></div>
-
                                 {/* User List */}
-                                <div className="p-5 space-y-6">
+                                <div className="p-3.5 space-y-4">
                                     {suggestedChannels.map((channel, index) => (
-                                        <div key={index} className="flex items-start gap-4 group cursor-pointer">
+                                        <div key={index} className="flex items-start gap-3 group cursor-pointer">
                                             <div className="relative flex-shrink-0">
                                                 <img 
                                                     src={channel.avatarUrl} 
                                                     onError={handleImageError} 
                                                     alt={channel.name} 
-                                                    className="w-12 h-12 rounded-lg object-cover border border-white/5 shadow-lg group-hover:scale-105 transition-transform duration-300" 
+                                                    className="w-9 h-9 object-cover border border-zinc-800" 
                                                 />
                                             </div>
-                                            <div className="flex-1 min-w-0 flex flex-col justify-center space-y-1">
+                                            <div className="flex-1 min-w-0 flex flex-col justify-center">
                                                 <div className="flex items-center gap-1.5">
-                                                    <p className="font-semibold text-white text-base truncate">{channel.name}</p>
-                                                    {channel.isVerified && <CheckBadgeIcon className="w-4 h-4 text-invox-blue" />}
+                                                    <p className="font-mono font-bold text-white text-xs truncate group-hover:text-zinc-200">{channel.name}</p>
+                                                    {channel.isVerified && <CheckBadgeIcon className="w-3.5 h-3.5 text-white" />}
                                                 </div>
-                                                <p className="text-sm text-gray-400 truncate">{channel.followers}</p>
-                                                <p className="text-sm text-gray-500 truncate font-semibold">{channel.domain}</p>
+                                                <p className="text-[11px] text-zinc-500 font-mono truncate">{channel.followers}</p>
+                                                <p className="text-[11px] text-zinc-400 font-mono truncate mt-0.5">{channel.domain}</p>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
 
-                                {/* Footer Action Button - Standardized size and style */}
-                                <div className="px-5 pb-5 mt-auto">
-                                    <button className="w-full bg-invox-dark text-white font-semibold py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200">
-                                        View All
+                                {/* Footer Action Button */}
+                                <div className="p-3 border-t border-zinc-800 bg-black/40">
+                                    <button className="w-full bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider py-1.5 transition-colors">
+                                        VIEW_ALL
                                     </button>
                                 </div>
                             </div>
                         </div>
 
-                        <footer className="text-xs text-gray-500 space-x-2 px-4 mt-8 opacity-50">
-                            <a href="#" className="hover:underline">Terms of Service</a>
-                            <a href="#" className="hover:underline">Privacy Policy</a>
-                            <a href="#" className="hover:underline">About</a>
-                            <span>© 2024 Invox Corp.</span>
+                        <footer className="text-[11px] font-mono text-zinc-600 space-x-2 px-4 mt-auto">
+                            <a href="#" className="hover:text-zinc-400">TERMS</a>
+                            <span>/</span>
+                            <a href="#" className="hover:text-zinc-400">PRIVACY</a>
+                            <span>/</span>
+                            <a href="#" className="hover:text-zinc-400">ABOUT</a>
+                            <span className="block mt-1 text-[10px]">© 2025 INVOX SYSTEM</span>
                         </footer>
                     </>
                 )}
@@ -402,13 +355,12 @@ const TrendzSidebar: React.FC<Pick<RightSidebarProps, 'followedDomainsFilter' | 
     const trendingItems = mockTrends.slice(0, 3).map(trend => ({
         id: trend.id,
         title: trend.title,
-        source: trend.details.publishedBy, // Use the actual source/publisher name
-        timestamp: trend.details.publishedOn, // Added timestamp
-        upvotes: formatNumber(trend.stats.likes), // Added upvotes (likes)
+        source: trend.details.publishedBy,
+        timestamp: trend.details.publishedOn,
+        upvotes: formatNumber(trend.stats.likes),
         imageUrl: trend.thumbnailUrl || trend.mediaUrl
     }));
     
-    // In a real app, this would come from user data
     const followedDomains = [
         { name: 'Health Care', icon: ShieldCheckIcon },
         { name: 'Technology', icon: CodeBracketIcon },
@@ -426,35 +378,35 @@ const TrendzSidebar: React.FC<Pick<RightSidebarProps, 'followedDomainsFilter' | 
     };
 
     return (
-        <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
-            <div className="h-full flex flex-col gap-6 overflow-y-auto no-scrollbar">
+        <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
+            <div className="h-full flex flex-col gap-5 overflow-y-auto no-scrollbar">
                 {isFollowedView ? (
                     <>
                         <div className="px-4 flex flex-col gap-4">
                              <div className="relative">
-                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                                 <input
                                     type="search"
-                                    placeholder="Search Trendz"
-                                    className="w-full bg-invox-dark-accent border border-gray-800 rounded-lg p-3 pl-10 focus:outline-none text-white"
+                                    placeholder="SEARCH_TRENDZ..."
+                                    className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
                                 />
                             </div>
                             <div className="flex items-center justify-between">
-                                <button onClick={handleBackFromFollowed} className="flex items-center gap-2 text-invox-light-gray hover:text-white transition-colors">
-                                    <ArrowLeftIcon className="w-5 h-5" />
-                                    <h3 className="font-bold text-lg text-white">Followed Domains</h3>
+                                <button onClick={handleBackFromFollowed} className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors">
+                                    <ArrowLeftIcon className="w-4 h-4" />
+                                    <span>// FOLLOWED_DOMAINS</span>
                                 </button>
                             </div>
                         </div>
-                        <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4 mx-4">
+                        <div className="bg-[#0c0c0e] border border-zinc-800 p-3 mx-4">
                             <div className="space-y-2">
                                 {followedDomains.map(domain => (
                                     <button
                                         key={domain.name}
                                         onClick={() => setFollowedDomainsFilter(domain.name)}
-                                        className={`w-full flex items-center gap-3 text-left p-3 rounded-md font-semibold transition-colors ${followedDomainsFilter === domain.name ? 'bg-invox-red text-white' : 'bg-invox-dark text-gray-300 hover:bg-gray-700'}`}
+                                        className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${followedDomainsFilter === domain.name ? 'bg-white text-black border-white font-bold' : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600'}`}
                                     >
-                                        <domain.icon className="w-5 h-5" />
+                                        <domain.icon className="w-4 h-4" />
                                         <span>{domain.name}</span>
                                     </button>
                                 ))}
@@ -463,73 +415,59 @@ const TrendzSidebar: React.FC<Pick<RightSidebarProps, 'followedDomainsFilter' | 
                     </>
                 ) : (
                     <>
-                        <div className="px-4 flex flex-col gap-4">
+                        <div className="px-4 flex flex-col gap-3">
                             <div className="relative">
-                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                                 <input
                                     type="search"
-                                    placeholder="Search Trendz"
-                                    className="w-full bg-invox-dark-accent border border-gray-800 rounded-lg p-3 pl-10 focus:outline-none text-white"
+                                    placeholder="SEARCH_TRENDZ..."
+                                    className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
                                 />
                             </div>
                             <button
                                 onClick={() => setIsFollowedView(true)}
-                                className="w-full flex items-center justify-center gap-2 bg-invox-dark-accent border border-gray-800 rounded-lg p-3 text-white font-semibold hover:bg-gray-700 transition-colors"
-                                title="Followed Domains"
+                                className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors"
                             >
-                                <BookmarkIcon className="w-5 h-5" />
-                                <span>Followed Domains</span>
+                                <div className="flex items-center gap-2">
+                                    <BookmarkIcon className="w-4 h-4 text-zinc-500" />
+                                    <span>// FOLLOWED_DOMAINS</span>
+                                </div>
+                                <span className="text-zinc-600">&gt;&gt;</span>
                             </button>
                         </div>
                         
                         <div>
-                            {/* MIMICKING CONFERENCE NOTIFY CARD UI */}
-                            <div className="bg-invox-dark-accent rounded-xl border border-gray-800 mx-4 overflow-hidden flex flex-col shadow-2xl">
-                                {/* Header */}
-                                <div className="flex items-center justify-between p-5 pb-4">
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="text-lg font-bold text-white">Momentum Now</h3>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="h-6 w-px bg-gray-800/50"></div>
-                                        <button className="p-1 text-gray-400 hover:text-white transition-colors">
-                                            <EllipsisVerticalIcon className="w-5 h-5" />
-                                        </button>
-                                    </div>
+                            <div className="bg-[#0c0c0e] border border-zinc-800 mx-4 flex flex-col">
+                                <div className="flex items-center justify-between p-3.5 border-b border-zinc-800">
+                                    <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// MOMENTUM_NOW</h3>
+                                    <EllipsisVerticalIcon className="w-4 h-4 text-zinc-500 cursor-pointer hover:text-white transition-colors" />
                                 </div>
 
-                                {/* Divider */}
-                                <div className="h-px bg-gray-800 mx-5"></div>
-
-                                {/* List Body */}
-                                <div className="p-5 space-y-6">
-                                    {trendingItems.map((item, index) => (
-                                        <div key={item.id} className="flex items-start gap-4 group cursor-pointer">
+                                <div className="p-3.5 space-y-4">
+                                    {trendingItems.map((item) => (
+                                        <div key={item.id} className="flex items-start gap-3 group cursor-pointer">
                                             <div className="relative flex-shrink-0">
                                                 <img 
                                                     src={item.imageUrl} 
                                                     onError={handleImageError} 
                                                     alt={item.title} 
-                                                    className="w-12 h-12 rounded-lg object-cover border border-white/5 shadow-lg group-hover:scale-105 transition-transform duration-300" 
+                                                    className="w-10 h-10 object-cover border border-zinc-800" 
                                                 />
                                             </div>
-                                            <div className="flex-1 min-w-0 flex flex-col justify-center space-y-1">
-                                                {/* REVEAL FULL ONE-LINE ON HOVER - Removed native tooltip title */}
-                                                <p className="font-semibold text-white text-base truncate group-hover:whitespace-normal group-hover:break-words group-hover:text-invox-red transition-all duration-300">
+                                            <div className="flex-1 min-w-0 flex flex-col justify-center space-y-0.5">
+                                                <p className="font-mono font-bold text-white text-xs truncate group-hover:text-zinc-200 transition-colors">
                                                     {item.title}
                                                 </p>
-                                                <p className="text-sm text-gray-400">{item.source}</p>
-                                                {/* REPLACED VIEWS WITH TIMESTAMP AND UPVOTES */}
-                                                <p className="text-xs text-gray-500 font-medium">{item.timestamp} • {item.upvotes} Upvotes</p>
+                                                <p className="text-[11px] text-zinc-500 font-mono">{item.source}</p>
+                                                <p className="text-[10px] text-zinc-600 font-mono">[{item.timestamp} // {item.upvotes} UPVOTES]</p>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
 
-                                {/* Footer Action */}
-                                <div className="px-5 pb-5 mt-auto">
-                                    <button className="w-full bg-invox-dark text-white font-semibold py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200">
-                                        View All
+                                <div className="p-3 border-t border-zinc-800 bg-black/40">
+                                    <button className="w-full bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider py-1.5 transition-colors">
+                                        VIEW_ALL
                                     </button>
                                 </div>
                             </div>
@@ -546,7 +484,6 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
     const [isPinnedView, setIsPinnedView] = useState(false);
     const [pinnedViewMode, setPinnedViewMode] = useState<'options' | 'profiles'>('options');
 
-    // Reset local view states when the variant changes (Showcase <-> Collabs)
     useEffect(() => {
         setIsBrowsingView(false);
         setIsPinnedView(false);
@@ -573,52 +510,48 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
         { name: 'Ada Lovelace', handle: '@ada', avatarUrl: 'https://picsum.photos/seed/ada/200' },
         { name: 'Crash Adams', handle: '@crashadams', avatarUrl: 'https://picsum.photos/id/10/200/200' },
         { name: 'Marco Rossi', handle: '@marcorossi', avatarUrl: 'https://picsum.photos/id/12/200/200' },
-        { name: 'Dr. Evelyn Reed', handle: '@evelynreed', avatarUrl: 'https://picsum.photos/id/13/200/200' },
-        { name: 'Chloe Bennet', handle: '@chloebennet', avatarUrl: 'https://picsum.photos/id/15/200/200' },
-        { name: 'Liam Johnson', handle: '@liamjohnson', avatarUrl: 'https://picsum.photos/id/16/200/200' },
-        { name: 'Mc Benny', handle: '@mcbenny', avatarUrl: 'https://picsum.photos/id/25/200/200' },
-        { name: 'Julia Chen', handle: '@juliachen', avatarUrl: 'https://picsum.photos/id/26/200/200' },
     ];
 
     const browseDescription = variant === 'spotlight-collabs' 
-        ? "Explore collaboration opportunities and connect with builders looking to work together."
+        ? "Explore collaboration opportunities and connect with builders."
         : "Explore projects and profiles from creators across the platform.";
 
     return (
-        <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
-            <div className="h-full flex flex-col gap-6 overflow-y-auto no-scrollbar">
+        <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
+            <div className="h-full flex flex-col gap-5 overflow-y-auto no-scrollbar">
                 {isBrowsingView ? (
                     <>
                         <div className="flex items-center justify-between px-4">
-                            <button onClick={() => setIsBrowsingView(false)} className="flex items-center gap-2 text-invox-light-gray hover:text-white transition-colors">
-                                <ArrowLeftIcon className="w-5 h-5" />
-                                <h3 className="font-bold text-lg text-white">Browse</h3>
+                            <button onClick={() => setIsBrowsingView(false)} className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors">
+                                <ArrowLeftIcon className="w-4 h-4" />
+                                <span>// BACK_TO_SPOTLIGHT</span>
                             </button>
                         </div>
-                        <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4 mx-4">
-                            <p className="text-sm text-gray-400 mb-4">{browseDescription}</p>
+                        <div className="bg-[#0c0c0e] border border-zinc-800 p-4 mx-4">
+                            <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider mb-2">// DIRECTORY</h3>
+                            <p className="text-xs text-zinc-400 font-mono mb-4">{browseDescription}</p>
                             <div className="space-y-2">
                                 <button
                                     onClick={() => setSpotlightBrowseState('projects')}
-                                    className={`w-full flex items-center gap-3 text-left p-3 rounded-md font-semibold transition-colors ${
+                                    className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${
                                         spotlightBrowseState === 'projects' 
-                                            ? 'bg-invox-red text-white' 
-                                            : 'bg-invox-dark text-gray-300 hover:bg-gray-700'
+                                            ? 'bg-white text-black border-white font-bold' 
+                                            : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600'
                                     }`}
                                 >
-                                    <CubeIcon className="w-5 h-5" />
-                                    <span>Browse Projects</span>
+                                    <CubeIcon className="w-4 h-4" />
+                                    <span>BROWSE_PROJECTS</span>
                                 </button>
                                 <button
                                      onClick={() => setSpotlightBrowseState('profiles')}
-                                     className={`w-full flex items-center gap-3 text-left p-3 rounded-md font-semibold transition-colors ${
+                                     className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${
                                         spotlightBrowseState === 'profiles' 
-                                            ? 'bg-invox-red text-white' 
-                                            : 'bg-invox-dark text-gray-300 hover:bg-gray-700'
+                                            ? 'bg-white text-black border-white font-bold' 
+                                            : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600'
                                     }`}
                                 >
-                                    <ProfileIcon className="w-5 h-5" />
-                                    <span>Browse Profiles</span>
+                                    <ProfileIcon className="w-4 h-4" />
+                                    <span>BROWSE_PROFILES</span>
                                 </button>
                             </div>
                         </div>
@@ -628,166 +561,134 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                         {pinnedViewMode === 'options' ? (
                             <>
                                 <div className="flex items-center justify-between px-4">
-                                    <button onClick={() => { setIsPinnedView(false); setShowPinnedHighlights(false); }} className="flex items-center gap-2 text-invox-light-gray hover:text-white transition-colors">
-                                        <ArrowLeftIcon className="w-5 h-5" />
-                                        <h3 className="font-bold text-lg text-white">Pinned</h3>
+                                    <button onClick={() => { setIsPinnedView(false); setShowPinnedHighlights(false); }} className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors">
+                                        <ArrowLeftIcon className="w-4 h-4" />
+                                        <span>// PINNED</span>
                                     </button>
                                 </div>
-                                <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4 mx-4">
-                                    <p className="text-sm text-gray-400 mb-4">Explore projects and profiles from creators you've pinned.</p>
+                                <div className="bg-[#0c0c0e] border border-zinc-800 p-4 mx-4">
+                                    <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider mb-2">// PINNED_ITEMS</h3>
+                                    <p className="text-xs text-zinc-400 font-mono mb-4">Explore projects and profiles from creators you've pinned.</p>
                                     <div className="space-y-2">
                                         <button
                                             onClick={() => setShowPinnedHighlights(true)}
-                                            className={`w-full flex items-center gap-3 text-left p-3 rounded-md font-semibold transition-colors ${
+                                            className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${
                                                 showPinnedHighlights
-                                                    ? 'bg-invox-red text-white'
-                                                    : 'bg-invox-dark text-gray-300 hover:bg-gray-700'
+                                                    ? 'bg-white text-black border-white font-bold'
+                                                    : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600'
                                             }`}
                                         >
-                                            <StarIcon className="w-5 h-5" />
-                                            <span>Pinned Highlights</span>
+                                            <StarIcon className="w-4 h-4" />
+                                            <span>PINNED_HIGHLIGHTS</span>
                                         </button>
                                         <button
                                             onClick={() => { setPinnedViewMode('profiles'); setShowPinnedHighlights(false); }}
-                                            className="w-full flex items-center gap-3 text-left p-3 rounded-md font-semibold bg-invox-dark text-gray-300 hover:bg-gray-700 transition-colors"
+                                            className="w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600"
                                         >
-                                            <ProfileIcon className="w-5 h-5" />
-                                            <span>Pinned Profiles</span>
+                                            <ProfileIcon className="w-4 h-4" />
+                                            <span>PINNED_PROFILES</span>
                                         </button>
                                     </div>
                                 </div>
                             </>
-                        ) : ( // Pinned Profiles View
+                        ) : (
                             <>
                                 <div className="flex items-center justify-between px-4">
-                                    <button onClick={() => setPinnedViewMode('options')} className="flex items-center gap-2 text-invox-light-gray hover:text-white transition-colors">
-                                        <ArrowLeftIcon className="w-5 h-5" />
-                                        <h3 className="font-bold text-lg text-white">Pinned Profiles</h3>
+                                    <button onClick={() => setPinnedViewMode('options')} className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors">
+                                        <ArrowLeftIcon className="w-4 h-4" />
+                                        <span>// PINNED_PROFILES</span>
                                     </button>
                                 </div>
-                                <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4 mx-4">
-                                    <p className="text-sm text-gray-400 mb-4">Profiles you have followed from the Spotlight section.</p>
-                                    <div className="space-y-4">
+                                <div className="bg-[#0c0c0e] border border-zinc-800 p-4 mx-4">
+                                    <div className="space-y-3">
                                         {pinnedUsers.map((user, index) => (
-                                            <div key={index} className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <img src={user.avatarUrl} onError={handleImageError} alt={user.name} className="w-10 h-10 rounded-full object-cover" />
-                                                    <div>
-                                                        <p className="font-semibold text-white hover:underline cursor-pointer">{user.name}</p>
-                                                    </div>
+                                            <div key={index} className="flex items-center justify-between border-b border-zinc-900 pb-2">
+                                                <div className="flex items-center gap-2.5">
+                                                    <img src={user.avatarUrl} onError={handleImageError} alt={user.name} className="w-7 h-7 object-cover border border-zinc-800" />
+                                                    <p className="font-mono text-xs text-white">{user.name}</p>
                                                 </div>
-                                                <button className="bg-invox-dark text-white border border-gray-800 px-4 py-1 rounded-full text-sm font-bold hover:bg-gray-700">View</button>
+                                                <button className="bg-black text-zinc-300 border border-zinc-800 px-2 py-0.5 font-mono text-[10px] uppercase hover:text-white hover:border-zinc-600">VIEW</button>
                                             </div>
                                         ))}
                                     </div>
-                                    <button className="text-invox-red text-sm mt-4 hover:underline">Show more</button>
                                 </div>
                             </>
                         )}
                     </>
-                ) : ( // Default Spotlight Sidebar View
+                ) : (
                     <>
-                        <div className="px-4 flex flex-col gap-4">
+                        <div className="px-4 flex flex-col gap-2.5">
                             <button
                                 onClick={() => { setIsBrowsingView(true); setShowPinnedHighlights(false); }}
-                                className="w-full flex items-center justify-center gap-2 bg-invox-dark-accent border border-gray-800 rounded-lg p-3 text-white font-semibold hover:bg-gray-700 transition-colors"
-                                title="Browse"
+                                className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors"
                             >
-                                <MagnifyingGlassIcon className="w-5 h-5" />
-                                <span>Browse</span>
+                                <div className="flex items-center gap-2">
+                                    <MagnifyingGlassIcon className="w-4 h-4 text-zinc-500" />
+                                    <span>// BROWSE</span>
+                                </div>
+                                <span className="text-zinc-600">&gt;&gt;</span>
                             </button>
                             {variant !== 'spotlight-collabs' && (
                                 <button
                                     onClick={() => { setIsPinnedView(true); setShowPinnedHighlights(false); }}
-                                    className="w-full flex items-center justify-center gap-2 bg-invox-dark-accent border border-gray-800 rounded-lg p-3 text-white font-semibold hover:bg-gray-700 transition-colors"
-                                    title="Pinned"
+                                    className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors"
                                 >
-                                    <BookmarkIcon className="w-5 h-5" />
-                                    <span>Pinned</span>
+                                    <div className="flex items-center gap-2">
+                                        <BookmarkIcon className="w-4 h-4 text-zinc-500" />
+                                        <span>// PINNED</span>
+                                    </div>
+                                    <span className="text-zinc-600">&gt;&gt;</span>
                                 </button>
                             )}
                         </div>
 
-                        {/* MY COLLABORATIONS CARD - Only show in Collabs section */}
                         {variant === 'spotlight-collabs' && (
-                            <div className="bg-invox-dark-accent rounded-xl border border-gray-800 mx-4 overflow-hidden flex flex-col shadow-2xl">
-                                {/* Header */}
-                                <div className="flex items-center justify-between p-5 pb-4">
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="text-lg font-bold text-white">My Collaborations</h3>
-                                    </div>
-                                    <button className="p-1 text-gray-400 hover:text-white transition-colors">
-                                        <EllipsisVerticalIcon className="w-5 h-5" />
-                                    </button>
+                            <div className="bg-[#0c0c0e] border border-zinc-800 mx-4 flex flex-col">
+                                <div className="flex items-center justify-between p-3.5 border-b border-zinc-800">
+                                    <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// MY_COLLABORATIONS</h3>
+                                    <EllipsisVerticalIcon className="w-4 h-4 text-zinc-500" />
                                 </div>
 
-                                {/* Divider */}
-                                <div className="h-px bg-gray-800 mx-5"></div>
-
-                                {/* Metrics Body */}
-                                <div className="p-5 space-y-4">
-                                    <div className="flex items-center justify-between group cursor-pointer">
-                                        <div className="flex items-center gap-3 text-gray-400 font-medium">
-                                            <div className="p-2 rounded-lg bg-gray-800/50 text-invox-red flex items-center justify-center transition-transform group-hover:scale-110">
-                                                <ChatBubbleBottomCenterTextIcon className="w-5 h-5" />
-                                            </div>
-                                            <span className="text-sm group-hover:text-white transition-colors">Pending Requests</span>
-                                        </div>
-                                        <span className="text-white font-bold tabular-nums bg-invox-red/10 px-2 py-0.5 rounded text-sm">12</span>
+                                <div className="p-3.5 space-y-3 font-mono text-xs">
+                                    <div className="flex items-center justify-between p-2 bg-black border border-zinc-850">
+                                        <span className="text-zinc-400">PENDING_REQUESTS:</span>
+                                        <span className="text-white font-bold bg-zinc-800 px-1.5 py-0.5">12</span>
                                     </div>
-                                    <div className="flex items-center justify-between group cursor-pointer">
-                                        <div className="flex items-center gap-3 text-gray-400 font-medium">
-                                            <div className="p-2 rounded-lg bg-gray-800/50 text-green-500 flex items-center justify-center transition-transform group-hover:scale-110">
-                                                <CheckCircleIcon className="w-5 h-5" />
-                                            </div>
-                                            <span className="text-sm group-hover:text-white transition-colors">Active Collaborations</span>
-                                        </div>
-                                        <span className="text-white font-bold tabular-nums bg-green-500/10 px-2 py-0.5 rounded text-sm">4</span>
+                                    <div className="flex items-center justify-between p-2 bg-black border border-zinc-850">
+                                        <span className="text-zinc-400">ACTIVE_COLLABS:</span>
+                                        <span className="text-white font-bold bg-zinc-800 px-1.5 py-0.5">4</span>
                                     </div>
                                 </div>
 
-                                {/* Footer Action */}
-                                <div className="px-5 pb-5 mt-auto">
-                                    <button className="w-full bg-invox-dark text-white font-semibold py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200 active:scale-95 transform">
-                                        Open
+                                <div className="p-3 border-t border-zinc-800 bg-black/40">
+                                    <button className="w-full bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider py-1.5 transition-colors">
+                                        OPEN_DASHBOARD
                                     </button>
                                 </div>
                             </div>
                         )}
 
-                        {/* CREATORS TO WATCH CARD - Only show in Showcase section */}
                         {variant !== 'spotlight-collabs' && (
                             <div>
-                                <div className="bg-invox-dark-accent rounded-xl border border-gray-800 mx-4 overflow-hidden flex flex-col shadow-2xl">
-                                    <div className="flex items-center justify-between p-5 pb-4">
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="text-lg font-bold text-white">Creators to Watch</h3>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="h-6 w-px bg-gray-800/50"></div>
-                                            <button className="p-1 text-gray-400 hover:text-white transition-colors">
-                                                <EllipsisVerticalIcon className="w-5 h-5" />
-                                            </button>
-                                        </div>
+                                <div className="bg-[#0c0c0e] border border-zinc-800 mx-4 flex flex-col">
+                                    <div className="flex items-center justify-between p-3.5 border-b border-zinc-800">
+                                        <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// CREATORS_TO_WATCH</h3>
+                                        <EllipsisVerticalIcon className="w-4 h-4 text-zinc-500 cursor-pointer hover:text-white transition-colors" />
                                     </div>
 
-                                    <div className="h-px bg-gray-800 mx-5"></div>
-
-                                    <div className="p-5 space-y-6">
+                                    <div className="p-3.5 space-y-3.5">
                                         {creatorsToWatch.map((creator, index) => (
-                                            <div key={index} className="flex items-start gap-4 group cursor-pointer">
-                                                <div className="relative flex-shrink-0">
-                                                    <img 
-                                                        src={creator.avatarUrl} 
-                                                        onError={handleImageError} 
-                                                        alt={creator.name} 
-                                                        className="w-12 h-12 rounded-lg object-cover border border-white/5 shadow-lg group-hover:scale-105 transition-transform duration-300" 
-                                                    />
-                                                </div>
-                                                <div className="flex-1 min-w-0 flex flex-col justify-center space-y-1">
-                                                    <p className="font-semibold text-white text-base truncate">{creator.name}</p>
-                                                    <p className="text-sm text-gray-400 truncate">{creator.domain}</p>
-                                                    <p className="text-xs text-gray-500 font-medium truncate group-hover:whitespace-normal group-hover:break-words transition-all duration-300">
+                                            <div key={index} className="flex items-start gap-3 group cursor-pointer border-b border-zinc-900 pb-3 last:border-0 last:pb-0">
+                                                <img 
+                                                    src={creator.avatarUrl} 
+                                                    onError={handleImageError} 
+                                                    alt={creator.name} 
+                                                    className="w-8 h-8 object-cover border border-zinc-800" 
+                                                />
+                                                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                                    <p className="font-mono font-bold text-white text-xs truncate group-hover:text-zinc-200">{creator.name}</p>
+                                                    <p className="text-[11px] text-zinc-500 font-mono truncate">{creator.domain}</p>
+                                                    <p className="text-[10px] text-zinc-400 font-mono truncate mt-0.5">
                                                         {creator.oneLine}
                                                     </p>
                                                 </div>
@@ -795,21 +696,14 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                         ))}
                                     </div>
 
-                                    <div className="px-5 pb-5 mt-auto">
-                                        <button className="w-full bg-invox-dark text-white font-semibold py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200">
-                                            View All
+                                    <div className="p-3 border-t border-zinc-800 bg-black/40">
+                                        <button className="w-full bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider py-1.5 transition-colors">
+                                            VIEW_ALL
                                         </button>
                                     </div>
                                 </div>
                             </div>
                         )}
-
-                        <footer className="text-xs text-gray-500 space-x-2 px-4 mt-auto">
-                            <a href="#" className="hover:underline">Terms of Service</a>
-                            <a href="#" className="hover:underline">Privacy Policy</a>
-                            <a href="#" className="hover:underline">About</a>
-                            <span>© 2024 Invox Corp.</span>
-                        </footer>
                     </>
                 )}
             </div>
@@ -833,34 +727,37 @@ const GoForItSidebar: React.FC<GoForItSidebarProps> = ({ filters, setFilters, se
     ];
 
     return (
-        <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
-            <div className="h-full flex flex-col gap-6 overflow-y-auto no-scrollbar">
+        <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
+            <div className="h-full flex flex-col gap-5 overflow-y-auto no-scrollbar">
                 <div className="relative px-4">
-                    <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                     <input
                         type="search"
-                        placeholder="Search by title, role..."
+                        placeholder="SEARCH_ROLES_TITLES..."
                         value={filters.searchTerm}
                         onChange={(e) => setFilters({ ...filters, searchTerm: e.target.value })}
-                        className="w-full bg-invox-dark-accent border border-gray-800 rounded-lg p-3 pl-10 focus:outline-none text-white"
+                        className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
                     />
                 </div>
                 <div className="px-4">
                     <button
                         onClick={() => setIsFilterModalOpen(true)}
-                        className="w-full flex items-center justify-center gap-2 bg-invox-dark-accent border border-gray-800 rounded-lg p-3 text-white font-semibold hover:bg-gray-700 transition-colors"
+                        className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors"
                     >
-                        <FilterIcon className="w-5 h-5" />
-                        <span>Filter Opportunities</span>
+                        <div className="flex items-center gap-2">
+                            <FilterIcon className="w-4 h-4 text-zinc-500" />
+                            <span>// FILTER_OPPORTUNITIES</span>
+                        </div>
+                        <span className="text-zinc-600">&gt;&gt;</span>
                     </button>
                 </div>
 
                 {/* Status Board */}
                 <div>
-                    <div className="px-4 mb-3">
-                        <h3 className="font-bold text-lg text-white">Status Board</h3>
+                    <div className="px-4 mb-2">
+                        <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// STATUS_BOARD</h3>
                     </div>
-                    <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-3 mx-4">
+                    <div className="bg-[#0c0c0e] border border-zinc-800 p-3 mx-4">
                         <div className="space-y-2">
                             {statusTabs.map((tab) => (
                                 <button
@@ -870,13 +767,13 @@ const GoForItSidebar: React.FC<GoForItSidebarProps> = ({ filters, setFilters, se
                                             navigate(tab.path);
                                         }
                                     }}
-                                    className={`w-full flex items-center gap-3 text-left p-3 rounded-lg font-semibold transition-colors border ${
+                                    className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${
                                         location.pathname === tab.path
-                                            ? 'bg-invox-red text-white border-invox-red hover:bg-invox-red-hover'
-                                            : 'bg-invox-dark text-invox-light-gray border-transparent hover:bg-gray-700/50'
+                                            ? 'bg-white text-black border-white font-bold'
+                                            : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600'
                                     }`}
                                 >
-                                    <tab.icon className="w-5 h-5" />
+                                    <tab.icon className="w-4 h-4" />
                                     <span>{tab.name}</span>
                                 </button>
                             ))}
@@ -886,16 +783,21 @@ const GoForItSidebar: React.FC<GoForItSidebarProps> = ({ filters, setFilters, se
 
                 {/* Profile Strength */}
                 <div>
-                    <div className="px-4 mb-3">
-                        <h3 className="font-bold text-lg text-white">Profile Strength</h3>
+                    <div className="px-4 mb-2">
+                        <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// PROFILE_STRENGTH</h3>
                     </div>
-                    <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4 mx-4 text-center">
-                        <p className="font-semibold text-lg text-white">Intermediate</p>
-                        <div className="w-full bg-gray-700 rounded-full h-2.5 my-3">
-                            <div className="bg-invox-red h-2.5 rounded-full" style={{width: '65%'}}></div>
+                    <div className="bg-[#0c0c0e] border border-zinc-800 p-4 mx-4">
+                        <div className="flex justify-between items-center font-mono text-xs mb-2">
+                            <span className="text-zinc-400">SCORE:</span>
+                            <span className="text-white font-bold">INTERMEDIATE (65%)</span>
                         </div>
-                        <p className="text-sm text-gray-400 mb-4">Complete your profile to stand out to recruiters.</p>
-                        <button className="bg-white text-black px-6 py-2 rounded-full text-sm font-bold hover:bg-gray-200">Enhance Profile</button>
+                        <div className="w-full bg-zinc-850 h-1 mb-3">
+                            <div className="bg-white h-1" style={{width: '65%'}}></div>
+                        </div>
+                        <p className="text-[11px] font-mono text-zinc-500 mb-3">Complete metadata to optimize discoverability.</p>
+                        <button className="w-full bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider py-1.5 transition-colors">
+                            ENHANCE_PROFILE
+                        </button>
                     </div>
                 </div>
             </div>
@@ -904,19 +806,17 @@ const GoForItSidebar: React.FC<GoForItSidebarProps> = ({ filters, setFilters, se
 };
 
 const MyCommunityCard: React.FC<{ community: MyCommunity }> = ({ community }) => (
-    <div className="bg-invox-dark-accent p-3 rounded-lg flex items-center justify-between border border-gray-800 hover:bg-gray-800/50 cursor-pointer">
-        <div className="flex items-center gap-3 overflow-hidden">
-            <img src={community.avatarUrl} onError={handleImageError} alt={community.name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+    <div className="bg-[#0c0c0e] p-2.5 border border-zinc-800 hover:border-zinc-600 flex items-center justify-between cursor-pointer transition-colors">
+        <div className="flex items-center gap-2.5 overflow-hidden">
+            <img src={community.avatarUrl} onError={handleImageError} alt={community.name} className="w-8 h-8 object-cover border border-zinc-800 flex-shrink-0" />
             <div className="overflow-hidden">
-                <p className="font-semibold text-white truncate">{community.name}</p>
-                <p className="text-sm text-gray-400 truncate">{community.latestMessage}</p>
+                <p className="font-mono font-bold text-xs text-white truncate">{community.name}</p>
+                <p className="text-[11px] font-mono text-zinc-500 truncate">{community.latestMessage}</p>
             </div>
         </div>
         <div className="flex flex-col items-end flex-shrink-0 ml-2">
-            <p className="text-xs text-invox-light-gray">{community.timestamp}</p>
-            <div className="h-5 flex items-center justify-end">
-                 {community.hasNotification && <span className="w-2.5 h-2.5 bg-invox-red rounded-full mt-1"></span>}
-            </div>
+            <p className="text-[10px] font-mono text-zinc-500">{community.timestamp}</p>
+            {community.hasNotification && <span className="w-2 h-2 bg-red-600 mt-1"></span>}
         </div>
     </div>
 );
@@ -928,7 +828,7 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
     const [isSearchFocused, setIsSearchFocused] = useState(false);
     
     const [conferenceFilter, setConferenceFilter] = useState<'All' | 'Online' | 'Offline'>('All');
-    const [hasNewConference, setHasNewConference] = useState(true); // Mock state for new conference notification
+    const [hasNewConference, setHasNewConference] = useState(true);
     const [isConferenceFilterMenuOpen, setIsConferenceFilterMenuOpen] = useState(false);
     const conferenceFilterMenuRef = useRef<HTMLDivElement>(null);
     
@@ -972,27 +872,18 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
         eventFilter === 'All' || e.locationType === eventFilter
     );
 
-    const getBadgeColor = (type: 'Meetup' | 'Hackathon' | 'Talk') => {
-      switch (type) {
-        case 'Meetup': return 'bg-blue-500/20 text-blue-300';
-        case 'Hackathon': return 'bg-purple-500/20 text-purple-300';
-        case 'Talk': return 'bg-green-500/20 text-green-300';
-        default: return 'bg-gray-700 text-gray-300';
-      }
-    };
-
     const showOtherElements = !isSearchFocused && communityFilters.searchTerm.trim() === '';
 
     return (
-        <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
-            <div className="h-full flex flex-col gap-6">
+        <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
+            <div className="h-full flex flex-col gap-5">
                 {communityView === 'my-communities' ? (
                      <>
-                        <div className="px-4 space-y-4">
+                        <div className="px-4 space-y-3">
                              <div className="flex items-center justify-between">
-                                <button onClick={() => setCommunityView('leaderboard')} className="flex items-center gap-2 text-invox-light-gray hover:text-white transition-colors">
-                                    <ArrowLeftIcon className="w-5 h-5" />
-                                    <h3 className="font-bold text-lg text-white">My Communities</h3>
+                                <button onClick={() => setCommunityView('leaderboard')} className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors">
+                                    <ArrowLeftIcon className="w-4 h-4" />
+                                    <span>// MY_COMMUNITIES</span>
                                 </button>
                             </div>
                             <DomainFilter
@@ -1002,13 +893,13 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                                 buttonText="Filter by Domain"
                             />
                             <div className="relative">
-                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                                 <input
                                     type="search"
-                                    placeholder="Search my communities..."
+                                    placeholder="SEARCH_MY_COMMUNITIES..."
                                     value={myCommunitiesSearchTerm}
                                     onChange={(e) => setMyCommunitiesSearchTerm(e.target.value)}
-                                    className="w-full bg-invox-dark-accent border border-gray-800 rounded-lg p-3 pl-10 focus:outline-none text-white"
+                                    className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
                                 />
                             </div>
                         </div>
@@ -1018,186 +909,162 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                                     <MyCommunityCardSkeleton />
                                     <MyCommunityCardSkeleton />
                                     <MyCommunityCardSkeleton />
-                                    <MyCommunityCardSkeleton />
-                                    <MyCommunityCardSkeleton />
                                 </>
                             ) : filteredMyCommunities.length > 0 ? (
                                 filteredMyCommunities.map(community => (
                                    <MyCommunityCard key={community.id} community={community} />
                                 ))
                             ) : (
-                                <p className="text-center text-gray-500 pt-8">No communities found.</p>
+                                <p className="text-center font-mono text-xs text-zinc-600 pt-8">// NO_COMMUNITIES_FOUND</p>
                             )}
                         </div>
                     </>
                 ) : (
-                    <div className='overflow-y-auto no-scrollbar flex flex-col gap-6'>
+                    <div className='overflow-y-auto no-scrollbar flex flex-col gap-5'>
                         <div className="relative px-4">
-                            <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                             <input
                                 type="search"
-                                placeholder="Search Communities or Domains"
+                                placeholder="SEARCH_COMMUNITIES..."
                                 value={communityFilters.searchTerm}
                                 onFocus={() => setIsSearchFocused(true)}
                                 onBlur={() => setIsSearchFocused(false)}
                                 onChange={(e) => setCommunityFilters(prev => ({...prev, searchTerm: e.target.value}))}
-                                className="w-full bg-invox-dark-accent border border-gray-800 rounded-lg p-3 pl-10 focus:outline-none text-white"
+                                className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
                             />
                         </div>
 
                         {showOtherElements && (
-                            <div className="px-4 transition-all duration-300 space-y-6">
-                                <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4">
-                                    <p className="text-sm text-gray-400 mb-4">Navigate between your personalized feed and the global community feed.</p>
+                            <div className="px-4 space-y-5">
+                                <div className="bg-[#0c0c0e] border border-zinc-800 p-3">
+                                    <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider mb-2">// VIEWS</h3>
                                     <div className="space-y-2">
                                         <button
                                             onClick={() => setCommunityView('my-communities')}
-                                            className="w-full flex items-center gap-3 text-left p-3 rounded-md font-semibold bg-invox-dark text-gray-300 hover:bg-gray-700 transition-colors"
-                                            title="Personalized community feed"
+                                            className="w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors"
                                         >
-                                            <BookmarkIcon className="w-5 h-5" />
-                                            <span>My Communities</span>
+                                            <BookmarkIcon className="w-4 h-4" />
+                                            <span>MY_COMMUNITIES</span>
                                         </button>
                                         <button
                                              onClick={() => setCommunityView('all')}
-                                             className="w-full flex items-center gap-3 text-left p-3 rounded-md font-semibold bg-invox-dark text-gray-300 hover:bg-gray-700 transition-colors"
-                                             title="Explore across all communities"
+                                             className="w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors"
                                         >
-                                            <GlobeAltIcon className="w-5 h-5" />
-                                            <span>All Communities</span>
+                                            <GlobeAltIcon className="w-4 h-4" />
+                                            <span>ALL_COMMUNITIES</span>
                                         </button>
                                     </div>
                                 </div>
                                 
-                                <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4 h-[25rem] flex flex-col">
+                                <div className="bg-[#0c0c0e] border border-zinc-800 flex flex-col">
                                     {/* Header */}
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between p-3.5 border-b border-zinc-800">
                                         <div className="flex items-center gap-2">
-                                            <h3 className="font-bold text-lg text-white">Conference Notify</h3>
+                                            <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// CONFERENCES</h3>
                                             {hasNewConference && (
-                                                <span className="relative flex h-2 w-2">
-                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-invox-red opacity-75"></span>
-                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-invox-red"></span>
-                                                </span>
+                                                <span className="w-1.5 h-1.5 bg-red-500 inline-block"></span>
                                             )}
                                         </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="h-6 w-px bg-gray-800"></div>
-                                            <div className="relative" ref={conferenceFilterMenuRef}>
-                                                <button onClick={() => setIsConferenceFilterMenuOpen(prev => !prev)} className="p-1 text-gray-400 rounded-full hover:bg-gray-700 hover:text-white transition-colors">
-                                                    <EllipsisVerticalIcon className="w-5 h-5" />
-                                                </button>
-                                                {isConferenceFilterMenuOpen && (
-                                                    <div className="absolute right-0 mt-2 w-32 bg-invox-dark rounded-lg shadow-lg z-10 py-1">
-                                                        <ul>
-                                                            {(['All', 'Online', 'Offline'] as const).map(filter => (
-                                                                <li key={filter}>
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            setConferenceFilter(filter);
-                                                                            setIsConferenceFilterMenuOpen(false);
-                                                                        }}
-                                                                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-700 ${conferenceFilter === filter ? 'text-white font-semibold' : 'text-gray-300'}`}
-                                                                    >
-                                                                        {filter}
-                                                                    </button>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
-                                            </div>
+                                        <div className="relative" ref={conferenceFilterMenuRef}>
+                                            <button onClick={() => setIsConferenceFilterMenuOpen(prev => !prev)} className="p-1 text-zinc-400 hover:text-white transition-colors">
+                                                <EllipsisVerticalIcon className="w-4 h-4" />
+                                            </button>
+                                            {isConferenceFilterMenuOpen && (
+                                                <div className="absolute right-0 mt-1 w-28 bg-[#0c0c0e] border border-zinc-800 z-10 py-1 font-mono text-xs">
+                                                    {(['All', 'Online', 'Offline'] as const).map(filter => (
+                                                        <button
+                                                            key={filter}
+                                                            onClick={() => {
+                                                                setConferenceFilter(filter);
+                                                                setIsConferenceFilterMenuOpen(false);
+                                                            }}
+                                                            className={`w-full text-left px-3 py-1.5 hover:bg-zinc-800 ${conferenceFilter === filter ? 'text-white font-bold bg-zinc-900' : 'text-zinc-400'}`}
+                                                        >
+                                                            {filter}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-
-                                    <hr className="border-gray-800 my-4" />
                                     
                                     {/* Conference List */}
-                                    <div className="space-y-5 flex-grow overflow-y-auto no-scrollbar">
+                                    <div className="p-3.5 space-y-3">
                                         {filteredConferences.slice(0, 3).map(conf => (
-                                            <div key={conf.id} className="flex items-start gap-4">
-                                                <img src={conf.communityAvatarUrl} onError={handleImageError} alt={conf.communityName} className="w-12 h-12 rounded-lg object-cover" />
-                                                <div className="flex-1 overflow-hidden space-y-1">
-                                                    <p className="font-semibold text-white text-base truncate">{conf.title}</p>
-                                                    <p className="text-sm text-gray-400">{conf.communityName}</p>
-                                                    <p className="text-sm text-gray-500">{conf.date} at {conf.time} {conf.timezone}</p>
+                                            <div key={conf.id} className="flex items-start gap-2.5 border-b border-zinc-900 pb-2.5 last:border-0 last:pb-0">
+                                                <img src={conf.communityAvatarUrl} onError={handleImageError} alt={conf.communityName} className="w-8 h-8 object-cover border border-zinc-800" />
+                                                <div className="flex-1 overflow-hidden">
+                                                    <p className="font-mono font-bold text-white text-xs truncate">{conf.title}</p>
+                                                    <p className="text-[11px] font-mono text-zinc-500 truncate">{conf.communityName}</p>
+                                                    <p className="text-[10px] font-mono text-zinc-600">[{conf.date} // {conf.time}]</p>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
 
-                                    {/* Footer - Standardized View All button */}
-                                    <button className="w-full bg-invox-dark text-white font-semibold py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200 mt-auto">
-                                        View All
-                                    </button>
+                                    <div className="p-3 border-t border-zinc-800 bg-black/40">
+                                        <button className="w-full bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider py-1.5 transition-colors">
+                                            VIEW_ALL
+                                        </button>
+                                    </div>
                                 </div>
                                 
-                                <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4 h-[25rem] flex flex-col">
+                                <div className="bg-[#0c0c0e] border border-zinc-800 flex flex-col">
                                     {/* Header */}
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between p-3.5 border-b border-zinc-800">
                                         <div className="flex items-center gap-2">
-                                            <h3 className="font-bold text-lg text-white">Event Notify</h3>
+                                            <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// EVENTS</h3>
                                             {hasNewEvent && (
-                                                <span className="relative flex h-2 w-2">
-                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-invox-red opacity-75"></span>
-                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-invox-red"></span>
-                                                </span>
+                                                <span className="w-1.5 h-1.5 bg-red-500 inline-block"></span>
                                             )}
                                         </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="h-6 w-px bg-gray-800"></div>
-                                            <div className="relative" ref={eventFilterMenuRef}>
-                                                <button onClick={() => setIsEventFilterMenuOpen(prev => !prev)} className="p-1 text-gray-400 rounded-full hover:bg-gray-700 hover:text-white transition-colors">
-                                                    <EllipsisVerticalIcon className="w-5 h-5" />
-                                                </button>
-                                                {isEventFilterMenuOpen && (
-                                                    <div className="absolute right-0 mt-2 w-32 bg-invox-dark rounded-lg shadow-lg z-10 py-1">
-                                                        <ul>
-                                                            {(['All', 'Online', 'Offline'] as const).map(filter => (
-                                                                <li key={filter}>
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            setEventFilter(filter);
-                                                                            setIsEventFilterMenuOpen(false);
-                                                                        }}
-                                                                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-700 ${eventFilter === filter ? 'text-white font-semibold' : 'text-gray-300'}`}
-                                                                    >
-                                                                        {filter}
-                                                                    </button>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
-                                            </div>
+                                        <div className="relative" ref={eventFilterMenuRef}>
+                                            <button onClick={() => setIsEventFilterMenuOpen(prev => !prev)} className="p-1 text-zinc-400 hover:text-white transition-colors">
+                                                <EllipsisVerticalIcon className="w-4 h-4" />
+                                            </button>
+                                            {isEventFilterMenuOpen && (
+                                                <div className="absolute right-0 mt-1 w-28 bg-[#0c0c0e] border border-zinc-800 z-10 py-1 font-mono text-xs">
+                                                    {(['All', 'Online', 'Offline'] as const).map(filter => (
+                                                        <button
+                                                            key={filter}
+                                                            onClick={() => {
+                                                                setEventFilter(filter);
+                                                                setIsEventFilterMenuOpen(false);
+                                                            }}
+                                                            className={`w-full text-left px-3 py-1.5 hover:bg-zinc-800 ${eventFilter === filter ? 'text-white font-bold bg-zinc-900' : 'text-zinc-400'}`}
+                                                        >
+                                                            {filter}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-
-                                    <hr className="border-gray-800 my-4" />
                                     
                                     {/* Event List */}
-                                    <div className="space-y-5 flex-grow overflow-y-auto no-scrollbar">
+                                    <div className="p-3.5 space-y-3">
                                         {filteredEvents.slice(0, 3).map(event => (
-                                            <div key={event.id} className="flex items-start gap-4">
-                                                <img src={event.communityAvatarUrl} onError={handleImageError} alt={event.communityName} className="w-12 h-12 rounded-lg object-cover" />
-                                                <div className="flex-1 overflow-hidden space-y-1">
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <p className="font-semibold text-white text-base truncate">{event.title}</p>
-                                                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getBadgeColor(event.eventType)}`}>
+                                            <div key={event.id} className="flex items-start gap-2.5 border-b border-zinc-900 pb-2.5 last:border-0 last:pb-0">
+                                                <img src={event.communityAvatarUrl} onError={handleImageError} alt={event.communityName} className="w-8 h-8 object-cover border border-zinc-800" />
+                                                <div className="flex-1 overflow-hidden">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <p className="font-mono font-bold text-white text-xs truncate">{event.title}</p>
+                                                        <span className="bg-zinc-800 text-zinc-300 px-1 py-0.2 font-mono text-[9px] uppercase">
                                                             {event.eventType}
                                                         </span>
                                                     </div>
-                                                    <p className="text-sm text-gray-400">{event.communityName}</p>
-                                                    <p className="text-sm text-gray-500">{event.date} at {event.time} {event.timezone}</p>
+                                                    <p className="text-[11px] font-mono text-zinc-500 truncate">{event.communityName}</p>
+                                                    <p className="text-[10px] font-mono text-zinc-600">[{event.date} // {event.time}]</p>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
 
-                                    {/* Footer - Standardized View All button */}
-                                    <button className="w-full bg-invox-dark text-white font-semibold py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200 mt-auto">
-                                        View All
-                                    </button>
+                                    <div className="p-3 border-t border-zinc-800 bg-black/40">
+                                        <button className="w-full bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider py-1.5 transition-colors">
+                                            VIEW_ALL
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -1239,12 +1106,6 @@ const HubConversationsSidebar: React.FC<{
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    useEffect(() => {
-        if (!isFilterOpen) {
-            setFilterSearchTerm('');
-        }
-    }, [isFilterOpen]);
-
     const filteredConversations = conversations.filter(convo => {
         const filterMatch =
             filter === 'All' ||
@@ -1256,98 +1117,50 @@ const HubConversationsSidebar: React.FC<{
         return filterMatch && searchMatch;
     });
 
-    const filteredOptions = filterOptionsWithIcons.filter(option =>
-        option.name.toLowerCase().includes(filterSearchTerm.toLowerCase())
-    );
-
     return (
-        <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
+        <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
             <div className="h-full flex flex-col gap-4">
                 <div className="flex items-center gap-2 px-4">
-                    <button onClick={onBack} className="p-2 rounded-full hover:bg-invox-dark-accent" aria-label="Back to Hub main">
-                        <ArrowLeftIcon className="w-6 h-6 text-white" />
+                    <button onClick={onBack} className="p-1.5 border border-zinc-800 bg-[#0c0c0e] hover:border-zinc-600 text-zinc-400 hover:text-white" aria-label="Back to Hub main">
+                        <ArrowLeftIcon className="w-4 h-4" />
                     </button>
-                    <h2 className="text-xl font-bold text-white">Conversations</h2>
-                </div>
-
-                <div ref={filterRef} className="relative w-full px-4">
-                    <button
-                        onClick={() => setIsFilterOpen(!isFilterOpen)}
-                        className="group flex items-center justify-between w-full px-4 py-3 text-sm font-semibold text-left text-white bg-invox-dark-accent border border-gray-800 rounded-lg focus:outline-none transition-all duration-200"
-                    >
-                        <div className="flex items-center">
-                            <span className="tracking-wider group-hover:tracking-widest transition-all duration-300 uppercase">
-                                {filter === 'All' ? 'FILTERS' : filter}
-                            </span>
-                            <ChevronDownIcon className={`w-5 h-5 ml-2 transition-transform duration-200 ${isFilterOpen ? 'rotate-180' : ''}`} />
-                        </div>
-                    </button>
-                    {isFilterOpen && (
-                        <div className="absolute z-10 w-full mt-2 bg-invox-dark-accent border border-gray-800 rounded-lg shadow-lg">
-                            <div className="p-2">
-                                <input
-                                    type="search"
-                                    placeholder="Search filters..."
-                                    value={filterSearchTerm}
-                                    onChange={e => setFilterSearchTerm(e.target.value)}
-                                    className="w-full bg-invox-dark rounded p-2 focus:outline-none text-sm text-white"
-                                />
-                            </div>
-                            <ul className="py-1 max-h-60 overflow-y-auto">
-                                {filteredOptions.map(option => (
-                                    <li key={option.name}>
-                                        <button
-                                            onClick={() => { setFilter(option.name); setIsFilterOpen(false); }}
-                                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-700/50 flex items-center justify-between"
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <option.icon className="w-5 h-5 text-gray-400" />
-                                                <span>{option.name}</span>
-                                            </div>
-                                            {filter === option.name && <CheckIcon className="w-5 h-5" />}
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
+                    <h2 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// CONVERSATIONS</h2>
                 </div>
 
                 <div className="relative px-4">
-                    <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                     <input
                         type="search"
-                        placeholder="Search conversations..."
+                        placeholder="SEARCH_CONVERSATIONS..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full bg-invox-dark-accent border border-gray-800 rounded-lg p-3 pl-10 focus:outline-none text-white"
+                        className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
                     />
                 </div>
                 
                 <div className="flex-1 overflow-y-auto no-scrollbar px-4 space-y-2">
                     {filteredConversations.map(convo => {
                         const lastMessage = convo.messages[convo.messages.length - 1];
-                        const lastMessageText = lastMessage?.text || (lastMessage ? `[${lastMessage.type}]` : 'No messages yet');
+                        const lastMessageText = lastMessage?.text || (lastMessage ? `[${lastMessage.type}]` : 'No messages');
                         return (
                             <button 
                                 key={convo.id}
                                 onClick={() => setSelectedHubConversation && setSelectedHubConversation(convo)}
-                                className="w-full text-left bg-invox-dark-accent p-3 rounded-lg flex items-center justify-between gap-3 border border-gray-800 hover:bg-gray-700 transition-all"
+                                className="w-full text-left bg-[#0c0c0e] p-2.5 flex items-center justify-between gap-2.5 border border-zinc-800 hover:border-zinc-600 transition-colors"
                             >
-                                <div className="flex items-center gap-3 overflow-hidden">
+                                <div className="flex items-center gap-2.5 overflow-hidden">
                                     <div className="relative flex-shrink-0">
-                                        <img src={convo.avatarUrl} onError={handleImageError} alt={convo.name} className="w-12 h-12 rounded-full object-cover" />
-                                        {convo.isGroup && <div className="absolute -bottom-1 -right-1 bg-blue-500 p-1 rounded-full border-2 border-invox-dark-accent"><UsersIcon className="w-3 h-3 text-white" /></div>}
+                                        <img src={convo.avatarUrl} onError={handleImageError} alt={convo.name} className="w-8 h-8 object-cover border border-zinc-800" />
                                     </div>
                                     <div className="overflow-hidden">
-                                        <p className="font-semibold text-white truncate">{convo.name}</p>
-                                        <p className="text-sm text-gray-400 truncate">{lastMessageText}</p>
+                                        <p className="font-mono font-bold text-xs text-white truncate">{convo.name}</p>
+                                        <p className="text-[11px] font-mono text-zinc-500 truncate">{lastMessageText}</p>
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-end flex-shrink-0">
-                                    <p className="text-xs text-invox-light-gray mb-1">{convo.timestamp}</p>
+                                    <p className="text-[10px] font-mono text-zinc-500 mb-1">{convo.timestamp}</p>
                                     {convo.unreadCount > 0 && (
-                                        <span className="bg-invox-red text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
+                                        <span className="bg-red-600 text-white text-[10px] font-mono font-bold px-1.5 py-0.2">
                                             {convo.unreadCount}
                                         </span>
                                     )}
@@ -1374,23 +1187,23 @@ const HubSidebar: React.FC<Pick<RightSidebarProps, 'hubView' | 'setHubView' | 'h
     ];
 
     return (
-        <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
-            <div className="h-full flex flex-col gap-3 overflow-y-auto no-scrollbar">
+        <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
+            <div className="h-full flex flex-col gap-4 overflow-y-auto no-scrollbar">
                 {hubView === 'stream' && (
                     <div className="flex items-center gap-2 px-4">
-                        <button onClick={() => setHubView && setHubView('welcome')} className="p-2 rounded-full hover:bg-invox-dark-accent transition-colors" aria-label="Back to Global Collective">
-                            <ArrowLeftIcon className="w-6 h-6 text-white" />
+                        <button onClick={() => setHubView && setHubView('welcome')} className="p-1.5 border border-zinc-800 bg-[#0c0c0e] hover:border-zinc-600 text-zinc-400 hover:text-white" aria-label="Back to Global Collective">
+                            <ArrowLeftIcon className="w-4 h-4" />
                         </button>
-                        <h2 className="text-xl font-bold text-white">Stream</h2>
+                        <h2 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// STREAM</h2>
                     </div>
                 )}
 
                 <div className="relative px-4">
-                    <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input type="search" placeholder="Search Hub" className="w-full bg-invox-dark-accent border border-gray-800 rounded-lg p-3 pl-10 focus:outline-none text-white" />
+                    <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                    <input type="search" placeholder="SEARCH_HUB..." className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors" />
                 </div>
 
-                <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-3 mx-4 shadow-sm">
+                <div className="bg-[#0c0c0e] border border-zinc-800 p-3 mx-4">
                     <div className="space-y-2">
                         {hubNavItems.map(item => (
                             <button
@@ -1399,11 +1212,11 @@ const HubSidebar: React.FC<Pick<RightSidebarProps, 'hubView' | 'setHubView' | 'h
                                     if (item.action) item.action();
                                     else if (item.view && setHubView) setHubView(item.view);
                                 }}
-                                className={`w-full flex items-center gap-3 text-left p-3 rounded-lg font-semibold transition-colors border ${
-                                    hubView === item.view ? 'bg-invox-red text-white border-invox-red' : 'bg-invox-dark text-invox-light-gray border-transparent hover:bg-gray-700/50 hover:text-white'
+                                className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${
+                                    hubView === item.view ? 'bg-white text-black border-white font-bold' : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600'
                                 }`}
                             >
-                                <item.icon className="w-5 h-5" />
+                                <item.icon className="w-4 h-4" />
                                 <span>{item.name}</span>
                             </button>
                         ))}
@@ -1422,42 +1235,42 @@ const MySpaceSidebar = () => {
     ];
 
     return (
-        <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
-            <div className="h-full flex flex-col gap-3 overflow-y-auto no-scrollbar">
+        <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
+            <div className="h-full flex flex-col gap-4 overflow-y-auto no-scrollbar">
                 <div className="relative px-4">
-                    <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input type="search" placeholder="Search My Space" className="w-full bg-invox-dark-accent border border-gray-800 rounded-lg p-3 pl-10 focus:outline-none text-white" />
+                    <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                    <input type="search" placeholder="SEARCH_MY_SPACE..." className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors" />
                 </div>
 
-                <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-3 mx-4 shadow-sm">
+                <div className="bg-[#0c0c0e] border border-zinc-800 p-3 mx-4">
                     <div className="space-y-2">
                         {sidebarButtons.map((btn) => (
                             <ReactRouterDOM.Link
                                 key={btn.name}
                                 to={btn.path}
-                                className="w-full flex items-center gap-3 text-left p-3 rounded-lg font-semibold transition-colors border border-transparent bg-invox-dark text-invox-light-gray hover:bg-gray-700/50 hover:text-white"
+                                className="w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors"
                             >
-                                <btn.icon className="w-5 h-5" />
+                                <btn.icon className="w-4 h-4" />
                                 <span>{btn.name}</span>
                             </ReactRouterDOM.Link>
                         ))}
                     </div>
                 </div>
 
-                <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4 mx-4 mt-3">
-                    <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4">Quick Insights</h3>
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-400 text-sm">Profile Views</span>
-                            <span className="text-white font-bold tabular-nums">1,204</span>
+                <div className="bg-[#0c0c0e] border border-zinc-800 p-4 mx-4">
+                    <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider mb-3">// QUICK_TELEMETRY</h3>
+                    <div className="space-y-2.5 font-mono text-xs">
+                        <div className="flex justify-between items-center border-b border-zinc-900 pb-2">
+                            <span className="text-zinc-500">PROFILE_VIEWS:</span>
+                            <span className="text-white font-bold">1,204</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-zinc-900 pb-2">
+                            <span className="text-zinc-500">POST_REACH:</span>
+                            <span className="text-white font-bold">+12%</span>
                         </div>
                         <div className="flex justify-between items-center">
-                            <span className="text-gray-400 text-sm">Post Reach</span>
-                            <span className="text-green-400 font-bold tabular-nums">+12%</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-400 text-sm">Connections</span>
-                            <span className="text-white font-bold tabular-nums">842</span>
+                            <span className="text-zinc-500">CONNECTIONS:</span>
+                            <span className="text-white font-bold">842</span>
                         </div>
                     </div>
                 </div>
@@ -1496,21 +1309,21 @@ const TargetSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onS
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={onClose}></div>
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
             
-            <div className="relative w-full max-w-md bg-invox-dark-accent border border-gray-800 rounded-2xl shadow-2xl overflow-hidden animate-fadeInUp">
-                <div className="flex items-center justify-between p-6 border-b border-gray-800">
-                    <h3 className="text-xl font-bold text-white">Select destination</h3>
-                    <button onClick={onClose} className="p-2 text-gray-400 hover:text-white transition-colors">
-                        <CloseIcon className="w-6 h-6" />
+            <div className="relative w-full max-w-md bg-[#0c0c0e] border border-zinc-800 shadow-2xl overflow-hidden animate-fadeInUp">
+                <div className="flex items-center justify-between p-4 border-b border-zinc-800 bg-black">
+                    <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// SELECT_DESTINATION</h3>
+                    <button onClick={onClose} className="p-1 text-zinc-400 hover:text-white transition-colors">
+                        <CloseIcon className="w-5 h-5" />
                     </button>
                 </div>
 
-                <div className="p-6 space-y-8 max-h-[70vh] overflow-y-auto no-scrollbar">
+                <div className="p-4 space-y-5 max-h-[70vh] overflow-y-auto no-scrollbar">
                     {categories.map((category) => (
                         <div key={category.title}>
-                            <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4">{category.title}</h4>
-                            <div className="grid grid-cols-1 gap-3">
+                            <h4 className="font-mono text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-2.5">{category.title}</h4>
+                            <div className="grid grid-cols-1 gap-2">
                                 {category.targets.map((target) => (
                                     <button
                                         key={target.name}
@@ -1518,15 +1331,13 @@ const TargetSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onS
                                             onSelect(target.context);
                                             onClose();
                                         }}
-                                        className="w-full flex items-center gap-4 p-4 rounded-xl bg-invox-dark border border-transparent hover:border-invox-red/50 hover:bg-gray-800/50 transition-all group"
+                                        className="w-full flex items-center gap-3 p-3 bg-black border border-zinc-850 hover:border-zinc-600 transition-all group font-mono text-xs text-left"
                                     >
-                                        <div className="p-2.5 rounded-lg bg-gray-800 group-hover:bg-invox-red/10 transition-colors">
-                                            <target.icon className="w-5 h-5 text-gray-300 group-hover:text-invox-red" />
+                                        <div className="p-1.5 bg-zinc-900 border border-zinc-800 text-zinc-400 group-hover:text-white transition-colors">
+                                            <target.icon className="w-4 h-4" />
                                         </div>
-                                        <span className="font-semibold text-white text-lg">{target.name}</span>
-                                        <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <CheckIcon className="w-5 h-5 text-invox-red" />
-                                        </div>
+                                        <span className="font-bold text-white uppercase">{target.name}</span>
+                                        <span className="ml-auto text-zinc-600 group-hover:text-white font-mono">&gt;&gt;</span>
                                     </button>
                                 ))}
                             </div>
@@ -1555,28 +1366,28 @@ const UploadsSidebar: React.FC<{ setUploadTriggerTarget: (target: string | null)
 
     return (
         <>
-            <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
+            <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
                 <div className="h-full flex flex-col gap-4">
                     <div className="px-4">
                         <button 
                             onClick={() => navigate('/myspace')} 
-                            className="flex items-center gap-2 text-invox-light-gray hover:text-white transition-colors" 
+                            className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors" 
                             aria-label="Back to My Space"
                         >
-                            <ArrowLeftIcon className="w-5 h-5" />
-                            <h3 className="font-bold text-lg text-white">Uploads</h3>
+                            <ArrowLeftIcon className="w-4 h-4" />
+                            <span>// MY_SPACE</span>
                         </button>
                     </div>
 
-                    <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-3 mx-4 shadow-sm">
+                    <div className="bg-[#0c0c0e] border border-zinc-800 p-3 mx-4">
                         <div className="space-y-2">
                             {creationItems.map((item) => (
                                 <div key={item.name}>
                                     <button
                                         onClick={() => setIsTargetModalOpen(true)}
-                                        className="w-full flex items-center gap-3 text-left p-3 rounded-lg font-semibold transition-colors border border-transparent bg-invox-dark text-invox-light-gray hover:bg-gray-700/50 hover:text-white"
+                                        className="w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors"
                                     >
-                                        <item.icon className="w-5 h-5" />
+                                        <item.icon className="w-4 h-4" />
                                         <span>{item.name}</span>
                                     </button>
                                 </div>
@@ -1633,9 +1444,9 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ variant, ...props }) => {
                 return <UploadsSidebar setUploadTriggerTarget={props.setUploadTriggerTarget || (() => {})} />;
             default:
                 return (
-                     <aside className="hidden lg:block w-80 xl:w-[350px] flex-shrink-0 border-l border-gray-800 h-screen sticky top-0 py-6">
-                        <div className="p-4 text-center text-gray-500">
-                           <p>Contextual actions will appear here.</p>
+                     <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
+                        <div className="p-4 text-center font-mono text-xs text-zinc-600">
+                           <p>// CONTEXT_PANEL_IDLE</p>
                         </div>
                     </aside>
                 );

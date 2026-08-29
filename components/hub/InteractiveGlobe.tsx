@@ -438,18 +438,16 @@ const InteractiveGlobe: React.FC = () => {
                     className="fixed pointer-events-none z-50 animate-fadeInUp"
                     style={{ left: tooltipPos.x + 20, top: tooltipPos.y - 20 }}
                 >
-                    <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-4 rounded-xl shadow-2xl min-w-[200px]">
-                        <p className="text-xs font-black text-invox-red uppercase tracking-widest mb-1">Active Node</p>
-                        <h4 className="text-lg font-bold text-white mb-2">{hoveredMarker.name}</h4>
-                        <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-gray-400 uppercase font-bold">Activity Level</span>
-                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                hoveredMarker.activity === 'Ultra' ? 'bg-invox-blue text-white' : 'bg-green-500/20 text-green-400'
-                            }`}>
+                    <div className="bg-[#0c0c0e]/95 backdrop-blur-md border border-zinc-800 p-3 shadow-2xl min-w-[200px] font-mono">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">// ACTIVE_NODE</p>
+                        <h4 className="text-sm font-bold text-white mb-2">{hoveredMarker.name}</h4>
+                        <div className="flex items-center justify-between text-xs">
+                            <span className="text-[10px] text-zinc-500 uppercase">ACTIVITY:</span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 bg-zinc-800 text-white border border-zinc-700">
                                 {hoveredMarker.activity}
                             </span>
                         </div>
-                        <div className="mt-3 text-[9px] text-gray-500 italic">Click to expand feed</div>
+                        <div className="mt-2.5 pt-2 border-t border-zinc-850 text-[9px] text-zinc-600 uppercase">&gt; CLICK_TO_EXPAND</div>
                     </div>
                 </div>
             )}

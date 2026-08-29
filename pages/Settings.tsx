@@ -75,25 +75,21 @@ const ChipInput: React.FC<ChipInputProps> = ({
 
     return (
         <div>
-            <label className="block text-invox-light-gray mb-2 text-sm font-medium">{label}</label>
+            <label className="block text-zinc-400 mb-1.5 text-xs font-mono uppercase tracking-wider">// {label}</label>
             <div
-                className="min-h-[48px] w-full bg-gray-700 border border-gray-600 rounded-lg p-2 focus-within:ring-2 focus-within:ring-invox-red focus-within:border-invox-red cursor-text flex flex-wrap gap-2"
+                className="min-h-[42px] w-full bg-[#0c0c0e] border border-zinc-800 p-2 cursor-text flex flex-wrap gap-1.5 focus-within:border-zinc-500 font-mono text-xs"
                 onClick={() => inputRef.current?.focus()}
             >
                 {chips.map((chip, idx) => (
                     <span
                         key={idx}
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            color === 'blue'
-                                ? 'bg-blue-900/40 border border-blue-700/50 text-blue-300'
-                                : 'bg-gray-600 border border-gray-500 text-gray-200'
-                        }`}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 border border-zinc-700 bg-zinc-900 text-zinc-200 text-[10px] uppercase"
                     >
                         {chip}
                         <button
                             type="button"
                             onClick={e => { e.stopPropagation(); removeChip(idx); }}
-                            className="text-gray-400 hover:text-white ml-0.5 leading-none"
+                            className="text-zinc-500 hover:text-white ml-0.5 leading-none"
                         >
                             ×
                         </button>
@@ -107,10 +103,10 @@ const ChipInput: React.FC<ChipInputProps> = ({
                     onKeyDown={handleKeyDown}
                     onBlur={() => { if (inputValue) addChip(inputValue); }}
                     placeholder={chips.length === 0 ? placeholder : ''}
-                    className="flex-1 min-w-[120px] bg-transparent outline-none text-white text-sm placeholder-gray-500"
+                    className="flex-1 min-w-[120px] bg-transparent outline-none text-white text-xs placeholder-zinc-600 font-mono"
                 />
             </div>
-            <p className="mt-1 text-xs text-gray-500">Press Enter or comma to add a tag</p>
+            <p className="mt-1 text-[10px] text-zinc-600 font-mono uppercase">Press Enter or comma to add</p>
         </div>
     );
 };
@@ -118,30 +114,31 @@ const ChipInput: React.FC<ChipInputProps> = ({
 /* ─── Shared small components ────────────────────────────────────────────── */
 
 const SectionHeader = ({ title, description }: { title: string; description?: string }) => (
-    <div className="mb-6 pb-4 border-b border-gray-800">
-        <h2 className="text-xl font-bold text-white">{title}</h2>
-        {description && <p className="text-sm text-gray-400 mt-1">{description}</p>}
+    <div className="mb-5 pb-3 border-b border-zinc-800 font-mono">
+        <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">// SECTION_CONFIG</span>
+        <h2 className="text-sm font-bold text-white uppercase tracking-wider mt-0.5">{title}</h2>
+        {description && <p className="text-xs text-zinc-400 mt-1">{description}</p>}
     </div>
 );
 
 const FormField = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div>
-        <label className="block text-invox-light-gray mb-2 text-sm font-medium">{label}</label>
+    <div className="font-mono">
+        <label className="block text-zinc-400 mb-1.5 text-xs uppercase tracking-wider">// {label}</label>
         {children}
     </div>
 );
 
-const inputClass = 'w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-invox-red focus:border-invox-red text-white placeholder-gray-500 transition-all';
+const inputClass = 'w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 text-xs text-white placeholder-zinc-600 font-mono focus:outline-none focus:border-zinc-500 transition-colors';
 const textareaClass = `${inputClass} resize-none`;
 
 const StatusMessage = ({ msg }: { msg: { type: string; text: string } }) =>
     msg.text ? (
-        <div className={`mb-5 p-3 rounded-lg text-sm font-medium ${
+        <div className={`mb-4 p-3 font-mono text-xs border ${
             msg.type === 'success'
-                ? 'bg-green-900/60 border border-green-700 text-green-300'
-                : 'bg-red-900/60 border border-red-700 text-red-300'
+                ? 'bg-zinc-900 border-zinc-700 text-white'
+                : 'bg-red-950/40 border-red-900/60 text-red-300'
         }`}>
-            {msg.text}
+            {msg.type === 'success' ? '// SUCCESS: ' : '// ERROR: '} {msg.text}
         </div>
     ) : null;
 
@@ -149,20 +146,20 @@ const SaveButton = ({ loading, label = 'Save Changes' }: { loading: boolean; lab
     <button
         type="submit"
         disabled={loading}
-        className="bg-invox-red text-white px-6 py-2.5 rounded-lg text-sm font-bold hover:bg-invox-red-hover disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 active:scale-95"
+        className="bg-white text-black px-5 py-2 font-mono text-xs font-bold uppercase hover:bg-zinc-200 disabled:bg-zinc-800 disabled:text-zinc-600 disabled:cursor-not-allowed transition-colors"
     >
-        {loading ? 'Saving…' : label}
+        {loading ? 'PROCESSING…' : label}
     </button>
 );
 
 /* ─── Tab config ─────────────────────────────────────────────────────────── */
 
 const TABS = [
-    { id: 'personal',      label: 'Personal Info',  icon: '👤' },
-    { id: 'professional',  label: 'Professional',   icon: '💼' },
-    { id: 'media',         label: 'Profile Media',  icon: '🖼️' },
-    { id: 'account',       label: 'Account',        icon: '🔑' },
-    { id: 'privacy',       label: 'Privacy',        icon: '🔒' },
+    { id: 'personal',      label: 'Personal Info',  code: '01' },
+    { id: 'professional',  label: 'Professional',   code: '02' },
+    { id: 'media',         label: 'Profile Media',  code: '03' },
+    { id: 'account',       label: 'Account',        code: '04' },
+    { id: 'privacy',       label: 'Privacy',        code: '05' },
 ];
 
 /* ─── Main Component ─────────────────────────────────────────────────────── */
@@ -416,45 +413,49 @@ const SettingsPage = () => {
     /* ── Render ─────────────────────────────────────────────────────────── */
 
     return (
-        <div className="text-white">
-            <h1 className="text-3xl font-bold mb-6">Settings</h1>
+        <div className="w-full">
+            {/* Sub-Header */}
+            <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-3">
+                <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest block leading-none">// PREFERENCES_AND_CONFIG</span>
+                <h1 className="text-xs font-bold font-mono text-white tracking-wider uppercase mt-0.5">Settings</h1>
+            </div>
 
-            <div className="flex flex-col md:flex-row gap-6">
+            <div className="flex flex-col md:flex-row border-b border-zinc-800">
 
-                {/* ── Sidebar ── */}
-                <div className="md:w-56 flex-shrink-0">
-                    <nav className="flex flex-col gap-1">
+                {/* ── Sidebar Tabs ── */}
+                <div className="md:w-56 flex-shrink-0 border-b md:border-b-0 md:border-r border-zinc-800 bg-[#0c0c0e]">
+                    <nav className="flex flex-row md:flex-col overflow-x-auto">
                         {TABS.map(tab => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`text-left py-3 px-4 rounded-xl font-medium text-sm transition-all duration-200 flex items-center gap-3 ${
+                                className={`text-left py-3 px-4 font-mono text-xs uppercase tracking-wider transition-colors flex items-center gap-2 whitespace-nowrap ${
                                     activeTab === tab.id
-                                        ? 'bg-invox-dark-accent border border-gray-700 text-white'
-                                        : 'text-gray-400 hover:bg-gray-800/60 hover:text-white'
+                                        ? 'bg-zinc-900/80 text-white font-bold border-l-2 md:border-l-2 md:border-b-0 border-b-2 border-white'
+                                        : 'text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-300'
                                 }`}
                             >
-                                <span>{tab.icon}</span>
-                                {tab.label}
+                                <span className="text-zinc-600 font-normal">[{tab.code}]</span>
+                                <span>{tab.label}</span>
                             </button>
                         ))}
                     </nav>
                 </div>
 
                 {/* ── Content Panel ── */}
-                <div className="flex-1 bg-invox-dark-accent rounded-xl border border-gray-800 p-6 md:p-8">
+                <div className="flex-1 bg-[#0c0c0e] p-5 md:p-6 min-w-0">
 
                     {/* ── Personal Info ── */}
                     {activeTab === 'personal' && (
                         <div>
                             <SectionHeader
                                 title="Personal Information"
-                                description="Update how your name and identity appear on Invox."
+                                description="Update your identity parameters across the platform."
                             />
                             <StatusMessage msg={personalMessage} />
                             <form
                                 onSubmit={handlePersonalSubmit}
-                                className="space-y-5"
+                                className="space-y-4"
                                 onChange={() => { personalTouched.current = true; }}
                             >
                                 <FormField label="Display Name">
@@ -462,19 +463,19 @@ const SettingsPage = () => {
                                         type="text"
                                         value={displayName}
                                         onChange={e => setDisplayName(e.target.value)}
-                                        placeholder="Your full name"
+                                        placeholder="Full Name"
                                         className={inputClass}
                                     />
                                 </FormField>
 
-                                <FormField label="Username">
+                                <FormField label="Username Handle">
                                     <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">@</span>
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-xs font-mono">@</span>
                                         <input
                                             type="text"
                                             value={username}
                                             onChange={e => setUsername(e.target.value)}
-                                            placeholder="yourhandle"
+                                            placeholder="handle"
                                             className={`${inputClass} pl-7`}
                                         />
                                     </div>
@@ -485,21 +486,21 @@ const SettingsPage = () => {
                                         type="text"
                                         value={headline}
                                         onChange={e => setHeadline(e.target.value)}
-                                        placeholder="e.g. Full-Stack Developer · AI Enthusiast"
+                                        placeholder="e.g. Full-Stack Developer // Systems Architect"
                                         className={inputClass}
                                     />
                                 </FormField>
 
-                                <FormField label="Bio">
+                                <FormField label="Bio / Dossier">
                                     <textarea
                                         value={bio}
                                         onChange={e => setBio(e.target.value)}
-                                        rows={5}
-                                        placeholder="Tell the community about yourself, your expertise, and what you're building…"
+                                        rows={4}
+                                        placeholder="Enter background, technical expertise, and active focus areas…"
                                         className={textareaClass}
                                         maxLength={500}
                                     />
-                                    <p className="mt-1 text-xs text-gray-500">{bio.length} / 500 characters</p>
+                                    <p className="mt-1 text-[10px] text-zinc-600 font-mono uppercase">{bio.length} / 500 characters</p>
                                 </FormField>
 
                                 <div className="pt-2">
@@ -513,27 +514,26 @@ const SettingsPage = () => {
                     {activeTab === 'professional' && (
                         <div>
                             <SectionHeader
-                                title="Professional Information"
-                                description="Showcase your skills, interests, and professional links."
+                                title="Professional Parameters"
+                                description="Configure skills, industry focus, and portfolio links."
                             />
                             <StatusMessage msg={professionalMessage} />
                             <form
                                 onSubmit={handleProfessionalSubmit}
-                                className="space-y-5"
+                                className="space-y-4"
                                 onChange={() => { professionalTouched.current = true; }}
                             >
                                 <ChipInput
-                                    label="Skills"
+                                    label="Skills & Competencies"
                                     chips={skills}
                                     onChange={chips => { professionalTouched.current = true; setSkills(chips); }}
-                                    placeholder="e.g. React, TypeScript, Firebase…"
+                                    placeholder="e.g. React, TypeScript, Rust…"
                                 />
                                 <ChipInput
-                                    label="Interests"
+                                    label="Interests & Domains"
                                     chips={interests}
                                     onChange={chips => { professionalTouched.current = true; setInterests(chips); }}
-                                    placeholder="e.g. AI, Space, Startups…"
-                                    color="blue"
+                                    placeholder="e.g. Distributed Systems, AI, Cryptography…"
                                 />
 
                                 <FormField label="Location">
@@ -541,7 +541,7 @@ const SettingsPage = () => {
                                         type="text"
                                         value={location}
                                         onChange={e => setLocation(e.target.value)}
-                                        placeholder="e.g. Bangalore, India"
+                                        placeholder="e.g. San Francisco, CA // Remote"
                                         className={inputClass}
                                     />
                                 </FormField>
@@ -551,7 +551,7 @@ const SettingsPage = () => {
                                         type="text"
                                         value={website}
                                         onChange={e => setWebsite(e.target.value)}
-                                        placeholder="https://yourwebsite.com"
+                                        placeholder="https://domain.com"
                                         className={inputClass}
                                     />
                                 </FormField>
@@ -561,7 +561,7 @@ const SettingsPage = () => {
                                         type="text"
                                         value={portfolioURL}
                                         onChange={e => setPortfolioURL(e.target.value)}
-                                        placeholder="https://yourportfolio.com"
+                                        placeholder="https://portfolio.dev"
                                         className={inputClass}
                                     />
                                 </FormField>
@@ -578,33 +578,33 @@ const SettingsPage = () => {
                         <div>
                             <SectionHeader
                                 title="Profile Media"
-                                description="Upload your profile photo and cover image. Changes are saved instantly."
+                                description="Manage avatar and banner assets. Changes sync immediately."
                             />
                             <StatusMessage msg={mediaMessage} />
-                            <div className="space-y-8">
+                            <div className="space-y-6 font-mono">
 
                                 {/* Profile Photo */}
                                 <div>
-                                    <p className="text-sm font-medium text-invox-light-gray mb-4">Profile Photo</p>
-                                    <div className="flex items-center gap-6">
-                                        <div className="w-24 h-24 rounded-full border-2 border-gray-700 overflow-hidden flex items-center justify-center bg-gray-800 flex-shrink-0 relative">
+                                    <label className="block text-zinc-400 mb-2 text-xs uppercase tracking-wider">// AVATAR_ASSET</label>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-20 h-20 border border-zinc-700 bg-zinc-950 overflow-hidden flex items-center justify-center flex-shrink-0 relative">
                                             {userAvatar ? (
                                                 <img src={userAvatar} onError={handleImageError} alt="Avatar" className="w-full h-full object-cover" />
                                             ) : (
-                                                <ProfileIcon className="w-12 h-12 text-gray-500" />
+                                                <ProfileIcon className="w-10 h-10 text-zinc-600" />
                                             )}
                                             {uploadingAvatar && (
-                                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-full">
+                                                <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
                                                     <span className="text-white text-xs font-bold">{avatarProgress}%</span>
                                                 </div>
                                             )}
                                         </div>
                                         <div>
-                                            <label className="cursor-pointer inline-flex items-center gap-2 bg-invox-red hover:bg-invox-red-hover text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <label className="cursor-pointer inline-flex items-center gap-2 bg-white text-black text-xs font-mono font-bold uppercase px-4 py-2 hover:bg-zinc-200 transition-colors">
+                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                                                 </svg>
-                                                {uploadingAvatar ? `Uploading ${avatarProgress}%` : 'Upload Photo'}
+                                                {uploadingAvatar ? `Uploading ${avatarProgress}%` : 'Upload Avatar'}
                                                 <input
                                                     type="file"
                                                     className="hidden"
@@ -613,36 +613,33 @@ const SettingsPage = () => {
                                                     disabled={uploadingAvatar}
                                                 />
                                             </label>
-                                            <p className="text-xs text-gray-500 mt-2">JPG, PNG, GIF, WebP · Max 5MB</p>
+                                            <p className="text-[10px] text-zinc-600 mt-1 uppercase">JPG, PNG, WebP · Max 5MB</p>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="border-t border-gray-800" />
+                                <div className="border-t border-zinc-850" />
 
                                 {/* Cover Photo */}
                                 <div>
-                                    <p className="text-sm font-medium text-invox-light-gray mb-4">Cover Photo</p>
+                                    <label className="block text-zinc-400 mb-2 text-xs uppercase tracking-wider">// BANNER_ASSET</label>
 
                                     {/* Preview */}
                                     <div
-                                        className="w-full h-36 rounded-xl border-2 border-gray-700 bg-gray-800 bg-cover bg-center mb-4 overflow-hidden relative"
+                                        className="w-full h-32 border border-zinc-800 bg-zinc-950 bg-cover bg-center mb-3 overflow-hidden relative"
                                         style={coverImage ? { backgroundImage: `url(${coverImage})` } : {}}
                                     >
                                         {!coverImage && (
-                                            <div className="h-full flex flex-col items-center justify-center text-gray-600 text-sm gap-2">
-                                                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                </svg>
-                                                No cover photo set
+                                            <div className="h-full flex flex-col items-center justify-center text-zinc-600 text-xs gap-1">
+                                                <span className="text-[10px] uppercase">// NO BANNER CONFIGURED</span>
                                             </div>
                                         )}
                                         {uploadingCover && (
-                                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                            <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
                                                 <div className="text-center">
-                                                    <div className="w-32 h-1.5 bg-gray-700 rounded-full overflow-hidden mb-2">
+                                                    <div className="w-32 h-1 bg-zinc-800 overflow-hidden mb-2">
                                                         <div
-                                                            className="h-full bg-invox-red rounded-full transition-all"
+                                                            className="h-full bg-white transition-all"
                                                             style={{ width: `${coverProgress}%` }}
                                                         />
                                                     </div>
@@ -652,12 +649,12 @@ const SettingsPage = () => {
                                         )}
                                     </div>
 
-                                    <div className="flex items-center gap-3 flex-wrap">
-                                        <label className="cursor-pointer inline-flex items-center gap-2 border border-gray-600 bg-gray-800 hover:bg-gray-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <label className="cursor-pointer inline-flex items-center gap-2 border border-zinc-700 bg-zinc-900 text-zinc-200 text-xs font-mono uppercase px-4 py-2 hover:bg-zinc-800 transition-colors">
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                                             </svg>
-                                            {uploadingCover ? `Uploading ${coverProgress}%` : 'Upload Cover'}
+                                            {uploadingCover ? `Uploading ${coverProgress}%` : 'Upload Banner'}
                                             <input
                                                 type="file"
                                                 className="hidden"
@@ -670,13 +667,13 @@ const SettingsPage = () => {
                                             <button
                                                 type="button"
                                                 onClick={handleRemoveCover}
-                                                className="inline-flex items-center gap-2 border border-red-800/50 text-red-400 hover:text-red-300 hover:border-red-600 text-sm font-semibold px-4 py-2.5 rounded-lg transition-all"
+                                                className="inline-flex items-center gap-1 border border-red-900/60 bg-red-950/20 text-red-400 hover:text-red-300 text-xs font-mono uppercase px-3 py-2 transition-colors"
                                             >
-                                                Remove Cover
+                                                Remove Banner
                                             </button>
                                         )}
                                     </div>
-                                    <p className="text-xs text-gray-500 mt-2">Recommended: 1200 × 400px · JPG, PNG · Max 5MB</p>
+                                    <p className="text-[10px] text-zinc-600 mt-1 uppercase">Recommended: 1200 × 400px · Max 5MB</p>
                                 </div>
                             </div>
                         </div>
@@ -686,21 +683,21 @@ const SettingsPage = () => {
                     {activeTab === 'account' && (
                         <div>
                             <SectionHeader
-                                title="Account Settings"
-                                description="Update your login credentials."
+                                title="Account Credentials"
+                                description="Manage credentials and authentication parameters."
                             />
-                            <div className="mb-5 p-4 rounded-xl bg-gray-800/60 border border-gray-700">
-                                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Current Email</p>
-                                <p className="text-white font-semibold">{currentUser?.email}</p>
+                            <div className="mb-4 p-3 border border-zinc-800 bg-zinc-950 font-mono text-xs">
+                                <span className="text-[10px] text-zinc-500 uppercase tracking-widest block mb-0.5">// ACTIVE_AUTHENTICATION_EMAIL</span>
+                                <p className="text-white font-bold">{currentUser?.email}</p>
                             </div>
                             <StatusMessage msg={accountMessage} />
-                            <form onSubmit={handleAccountSubmit} className="space-y-5">
+                            <form onSubmit={handleAccountSubmit} className="space-y-4">
                                 <FormField label="New Email Address">
                                     <input
                                         type="email"
                                         value={newEmail}
                                         onChange={e => setNewEmail(e.target.value)}
-                                        placeholder="Leave blank to keep current email"
+                                        placeholder="Leave blank to retain current email"
                                         className={inputClass}
                                     />
                                 </FormField>
@@ -709,21 +706,21 @@ const SettingsPage = () => {
                                         type="password"
                                         value={newPassword}
                                         onChange={e => setNewPassword(e.target.value)}
-                                        placeholder="At least 8 characters, include number & symbol"
+                                        placeholder="Min 8 chars, 1 number & 1 symbol"
                                         className={inputClass}
                                     />
                                 </FormField>
-                                <FormField label="Confirm New Password">
+                                <FormField label="Confirm Password">
                                     <input
                                         type="password"
                                         value={confirmPassword}
                                         onChange={e => setConfirmPassword(e.target.value)}
-                                        placeholder="Repeat your new password"
+                                        placeholder="Repeat new password"
                                         className={inputClass}
                                     />
                                 </FormField>
                                 <div className="pt-2">
-                                    <SaveButton loading={accountLoading} label="Update Account" />
+                                    <SaveButton loading={accountLoading} label="Update Credentials" />
                                 </div>
                             </form>
                         </div>
@@ -733,23 +730,23 @@ const SettingsPage = () => {
                     {activeTab === 'privacy' && (
                         <div>
                             <SectionHeader
-                                title="Privacy & Security"
-                                description="Manage how your data is shared and who can see your activity."
+                                title="Privacy & Telemetry"
+                                description="Manage visibility preferences and direct access permissions."
                             />
-                            <div className="space-y-4">
+                            <div className="space-y-2 font-mono">
                                 {[
-                                    { title: 'Profile Visibility',  desc: 'Control who can view your full profile.' },
-                                    { title: 'Activity Status',     desc: 'Show or hide your online status.' },
-                                    { title: 'Direct Messages',     desc: 'Manage who can send you direct messages.' },
-                                    { title: 'Data & Analytics',    desc: 'Control how your data is used to personalize your experience.' },
+                                    { title: 'Profile Visibility',  desc: 'Control public discovery vs restricted access.' },
+                                    { title: 'Activity Telemetry',  desc: 'Broadcast online state and active streams.' },
+                                    { title: 'Direct Transmission', desc: 'Manage inbound peer-to-peer messages.' },
+                                    { title: 'Data Processing',     desc: 'Telemetry parameters for feed optimization.' },
                                 ].map(item => (
-                                    <div key={item.title} className="flex items-center justify-between p-4 rounded-xl bg-gray-800/40 border border-gray-800">
+                                    <div key={item.title} className="flex items-center justify-between p-3 border border-zinc-800 bg-zinc-950">
                                         <div>
-                                            <p className="text-sm font-semibold text-white">{item.title}</p>
-                                            <p className="text-xs text-gray-400 mt-0.5">{item.desc}</p>
+                                            <p className="text-xs font-bold text-white uppercase">{item.title}</p>
+                                            <p className="text-[10px] text-zinc-500 mt-0.5">{item.desc}</p>
                                         </div>
-                                        <span className="text-xs text-gray-500 bg-gray-800 border border-gray-700 px-3 py-1 rounded-full">
-                                            Coming Soon
+                                        <span className="text-[10px] text-zinc-500 border border-zinc-800 bg-zinc-900 px-2 py-0.5 uppercase">
+                                            LOCKED_DEFAULT
                                         </span>
                                     </div>
                                 ))}

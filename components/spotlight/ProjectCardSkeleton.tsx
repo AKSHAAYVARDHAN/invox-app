@@ -3,40 +3,40 @@ import React from 'react';
 
 const ProjectCardSkeleton = () => {
     return (
-        <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4 mb-4 animate-pulse">
+        <div className="bg-[#0c0c0e] border border-zinc-800 p-4 mb-4 animate-pulse">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gray-700"></div>
-                    <div className="h-4 w-24 bg-gray-700 rounded"></div>
+                    <div className="w-8 h-8 bg-zinc-800"></div>
+                    <div className="h-3.5 w-24 bg-zinc-800"></div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-gray-700 rounded-md"></div>
-                    <div className="w-6 h-6 bg-gray-700 rounded-md"></div>
+                    <div className="w-5 h-5 bg-zinc-800"></div>
+                    <div className="w-5 h-5 bg-zinc-800"></div>
                 </div>
             </div>
 
             {/* Content */}
-            <div className="mt-4 space-y-3">
-                <div className="h-5 w-3/4 bg-gray-700 rounded"></div>
-                <div className="h-4 w-full bg-gray-700 rounded"></div>
-                <div className="h-4 w-5/6 bg-gray-700 rounded"></div>
+            <div className="mt-4 space-y-2">
+                <div className="h-4 w-3/4 bg-zinc-800"></div>
+                <div className="h-3 w-full bg-zinc-850"></div>
+                <div className="h-3 w-5/6 bg-zinc-850"></div>
             </div>
 
             {/* Media */}
-            <div className="mt-4 h-64 bg-gray-700 rounded-2xl"></div>
+            <div className="mt-4 h-64 bg-zinc-850 border border-zinc-800"></div>
             
             {/* Action Bar */}
-            <div className="mt-4 border border-gray-800 rounded-lg h-10 flex justify-around items-center">
-                <div className="h-6 w-12 bg-gray-700 rounded-md"></div>
-                <div className="h-6 w-12 bg-gray-700 rounded-md"></div>
-                <div className="h-6 w-12 bg-gray-700 rounded-md"></div>
-                <div className="h-6 w-6 bg-gray-700 rounded-md"></div>
-                <div className="h-6 w-6 bg-gray-700 rounded-md"></div>
+            <div className="mt-4 border border-zinc-800 h-9 flex justify-around items-center bg-black">
+                <div className="h-4 w-10 bg-zinc-800"></div>
+                <div className="h-4 w-10 bg-zinc-800"></div>
+                <div className="h-4 w-10 bg-zinc-800"></div>
+                <div className="h-4 w-5 bg-zinc-800"></div>
+                <div className="h-4 w-5 bg-zinc-800"></div>
             </div>
 
             {/* Connect Button */}
-            <div className="mt-2 h-10 bg-gray-700 rounded-lg"></div>
+            <div className="mt-2 h-9 bg-zinc-800"></div>
         </div>
     );
 };

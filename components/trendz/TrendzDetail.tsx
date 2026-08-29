@@ -146,16 +146,16 @@ const TrendzDetail: React.FC<TrendzDetailProps> = ({ trend, onBack }) => {
 
     return (
         <>
-            <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4">
-                <button onClick={onBack} className="flex items-center gap-2 mb-4 text-invox-light-gray hover:text-white transition-transform duration-200 transform hover:scale-105 active:scale-100">
-                    <ArrowLeftIcon className="w-6 h-6" />
-                    <span className="font-semibold">Back to Trendz</span>
+            <div className="bg-[#0c0c0e] border border-zinc-800 p-4 sm:p-6">
+                <button onClick={onBack} className="flex items-center gap-2 mb-4 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors">
+                    <ArrowLeftIcon className="w-4 h-4" />
+                    <span>// BACK_TO_TRENDZ</span>
                 </button>
                 
                 <AspectRatioBox
                     ref={videoContainerRef}
                     ratio="video"
-                    className={`rounded-lg mb-4 bg-invox-dark border border-gray-800 group ${isVideo ? 'cursor-pointer' : 'cursor-zoom-in'}`}
+                    className={`mb-4 bg-black border border-zinc-800 group ${isVideo ? 'cursor-pointer' : 'cursor-zoom-in'}`}
                     onMouseEnter={() => setIsControlsVisible(true)}
                     onMouseLeave={() => setIsControlsVisible(false)}
                     onClick={isVideo ? togglePlayPause : () => setZoomedImageUrl(trend.mediaUrl)}
@@ -177,13 +177,13 @@ const TrendzDetail: React.FC<TrendzDetailProps> = ({ trend, onBack }) => {
                                 className="w-full h-full object-cover"
                             />
                             
-                            <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${!isPlaying ? 'opacity-100' : 'opacity-0'} bg-black/30 pointer-events-none`}>
-                                <div className="w-20 h-20 bg-black/50 rounded-full flex items-center justify-center backdrop-blur-sm">
-                                    <PlayIcon className="w-10 h-10 text-white" />
+                            <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${!isPlaying ? 'opacity-100' : 'opacity-0'} bg-black/40 pointer-events-none`}>
+                                <div className="w-14 h-14 bg-black/80 border border-white/20 flex items-center justify-center backdrop-blur-sm">
+                                    <PlayIcon className="w-6 h-6 text-white" />
                                 </div>
                             </div>
                             
-                            <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 transition-opacity duration-300 ${isControlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0'}`} onClick={(e) => e.stopPropagation()}>
+                            <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-2.5 transition-opacity duration-200 ${isControlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0'}`} onClick={(e) => e.stopPropagation()}>
                                 <div className="w-full mb-2">
                                     <input
                                         type="range"
@@ -193,17 +193,17 @@ const TrendzDetail: React.FC<TrendzDetailProps> = ({ trend, onBack }) => {
                                         onChange={handleSeek}
                                         onPointerDown={handleProgressPointerDown}
                                         aria-label="Video progress"
-                                        className="w-full h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-invox-red"
+                                        className="w-full h-1 bg-zinc-700 appearance-none cursor-pointer accent-white"
                                     />
                                 </div>
-                                <div className="flex items-center justify-between gap-4 text-white">
-                                    <div className="flex items-center gap-3">
-                                        <button onClick={togglePlayPause} className="p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label={isPlaying ? 'Pause video' : 'Play video'}>
-                                            {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
+                                <div className="flex items-center justify-between gap-3 text-white">
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={togglePlayPause} className="p-1 border border-zinc-700 bg-black/60 hover:bg-zinc-800 transition-colors" aria-label={isPlaying ? 'Pause video' : 'Play video'}>
+                                            {isPlaying ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4" />}
                                         </button>
-                                        <div className="flex items-center gap-2 group/volume">
-                                            <button onClick={toggleMute} className="p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label={isMuted ? 'Unmute video' : 'Mute video'}>
-                                                {isMuted || volume === 0 ? <VolumeOffIcon className="w-6 h-6" /> : <VolumeUpIcon className="w-6 h-6" />}
+                                        <div className="flex items-center gap-1 group/volume">
+                                            <button onClick={toggleMute} className="p-1 border border-zinc-700 bg-black/60 hover:bg-zinc-800 transition-colors" aria-label={isMuted ? 'Unmute video' : 'Mute video'}>
+                                                {isMuted || volume === 0 ? <VolumeOffIcon className="w-4 h-4" /> : <VolumeUpIcon className="w-4 h-4" />}
                                             </button>
                                             <input
                                                 type="range"
@@ -213,18 +213,18 @@ const TrendzDetail: React.FC<TrendzDetailProps> = ({ trend, onBack }) => {
                                                 value={isMuted ? 0 : volume}
                                                 onChange={handleVolumeChange}
                                                 aria-label="Volume control"
-                                                className="w-0 h-1.5 bg-white/20 rounded-full appearance-none cursor-pointer accent-invox-red transition-all duration-300 opacity-0 group-hover/volume:opacity-100 group-hover/volume:w-20"
+                                                className="w-0 h-1 bg-zinc-700 appearance-none cursor-pointer accent-white transition-all duration-200 opacity-0 group-hover/volume:opacity-100 group-hover/volume:w-16"
                                             />
                                         </div>
                                     </div>
                                     
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-mono w-24 text-center">{formatTime(progress)} / {formatTime(duration)}</span>
-                                        <button onClick={cyclePlaybackRate} className="text-xs font-bold w-14 text-center p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label="Change playback speed">
+                                    <div className="flex items-center gap-2 font-mono text-[11px]">
+                                        <span className="text-zinc-300 tracking-wider">[{formatTime(progress)} / {formatTime(duration)}]</span>
+                                        <button onClick={cyclePlaybackRate} className="px-1.5 py-0.5 border border-zinc-700 bg-black/60 hover:bg-zinc-800 text-[10px] font-bold" aria-label="Change playback speed">
                                             {playbackRate.toFixed(2)}x
                                         </button>
-                                        <button onClick={toggleFullScreen} className="p-1.5 rounded-full hover:bg-white/25 transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}>
-                                            {isFullscreen ? <ArrowsPointingInIcon className="w-6 h-6" /> : <ArrowsPointingOutIcon className="w-6 h-6" />}
+                                        <button onClick={toggleFullScreen} className="p-1 border border-zinc-700 bg-black/60 hover:bg-zinc-800" aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}>
+                                            {isFullscreen ? <ArrowsPointingInIcon className="w-4 h-4" /> : <ArrowsPointingOutIcon className="w-4 h-4" />}
                                         </button>
                                     </div>
                                 </div>
@@ -240,50 +240,47 @@ const TrendzDetail: React.FC<TrendzDetailProps> = ({ trend, onBack }) => {
                     )}
                 </AspectRatioBox>
 
-                <h1 className="text-2xl font-bold text-white mb-3">{trend.title}</h1>
-                <p className="text-gray-300 mb-6 leading-relaxed">{trend.fullContent}</p>
+                <h1 className="text-xl sm:text-2xl font-bold font-mono text-white mb-3 uppercase tracking-tight">{trend.title}</h1>
+                <p className="text-zinc-400 text-sm sm:text-base leading-relaxed mb-6 font-sans">{trend.fullContent}</p>
 
-                <div className="border border-gray-800 rounded-lg px-4 py-2 flex justify-around items-center mb-6">
-                    <button className="flex items-center gap-1.5 text-invox-light-gray hover:text-invox-red transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label="Upvote trend">
-                        <ArrowUpIcon className="w-5 h-5" />
-                        <span className="text-sm font-semibold">{formatNumber(trend.stats.likes)}</span>
+                <div className="border border-zinc-800 bg-zinc-900/30 px-4 py-2.5 flex justify-between items-center mb-6 font-mono text-xs text-zinc-400">
+                    <button className="flex items-center gap-1.5 hover:text-white transition-colors" aria-label="Upvote trend">
+                        <ArrowUpIcon className="w-4 h-4" />
+                        <span>{formatNumber(trend.stats.likes)}</span>
                     </button>
-                    <div className="flex items-center gap-1.5 text-invox-light-gray" role="status" aria-label={`${formatNumber(trend.stats.views)} views`}>
-                        <TrendingUpIcon className="w-5 h-5" />
-                        <span className="text-sm font-semibold">{formatNumber(trend.stats.views)}</span>
+                    <div className="flex items-center gap-1.5 text-zinc-500" role="status" aria-label={`${formatNumber(trend.stats.views)} views`}>
+                        <TrendingUpIcon className="w-4 h-4" />
+                        <span>{formatNumber(trend.stats.views)}</span>
                     </div>
-                    <button className="flex items-center gap-1.5 text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label="View comments">
-                        <EqualsInCircleIcon className="w-5 h-5" />
-                        <span className="text-sm font-semibold">{formatNumber(trend.stats.comments)}</span>
+                    <button className="flex items-center gap-1.5 hover:text-white transition-colors" aria-label="View comments">
+                        <EqualsInCircleIcon className="w-4 h-4" />
+                        <span>{formatNumber(trend.stats.comments)}</span>
                     </button>
-                    <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label="Listen">
-                        <SoundWaveIcon className="w-5 h-5" />
+                    <button className="p-1 hover:text-white transition-colors" aria-label="Listen">
+                        <SoundWaveIcon className="w-4 h-4" />
                     </button>
-                    <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label="Share trend">
-                        <ForwardIcon className="w-5 h-5" />
+                    <button className="p-1 hover:text-white transition-colors" aria-label="Share trend">
+                        <ForwardIcon className="w-4 h-4" />
                     </button>
-                    <button className="text-invox-light-gray hover:text-white transition-all duration-200 transform hover:scale-110 active:scale-100" aria-label="Save trend">
-                        <BookmarkIcon className="w-5 h-5" />
+                    <button className="p-1 hover:text-white transition-colors" aria-label="Save trend">
+                        <BookmarkIcon className="w-4 h-4" />
                     </button>
                 </div>
 
-                <div className="bg-invox-dark p-4 rounded-lg border border-gray-800">
-                    <h3 className="text-lg font-bold text-white mb-4">DETAILS</h3>
-                    <div className="space-y-3 text-sm">
-                        <div className="flex items-center gap-2">
-                            <PlayIcon className="w-4 h-4 text-invox-light-gray" />
-                            <span className="text-gray-400">Published by :</span>
+                <div className="bg-black border border-zinc-800 p-4">
+                    <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider mb-3">// TELEMETRY_DETAILS</h3>
+                    <div className="space-y-2.5 font-mono text-xs">
+                        <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
+                            <span className="text-zinc-500">PUBLISHED_BY:</span>
                             <span className="text-white font-semibold">{trend.details.publishedBy}</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <PlayIcon className="w-4 h-4 text-invox-light-gray" />
-                            <span className="text-gray-400">Published on :</span>
+                        <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
+                            <span className="text-zinc-500">DATE:</span>
                             <span className="text-white font-semibold">{trend.details.publishedOn}</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <PlayIcon className="w-4 h-4 text-invox-light-gray" />
-                            <span className="text-gray-400">Links :</span>
-                            <a href={trend.details.link} target="_blank" rel="noopener noreferrer" className="text-invox-red-text hover:underline truncate">{trend.details.link}</a>
+                        <div className="flex items-center justify-between">
+                            <span className="text-zinc-500">SOURCE:</span>
+                            <a href={trend.details.link} target="_blank" rel="noopener noreferrer" className="text-zinc-300 underline hover:text-white truncate max-w-[200px] sm:max-w-xs">{trend.details.link}</a>
                         </div>
                     </div>
                 </div>

@@ -30,76 +30,69 @@ const OpportunityDetailModal: React.FC<{
     const handleApply = () => {
         navigate(`/apply/${offer.id}`, { state: { offer } });
     };
-    
-    const typeColors: { [key: string]: string } = {
-        'Full-Time': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-        'Gigs': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-        'Invites': 'bg-green-500/20 text-green-400 border-green-500/30',
-        'Others': 'bg-gray-500/20 text-gray-400 border-gray-500/30',
-    };
 
     const isSaved = savedOfferIds.includes(offer.id);
 
     return (
         <div 
-            className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex justify-center items-center z-50 transition-opacity duration-300" 
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4 animate-fadeIn" 
             onClick={onClose}
             aria-modal="true"
             role="dialog"
         >
             <div 
-                className="bg-invox-dark-accent rounded-xl shadow-2xl w-full max-w-3xl flex flex-col border border-gray-700 m-4 max-h-[90vh]" 
+                className="bg-[#0c0c0e] border border-zinc-800 w-full max-w-2xl flex flex-col shadow-2xl max-h-[90vh] overflow-hidden animate-fadeInUp font-mono" 
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="flex justify-between items-start p-6 border-b border-gray-700 flex-shrink-0">
-                    <div className="flex items-center gap-4">
-                        <img src={offer.companyAvatarUrl} onError={handleImageError} alt={offer.companyName} className="w-16 h-16 rounded-lg object-cover" />
+                <div className="flex justify-between items-start p-4 border-b border-zinc-800 bg-zinc-950 flex-shrink-0">
+                    <div className="flex items-center gap-3">
+                        <img src={offer.companyAvatarUrl} onError={handleImageError} alt={offer.companyName} className="w-12 h-12 border border-zinc-700 object-cover" />
                         <div>
-                            <h2 className="text-2xl font-bold text-white">{offer.title}</h2>
-                            <p className="text-gray-400 text-lg">{offer.companyName}</p>
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">// {offer.companyName}</span>
+                            <h2 className="text-sm font-bold text-white uppercase tracking-wider">{offer.title}</h2>
                         </div>
                     </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100" aria-label="Close opportunity details">
-                        <CloseIcon />
+                    <button onClick={onClose} className="p-1 text-zinc-400 hover:text-white transition-colors" aria-label="Close opportunity details">
+                        <CloseIcon className="w-4 h-4" />
                     </button>
                 </div>
 
                 {/* Body */}
-                <div className="p-6 overflow-y-auto text-gray-300 space-y-6">
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                        <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${typeColors[offer.type] || typeColors['Others']}`}>{offer.type}</span>
+                <div className="p-5 overflow-y-auto text-zinc-300 space-y-5 text-xs">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-2 py-0.5 border border-zinc-700 bg-black text-white text-[10px] uppercase font-bold">{offer.type}</span>
                         {offer.location && (
-                            <div className="flex items-center gap-1.5 text-gray-300">
-                                <MapPinIcon className="w-5 h-5" />
+                            <div className="flex items-center gap-1 text-zinc-400 text-[10px]">
+                                <MapPinIcon className="w-3.5 h-3.5" />
                                 <span>{offer.location}</span>
                             </div>
                         )}
-                         {offer.experienceLevel && (
-                            <div className="flex items-center gap-1.5 text-gray-300">
-                                <BriefcaseIcon className="w-5 h-5" />
+                        {offer.experienceLevel && (
+                            <div className="flex items-center gap-1 text-zinc-400 text-[10px]">
+                                <BriefcaseIcon className="w-3.5 h-3.5" />
                                 <span>{offer.experienceLevel}</span>
                             </div>
                         )}
                         {offer.category && (
-                            <div className="flex items-center gap-1.5 text-gray-300">
-                                <CubeIcon className="w-5 h-5" />
+                            <div className="flex items-center gap-1 text-zinc-400 text-[10px]">
+                                <CubeIcon className="w-3.5 h-3.5" />
                                 <span>{offer.category}</span>
                             </div>
                         )}
                     </div>
 
                     <div>
-                        <h3 className="text-lg font-semibold text-white mb-2">Job Description</h3>
-                        <p className="whitespace-pre-wrap leading-relaxed">{offer.description}</p>
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest block mb-2">// SPECIFICATION</span>
+                        <p className="whitespace-pre-wrap leading-relaxed text-zinc-300 bg-zinc-950 p-3.5 border border-zinc-800/80">{offer.description}</p>
                     </div>
 
                     {offer.skills && offer.skills.length > 0 && (
                         <div>
-                            <h3 className="text-lg font-semibold text-white mb-2">Skills Required</h3>
-                             <div className="flex flex-wrap gap-2">
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-widest block mb-2">// CORE_REQUIREMENTS</span>
+                            <div className="flex flex-wrap gap-1.5">
                                 {offer.skills.map(skill => (
-                                    <span key={skill} className="bg-gray-700/50 text-gray-300 px-3 py-1.5 rounded-md text-sm font-medium border border-gray-600/50">
+                                    <span key={skill} className="bg-black text-zinc-400 px-2 py-0.5 text-[10px] uppercase border border-zinc-800">
                                         {skill}
                                     </span>
                                 ))}
@@ -109,21 +102,20 @@ const OpportunityDetailModal: React.FC<{
                 </div>
 
                 {/* Footer */}
-                <div className="flex-shrink-0 flex justify-between items-center gap-4 p-4 border-t border-gray-700 bg-invox-dark rounded-b-xl">
-                    <span className="text-sm text-gray-500">Posted {offer.createdAt}</span>
-                    <div className="flex items-center gap-4">
+                <div className="flex-shrink-0 flex justify-between items-center gap-4 p-4 border-t border-zinc-800 bg-zinc-950">
+                    <span className="text-[10px] text-zinc-500 uppercase">LOGGED: {offer.createdAt}</span>
+                    <div className="flex items-center gap-2">
                         <button
                             onClick={() => toggleSaveOffer(offer.id)}
-                            className={`flex items-center gap-2 border px-6 py-2.5 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 active:scale-95 ${
-                                isSaved
-                                ? 'bg-invox-dark-accent border-gray-600 text-white hover:bg-gray-800'
-                                : 'bg-invox-dark-accent border-gray-600 text-white hover:bg-gray-800'
-                            }`}
+                            className="flex items-center gap-1.5 border border-zinc-700 bg-[#0c0c0e] px-4 py-2 text-xs font-mono uppercase text-white hover:bg-zinc-900 transition-colors"
                         >
-                            {isSaved ? <BookmarkIconSolid className="w-5 h-5" /> : <BookmarkIcon className="w-5 h-5" />}
-                            {isSaved ? 'Saved' : 'Save'}
+                            {isSaved ? <BookmarkIconSolid className="w-3.5 h-3.5 text-white" /> : <BookmarkIcon className="w-3.5 h-3.5 text-zinc-400" />}
+                            <span>{isSaved ? 'Saved' : 'Save'}</span>
                         </button>
-                        <button onClick={handleApply} className="bg-green-600 px-8 py-2.5 rounded-lg font-semibold text-white text-center hover:bg-green-700 transition-all duration-200 transform hover:scale-105 active:scale-95 inline-block">
+                        <button 
+                            onClick={handleApply} 
+                            className="bg-white text-black px-6 py-2 text-xs font-mono uppercase font-bold hover:bg-zinc-200 transition-colors"
+                        >
                             Apply Now
                         </button>
                     </div>
@@ -173,20 +165,29 @@ const SavedApplicationsPage = () => {
         setTimeout(() => {
             toggleSaveOffer(offerId);
             setUnsavingIds(prev => prev.filter(id => id !== offerId));
-        }, 300); // Duration matches the CSS transition
+        }, 300);
     };
 
     return (
-        <div className="p-4">
-            <div className="flex items-center gap-4 mb-4">
-                <button onClick={() => navigate('/spotlight?tab=Leap&subTab=GoForIt')} className="text-invox-light-gray hover:text-white transition-transform duration-200 transform hover:scale-105 active:scale-100">
-                    <ArrowLeftIcon className="w-6 h-6" />
-                </button>
-                <h1 className="text-2xl font-bold text-white">Saved Opportunities</h1>
+        <div className="w-full">
+            {/* Sub-Header */}
+            <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <button 
+                        onClick={() => navigate('/spotlight?tab=Leap&subTab=GoForIt')} 
+                        className="text-zinc-400 hover:text-white transition-colors"
+                        aria-label="Back"
+                    >
+                        <ArrowLeftIcon className="w-4 h-4" />
+                    </button>
+                    <div>
+                        <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest block leading-none">// BOOKMARKS</span>
+                        <h1 className="text-xs font-bold font-mono text-white tracking-wider uppercase mt-0.5">Saved Opportunities</h1>
+                    </div>
+                </div>
             </div>
-            <hr className="border-gray-700 mb-6" />
 
-            <div className="space-y-4">
+            <div className="p-4 space-y-3">
                 {loading ? (
                     <>
                         <GoForItOpportunityCardSkeleton />
@@ -212,8 +213,9 @@ const SavedApplicationsPage = () => {
                         </div>
                     ))
                 ) : (
-                    <div className="text-center py-16 text-gray-400">
-                        <p>You haven't saved any opportunities yet.</p>
+                    <div className="border border-zinc-800 bg-[#0c0c0e] p-8 text-center font-mono">
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest block mb-1">// NULL_BOOKMARKS</span>
+                        <p className="text-zinc-400 text-xs uppercase tracking-wider">You haven't saved any opportunities yet.</p>
                     </div>
                 )}
             </div>

@@ -253,52 +253,59 @@ const TrendzPage = () => {
     if (selectedTrend) {
         const similarTrends = trends.filter(t => t.id !== selectedTrend.id && t.domain.name === selectedTrend.domain.name);
         return (
-            <div>
+            <div className="space-y-6">
                 <TrendzDetail trend={selectedTrend} onBack={handleBack} />
-                <div className="p-4">
-                    <h3 className="text-xl font-bold text-white mb-4">Similar Trendz</h3>
+                <div className="mt-8 border-t border-zinc-800/80 pt-6">
+                    <div className="flex items-center gap-2 mb-4">
+                        <span className="w-1.5 h-1.5 bg-white"></span>
+                        <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// SIMILAR_SIGNALS</h3>
+                    </div>
                     {similarTrends.length > 0 ? (
                         similarTrends.slice(0, 2).map(trend => (
                             <TrendzCard key={trend.id} trend={trend} onClick={() => handleSelectTrend(trend)} />
                         ))
                     ) : (
-                        <p className="text-gray-400">No similar trends found.</p>
+                        <p className="text-zinc-500 font-mono text-xs">// No matching signals found in this domain.</p>
                     )}
                 </div>
             </div>
-        )
+        );
     }
 
     return (
-        <div className="p-4">
+        <div className="space-y-4">
             {followedDomainsFilter ? (
-                 <div className="bg-invox-dark-accent p-3 rounded-lg border border-gray-800 mb-4">
-                    <h2 className="font-semibold text-white text-center">
-                        {`Showing Trendz from "${followedDomainsFilter}"`}
+                 <div className="bg-[#0c0c0e] p-3 border border-zinc-800 mb-4 flex items-center justify-between">
+                    <h2 className="font-mono text-xs text-white uppercase tracking-wider">
+                        {`// DOMAIN: ${followedDomainsFilter}`}
                     </h2>
+                    <span className="font-mono text-[10px] text-zinc-500">FILTER_ACTIVE</span>
                 </div>
             ) : (
                 <>
-                    <div className="flex items-center space-x-2 overflow-x-auto pb-3 mb-4 no-scrollbar">
+                    {/* Category Filter Pills */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-3 mb-3 no-scrollbar">
                         {categoryFilters.map(category => (
                             <button
                                 key={category}
                                 onClick={() => setActiveCategory(category)}
-                                className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                                className={`px-3 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider whitespace-nowrap transition-all duration-150 border ${
                                     activeCategory === category
-                                        ? 'bg-invox-red text-white'
-                                        : 'bg-invox-dark-accent text-gray-300 hover:bg-gray-700'
+                                        ? 'bg-white text-black border-white font-bold'
+                                        : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
                                 }`}
                             >
                                 {category}
                             </button>
                         ))}
                     </div>
-                    <input
-                        type="search"
-                        placeholder="Search Trends or Domains"
-                        className="w-full bg-invox-dark-accent border border-gray-800 rounded-lg p-3 mb-4 focus:outline-none text-white"
-                    />
+                    <div className="mb-4">
+                        <input
+                            type="search"
+                            placeholder="SEARCH_TRENDS_OR_DOMAINS..."
+                            className="w-full bg-[#0c0c0e] border border-zinc-800/90 px-3.5 py-2.5 text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
+                        />
+                    </div>
                     <DomainFilter 
                         domains={trendzDomains}
                         selectedDomains={domainSelections.trendz || []}
@@ -307,8 +314,7 @@ const TrendzPage = () => {
                 </>
             )}
 
-
-            <div>
+            <div className="mt-4">
                 {loading ? (
                     <>
                         <TrendzCardSkeleton />
@@ -332,7 +338,7 @@ const TrendzPage = () => {
                     <TrendzCardSkeleton />
                 )}
                 {!hasMore && trends.length > 0 && !loading && !isFetchingMore && (
-                    <p className="text-gray-500">You've reached the end of the line.</p>
+                    <p className="text-zinc-600 font-mono text-xs tracking-wider">// END OF STREAM REACHED</p>
                 )}
             </div>
         </div>
