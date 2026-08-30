@@ -1,7 +1,6 @@
 /**
- * Geographic coordinate resolver and location parser for INVOX Global Network.
- * Maps user-provided locations (country, city, state, region) to approximate coordinates
- * for 3D globe visualization while preserving privacy.
+ * Geographic coordinate resolver, location parser, and global network seed data
+ * for INVOX Global Collective Network 3D Globe visualization.
  */
 
 export interface GeoLocation {
@@ -13,7 +12,7 @@ export interface GeoLocation {
     isApproximate: boolean;
 }
 
-// Major global developer & tech hubs / capitals with exact coordinates
+// Major global developer & tech hubs with precise coordinates
 const CITY_COORDINATES: Record<string, { lat: number; lon: number; country: string; city: string }> = {
     // North America
     'san francisco': { lat: 37.7749, lon: -122.4194, country: 'United States', city: 'San Francisco' },
@@ -201,7 +200,7 @@ const COUNTRY_COORDINATES: Record<string, { lat: number; lon: number; name: stri
     'sa': { lat: 23.8859, lon: 45.0792, name: 'Saudi Arabia' },
 };
 
-// Global default network anchor points (for deterministic fallback when location is unset)
+// Global default network anchor points
 const DEFAULT_GATEWAYS: Array<{ lat: number; lon: number; regionName: string; country: string }> = [
     { lat: 37.7749, lon: -122.4194, regionName: 'Pacific Hub (SF)', country: 'United States' },
     { lat: 51.5074, lon: -0.1278, regionName: 'Atlantic Hub (London)', country: 'United Kingdom' },
@@ -213,9 +212,6 @@ const DEFAULT_GATEWAYS: Array<{ lat: number; lon: number; regionName: string; co
     { lat: -23.5505, lon: -46.6333, regionName: 'LatAm Hub (São Paulo)', country: 'Brazil' },
 ];
 
-/**
- * Deterministic string hash to index
- */
 function hashString(str: string): number {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -225,15 +221,10 @@ function hashString(str: string): number {
     return Math.abs(hash);
 }
 
-/**
- * Resolve user profile location string into 3D geographic coordinates.
- * Supports strings like "San Francisco, CA", "Berlin, Germany", "Tokyo, Japan", "India", etc.
- */
 export function resolveUserLocation(rawLocation?: string | null, userIdSeed: string = 'node-seed'): GeoLocation {
     if (!rawLocation || typeof rawLocation !== 'string' || !rawLocation.trim()) {
         const hash = hashString(userIdSeed);
         const gateway = DEFAULT_GATEWAYS[hash % DEFAULT_GATEWAYS.length];
-        // Introduce slight subtle jitter so multiple fallback nodes in same gateway don't overlap completely
         const jitterLat = ((hash % 100) / 100 - 0.5) * 1.5;
         const jitterLon = (((hash >> 4) % 100) / 100 - 0.5) * 1.5;
         return {
@@ -289,7 +280,6 @@ export function resolveUserLocation(rawLocation?: string | null, userIdSeed: str
 
     // 3. Substring country check
     for (const [countryKey, countryData] of Object.entries(COUNTRY_COORDINATES)) {
-        // Match whole word or exact
         const regex = new RegExp(`\\b${countryKey}\\b`, 'i');
         if (regex.test(clean)) {
             return {
@@ -302,7 +292,7 @@ export function resolveUserLocation(rawLocation?: string | null, userIdSeed: str
         }
     }
 
-    // 4. Fallback to deterministic regional gateway based on seed
+    // 4. Fallback to deterministic regional gateway
     const hash = hashString(userIdSeed + clean);
     const gateway = DEFAULT_GATEWAYS[hash % DEFAULT_GATEWAYS.length];
     const jitterLat = ((hash % 100) / 100 - 0.5) * 2.0;
@@ -316,3 +306,190 @@ export function resolveUserLocation(rawLocation?: string | null, userIdSeed: str
         isApproximate: true,
     };
 }
+
+/**
+ * High-fidelity initial fallback dataset spanning all requested countries:
+ * India, United States, United Kingdom, Germany, Singapore, Australia, Japan, Canada, UAE, Brazil
+ */
+export const INITIAL_MOCK_NODES = [
+    {
+        uid: 'node-us-sf',
+        username: 'alex_chen',
+        displayName: 'Alex Chen',
+        location: 'San Francisco, United States',
+        headline: 'Distributed Systems Architect',
+        bio: 'Building real-time state machines and decentralized node meshes.',
+        followerCount: 342,
+        followingCount: 184,
+        skills: ['Distributed Systems', 'Rust', 'WebAssembly', 'Three.js'],
+        photoURL: null,
+    },
+    {
+        uid: 'node-us-nyc',
+        username: 'elena_v',
+        displayName: 'Elena Vance',
+        location: 'New York, United States',
+        headline: 'Full-Stack Protocol Engineer',
+        bio: 'Focusing on high-throughput streaming pipelines and WebGL interfaces.',
+        followerCount: 289,
+        followingCount: 95,
+        skills: ['TypeScript', 'Node.js', 'PostgreSQL', 'GraphQL'],
+        photoURL: null,
+    },
+    {
+        uid: 'node-in-del',
+        username: 'rohit_verma',
+        displayName: 'Rohit Verma',
+        location: 'New Delhi, India',
+        headline: 'Autonomous Systems & Edge AI',
+        bio: 'Optimizing low-latency neural routing and embedded inference.',
+        followerCount: 512,
+        followingCount: 260,
+        skills: ['Embedded Systems', 'C++', 'PyTorch', 'Robotics'],
+        photoURL: null,
+    },
+    {
+        uid: 'node-in-blr',
+        username: 'aarav_sharma',
+        displayName: 'Aarav Sharma',
+        location: 'Bengaluru, India',
+        headline: 'AI & Neural Systems Specialist',
+        bio: 'Training autonomous agent swarms and multimodal vision models.',
+        followerCount: 412,
+        followingCount: 220,
+        skills: ['PyTorch', 'Gemini API', 'Transformers', 'CUDA'],
+        photoURL: null,
+    },
+    {
+        uid: 'node-in-mum',
+        username: 'priya_nair',
+        displayName: 'Priya Nair',
+        location: 'Mumbai, India',
+        headline: 'Cloud Infrastructure Lead',
+        bio: 'Designing fault-tolerant microservices across global edge clusters.',
+        followerCount: 198,
+        followingCount: 130,
+        skills: ['Kubernetes', 'Go', 'Terraform', 'Kafka'],
+        photoURL: null,
+    },
+    {
+        uid: 'node-uk-ldn',
+        username: 'oliver_smith',
+        displayName: 'Oliver Smith',
+        location: 'London, United Kingdom',
+        headline: 'Cryptographic Security Researcher',
+        bio: 'Zero-knowledge proofs, verifiable computing, and secure enclaves.',
+        followerCount: 520,
+        followingCount: 310,
+        skills: ['Cryptography', 'Rust', 'ZK-SNARKs', 'C++'],
+        photoURL: null,
+    },
+    {
+        uid: 'node-de-ber',
+        username: 'lukas_weber',
+        displayName: 'Lukas Weber',
+        location: 'Berlin, Germany',
+        headline: 'Spatial Computing & 3D Dev',
+        bio: 'Procedural generation, shader authoring, and immersive visualization.',
+        followerCount: 376,
+        followingCount: 215,
+        skills: ['GLSL', 'WebGL', 'Three.js', 'WebGPU'],
+        photoURL: null,
+    },
+    {
+        uid: 'node-sg-sg',
+        username: 'mei_ling',
+        displayName: 'Mei Ling Tan',
+        location: 'Singapore',
+        headline: 'Edge Compute & Quant Systems',
+        bio: 'Ultra low-latency network telemetry and edge caching architectures.',
+        followerCount: 260,
+        followingCount: 145,
+        skills: ['C++', 'Networking', 'ZeroMQ', 'Redis'],
+        photoURL: null,
+    },
+    {
+        uid: 'node-jp-tok',
+        username: 'kenji_sato',
+        displayName: 'Kenji Sato',
+        location: 'Tokyo, Japan',
+        headline: 'Robotics & Embedded Systems',
+        bio: 'Interfacing physical sensor telemetry with digital twin engines.',
+        followerCount: 480,
+        followingCount: 290,
+        skills: ['ROS', 'Embedded C', 'Computer Vision', 'IoT'],
+        photoURL: null,
+    },
+    {
+        uid: 'node-au-syd',
+        username: 'chloe_taylor',
+        displayName: 'Chloe Taylor',
+        location: 'Sydney, Australia',
+        headline: 'Data Mesh & Graph Engineer',
+        bio: 'Knowledge graph synthesis and vector embedding indexing.',
+        followerCount: 215,
+        followingCount: 180,
+        skills: ['Neo4j', 'Python', 'Vector DBs', 'FastAPI'],
+        photoURL: null,
+    },
+    {
+        uid: 'node-ca-tor',
+        username: 'marcus_roy',
+        displayName: 'Marcus Roy',
+        location: 'Toronto, Canada',
+        headline: 'Machine Learning Infrastructure',
+        bio: 'Scaling distributed model evaluation and GPU orchestrations.',
+        followerCount: 330,
+        followingCount: 175,
+        skills: ['PyTorch', 'Ray', 'Docker', 'Python'],
+        photoURL: null,
+    },
+    {
+        uid: 'node-ae-dxb',
+        username: 'tariq_almansoor',
+        displayName: 'Tariq Al-Mansoor',
+        location: 'Dubai, United Arab Emirates',
+        headline: 'Fintech & Settlement Mesh Lead',
+        bio: 'Building cross-border liquidity rails and high-availability gateways.',
+        followerCount: 295,
+        followingCount: 160,
+        skills: ['Go', 'Solidity', 'Postgres', 'Distributed DBs'],
+        photoURL: null,
+    },
+    {
+        uid: 'node-br-sao',
+        username: 'gabriel_silva',
+        displayName: 'Gabriel Silva',
+        location: 'São Paulo, Brazil',
+        headline: 'Mobile & Real-Time Sync Dev',
+        bio: 'Local-first offline synchronization and CRDT data structures.',
+        followerCount: 245,
+        followingCount: 190,
+        skills: ['React Native', 'CRDTs', 'WebSockets', 'Swift'],
+        photoURL: null,
+    },
+];
+
+/**
+ * Initial connection relationships with dynamic connection state
+ */
+export const INITIAL_MOCK_CONNECTIONS = [
+    { fromId: 'node-in-del', toId: 'node-in-blr', status: 'ACTIVE' as const },
+    { fromId: 'node-in-del', toId: 'node-uk-ldn', status: 'ACTIVE' as const },
+    { fromId: 'node-in-del', toId: 'node-jp-tok', status: 'ACTIVE' as const },
+    { fromId: 'node-in-blr', toId: 'node-sg-sg', status: 'ACTIVE' as const },
+    { fromId: 'node-in-del', toId: 'node-sg-sg', status: 'ACTIVE' as const },
+    { fromId: 'node-in-blr', toId: 'node-in-mum', status: 'ACTIVE' as const },
+    { fromId: 'node-us-sf', toId: 'node-jp-tok', status: 'ACTIVE' as const },
+    { fromId: 'node-us-sf', toId: 'node-uk-ldn', status: 'ACTIVE' as const },
+    { fromId: 'node-us-nyc', toId: 'node-uk-ldn', status: 'ACTIVE' as const },
+    { fromId: 'node-us-nyc', toId: 'node-ca-tor', status: 'ACTIVE' as const },
+    { fromId: 'node-uk-ldn', toId: 'node-de-ber', status: 'ACTIVE' as const },
+    { fromId: 'node-de-ber', toId: 'node-ae-dxb', status: 'CONNECTING' as const },
+    { fromId: 'node-in-mum', toId: 'node-ae-dxb', status: 'ACTIVE' as const },
+    { fromId: 'node-sg-sg', toId: 'node-jp-tok', status: 'ACTIVE' as const },
+    { fromId: 'node-sg-sg', toId: 'node-au-syd', status: 'ACTIVE' as const },
+    { fromId: 'node-jp-tok', toId: 'node-au-syd', status: 'IDLE' as const },
+    { fromId: 'node-us-sf', toId: 'node-br-sao', status: 'ACTIVE' as const },
+    { fromId: 'node-br-sao', toId: 'node-uk-ldn', status: 'DISCONNECTING' as const },
+];

@@ -126,23 +126,23 @@ const HubPage = () => {
                         <div className="inline-block bg-black/80 border border-zinc-800 px-2.5 py-1 mb-3">
                             <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">// NODE_DISCOVERY_SYSTEM</span>
                         </div>
-                        <h1 className="text-2xl md:text-4xl font-bold font-mono text-white leading-tight uppercase tracking-wider">
+                        <h1 className="text-3xl md:text-5xl font-extrabold font-mono text-white leading-tight uppercase tracking-tight">
                             GLOBAL<br />
                             <span className="text-zinc-400">COLLECTIVE</span>
                         </h1>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-6 md:gap-10 mb-8">
-                        <div className="bg-[#0c0c0e]/90 border border-zinc-800 p-4 min-w-[140px]">
-                            <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest block mb-1">// LIVE_COMRADES</span>
-                            <span className="text-2xl font-bold font-mono text-white tabular-nums">42.8K</span>
+                    <div className="flex flex-wrap items-end gap-8 md:gap-12 mb-8">
+                        <div>
+                            <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-widest block mb-1.5">// ACTIVE_COMRADES</span>
+                            <span className="text-3xl md:text-4xl font-bold font-mono text-white tabular-nums tracking-tight">42.8K</span>
                         </div>
-                        <div className="bg-[#0c0c0e]/90 border border-zinc-800 p-4 min-w-[140px]">
-                            <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest block mb-1">// NETWORK_PINGS</span>
-                            <span className="text-2xl font-bold font-mono text-white tabular-nums">1.2M</span>
+                        <div>
+                            <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-widest block mb-1.5">// NETWORK_PINGS</span>
+                            <span className="text-3xl md:text-4xl font-bold font-mono text-white tabular-nums tracking-tight">1.2M</span>
                         </div>
                         <div className="ml-auto pointer-events-auto">
-                            <button className="flex items-center gap-3 bg-white text-black font-mono text-xs font-bold uppercase tracking-wider px-6 py-3.5 border border-white hover:bg-zinc-200 transition-colors shadow-2xl">
+                            <button className="flex items-center gap-3 bg-white hover:bg-zinc-200 text-black font-mono text-xs font-bold uppercase tracking-wider px-6 py-3.5 border border-white transition-colors shadow-2xl active:scale-[0.98]">
                                 <SparklesIcon className="w-4 h-4 text-black" />
                                 <span>Broadcast Signal</span>
                             </button>
