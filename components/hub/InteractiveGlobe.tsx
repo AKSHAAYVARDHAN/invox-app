@@ -219,11 +219,14 @@ const InteractiveGlobe: React.FC = () => {
     const [hoveredNode, setHoveredNode] = useState<UserGlobeNode | null>(null);
     const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
     const [selectedNode, setSelectedNode] = useState<UserGlobeNode | null>(null);
+    const [showArcs, setShowArcs] = useState<boolean>(true);
 
     // References for the animation / render loop
     const nodesRef = useRef<UserGlobeNode[]>([]);
     const arcsRef = useRef<ConnectionArcData[]>([]);
     const selectedNodeRef = useRef<UserGlobeNode | null>(null);
+    const showArcsRef = useRef<boolean>(true);
+    const arcsGroupRef = useRef<THREE.Group | null>(null);
     const controlsRef = useRef<OrbitControls | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
     const targetCameraLookAt = useRef<THREE.Vector3 | null>(null);
@@ -234,6 +237,13 @@ const InteractiveGlobe: React.FC = () => {
     useEffect(() => {
         selectedNodeRef.current = selectedNode;
     }, [selectedNode]);
+
+    useEffect(() => {
+        showArcsRef.current = showArcs;
+        if (arcsGroupRef.current) {
+            arcsGroupRef.current.visible = showArcs;
+        }
+    }, [showArcs]);
 
     // 1. Subscribe to real Firestore Users & Follows
     useEffect(() => {
@@ -628,6 +638,8 @@ const InteractiveGlobe: React.FC = () => {
         globeGroup.add(nodesGroup);
 
         const arcsGroup = new THREE.Group();
+        arcsGroup.visible = showArcsRef.current;
+        arcsGroupRef.current = arcsGroup;
         globeGroup.add(arcsGroup);
 
         const nodeHitboxes: THREE.Mesh[] = [];
@@ -1084,6 +1096,19 @@ const InteractiveGlobe: React.FC = () => {
                         {globeNodes.length} NODES <span className="text-zinc-600">/</span> {connectionArcs.length} ARCS
                     </span>
                 </div>
+
+                <button
+                    onClick={() => setShowArcs(prev => !prev)}
+                    title={showArcs ? "Hide Connection Arcs" : "Show Connection Arcs"}
+                    className={`border px-3 py-1.5 text-[11px] font-mono tracking-wider transition-colors shadow-lg active:scale-[0.98] flex items-center gap-1.5 ${
+                        showArcs
+                            ? 'bg-[#0c0c0e]/90 hover:bg-[#18181d] border-zinc-800/90 hover:border-zinc-600 text-zinc-300 hover:text-white'
+                            : 'bg-zinc-900 border-zinc-700 text-zinc-500 hover:text-zinc-300'
+                    }`}
+                >
+                    <span className={`w-1.5 h-1.5 ${showArcs ? 'bg-emerald-400' : 'bg-zinc-600'}`}></span>
+                    <span>ARCS: {showArcs ? 'ON' : 'OFF'}</span>
+                </button>
 
                 <button
                     onClick={handleResetView}
