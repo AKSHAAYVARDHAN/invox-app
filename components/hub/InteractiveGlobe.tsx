@@ -384,7 +384,7 @@ const InteractiveGlobe: React.FC = () => {
 
         const camera = new THREE.PerspectiveCamera(36, width / height, 1, 4000);
         // Framing: Centered and zoomed out for comfortable view of globe and towering arcs
-        camera.position.set(0, 40, 560);
+        camera.position.set(0, 45, 660);
         cameraRef.current = camera;
 
         renderer.setSize(width, height);
@@ -398,8 +398,8 @@ const InteractiveGlobe: React.FC = () => {
         controls.enableDamping = true;
         controls.dampingFactor = 0.055;
         controls.enablePan = false;
-        controls.minDistance = 240;
-        controls.maxDistance = 900;
+        controls.minDistance = 280;
+        controls.maxDistance = 1100;
         controls.autoRotate = true;
         controls.autoRotateSpeed = 0.35;
         controlsRef.current = controls;
@@ -883,7 +883,7 @@ const InteractiveGlobe: React.FC = () => {
     // Helper: Reset globe camera view to default orientation
     const handleResetView = () => {
         if (cameraRef.current && controlsRef.current) {
-            targetCameraLookAt.current = new THREE.Vector3(0, 40, 560);
+            targetCameraLookAt.current = new THREE.Vector3(0, 45, 660);
             setSelectedNode(null);
         }
     };
