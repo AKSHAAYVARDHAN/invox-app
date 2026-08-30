@@ -20,6 +20,7 @@ import SavedApplicationsPage from './pages/SavedApplicationsPage';
 import ComingSoonPage from './pages/ComingSoon';
 import OnboardingPage from './pages/Onboarding';
 import SettingsPage from './pages/Settings';
+import { LandingPage } from './pages/LandingPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { AIAssistantButton, AIChatModal } from './components/ui/AIAssistant';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -316,6 +317,8 @@ const AppRoutes = () => {
 
     return (
         <ReactRouterDOM.Routes>
+            <ReactRouterDOM.Route path="/" element={!currentUser ? <LandingPage /> : <ReactRouterDOM.Navigate to="/explore" />} />
+            <ReactRouterDOM.Route path="/landing" element={<LandingPage />} />
             <ReactRouterDOM.Route path="/login" element={!currentUser ? <LoginPage /> : <ReactRouterDOM.Navigate to="/explore" />} />
             <ReactRouterDOM.Route path="/signup" element={!currentUser ? <SignupPage /> : <ReactRouterDOM.Navigate to="/explore" />} />
             
