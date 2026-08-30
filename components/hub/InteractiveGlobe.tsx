@@ -473,7 +473,7 @@ const InteractiveGlobe: React.FC = () => {
             specular: new THREE.Color(0x5a687d),
             shininess: 28,
             color: new THREE.Color(0xffffff),
-            emissive: new THREE.Color(0x0c0f16),
+            emissive: new THREE.Color(0x020408),
         });
 
         // Rotate globe slightly so South Asia / India is front and center on launch
@@ -484,30 +484,58 @@ const InteractiveGlobe: React.FC = () => {
         const globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
         globeGroup.add(globeMesh);
 
-        // ─── ATMOSPHERIC FRESNEL SHADER (Clean Neutral Cool Rim) ────────────────
-        const atmosphereGeometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.02, 96, 96);
+        // ─── VOLUMETRIC ATMOSPHERIC SCATTERING (Soft Exponential Limb Fade) ───
+        const ATMO_RADIUS = GLOBE_RADIUS * 1.18;
+        const atmosphereGeometry = new THREE.SphereGeometry(ATMO_RADIUS, 128, 128);
         const atmosphereMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                uGlobeRadius: { value: GLOBE_RADIUS },
+                uAtmoRadius: { value: ATMO_RADIUS },
+            },
             vertexShader: `
-                varying vec3 vNormal;
-                varying vec3 vPosition;
+                varying vec3 vViewPosition;
+                varying vec3 vCenterInView;
                 void main() {
-                    vNormal = normalize(normalMatrix * normal);
-                    vPosition = (modelViewMatrix * vec4(position, 1.0)).xyz;
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                    vViewPosition = mvPosition.xyz;
+                    vec4 centerMv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+                    vCenterInView = centerMv.xyz;
+                    gl_Position = projectionMatrix * mvPosition;
                 }
             `,
             fragmentShader: `
-                varying vec3 vNormal;
-                varying vec3 vPosition;
+                varying vec3 vViewPosition;
+                varying vec3 vCenterInView;
+                uniform float uGlobeRadius;
+                uniform float uAtmoRadius;
                 void main() {
-                    vec3 viewDir = normalize(-vPosition);
-                    float rim = 1.0 - max(0.0, dot(viewDir, vNormal));
+                    vec3 rayDir = normalize(vViewPosition);
+                    // Perpendicular distance from camera ray to globe center
+                    float dist = length(cross(rayDir, vCenterInView));
                     
-                    // Subtle neutral cool silver rim glow with smooth falloff
-                    float rimIntensity = pow(rim, 3.2) * 0.38;
-                    vec3 rimColor = vec3(0.55, 0.65, 0.82);
+                    // Outer halo glow: gently peaks at globe horizon and smoothly fades to 0 before outer radius
+                    float outerGlow = 0.0;
+                    if (dist >= uGlobeRadius && dist < uAtmoRadius) {
+                        float t = (dist - uGlobeRadius) / (uAtmoRadius - uGlobeRadius);
+                        // Quadratic/cubic ease to ensure zero derivative at outer edge (eliminates sharp circular outline)
+                        outerGlow = pow(1.0 - t, 2.6) * (1.0 - smoothstep(0.0, 1.0, t)) * 0.42;
+                    }
                     
-                    gl_FragColor = vec4(rimColor, rimIntensity);
+                    // Inner limb soft scattering: softens the transition along the edge of the sphere
+                    float innerGlow = 0.0;
+                    if (dist < uGlobeRadius) {
+                        float t = dist / uGlobeRadius;
+                        innerGlow = pow(smoothstep(0.68, 1.0, t), 2.8) * 0.24;
+                    }
+                    
+                    float totalAlpha = outerGlow + innerGlow;
+                    if (totalAlpha <= 0.002) {
+                        discard;
+                    }
+                    
+                    // Subtle, cool cinematic cyan-silver atmospheric glow
+                    vec3 rimColor = vec3(0.55, 0.68, 0.88);
+                    gl_FragColor = vec4(rimColor, totalAlpha);
                 }
             `,
             blending: THREE.AdditiveBlending,
