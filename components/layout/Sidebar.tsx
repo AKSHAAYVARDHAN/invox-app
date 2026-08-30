@@ -58,9 +58,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHu
 
     const handleLogout = async () => {
         try {
-            await logout();
             setIsDropdownOpen(false);
-            // The AuthProvider will handle navigation via ProtectedRoute
+            if (isOpen) toggleSidebar();
+            await logout();
+            navigate('/', { replace: true });
         } catch (error) {
             console.error("Failed to log out", error);
         }

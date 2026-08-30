@@ -26,7 +26,7 @@ const SignupPage = () => {
         setError('');
         try {
             await registerWithEmail(email, password, displayName.trim() || undefined);
-            navigate('/');
+            navigate('/explore', { replace: true });
         } catch (err: any) {
             setError(getFriendlyErrorMessage(err));
             console.error(err);
@@ -39,7 +39,7 @@ const SignupPage = () => {
         setError('');
         try {
             await loginWithGoogle();
-            navigate('/');
+            navigate('/explore', { replace: true });
         } catch (err: any) {
             setError(getFriendlyErrorMessage(err));
             console.error(err);

@@ -15,7 +15,7 @@ export const ProtectedRoute = () => {
     }
 
     if (!currentUser) {
-        return <Navigate to="/login" state={{ from: location }} replace />;
+        return <Navigate to="/" state={{ from: location }} replace />;
     }
 
     // Require onboarding before accessing the main app

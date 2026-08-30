@@ -18,7 +18,7 @@ const LoginPage = () => {
         setSuccess('');
         try {
             await loginWithEmail(email, password);
-            navigate('/');
+            navigate('/explore', { replace: true });
         } catch (err: any) {
             setError(getFriendlyErrorMessage(err));
             console.error(err);
@@ -32,7 +32,7 @@ const LoginPage = () => {
         setSuccess('');
         try {
             await loginWithGoogle();
-            navigate('/');
+            navigate('/explore', { replace: true });
         } catch (err: any) {
             setError(getFriendlyErrorMessage(err));
             console.error(err);
