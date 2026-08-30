@@ -51,53 +51,91 @@ const OnboardingPage = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-invox-dark p-4">
-            <div className="bg-invox-dark-accent p-8 rounded-lg shadow-lg w-full max-w-lg border border-gray-800">
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-invox-red">Invox</h1>
-                    <span className="text-gray-400">Step {step} of 2</span>
+        <div className="min-h-screen flex items-center justify-center bg-black p-4 font-mono">
+            <div className="bg-[#0c0c0e] p-6 sm:p-8 w-full max-w-lg border border-zinc-800/90 shadow-2xl">
+                {/* Brand Header */}
+                <div className="flex justify-between items-center pb-4 mb-5 border-b border-zinc-800">
+                    <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 bg-emerald-500 animate-pulse"></span>
+                        <h1 className="text-base font-bold text-white tracking-wider uppercase font-mono">
+                            // INVOX_ONBOARDING
+                        </h1>
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 bg-[#09090b] border border-zinc-800 text-zinc-400 uppercase tracking-widest font-mono">
+                        STEP {step} / 2
+                    </span>
                 </div>
-                
-                <h2 className="text-2xl font-bold text-white mb-6">
-                    {step === 1 ? 'Complete your profile' : 'Professional interests'}
-                </h2>
 
-                {error && <p className="bg-red-900 text-white text-center p-3 rounded-md mb-4">{error}</p>}
+                {/* Segmented Step Indicator */}
+                <div className="w-full bg-[#09090b] border border-zinc-800/90 p-1 grid grid-cols-2 gap-1 mb-6">
+                    <div
+                        className={`py-2 text-center font-mono text-xs uppercase tracking-wider transition-all ${
+                            step === 1
+                                ? 'bg-[#18181b] border border-zinc-700 text-white font-bold'
+                                : 'bg-transparent text-zinc-500'
+                        }`}
+                    >
+                        // 01_PROFILE
+                    </div>
+                    <div
+                        className={`py-2 text-center font-mono text-xs uppercase tracking-wider transition-all ${
+                            step === 2
+                                ? 'bg-[#18181b] border border-zinc-700 text-white font-bold'
+                                : 'bg-transparent text-zinc-500'
+                        }`}
+                    >
+                        // 02_EXPERTISE
+                    </div>
+                </div>
+
+                {error && (
+                    <div className="bg-red-950/80 border border-red-800/90 text-red-300 text-center p-3 mb-4 text-xs font-mono uppercase tracking-wider">
+                        {error}
+                    </div>
+                )}
 
                 <form onSubmit={step === 2 ? handleSubmit : (e) => { e.preventDefault(); handleNext(); }}>
                     {step === 1 && (
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-invox-light-gray mb-2" htmlFor="displayName">Display Name</label>
+                                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5" htmlFor="displayName">
+                                    // DISPLAY_NAME
+                                </label>
                                 <input
                                     type="text"
                                     id="displayName"
                                     value={displayName}
+                                    placeholder="Alex Mercer"
                                     onChange={(e) => setDisplayName(e.target.value)}
                                     required
-                                    className="w-full bg-gray-700 border border-gray-600 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-invox-red text-white"
+                                    className="w-full bg-[#09090b] border border-zinc-800 focus:border-zinc-500 focus:outline-none p-3 text-xs text-white placeholder-zinc-600 font-mono transition-colors"
                                 />
                             </div>
                             <div>
-                                <label className="block text-invox-light-gray mb-2" htmlFor="username">Username</label>
+                                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5" htmlFor="username">
+                                    // SYSTEM_USERNAME
+                                </label>
                                 <input
                                     type="text"
                                     id="username"
                                     value={username}
+                                    placeholder="alex_mercer"
                                     onChange={(e) => setUsername(e.target.value)}
                                     required
-                                    className="w-full bg-gray-700 border border-gray-600 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-invox-red text-white"
+                                    className="w-full bg-[#09090b] border border-zinc-800 focus:border-zinc-500 focus:outline-none p-3 text-xs text-white placeholder-zinc-600 font-mono transition-colors"
                                 />
                             </div>
                             <div>
-                                <label className="block text-invox-light-gray mb-2" htmlFor="headline">Headline</label>
+                                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5" htmlFor="headline">
+                                    // PROFESSIONAL_HEADLINE
+                                </label>
                                 <input
                                     type="text"
                                     id="headline"
-                                    placeholder="e.g. Software Engineer at Tech Corp"
+                                    placeholder="e.g. Distributed Systems Engineer @ Tech Labs"
                                     value={headline}
                                     onChange={(e) => setHeadline(e.target.value)}
-                                    className="w-full bg-gray-700 border border-gray-600 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-invox-red text-white"
+                                    className="w-full bg-[#09090b] border border-zinc-800 focus:border-zinc-500 focus:outline-none p-3 text-xs text-white placeholder-zinc-600 font-mono transition-colors"
                                 />
                             </div>
                         </div>
@@ -106,46 +144,50 @@ const OnboardingPage = () => {
                     {step === 2 && (
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-invox-light-gray mb-2" htmlFor="skills">Skills (comma separated)</label>
+                                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5" htmlFor="skills">
+                                    // TECHNICAL_SKILLS (COMMA SEPARATED)
+                                </label>
                                 <input
                                     type="text"
                                     id="skills"
-                                    placeholder="e.g. React, Node.js, Design"
+                                    placeholder="React, TypeScript, Rust, Distributed Systems, PyTorch"
                                     value={skillsInput}
                                     onChange={(e) => setSkillsInput(e.target.value)}
-                                    className="w-full bg-gray-700 border border-gray-600 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-invox-red text-white"
+                                    className="w-full bg-[#09090b] border border-zinc-800 focus:border-zinc-500 focus:outline-none p-3 text-xs text-white placeholder-zinc-600 font-mono transition-colors"
                                 />
                             </div>
                             <div>
-                                <label className="block text-invox-light-gray mb-2" htmlFor="interests">Interests (comma separated)</label>
+                                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5" htmlFor="interests">
+                                    // RESEARCH_INTERESTS (COMMA SEPARATED)
+                                </label>
                                 <input
                                     type="text"
                                     id="interests"
-                                    placeholder="e.g. AI, Startups, Open Source"
+                                    placeholder="AI Infrastructure, Quantum Computing, Dev Tools"
                                     value={interestsInput}
                                     onChange={(e) => setInterestsInput(e.target.value)}
-                                    className="w-full bg-gray-700 border border-gray-600 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-invox-red text-white"
+                                    className="w-full bg-[#09090b] border border-zinc-800 focus:border-zinc-500 focus:outline-none p-3 text-xs text-white placeholder-zinc-600 font-mono transition-colors"
                                 />
                             </div>
                         </div>
                     )}
 
-                    <div className="mt-8 flex gap-4">
+                    <div className="mt-8 flex gap-3">
                         {step === 2 && (
                             <button 
                                 type="button" 
                                 onClick={handlePrev}
-                                className="flex-1 bg-gray-700 text-white p-3 rounded-md font-bold hover:bg-gray-600 transition-all"
+                                className="flex-1 bg-[#09090b] hover:bg-zinc-900 text-zinc-300 hover:text-white border border-zinc-800 hover:border-zinc-600 p-3 font-mono text-xs font-bold uppercase tracking-wider transition-colors"
                             >
-                                Back
+                                // BACK
                             </button>
                         )}
                         <button 
                             type="submit" 
                             disabled={loading} 
-                            className="flex-1 bg-invox-red text-white p-3 rounded-md font-bold hover:bg-invox-red-hover disabled:bg-gray-500 transition-all"
+                            className="flex-1 bg-white hover:bg-zinc-200 text-black p-3 font-mono text-xs font-bold uppercase tracking-wider transition-colors border border-white disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {loading ? 'Saving...' : step === 1 ? 'Next' : 'Complete Onboarding'}
+                            {loading ? '// SAVING...' : step === 1 ? '// NEXT_STEP' : '// COMPLETE_ONBOARDING'}
                         </button>
                     </div>
                 </form>
