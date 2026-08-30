@@ -24,18 +24,18 @@ const formatJoinDate = (ts: any): string => {
 /* ─── sub-components ──────────────────────────────────────────────────────── */
 
 const StatCard = ({ label, value }: { label: string; value: number | string }) => (
-    <div className="flex flex-col items-center justify-center bg-gray-800 rounded-xl border border-gray-700 p-4 gap-1">
-        <span className="text-xl font-bold text-white">{value}</span>
-        <span className="text-xs text-gray-400 text-center">{label}</span>
+    <div className="flex flex-col items-center justify-center bg-[#09090b] border border-zinc-800/90 p-3.5 gap-1 font-mono hover:border-zinc-700 transition-colors">
+        <span className="text-xl font-bold text-white tracking-tight">{value}</span>
+        <span className="text-[10px] text-zinc-500 uppercase tracking-widest text-center">{label}</span>
     </div>
 );
 
 interface ChipProps { label: string; color?: 'default' | 'blue' }
 const Chip: React.FC<ChipProps> = ({ label, color = 'default' }) => (
-    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+    <span className={`inline-flex items-center px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider border transition-colors ${
         color === 'blue'
-            ? 'bg-blue-900/30 border-blue-700/50 text-blue-300'
-            : 'bg-gray-800 border-gray-700 text-gray-300'
+            ? 'bg-[#121826] border-blue-900/60 text-blue-400'
+            : 'bg-[#18181d] border-zinc-800 text-zinc-300'
     }`}>
         {label}
     </span>
@@ -47,6 +47,7 @@ const ProfilePage = () => {
     const { currentUser, userProfile, loading } = useAuth();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('Posts');
+    const profileTabs = ['Posts', 'Replies', 'Media', 'Likes'];
     const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
     const [uploadingCover, setUploadingCover] = useState(false);
@@ -123,7 +124,7 @@ const ProfilePage = () => {
     };
 
     if (loading) return <ProfileSkeleton />;
-    if (!currentUser) return <div className="p-4 text-white">User not found.</div>;
+    if (!currentUser) return <div className="p-4 font-mono text-xs text-white">User not found.</div>;
 
     // Local previews take precedence; then Firestore data from context
     const userAvatar    = localAvatarUrl || userProfile?.photoURL || currentUser?.photoURL || null;
@@ -163,26 +164,26 @@ const ProfilePage = () => {
     }).slice(0, 4);
 
     return (
-        <>
+        <div className="font-mono text-zinc-300">
             {uploadError && (
-                <p className="bg-red-900 text-white text-center p-3 rounded-md mb-3 text-sm">
+                <p className="bg-red-950/80 border border-red-800 text-red-200 text-center p-3 mb-3 text-xs uppercase tracking-wider font-mono">
                     {uploadError}
                 </p>
             )}
 
             {/* ── Identity Block ─────────────────────────────────────────── */}
-            <div className="bg-invox-dark-accent rounded-xl border border-gray-800 overflow-hidden mb-4">
+            <div className="bg-[#0c0c0e] border border-zinc-800/90 overflow-hidden mb-4">
 
                 {/* Cover Photo */}
-                <div className="relative group h-48">
+                <div className="relative group h-48 border-b border-zinc-800">
                     <div
-                        className="h-full w-full bg-gray-700 bg-cover bg-center cursor-zoom-in transition-opacity"
+                        className="h-full w-full bg-zinc-900 bg-cover bg-center cursor-zoom-in transition-opacity"
                         style={coverImageUrl ? { backgroundImage: `url(${coverImageUrl})` } : {}}
                         onClick={() => coverImageUrl && setZoomedImageUrl(coverImageUrl)}
                     >
                         {!coverImageUrl && (
                             <div className="h-full flex items-center justify-center">
-                                <svg className="w-10 h-10 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-10 h-10 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
                             </div>
@@ -190,13 +191,13 @@ const ProfilePage = () => {
                     </div>
 
                     {/* Upload overlay */}
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <label className="cursor-pointer bg-gray-900/80 border border-gray-600 px-4 py-2 rounded-full text-sm font-semibold hover:bg-gray-800 transition-all flex items-center gap-2">
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <label className="cursor-pointer bg-zinc-900 border border-zinc-700 px-4 py-2 text-xs font-mono font-bold uppercase tracking-wider text-white hover:bg-zinc-800 transition-all flex items-center gap-2">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
-                            {uploadingCover ? `Uploading ${uploadProgress}%` : 'Update Cover'}
+                            {uploadingCover ? `Uploading ${uploadProgress}%` : '// UPDATE_COVER'}
                             <input
                                 type="file"
                                 className="hidden"
@@ -209,9 +210,9 @@ const ProfilePage = () => {
 
                     {/* Upload progress bar */}
                     {uploadingCover && (
-                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-800">
+                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-zinc-800">
                             <div
-                                className="h-full bg-invox-red transition-all"
+                                className="h-full bg-white transition-all"
                                 style={{ width: `${uploadProgress}%` }}
                             />
                         </div>
@@ -225,25 +226,25 @@ const ProfilePage = () => {
                         {/* Avatar */}
                         <div className="relative group">
                             <div
-                                className="w-28 h-28 rounded-full border-4 border-invox-dark-accent bg-invox-dark-accent flex items-center justify-center cursor-zoom-in overflow-hidden"
+                                className="w-28 h-28 border-4 border-[#0c0c0e] bg-zinc-900 flex items-center justify-center cursor-zoom-in overflow-hidden"
                                 onClick={() => { if (userAvatar) setZoomedImageUrl(userAvatar); }}
                             >
                                 {userAvatar ? (
                                     <img src={userAvatar} onError={handleImageError} alt="Profile" className="w-full h-full object-cover" />
                                 ) : (
-                                    <ProfileIcon className="w-16 h-16 text-gray-500" />
+                                    <ProfileIcon className="w-16 h-16 text-zinc-600" />
                                 )}
                                 {/* Uploading overlay */}
                                 {uploadingAvatar && (
-                                    <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center">
+                                    <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
                                         <span className="text-white text-xs font-bold">{uploadProgress}%</span>
                                     </div>
                                 )}
                                 {/* Hover change overlay */}
                                 {!uploadingAvatar && (
-                                    <div className="absolute inset-0 bg-black/50 rounded-full flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <label className="cursor-pointer text-xs font-semibold text-center w-full h-full flex items-center justify-center">
-                                            Change
+                                    <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <label className="cursor-pointer text-[10px] font-mono uppercase tracking-wider text-center w-full h-full flex items-center justify-center text-white">
+                                            // CHANGE
                                             <input
                                                 type="file"
                                                 className="hidden"
@@ -256,35 +257,35 @@ const ProfilePage = () => {
                                 )}
                             </div>
                             {/* Online indicator */}
-                            <span className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-invox-dark-accent" />
+                            <span className="absolute bottom-1 right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-[#0c0c0e]" />
                         </div>
 
                         {/* Edit Profile button */}
                         <div className="flex items-center gap-2 mt-1">
                             <button
                                 onClick={() => navigate('/settings')}
-                                className="flex items-center gap-2 border border-gray-600 px-4 py-2 rounded-full text-sm font-semibold hover:bg-gray-800 transition-all duration-200 hover:scale-105 active:scale-95"
+                                className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 hover:border-zinc-500 text-white px-4 py-2 font-mono text-xs uppercase tracking-wider transition-colors font-bold"
                             >
-                                <PencilIcon className="w-4 h-4" />
-                                Edit Profile
+                                <PencilIcon className="w-3.5 h-3.5" />
+                                <span>// EDIT_PROFILE</span>
                             </button>
                         </div>
                     </div>
 
                     {/* User Info */}
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight">{displayName}</h1>
-                        <p className="text-gray-400 text-sm mt-0.5">@{username}</p>
+                        <h1 className="text-xl font-bold font-mono text-white tracking-tight">{displayName}</h1>
+                        <p className="text-zinc-500 text-xs font-mono mt-0.5">@{username}</p>
 
                         {userProfile?.headline && (
-                            <p className="text-gray-200 font-medium mt-1.5">{userProfile.headline}</p>
+                            <p className="text-zinc-300 font-mono text-xs mt-2">{userProfile.headline}</p>
                         )}
 
                         {/* Meta row */}
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-sm text-gray-400">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-xs text-zinc-400 font-mono">
                             {(userProfile as any)?.location && (
-                                <span className="flex items-center gap-1">
-                                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <span className="flex items-center gap-1.5">
+                                    <svg className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                     </svg>
@@ -298,9 +299,9 @@ const ProfilePage = () => {
                                         : `https://${(userProfile as any).website}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center gap-1 text-invox-red-text hover:underline"
+                                    className="flex items-center gap-1.5 text-zinc-300 hover:text-white hover:underline"
                                 >
-                                    <GlobeAltIcon className="w-4 h-4 flex-shrink-0" />
+                                    <GlobeAltIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
                                     {(userProfile as any).website.replace(/^https?:\/\//, '')}
                                 </a>
                             )}
@@ -311,15 +312,15 @@ const ProfilePage = () => {
                                         : `https://${(userProfile as any).portfolioURL}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center gap-1 text-invox-blue hover:underline"
+                                    className="flex items-center gap-1.5 text-zinc-300 hover:text-white hover:underline"
                                 >
-                                    <CometIcon className="w-4 h-4 flex-shrink-0" />
+                                    <CometIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
                                     Portfolio
                                 </a>
                             )}
                             {joinDate && (
-                                <span className="flex items-center gap-1">
-                                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <span className="flex items-center gap-1.5 text-zinc-500">
+                                    <svg className="w-3.5 h-3.5 text-zinc-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                     </svg>
                                     Joined {joinDate}
@@ -328,11 +329,11 @@ const ProfilePage = () => {
                         </div>
 
                         {/* Follower counts */}
-                        <div className="flex gap-5 mt-3 text-sm">
-                            <span className="text-gray-400">
+                        <div className="flex gap-5 mt-3 text-xs font-mono">
+                            <span className="text-zinc-400">
                                 <span className="font-bold text-white">{userProfile?.followingCount ?? 0}</span> Following
                             </span>
-                            <span className="text-gray-400">
+                            <span className="text-zinc-400">
                                 <span className="font-bold text-white">{userProfile?.followerCount ?? 0}</span> Followers
                             </span>
                         </div>
@@ -342,36 +343,31 @@ const ProfilePage = () => {
 
             {/* ── Profile Completion Widget ─────────────────────────────── */}
             {completion < 100 && (
-                <div className="bg-invox-dark-accent rounded-xl border border-gray-800 p-4 mb-4">
+                <div className="bg-[#0c0c0e] border border-zinc-800/90 p-4 mb-4 font-mono">
                     <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-semibold text-white">Profile Completion</span>
-                        <span className={`text-sm font-bold ${
-                            completion >= 70 ? 'text-green-400' : completion >= 40 ? 'text-yellow-400' : 'text-invox-red-text'
+                        <span className="text-xs font-bold text-white uppercase tracking-wider">// PROFILE_COMPLETION</span>
+                        <span className={`text-xs font-bold ${
+                            completion >= 70 ? 'text-emerald-400' : completion >= 40 ? 'text-amber-400' : 'text-zinc-400'
                         }`}>
                             {completion}%
                         </span>
                     </div>
-                    <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden mb-3">
+                    <div className="w-full h-1.5 bg-zinc-900 border border-zinc-800 mb-3">
                         <div
-                            className="h-full rounded-full transition-all duration-700"
-                            style={{
-                                width: `${completion}%`,
-                                background: completion >= 70
-                                    ? 'linear-gradient(90deg,#16a34a,#4ade80)'
-                                    : completion >= 40
-                                    ? 'linear-gradient(90deg,#ca8a04,#facc15)'
-                                    : 'linear-gradient(90deg,#E50914,#FF4747)',
-                            }}
+                            className={`h-full transition-all duration-700 ${
+                                completion >= 70 ? 'bg-emerald-500' : completion >= 40 ? 'bg-amber-500' : 'bg-zinc-400'
+                            }`}
+                            style={{ width: `${completion}%` }}
                         />
                     </div>
                     {suggestions.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                            <span className="text-xs text-gray-500 w-full">Suggested:</span>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] text-zinc-500 uppercase tracking-wider">Suggested:</span>
                             {suggestions.map(s => (
                                 <button
                                     key={s.key}
                                     onClick={() => navigate('/settings')}
-                                    className="text-xs px-3 py-1.5 rounded-full border border-gray-700 bg-gray-800 text-gray-300 hover:border-invox-red hover:text-white transition-all duration-150"
+                                    className="text-[11px] px-2.5 py-1 border border-zinc-800 bg-[#18181d] text-zinc-300 hover:border-zinc-600 hover:text-white transition-all uppercase tracking-wider"
                                 >
                                     + {s.label}
                                 </button>
@@ -384,24 +380,24 @@ const ProfilePage = () => {
             {/* ── About + Stats ─────────────────────────────────────────── */}
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
                 {/* About */}
-                <div className="md:col-span-3 bg-invox-dark-accent rounded-xl border border-gray-800 p-5">
-                    <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">About</h2>
+                <div className="md:col-span-3 bg-[#0c0c0e] border border-zinc-800/90 p-5 font-mono">
+                    <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">// ABOUT</h2>
                     {userProfile?.bio ? (
-                        <p className="text-gray-200 leading-relaxed text-sm whitespace-pre-line">{userProfile.bio}</p>
+                        <p className="text-zinc-300 leading-relaxed text-xs whitespace-pre-line">{userProfile.bio}</p>
                     ) : (
-                        <p className="text-gray-500 italic text-sm leading-relaxed">
-                            Tell the Invox community about your expertise, interests, projects, and goals.
+                        <p className="text-zinc-600 italic text-xs leading-relaxed">
+                            Tell the community about your expertise, interests, projects, and goals.
                         </p>
                     )}
                     {!userProfile?.bio && (
-                        <button onClick={() => navigate('/settings')} className="mt-3 text-xs text-invox-red-text hover:underline">
+                        <button onClick={() => navigate('/settings')} className="mt-3 text-xs text-zinc-400 hover:text-white uppercase tracking-wider transition-colors">
                             + Add bio
                         </button>
                     )}
                 </div>
 
                 {/* Stats */}
-                <div className="md:col-span-2 grid grid-cols-2 gap-3">
+                <div className="md:col-span-2 grid grid-cols-2 gap-2.5">
                     <StatCard label="Projects Published"  value={0} />
                     <StatCard label="Knowledge Posts"     value={0} />
                     <StatCard label="Communities Joined"  value={0} />
@@ -411,10 +407,10 @@ const ProfilePage = () => {
 
             {/* ── Skills & Interests ────────────────────────────────────── */}
             {((userProfile?.skills?.length ?? 0) > 0 || (userProfile?.interests?.length ?? 0) > 0) ? (
-                <div className="bg-invox-dark-accent rounded-xl border border-gray-800 p-5 mb-4">
+                <div className="bg-[#0c0c0e] border border-zinc-800/90 p-5 mb-4 font-mono">
                     {(userProfile?.skills?.length ?? 0) > 0 && (
                         <div className="mb-4">
-                            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Skills</h2>
+                            <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">// SKILLS</h2>
                             <div className="flex flex-wrap gap-2">
                                 {userProfile!.skills.map((skill, idx) => <Chip key={idx} label={skill} />)}
                             </div>
@@ -422,7 +418,7 @@ const ProfilePage = () => {
                     )}
                     {(userProfile?.interests?.length ?? 0) > 0 && (
                         <div>
-                            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Interests</h2>
+                            <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">// INTERESTS</h2>
                             <div className="flex flex-wrap gap-2">
                                 {userProfile!.interests.map((interest, idx) => <Chip key={idx} label={interest} color="blue" />)}
                             </div>
@@ -430,50 +426,50 @@ const ProfilePage = () => {
                     )}
                 </div>
             ) : (
-                <div className="bg-invox-dark-accent rounded-xl border border-gray-800 p-5 mb-4">
-                    <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Skills & Interests</h2>
-                    <p className="text-gray-500 italic text-sm">No skills or interests added yet.</p>
-                    <button onClick={() => navigate('/settings')} className="mt-2 text-xs text-invox-red-text hover:underline">
+                <div className="bg-[#0c0c0e] border border-zinc-800/90 p-5 mb-4 font-mono">
+                    <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">// SKILLS & INTERESTS</h2>
+                    <p className="text-zinc-600 italic text-xs mb-3">No skills or interests added yet.</p>
+                    <button onClick={() => navigate('/settings')} className="text-xs text-zinc-400 hover:text-white uppercase tracking-wider transition-colors">
                         + Add skills & interests
                     </button>
                 </div>
             )}
 
-            {/* ── Activity Tabs ──────────────────────────────────────────── */}
-            <div className="bg-invox-dark-accent rounded-xl border border-gray-800 overflow-hidden">
-                <div className="border-b border-gray-800">
-                    <nav className="flex px-4 gap-1">
-                        {['Posts', 'Replies', 'Media', 'Likes'].map(tab => (
-                            <button
-                                key={tab}
-                                onClick={() => setActiveTab(tab)}
-                                className={`py-3.5 px-4 text-sm font-semibold border-b-2 transition-all duration-200 hover:-translate-y-px ${
-                                    activeTab === tab
-                                        ? 'border-invox-red text-white'
-                                        : 'border-transparent text-gray-400 hover:text-white'
-                                }`}
-                            >
-                                {tab}
-                            </button>
-                        ))}
-                    </nav>
-                </div>
+            {/* ── Activity Tabs (Segmented Slide Bar) ───────────────────────── */}
+            <div className="w-full bg-[#09090b] border border-zinc-800/90 p-1 grid grid-cols-4 gap-1 mb-4">
+                {profileTabs.map(tab => {
+                    const isActive = activeTab === tab;
+                    return (
+                        <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            className={`py-2 px-1 sm:px-3 text-center font-mono text-xs uppercase tracking-wider transition-all duration-150 flex items-center justify-center ${
+                                isActive
+                                    ? 'bg-[#18181b] border border-zinc-700 text-white font-bold shadow-sm'
+                                    : 'bg-transparent border border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/30'
+                            }`}
+                        >
+                            <span>{tab}</span>
+                        </button>
+                    );
+                })}
+            </div>
 
-                <div className="p-6 min-h-[220px]">
-                    <div className="flex flex-col items-center justify-center text-center py-12">
-                        <div className="w-14 h-14 rounded-2xl bg-gray-800 flex items-center justify-center mb-4">
-                            <svg className="w-7 h-7 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                        </div>
-                        <h3 className="text-lg font-bold text-white mb-1">No {activeTab} Yet</h3>
-                        <p className="text-gray-400 text-sm max-w-xs leading-relaxed">
-                            {activeTab === 'Posts'
-                                ? 'Share knowledge, projects, and ideas with the community. Publish your first contribution and begin building your professional presence.'
-                                : `When you create ${activeTab.toLowerCase()}, they'll appear here.`
-                            }
-                        </p>
+            {/* ── Activity Tab Content ─────────────────────────────────────── */}
+            <div className="bg-[#0c0c0e] border border-zinc-800/90 p-6 min-h-[220px]">
+                <div className="flex flex-col items-center justify-center text-center py-12">
+                    <div className="w-12 h-12 bg-black border border-zinc-800 flex items-center justify-center mb-3 text-zinc-600">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
                     </div>
+                    <h3 className="text-sm font-mono font-bold text-white uppercase tracking-wider mb-1">// NO_{activeTab.toUpperCase()}_FOUND</h3>
+                    <p className="text-zinc-500 text-xs font-mono max-w-sm leading-relaxed">
+                        {activeTab === 'Posts'
+                            ? 'Share knowledge, projects, and ideas with the community. Publish your first contribution and begin building your presence.'
+                            : `When you create ${activeTab.toLowerCase()}, they will appear here in your activity log.`
+                        }
+                    </p>
                 </div>
             </div>
 
@@ -482,7 +478,7 @@ const ProfilePage = () => {
                 onClose={() => setZoomedImageUrl(null)}
                 imageUrl={zoomedImageUrl || ''}
             />
-        </>
+        </div>
     );
 };
 

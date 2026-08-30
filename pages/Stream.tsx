@@ -104,22 +104,27 @@ const StreamPage = () => {
                 ))}
             </div>
 
-            {/* Sub-tabs for Moments */}
+            {/* Sub-tabs for Moments (Segmented Slide Bar) */}
             {activeMainTab === 'Moments' && (
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-                    {subTabs.map(tab => (
-                        <button 
-                            key={tab}
-                            onClick={() => setActiveSubTab(tab)}
-                            className={`px-3 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider whitespace-nowrap transition-all duration-150 border ${
-                                activeSubTab === tab 
-                                    ? 'bg-white text-black border-white font-bold' 
-                                    : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
-                            }`}
-                        >
-                            {tab}
-                        </button>
-                    ))}
+                <div className="w-full bg-[#08080a] border border-zinc-800 p-1">
+                    <div className="grid grid-cols-4 gap-1">
+                        {subTabs.map(tab => {
+                            const isSelected = activeSubTab === tab;
+                            return (
+                                <button 
+                                    key={tab}
+                                    onClick={() => setActiveSubTab(tab)}
+                                    className={`py-2 px-1 text-center font-mono text-[11px] md:text-xs uppercase tracking-wider transition-all duration-150 ${
+                                        isSelected 
+                                            ? 'bg-[#18181d] border border-zinc-700 text-white font-bold shadow-sm' 
+                                            : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/40 border border-transparent font-medium'
+                                    }`}
+                                >
+                                    {tab}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
             

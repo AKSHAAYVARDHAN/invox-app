@@ -1152,8 +1152,8 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
     
                  {/* Connect Button */}
                 <div className="mt-3">
-                    <button className="w-full bg-zinc-900 border border-zinc-750 text-white font-mono text-xs uppercase tracking-wider py-2.5 font-bold hover:bg-zinc-800 hover:border-zinc-600 transition-colors">
-                        Connect
+                    <button className="w-full bg-zinc-900/60 border border-zinc-700/80 text-white font-mono text-xs uppercase tracking-wider py-2.5 font-bold hover:bg-zinc-800 hover:border-zinc-500 transition-all duration-150 flex items-center justify-center gap-2">
+                        <span>// CONNECT</span>
                     </button>
                 </div>
             </div>
@@ -2299,20 +2299,23 @@ export const SpotlightPage = () => {
                         />
                     </div>
                     
-                    <div className="flex flex-wrap gap-1.5 mb-4">
-                        {offerTypeFilters.map(filter => (
-                            <button
-                                key={filter}
-                                onClick={() => setActiveOfferFilter(filter)}
-                                className={`px-3 py-1 font-mono text-xs uppercase transition-colors ${
-                                    activeOfferFilter === filter
-                                        ? 'bg-white text-black font-bold'
-                                        : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600'
-                                }`}
-                            >
-                                {filter}
-                            </button>
-                        ))}
+                    <div className="w-full bg-[#09090b] border border-zinc-800/90 p-1 grid grid-cols-5 gap-1 mb-4">
+                        {offerTypeFilters.map(filter => {
+                            const isActive = activeOfferFilter === filter;
+                            return (
+                                <button
+                                    key={filter}
+                                    onClick={() => setActiveOfferFilter(filter)}
+                                    className={`py-2 px-1 sm:px-3 text-center font-mono text-[11px] sm:text-xs uppercase tracking-wider transition-all duration-150 flex items-center justify-center ${
+                                        isActive
+                                            ? 'bg-[#18181b] border border-zinc-700 text-white font-bold shadow-sm'
+                                            : 'bg-transparent border border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/30'
+                                    }`}
+                                >
+                                    <span>{filter}</span>
+                                </button>
+                            );
+                        })}
                     </div>
         
                     <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1 no-scrollbar">
@@ -2623,7 +2626,7 @@ export const SpotlightPage = () => {
                                         onClick={() => setActiveCategory(category)}
                                         className={`px-3 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider whitespace-nowrap transition-all duration-150 border ${
                                             activeCategory === category
-                                                ? 'bg-white text-black border-white font-bold'
+                                                ? 'bg-[#18181d] text-white border-zinc-700 font-bold'
                                                 : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
                                         }`}
                                     >
@@ -2648,11 +2651,11 @@ export const SpotlightPage = () => {
                                     onClick={() => setActiveTab(tab)}
                                     className={`flex-1 text-center py-2.5 text-xs font-mono uppercase tracking-widest transition-all duration-150 flex items-center justify-center gap-2 ${
                                         activeTab === tab 
-                                            ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                            ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/40' 
                                             : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
                                     }`}
                                 >
-                                    <span className="w-1.5 h-1.5 bg-white opacity-0 transition-opacity" style={{ opacity: activeTab === tab ? 1 : 0 }}></span>
+                                    <span className="w-1.5 h-1.5 bg-zinc-300 opacity-0 transition-opacity" style={{ opacity: activeTab === tab ? 1 : 0 }}></span>
                                     <span>// {tab}</span>
                                 </button>
                             ))}
@@ -2668,22 +2671,22 @@ export const SpotlightPage = () => {
                         onClick={() => setActiveLeapTab('GoForIt')}
                         className={`w-1/2 text-center py-2.5 text-xs font-mono uppercase tracking-widest transition-all duration-150 flex items-center justify-center gap-2 ${
                             activeLeapTab === 'GoForIt' 
-                                ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/40' 
                                 : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
                         }`}
                     >
-                        <span className="w-1.5 h-1.5 bg-white opacity-0 transition-opacity" style={{ opacity: activeLeapTab === 'GoForIt' ? 1 : 0 }}></span>
+                        <span className="w-1.5 h-1.5 bg-zinc-300 opacity-0 transition-opacity" style={{ opacity: activeLeapTab === 'GoForIt' ? 1 : 0 }}></span>
                         <span>// Opportunities (GoForIt)</span>
                     </button>
                     <button
                         onClick={() => setActiveLeapTab('Pings')}
                         className={`w-1/2 text-center py-2.5 text-xs font-mono uppercase tracking-widest transition-all duration-150 flex items-center justify-center gap-2 ${
                             activeLeapTab === 'Pings' 
-                                ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/40' 
                                 : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
                         }`}
                     >
-                        <span className="w-1.5 h-1.5 bg-white opacity-0 transition-opacity" style={{ opacity: activeLeapTab === 'Pings' ? 1 : 0 }}></span>
+                        <span className="w-1.5 h-1.5 bg-zinc-300 opacity-0 transition-opacity" style={{ opacity: activeLeapTab === 'Pings' ? 1 : 0 }}></span>
                         <span>// Inbound Pings</span>
                     </button>
                 </div>

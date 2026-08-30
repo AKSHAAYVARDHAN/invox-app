@@ -257,13 +257,13 @@ const DiscoverSidebar: React.FC<Pick<RightSidebarProps, 'activityFilter' | 'setA
                             <div className="space-y-2">
                                 <button
                                     onClick={() => setActivityFilter('threads')}
-                                    className={`w-full text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${activityFilter === 'threads' ? 'bg-white text-black border-white font-bold' : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600'}`}
+                                    className={`w-full text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${activityFilter === 'threads' ? 'bg-[#18181d] text-white border-zinc-700 font-bold' : 'bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600'}`}
                                 >
                                     &gt; THREADS
                                 </button>
                                 <button
                                     onClick={() => setActivityFilter('queries')}
-                                    className={`w-full text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${activityFilter === 'queries' ? 'bg-white text-black border-white font-bold' : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600'}`}
+                                    className={`w-full text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${activityFilter === 'queries' ? 'bg-[#18181d] text-white border-zinc-700 font-bold' : 'bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600'}`}
                                 >
                                     &gt; QUERIES
                                 </button>
@@ -404,7 +404,7 @@ const TrendzSidebar: React.FC<Pick<RightSidebarProps, 'followedDomainsFilter' | 
                                     <button
                                         key={domain.name}
                                         onClick={() => setFollowedDomainsFilter(domain.name)}
-                                        className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${followedDomainsFilter === domain.name ? 'bg-white text-black border-white font-bold' : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600'}`}
+                                        className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${followedDomainsFilter === domain.name ? 'bg-[#18181d] text-white border-zinc-700 font-bold' : 'bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600'}`}
                                     >
                                         <domain.icon className="w-4 h-4" />
                                         <span>{domain.name}</span>
@@ -535,8 +535,8 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                     onClick={() => setSpotlightBrowseState('projects')}
                                     className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${
                                         spotlightBrowseState === 'projects' 
-                                            ? 'bg-white text-black border-white font-bold' 
-                                            : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600'
+                                            ? 'bg-[#18181d] text-white border-zinc-700 font-bold' 
+                                            : 'bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600'
                                     }`}
                                 >
                                     <CubeIcon className="w-4 h-4" />
@@ -546,8 +546,8 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                      onClick={() => setSpotlightBrowseState('profiles')}
                                      className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${
                                         spotlightBrowseState === 'profiles' 
-                                            ? 'bg-white text-black border-white font-bold' 
-                                            : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600'
+                                            ? 'bg-[#18181d] text-white border-zinc-700 font-bold' 
+                                            : 'bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600'
                                     }`}
                                 >
                                     <ProfileIcon className="w-4 h-4" />
@@ -574,8 +574,8 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                             onClick={() => setShowPinnedHighlights(true)}
                                             className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${
                                                 showPinnedHighlights
-                                                    ? 'bg-white text-black border-white font-bold'
-                                                    : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600'
+                                                    ? 'bg-[#18181d] text-white border-zinc-700 font-bold'
+                                                    : 'bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600'
                                             }`}
                                         >
                                             <StarIcon className="w-4 h-4" />
@@ -583,7 +583,7 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                         </button>
                                         <button
                                             onClick={() => { setPinnedViewMode('profiles'); setShowPinnedHighlights(false); }}
-                                            className="w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600"
+                                            className="w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600"
                                         >
                                             <ProfileIcon className="w-4 h-4" />
                                             <span>PINNED_PROFILES</span>
@@ -607,7 +607,7 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                                     <img src={user.avatarUrl} onError={handleImageError} alt={user.name} className="w-7 h-7 object-cover border border-zinc-800" />
                                                     <p className="font-mono text-xs text-white">{user.name}</p>
                                                 </div>
-                                                <button className="bg-black text-zinc-300 border border-zinc-800 px-2 py-0.5 font-mono text-[10px] uppercase hover:text-white hover:border-zinc-600">VIEW</button>
+                                                <button className="bg-zinc-900 text-zinc-300 border border-zinc-750 hover:border-zinc-500 px-2 py-0.5 font-mono text-[10px] uppercase hover:text-white transition-colors">VIEW</button>
                                             </div>
                                         ))}
                                     </div>
@@ -620,7 +620,7 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                         <div className="px-4 flex flex-col gap-2.5">
                             <button
                                 onClick={() => { setIsBrowsingView(true); setShowPinnedHighlights(false); }}
-                                className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors"
+                                className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800/90 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors"
                             >
                                 <div className="flex items-center gap-2">
                                     <MagnifyingGlassIcon className="w-4 h-4 text-zinc-500" />
@@ -631,7 +631,7 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                             {variant !== 'spotlight-collabs' && (
                                 <button
                                     onClick={() => { setIsPinnedView(true); setShowPinnedHighlights(false); }}
-                                    className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors"
+                                    className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800/90 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors"
                                 >
                                     <div className="flex items-center gap-2">
                                         <BookmarkIcon className="w-4 h-4 text-zinc-500" />
@@ -649,20 +649,20 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                     <EllipsisVerticalIcon className="w-4 h-4 text-zinc-500" />
                                 </div>
 
-                                <div className="p-3.5 space-y-3 font-mono text-xs">
-                                    <div className="flex items-center justify-between p-2 bg-black border border-zinc-850">
+                                <div className="p-3.5 space-y-2.5 font-mono text-xs">
+                                    <div className="flex items-center justify-between p-2.5 bg-black/60 border border-zinc-800/90 hover:border-zinc-700 transition-colors">
                                         <span className="text-zinc-400">PENDING_REQUESTS:</span>
-                                        <span className="text-white font-bold bg-zinc-800 px-1.5 py-0.5">12</span>
+                                        <span className="text-white font-bold bg-zinc-800 px-2 py-0.5 border border-zinc-700 text-[11px]">12</span>
                                     </div>
-                                    <div className="flex items-center justify-between p-2 bg-black border border-zinc-850">
+                                    <div className="flex items-center justify-between p-2.5 bg-black/60 border border-zinc-800/90 hover:border-zinc-700 transition-colors">
                                         <span className="text-zinc-400">ACTIVE_COLLABS:</span>
-                                        <span className="text-white font-bold bg-zinc-800 px-1.5 py-0.5">4</span>
+                                        <span className="text-white font-bold bg-zinc-800 px-2 py-0.5 border border-zinc-700 text-[11px]">4</span>
                                     </div>
                                 </div>
 
                                 <div className="p-3 border-t border-zinc-800 bg-black/40">
-                                    <button className="w-full bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider py-1.5 transition-colors">
-                                        OPEN_DASHBOARD
+                                    <button className="w-full bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700/80 hover:border-zinc-500 text-white font-mono text-xs uppercase tracking-wider py-2 font-bold transition-all flex items-center justify-center gap-2">
+                                        <span>// OPEN_DASHBOARD</span>
                                     </button>
                                 </div>
                             </div>
@@ -697,8 +697,8 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                     </div>
 
                                     <div className="p-3 border-t border-zinc-800 bg-black/40">
-                                        <button className="w-full bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider py-1.5 transition-colors">
-                                            VIEW_ALL
+                                        <button className="w-full bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700/80 hover:border-zinc-500 text-white font-mono text-xs uppercase tracking-wider py-2 font-bold transition-all flex items-center justify-center gap-2">
+                                            <span>// VIEW_ALL</span>
                                         </button>
                                     </div>
                                 </div>
@@ -769,8 +769,8 @@ const GoForItSidebar: React.FC<GoForItSidebarProps> = ({ filters, setFilters, se
                                     }}
                                     className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${
                                         location.pathname === tab.path
-                                            ? 'bg-white text-black border-white font-bold'
-                                            : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600'
+                                            ? 'bg-[#18181d] text-white border-zinc-700 font-bold'
+                                            : 'bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600'
                                     }`}
                                 >
                                     <tab.icon className="w-4 h-4" />
@@ -795,8 +795,8 @@ const GoForItSidebar: React.FC<GoForItSidebarProps> = ({ filters, setFilters, se
                             <div className="bg-white h-1" style={{width: '65%'}}></div>
                         </div>
                         <p className="text-[11px] font-mono text-zinc-500 mb-3">Complete metadata to optimize discoverability.</p>
-                        <button className="w-full bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider py-1.5 transition-colors">
-                            ENHANCE_PROFILE
+                        <button className="w-full bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700/80 hover:border-zinc-500 text-white font-mono text-xs uppercase tracking-wider py-2 font-bold transition-all flex items-center justify-center gap-2">
+                            <span>// ENHANCE_PROFILE</span>
                         </button>
                     </div>
                 </div>
@@ -1213,7 +1213,7 @@ const HubSidebar: React.FC<Pick<RightSidebarProps, 'hubView' | 'setHubView' | 'h
                                     else if (item.view && setHubView) setHubView(item.view);
                                 }}
                                 className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${
-                                    hubView === item.view ? 'bg-white text-black border-white font-bold' : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-600'
+                                    hubView === item.view ? 'bg-[#18181d] text-white border-zinc-700 font-bold' : 'bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600'
                                 }`}
                             >
                                 <item.icon className="w-4 h-4" />
@@ -1331,9 +1331,9 @@ const TargetSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onS
                                             onSelect(target.context);
                                             onClose();
                                         }}
-                                        className="w-full flex items-center gap-3 p-3 bg-black border border-zinc-850 hover:border-zinc-600 transition-all group font-mono text-xs text-left"
+                                        className="w-full flex items-center gap-3 p-3 bg-black/60 border border-zinc-800/90 hover:border-zinc-600 hover:bg-zinc-900/50 transition-all group font-mono text-xs text-left"
                                     >
-                                        <div className="p-1.5 bg-zinc-900 border border-zinc-800 text-zinc-400 group-hover:text-white transition-colors">
+                                        <div className="p-1.5 bg-zinc-900/90 border border-zinc-800 text-zinc-400 group-hover:text-white transition-colors">
                                             <target.icon className="w-4 h-4" />
                                         </div>
                                         <span className="font-bold text-white uppercase">{target.name}</span>

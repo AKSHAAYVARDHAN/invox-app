@@ -1,12 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import type { StreamMoment, HubConversation } from '../types';
+import type { StreamMoment, StreamLoop, HubConversation } from '../types';
 import MomentCard from '../components/stream/MomentCard';
 import MomentCardSkeleton from '../components/stream/MomentCardSkeleton';
+import LoopCard from '../components/stream/LoopCard';
+import LoopCardSkeleton from '../components/stream/LoopCardSkeleton';
 import ChatInterface from '../components/hub/ChatInterface';
 import InteractiveGlobe from '../components/hub/InteractiveGlobe';
-import { CubeIcon, HubIcon, ChatBubbleBottomCenterTextIcon, SparklesIcon } from '../components/ui/Icons';
+import { CubeIcon, ChatBubbleBottomCenterTextIcon, SparklesIcon, RadioIcon } from '../components/ui/Icons';
 
 const mockMoments: StreamMoment[] = [
     {
@@ -53,6 +55,12 @@ const mockMoments: StreamMoment[] = [
     }
 ];
 
+const mockLoops: StreamLoop[] = [
+    { id: 'l1', author: { name: 'Adams', avatarUrl: 'https://picsum.photos/seed/201/200' }, category: 'Zaps', title: 'Tactical Cyber Setup', content: "Real-time surveillance matrix deployed.", imageUrl: 'https://picsum.photos/seed/zap/400/600' },
+    { id: 'l2', author: { name: 'Lisa Jones', avatarUrl: 'https://picsum.photos/seed/202/200' }, category: 'Mood', title: 'Atmospheric Resonance', content: 'Dark wave synthesizer session recordings.', imageUrl: 'https://picsum.photos/seed/mood/400/600' },
+    { id: 'l3', author: { name: 'Harvey', avatarUrl: 'https://picsum.photos/seed/203/200' }, category: 'Thought', title: 'Network Theory', content: 'Decentralized collective node synchronizations.', imageUrl: 'https://picsum.photos/seed/thought/400/600' },
+    { id: 'l4', author: { name: 'Akshaay', avatarUrl: 'https://picsum.photos/seed/204/200' }, category: 'Music', title: 'Midnight Protocol', content: 'Low-latency broadcast streams.', imageUrl: 'https://picsum.photos/seed/music/400/600' },
+];
 
 const HubPage = () => {
     const { 
@@ -69,8 +77,7 @@ const HubPage = () => {
         updateHubConversation: (conversation: HubConversation) => void;
     }>();
 
-    // New state for the stream view
-    const [activeStreamTab, setActiveStreamTab] = useState('Moments');
+    const [activeStreamTab, setActiveStreamTab] = useState<'Moments' | 'Loops'>('Moments');
     const [activeMomentsFilter, setActiveMomentsFilter] = useState('All');
     const [streamLoading, setStreamLoading] = useState(true);
 
@@ -88,14 +95,14 @@ const HubPage = () => {
     useEffect(() => {
         if (hubView === 'stream') {
             setStreamLoading(true);
-            const timer = setTimeout(() => setStreamLoading(false), 1500);
+            const timer = setTimeout(() => setStreamLoading(false), 900);
             return () => clearTimeout(timer);
         }
     }, [hubView, activeStreamTab, activeMomentsFilter]);
     
     if (selectedHubConversation && setSelectedHubConversation) {
         return (
-            <div className="-mx-4 sm:-mx-6 lg:-mx-8 -mt-4 md:-mt-6 -mb-4 md:-mb-10 h-[calc(100vh-4rem)] md:h-screen transition-all duration-500 overflow-hidden">
+            <div className="-mx-4 sm:-mx-6 lg:-mx-8 -mt-4 md:-mt-6 -mb-4 md:-mb-10 h-[calc(100vh-4rem)] md:h-screen transition-all duration-300 overflow-hidden">
                 <ChatInterface 
                     conversation={selectedHubConversation} 
                     onBack={() => setSelectedHubConversation(null)}
@@ -107,7 +114,7 @@ const HubPage = () => {
 
     if (hubView === 'welcome') {
         return (
-            <div className="relative overflow-hidden flex flex-col group/hub -mx-4 sm:-mx-6 lg:-mx-8 -mt-4 md:-mt-6 -mb-4 md:-mb-10 h-[calc(100vh-4rem)] md:h-screen transition-all duration-500">
+            <div className="relative overflow-hidden flex flex-col group/hub -mx-4 sm:-mx-6 lg:-mx-8 -mt-4 md:-mt-6 -mb-4 md:-mb-10 h-[calc(100vh-4rem)] md:h-screen transition-all duration-500 bg-black">
                 {/* 3D Interactive Globe */}
                 <div className="absolute inset-0 z-0">
                     <InteractiveGlobe />
@@ -116,25 +123,27 @@ const HubPage = () => {
                 {/* Overlaid Content */}
                 <div className="relative z-10 p-6 md:p-10 pointer-events-none flex flex-col h-full flex-grow justify-between">
                     <div>
-                        {/* Heading reduced in size and placed top-left */}
-                        <h1 className="text-2xl md:text-4xl font-black text-white leading-tight animate-fadeInUp tracking-tighter">
+                        <div className="inline-block bg-black/80 border border-zinc-800 px-2.5 py-1 mb-3">
+                            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">// NODE_DISCOVERY_SYSTEM</span>
+                        </div>
+                        <h1 className="text-2xl md:text-4xl font-bold font-mono text-white leading-tight uppercase tracking-wider">
                             GLOBAL<br />
-                            <span className="text-invox-red">COLLECTIVE</span>
+                            <span className="text-zinc-400">COLLECTIVE</span>
                         </h1>
                     </div>
 
-                    <div className="flex items-center gap-12 animate-fadeInUp mb-12" style={{ animationDelay: '200ms' }}>
-                        <div className="flex flex-col">
-                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Live Comrades</span>
-                            <span className="text-3xl font-bold text-white tabular-nums">42.8K</span>
+                    <div className="flex flex-wrap items-center gap-6 md:gap-10 mb-8">
+                        <div className="bg-[#0c0c0e]/90 border border-zinc-800 p-4 min-w-[140px]">
+                            <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest block mb-1">// LIVE_COMRADES</span>
+                            <span className="text-2xl font-bold font-mono text-white tabular-nums">42.8K</span>
                         </div>
-                        <div className="flex flex-col">
-                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Network Pings</span>
-                            <span className="text-3xl font-bold text-white tabular-nums">1.2M</span>
+                        <div className="bg-[#0c0c0e]/90 border border-zinc-800 p-4 min-w-[140px]">
+                            <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest block mb-1">// NETWORK_PINGS</span>
+                            <span className="text-2xl font-bold font-mono text-white tabular-nums">1.2M</span>
                         </div>
                         <div className="ml-auto pointer-events-auto">
-                            <button className="flex items-center gap-3 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/10 px-8 py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all duration-300 group shadow-2xl">
-                                <SparklesIcon className="w-5 h-5 text-invox-red group-hover:scale-125 transition-transform" />
+                            <button className="flex items-center gap-3 bg-white text-black font-mono text-xs font-bold uppercase tracking-wider px-6 py-3.5 border border-white hover:bg-zinc-200 transition-colors shadow-2xl">
+                                <SparklesIcon className="w-4 h-4 text-black" />
                                 <span>Broadcast Signal</span>
                             </button>
                         </div>
@@ -146,13 +155,19 @@ const HubPage = () => {
 
     if (hubView === 'conversations') {
         return (
-            <div className="flex items-center justify-center h-full p-4 text-center">
-                <div>
-                    <ChatBubbleBottomCenterTextIcon className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                    <h1 className="text-4xl font-bold text-white mb-2">Conversations</h1>
-                    <p className="text-xl text-invox-light-gray max-w-lg mx-auto">
-                        Choose a conversation from the sidebar to start engaging with your network.
+            <div className="flex items-center justify-center h-[calc(100vh-8rem)] p-6 text-center">
+                <div className="bg-[#0c0c0e] border border-zinc-800 p-8 max-w-md w-full">
+                    <div className="w-12 h-12 bg-zinc-900 border border-zinc-700 flex items-center justify-center mx-auto mb-4 text-zinc-400">
+                        <ChatBubbleBottomCenterTextIcon className="w-6 h-6" />
+                    </div>
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block mb-1">// TRANSMISSION_CHANNELS</span>
+                    <h2 className="text-base font-bold font-mono uppercase tracking-wider text-white mb-2">Conversations Terminal</h2>
+                    <p className="text-xs font-mono text-zinc-400 leading-relaxed mb-6">
+                        Select a communication stream from the right sidebar to initiate real-time dialogue with nodes in your network.
                     </p>
+                    <div className="text-[10px] font-mono text-zinc-600 uppercase border-t border-zinc-800/80 pt-4">
+                        &gt; WAITING_FOR_OPERATOR_INPUT
+                    </div>
                 </div>
             </div>
         );
@@ -167,67 +182,106 @@ const HubPage = () => {
             );
 
             if (streamLoading) {
-                return <>
-                    <MomentCardSkeleton />
-                    <MomentCardSkeleton />
-                </>;
+                return (
+                    <div className="space-y-4">
+                        <MomentCardSkeleton />
+                        <MomentCardSkeleton />
+                    </div>
+                );
             }
 
             if (filteredMoments.length > 0) {
-                return filteredMoments.map(moment => <MomentCard key={moment.id} moment={moment} />);
+                return (
+                    <div className="space-y-4">
+                        {filteredMoments.map(moment => <MomentCard key={moment.id} moment={moment} />)}
+                    </div>
+                );
             }
 
             return (
-                <div className="text-center py-16 text-gray-400">
-                    <p>No moments found for this filter.</p>
+                <div className="bg-[#0c0c0e] border border-zinc-800 p-8 text-center font-mono">
+                    <span className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1">// NULL_RESULT</span>
+                    <p className="text-xs text-zinc-400">No transmission moments found matching filter: {activeMomentsFilter}</p>
+                </div>
+            );
+        };
+
+        const renderLoopsContent = () => {
+            if (streamLoading) {
+                return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <LoopCardSkeleton />
+                        <LoopCardSkeleton />
+                        <LoopCardSkeleton />
+                        <LoopCardSkeleton />
+                    </div>
+                );
+            }
+
+            return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {mockLoops.map(loop => <LoopCard key={loop.id} loop={loop} />)}
                 </div>
             );
         };
 
         return (
-            <div>
-                {/* Main Tabs: Moments/Loops */}
-                <div className="flex border-b border-gray-800 mb-4">
-                    <button 
-                        onClick={() => setActiveStreamTab('Moments')} 
-                        className={`w-1/2 text-center py-3 font-semibold transition-all duration-200 transform hover:-translate-y-px ${activeStreamTab === 'Moments' ? 'border-b-2 border-invox-red text-white' : 'text-gray-400 hover:text-white'}`}
-                    >
-                        Moments
-                    </button>
-                    <button 
-                        onClick={() => setActiveStreamTab('Loops')}
-                        className={`w-1/2 text-center py-3 font-semibold transition-all duration-200 transform hover:-translate-y-px ${activeStreamTab === 'Loops' ? 'border-b-2 border-invox-red text-white' : 'text-gray-400 hover:text-white'}`}
-                    >
-                        Loops
-                    </button>
+            <div className="space-y-4">
+                {/* Header title */}
+                <div className="flex items-center justify-between pb-1">
+                    <div>
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">// STREAM_CHANNELS</span>
+                        <h1 className="text-sm font-bold font-mono uppercase tracking-wider text-white">Hub Broadcast Stream</h1>
+                    </div>
+                    <div className="flex items-center gap-1.5 font-mono text-[10px] text-zinc-400 bg-[#0c0c0e] border border-zinc-800 px-2.5 py-1">
+                        <RadioIcon className="w-3.5 h-3.5 text-green-400 animate-pulse" />
+                        <span>LIVE_FEED</span>
+                    </div>
                 </div>
 
-                {/* Sub-filters for Moments */}
+                {/* Main Tabs: Moments/Loops */}
+                <div className="flex border-b border-zinc-800">
+                    {(['Moments', 'Loops'] as const).map(tab => (
+                        <button 
+                            key={tab}
+                            onClick={() => setActiveStreamTab(tab)}
+                            className={`flex-1 text-center py-2.5 text-xs font-mono uppercase tracking-widest transition-all duration-150 flex items-center justify-center gap-2 ${
+                                activeStreamTab === tab 
+                                    ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                    : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                            }`}
+                        >
+                            <span className="w-1.5 h-1.5 bg-white opacity-0 transition-opacity" style={{ opacity: activeStreamTab === tab ? 1 : 0 }}></span>
+                            <span>// {tab}</span>
+                        </button>
+                    ))}
+                </div>
+
+                {/* Sub-filters for Moments (Segmented Slide Bar) */}
                 {activeStreamTab === 'Moments' && (
-                    <div className="flex space-x-2 border border-gray-800 rounded-lg p-1 bg-invox-dark-accent mb-4">
-                        {streamSubFilters.map(filter => (
-                            <button 
-                                key={filter}
-                                onClick={() => setActiveMomentsFilter(filter)}
-                                className={`flex-1 py-2 rounded-md transition-all duration-200 ${activeMomentsFilter === filter ? 'bg-invox-red text-white font-semibold' : 'text-gray-400 hover:text-white hover:bg-gray-700'}`}
-                            >
-                                {filter}
-                            </button>
-                        ))}
-                    </div>
-                )}
-                
-                {activeStreamTab === 'Moments' ? (
-                    renderMomentsContent()
-                ) : (
-                     <div className="flex items-center justify-center h-full p-4 text-center mt-16">
-                        <div>
-                            <CubeIcon className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                            <h1 className="text-4xl font-bold text-white mb-2 capitalize">{activeStreamTab}</h1>
-                            <p className="text-xl text-invox-light-gray">This section is under development.</p>
+                    <div className="w-full bg-[#08080a] border border-zinc-800 p-1">
+                        <div className="grid grid-cols-4 gap-1">
+                            {streamSubFilters.map(filter => {
+                                const isSelected = activeMomentsFilter === filter;
+                                return (
+                                    <button 
+                                        key={filter}
+                                        onClick={() => setActiveMomentsFilter(filter)}
+                                        className={`py-2 px-1 text-center font-mono text-[11px] md:text-xs uppercase tracking-wider transition-all duration-150 ${
+                                            isSelected 
+                                                ? 'bg-[#18181d] border border-zinc-700 text-white font-bold shadow-sm' 
+                                                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/40 border border-transparent font-medium'
+                                        }`}
+                                    >
+                                        {filter}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 )}
+                
+                {activeStreamTab === 'Moments' ? renderMomentsContent() : renderLoopsContent()}
             </div>
         );
     }
@@ -235,13 +289,15 @@ const HubPage = () => {
     // Fallback in case hubView is something unexpected
     return (
         <div className="flex items-center justify-center h-full p-4 text-center">
-            <div>
-                <CubeIcon className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                <h1 className="text-4xl font-bold text-white mb-2">Stream</h1>
-                <p className="text-xl text-invox-light-gray">This section is under development.</p>
+            <div className="bg-[#0c0c0e] border border-zinc-800 p-8 max-w-sm">
+                <CubeIcon className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
+                <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block mb-1">// HUB_MODULE</span>
+                <h1 className="text-base font-bold font-mono text-white mb-2 uppercase">Stream</h1>
+                <p className="text-xs font-mono text-zinc-400">This transmission module is currently initializing.</p>
             </div>
         </div>
     );
 };
 
 export default HubPage;
+

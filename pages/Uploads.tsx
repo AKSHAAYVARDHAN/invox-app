@@ -163,11 +163,11 @@ const UploadsPage = () => {
                             onClick={() => setActiveTab(tab)}
                             className={`flex-1 text-center py-2.5 text-xs font-mono uppercase tracking-widest transition-all duration-150 flex items-center justify-center gap-2 ${
                                 activeTab === tab 
-                                    ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                    ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/40' 
                                     : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
                             }`}
                         >
-                            <span className="w-1.5 h-1.5 bg-white opacity-0 transition-opacity" style={{ opacity: activeTab === tab ? 1 : 0 }}></span>
+                            <span className="w-1.5 h-1.5 bg-zinc-300 opacity-0 transition-opacity" style={{ opacity: activeTab === tab ? 1 : 0 }}></span>
                             <span>// {tab}</span>
                         </button>
                     ))}
@@ -180,7 +180,7 @@ const UploadsPage = () => {
                                 onClick={() => setExploreSubTab('Feeds')} 
                                 className={`w-1/2 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                                     exploreSubTab === 'Feeds' 
-                                        ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                        ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/30' 
                                         : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
                                 }`}
                             >
@@ -190,7 +190,7 @@ const UploadsPage = () => {
                                 onClick={() => setExploreSubTab('Discover')} 
                                 className={`w-1/2 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                                     exploreSubTab === 'Discover' 
-                                        ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                        ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/30' 
                                         : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
                                 }`}
                             >
@@ -204,7 +204,7 @@ const UploadsPage = () => {
                                 onClick={() => setSpotlightSubTab('Showcase')} 
                                 className={`w-1/2 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                                     spotlightSubTab === 'Showcase' 
-                                        ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                        ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/30' 
                                         : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
                                 }`}
                             >
@@ -214,7 +214,7 @@ const UploadsPage = () => {
                                 onClick={() => setSpotlightSubTab('Collabs')} 
                                 className={`w-1/2 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                                     spotlightSubTab === 'Collabs' 
-                                        ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                        ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/30' 
                                         : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
                                 }`}
                             >
@@ -228,7 +228,7 @@ const UploadsPage = () => {
                                 onClick={() => setHubSubTab('Stills')} 
                                 className={`w-1/3 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                                     hubSubTab === 'Stills' 
-                                        ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                        ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/30' 
                                         : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
                                 }`}
                             >
@@ -238,7 +238,7 @@ const UploadsPage = () => {
                                 onClick={() => setHubSubTab('Tapes')} 
                                 className={`w-1/3 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                                     hubSubTab === 'Tapes' 
-                                        ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                        ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/30' 
                                         : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
                                 }`}
                             >
@@ -248,7 +248,7 @@ const UploadsPage = () => {
                                 onClick={() => setHubSubTab('Knacks')} 
                                 className={`w-1/3 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                                     hubSubTab === 'Knacks' 
-                                        ? 'border-b-2 border-white text-white font-bold bg-zinc-900/20' 
+                                        ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/30' 
                                         : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
                                 }`}
                             >
@@ -274,14 +274,14 @@ const UploadsPage = () => {
                             <div className="flex flex-col sm:flex-row gap-3 justify-center">
                                 <button 
                                     onClick={() => { setOverrideContextName(name); setIsModalOpen(true); }} 
-                                    className="flex items-center justify-center gap-2 bg-white hover:bg-zinc-200 text-black font-mono text-xs uppercase font-bold tracking-wider py-3 px-6 transition-all"
+                                    className="flex items-center justify-center gap-2 bg-zinc-900/80 hover:bg-zinc-800 text-white font-mono text-xs uppercase font-bold tracking-wider py-3 px-6 border border-zinc-700/80 hover:border-zinc-500 transition-all"
                                 >
                                     <PlusIcon className="w-4 h-4" />
                                     <span>Create {name}</span>
                                 </button>
                                 <button 
                                     onClick={() => { setOverrideContextName(name); setIsModalOpen(true); }} 
-                                    className="flex items-center justify-center gap-2 bg-[#0c0c0e] hover:bg-zinc-900 text-zinc-300 hover:text-white font-mono text-xs uppercase tracking-wider py-3 px-6 border border-zinc-700 transition-all"
+                                    className="flex items-center justify-center gap-2 bg-[#0c0c0e] hover:bg-zinc-900 text-zinc-300 hover:text-white font-mono text-xs uppercase tracking-wider py-3 px-6 border border-zinc-800 hover:border-zinc-600 transition-all"
                                 >
                                     <SparklesIcon className="w-4 h-4 text-zinc-400" />
                                     <span>Smart Create {name}</span>
@@ -298,7 +298,7 @@ const UploadsPage = () => {
                             </div>
                             <button 
                                 onClick={() => { setOverrideContextName(name); setIsModalOpen(true); }} 
-                                className="flex items-center gap-1.5 bg-white text-black px-3.5 py-1.5 text-xs font-mono uppercase font-bold tracking-wider hover:bg-zinc-200 transition-all"
+                                className="flex items-center gap-1.5 bg-zinc-900/80 text-white px-3.5 py-1.5 text-xs font-mono uppercase font-bold tracking-wider border border-zinc-700/80 hover:bg-zinc-800 hover:border-zinc-500 transition-all"
                             >
                                 <PlusIcon className="w-3.5 h-3.5" />
                                 <span>New {name}</span>

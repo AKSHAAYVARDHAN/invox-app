@@ -1,7 +1,33 @@
-
-
 import React, { useState, useRef, useEffect } from 'react';
-import { SparklesIcon, CloseIcon, SendIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon, MenuIcon, PencilSquareIcon, CubeIcon, InformationCircleIcon, PencilSwooshIcon, EllipsisVerticalIcon, MapPinIcon, PencilIcon, TrashIcon, StopIcon, ChatBubbleIcon, MicrophoneIcon, ClipboardIcon, CheckIcon, ThumbsUpIcon, ThumbsDownIcon, RegenerateIcon, ShareIcon, MagnifyingGlassIcon, GlobeAltIcon } from './Icons';
+import { 
+    SparklesIcon, 
+    CloseIcon, 
+    SendIcon, 
+    ArrowsPointingOutIcon, 
+    ArrowsPointingInIcon, 
+    MenuIcon, 
+    PencilSquareIcon, 
+    CubeIcon, 
+    InformationCircleIcon, 
+    PencilSwooshIcon, 
+    EllipsisVerticalIcon, 
+    MapPinIcon, 
+    PencilIcon, 
+    TrashIcon, 
+    StopIcon, 
+    ChatBubbleIcon, 
+    MicrophoneIcon, 
+    ClipboardIcon, 
+    CheckIcon, 
+    ThumbsUpIcon, 
+    ThumbsDownIcon, 
+    RegenerateIcon, 
+    ShareIcon, 
+    MagnifyingGlassIcon, 
+    GlobeAltIcon,
+    CodeBracketIcon,
+    WrenchScrewdriverIcon
+} from './Icons';
 import { getAIChatResponseStream } from '../../services/geminiService';
 import { useAIAssistant, type ChatMessage, type Conversation } from '../../contexts/AIAssistantContext';
 import { useFullscreen } from '../hooks/useFullscreen';
@@ -57,13 +83,19 @@ const CopyButton: React.FC<{ textToCopy: string }> = ({ textToCopy }) => {
     return (
         <button
             onClick={handleCopy}
-            className="absolute top-2 right-2 p-1.5 bg-gray-900/80 rounded-md text-gray-300 hover:text-white hover:bg-gray-800/80 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+            className="flex items-center gap-1 px-2 py-1 bg-zinc-900 border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 text-[10px] font-mono uppercase tracking-wider transition-all"
             aria-label={isCopied ? 'Copied to clipboard' : 'Copy code to clipboard'}
         >
             {isCopied ? (
-                <CheckIcon className="w-4 h-4 text-green-400" />
+                <>
+                    <CheckIcon className="w-3 h-3 text-emerald-400" />
+                    <span className="text-emerald-400">COPIED</span>
+                </>
             ) : (
-                <ClipboardIcon className="w-4 h-4" />
+                <>
+                    <ClipboardIcon className="w-3 h-3 text-zinc-400" />
+                    <span>COPY</span>
+                </>
             )}
         </button>
     );
@@ -88,28 +120,35 @@ const ActionButtons: React.FC<{ message: ChatMessage; onRegenerate: () => void; 
             }).catch(console.error);
         } else {
             handleCopy();
-            alert('Response copied to clipboard. Sharing not supported on this browser.');
         }
     };
 
-    const actionButtonClass = "p-1.5 rounded-md text-gray-400 hover:bg-gray-800 hover:text-white transition-colors";
+    const actionButtonClass = "p-1.5 border border-zinc-800 bg-[#121215] text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors";
     
     return (
-        <div className="flex items-center gap-2 mt-2">
-            <button title="Good response" className={`${actionButtonClass} ${feedback === 'like' ? 'text-blue-500 bg-gray-800' : ''}`} onClick={() => setFeedback(f => f === 'like' ? null : 'like')}>
-                <ThumbsUpIcon className="w-4 h-4" />
+        <div className="flex items-center gap-1.5 mt-3 font-mono">
+            <button 
+                title="Good response" 
+                className={`${actionButtonClass} ${feedback === 'like' ? 'text-emerald-400 border-emerald-800/80 bg-emerald-950/30' : ''}`} 
+                onClick={() => setFeedback(f => f === 'like' ? null : 'like')}
+            >
+                <ThumbsUpIcon className="w-3.5 h-3.5" />
             </button>
-            <button title="Bad response" className={`${actionButtonClass} ${feedback === 'dislike' ? 'text-red-500 bg-gray-800' : ''}`} onClick={() => setFeedback(f => f === 'dislike' ? null : 'dislike')}>
-                <ThumbsDownIcon className="w-4 h-4" />
+            <button 
+                title="Bad response" 
+                className={`${actionButtonClass} ${feedback === 'dislike' ? 'text-red-400 border-red-800/80 bg-red-950/30' : ''}`} 
+                onClick={() => setFeedback(f => f === 'dislike' ? null : 'dislike')}
+            >
+                <ThumbsDownIcon className="w-3.5 h-3.5" />
             </button>
             <button title="Regenerate" className={actionButtonClass} onClick={onRegenerate}>
-                <RegenerateIcon className="w-4 h-4" />
+                <RegenerateIcon className="w-3.5 h-3.5" />
             </button>
             <button title="Share" className={actionButtonClass} onClick={handleShare}>
-                <ShareIcon className="w-4 h-4" />
+                <ShareIcon className="w-3.5 h-3.5" />
             </button>
             <button title={isCopied ? "Copied!" : "Copy"} className={actionButtonClass} onClick={handleCopy}>
-                {isCopied ? <CheckIcon className="w-4 h-4 text-green-400" /> : <ClipboardIcon className="w-4 h-4" />}
+                {isCopied ? <CheckIcon className="w-3.5 h-3.5 text-emerald-400" /> : <ClipboardIcon className="w-3.5 h-3.5" />}
             </button>
         </div>
     );
@@ -169,7 +208,7 @@ const ChatHistorySidebar = () => {
     };
 
     const handleDelete = (id: string, title: string) => {
-        if (window.confirm(`Are you sure you want to delete the chat "${title}"? This action cannot be undone.`)) {
+        if (window.confirm(`Delete chat session "${title}"? This action cannot be undone.`)) {
             deleteConversation(id);
         }
     };
@@ -177,105 +216,108 @@ const ChatHistorySidebar = () => {
     const pinnedConversations = filteredConversations.filter(c => c.isPinned).sort((a, b) => (a.title > b.title ? 1 : -1));
     const recentConversations = filteredConversations.filter(c => !c.isPinned);
 
-    const renderConvoItem = (convo: Conversation) => (
-        <div key={convo.id} className={`relative group ${menuOpenId === convo.id ? 'z-40' : ''}`}>
-            {renamingId === convo.id ? (
-                <input
-                    ref={inputRef}
-                    type="text"
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onBlur={handleRenameSubmit}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleRenameSubmit(); if (e.key === 'Escape') setRenamingId(null); }}
-                    className="w-full text-left p-2.5 rounded-md bg-invox-dark-accent text-white text-sm font-medium focus:outline-none ring-1 ring-inset ring-gray-800 focus:ring-gray-700"
-                />
-            ) : (
-                <button
-                    onClick={() => selectConversation(convo.id)}
-                    className={`w-full text-left p-2.5 rounded-md truncate transition-all text-sm font-medium pr-8 flex items-center gap-3 ${
-                        activeConversation?.id === convo.id
-                            ? 'bg-gradient-to-r from-invox-red to-invox-blue text-white'
-                            : 'text-gray-300 hover:bg-gray-800'
-                    }`}
-                >
-                    <ChatBubbleIcon className="w-4 h-4 flex-shrink-0"/>
-                    <span className="truncate">{convo.title}</span>
-                </button>
-            )}
-
-            {renamingId !== convo.id && (
-                <div className="absolute right-1 top-1/2 -translate-y-1/2">
+    const renderConvoItem = (convo: Conversation) => {
+        const isActive = activeConversation?.id === convo.id;
+        return (
+            <div key={convo.id} className={`relative group ${menuOpenId === convo.id ? 'z-40' : ''}`}>
+                {renamingId === convo.id ? (
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onBlur={handleRenameSubmit}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleRenameSubmit(); if (e.key === 'Escape') setRenamingId(null); }}
+                        className="w-full text-left p-2 bg-[#09090b] text-white text-xs font-mono border border-zinc-600 focus:outline-none"
+                    />
+                ) : (
                     <button
-                        onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === convo.id ? null : convo.id); }}
-                        className={`p-1 rounded-full text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity ${activeConversation?.id === convo.id ? 'text-white' : 'hover:text-white'}`}
-                        aria-label={`Options for chat: ${convo.title}`}
+                        onClick={() => selectConversation(convo.id)}
+                        className={`w-full text-left p-2.5 transition-all text-xs font-mono pr-7 flex items-center gap-2 border ${
+                            isActive
+                                ? 'bg-[#18181b] border-zinc-700 text-white font-bold'
+                                : 'bg-transparent border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-[#121215] hover:border-zinc-800'
+                        }`}
                     >
-                        <EllipsisVerticalIcon className="w-5 h-5" />
+                        <ChatBubbleIcon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-white' : 'text-zinc-500'}`} />
+                        <span className="truncate">{convo.title}</span>
                     </button>
-                    {menuOpenId === convo.id && (
-                        <div ref={menuRef} className="absolute right-0 top-6 w-40 bg-invox-dark-accent border border-gray-800 rounded-lg shadow-xl z-30 py-1">
-                             <button onClick={() => { pinConversation(convo.id); setMenuOpenId(null); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-200 hover:bg-gray-800">
-                                <MapPinIcon className={`w-4 h-4 ${convo.isPinned ? 'fill-current text-white' : ''}`} />
-                                <span>{convo.isPinned ? 'Unpin' : 'Pin'}</span>
-                            </button>
-                            <button onClick={() => { setRenamingId(convo.id); setRenameValue(convo.title); setMenuOpenId(null); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-200 hover:bg-gray-800">
-                                <PencilIcon className="w-4 h-4" />
-                                <span>Rename</span>
-                            </button>
-                            <button onClick={() => { handleDelete(convo.id, convo.title); setMenuOpenId(null); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-400 hover:bg-gray-800">
-                                <TrashIcon className="w-4 h-4" />
-                                <span>Delete</span>
-                            </button>
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
-    );
+                )}
+
+                {renamingId !== convo.id && (
+                    <div className="absolute right-1 top-1/2 -translate-y-1/2">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === convo.id ? null : convo.id); }}
+                            className={`p-1 text-zinc-500 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity hover:text-white`}
+                            aria-label={`Options for chat: ${convo.title}`}
+                        >
+                            <EllipsisVerticalIcon className="w-4 h-4" />
+                        </button>
+                        {menuOpenId === convo.id && (
+                            <div ref={menuRef} className="absolute right-0 top-6 w-36 bg-[#09090b] border border-zinc-800 shadow-2xl z-30 py-1 font-mono text-xs">
+                                 <button onClick={() => { pinConversation(convo.id); setMenuOpenId(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-zinc-300 hover:bg-zinc-900 hover:text-white">
+                                    <MapPinIcon className={`w-3.5 h-3.5 ${convo.isPinned ? 'fill-current text-white' : 'text-zinc-500'}`} />
+                                    <span>{convo.isPinned ? 'UNPIN' : 'PIN'}</span>
+                                </button>
+                                <button onClick={() => { setRenamingId(convo.id); setRenameValue(convo.title); setMenuOpenId(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-zinc-300 hover:bg-zinc-900 hover:text-white">
+                                    <PencilIcon className="w-3.5 h-3.5 text-zinc-500" />
+                                    <span>RENAME</span>
+                                </button>
+                                <button onClick={() => { handleDelete(convo.id, convo.title); setMenuOpenId(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-red-400 hover:bg-red-950/40">
+                                    <TrashIcon className="w-3.5 h-3.5" />
+                                    <span>DELETE</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        );
+    };
 
     return (
-        <div className="bg-invox-dark p-3 flex flex-col h-full border-r border-gray-800">
+        <div className="bg-[#09090b] p-3 flex flex-col h-full border-r border-zinc-800/90 font-mono">
             <button
                 onClick={() => startNewChat()}
-                className="flex items-center justify-center w-full gap-2 text-left p-3 mb-1 rounded-lg text-white font-semibold bg-invox-dark-accent border border-gray-800 hover:bg-gray-700 transition-colors duration-200"
+                className="flex items-center justify-center w-full gap-2 text-left p-2.5 mb-2 text-white font-mono text-xs font-bold uppercase tracking-wider bg-zinc-900 border border-zinc-700/80 hover:border-zinc-500 hover:bg-zinc-800 transition-colors"
             >
-                <PencilSwooshIcon className="w-5 h-5" />
-                <span>New Chat</span>
+                <PencilSwooshIcon className="w-4 h-4" />
+                <span>// NEW_SESSION</span>
             </button>
-            <div className="relative my-2">
-                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <div className="relative mb-3">
+                <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500 pointer-events-none" />
                 <input
                     type="search"
-                    placeholder="Search history..."
+                    placeholder="Search logs..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full bg-invox-dark-accent border border-gray-800 rounded-lg p-2 pl-9 focus:outline-none focus:ring-1 focus:ring-gray-700 text-sm text-white"
+                    className="w-full bg-[#0c0c0e] border border-zinc-800 p-2 pl-8 focus:outline-none focus:border-zinc-600 text-xs text-white placeholder-zinc-600 font-mono"
                 />
             </div>
             <div className={`flex-grow no-scrollbar pr-1 ${visibleConversations.length === 0 ? 'overflow-y-hidden' : 'overflow-y-auto'}`}>
                 {visibleConversations.length === 0 ? (
-                    <div className="text-center text-gray-500 text-sm mt-8 px-2 flex flex-col items-center h-full justify-center">
-                        <ChatBubbleIcon className="w-10 h-10 mb-3 text-gray-600" />
-                        <p className="font-semibold text-gray-400">Your chat history is empty.</p>
-                        <p className="mt-1">Click 'New Chat' to get started!</p>
+                    <div className="text-center text-zinc-500 text-xs mt-8 px-2 flex flex-col items-center h-full justify-center font-mono">
+                        <ChatBubbleIcon className="w-8 h-8 mb-2 text-zinc-700" />
+                        <p className="font-bold text-zinc-400 uppercase tracking-wider">// NO_HISTORY</p>
+                        <p className="mt-1 text-[11px] text-zinc-600">Click New Session to start.</p>
                     </div>
                 ) : filteredConversations.length === 0 && searchTerm ? (
-                    <div className="text-center text-gray-500 text-sm mt-6 px-2">
-                        <p>No results for <span className="font-semibold text-gray-400">"{searchTerm}"</span></p>
+                    <div className="text-center text-zinc-500 text-xs mt-6 px-2 font-mono">
+                        <p>No matches for <span className="font-bold text-zinc-300">"{searchTerm}"</span></p>
                     </div>
                 ) : (
                     <>
                         {pinnedConversations.length > 0 && (
                         <>
-                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2 mt-2">Pinned</p>
-                            <div className="space-y-1 mb-4">
+                            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 px-1 mt-1">// PINNED_SESSIONS</p>
+                            <div className="space-y-1 mb-3">
                             {pinnedConversations.map(renderConvoItem)}
                             </div>
                         </>
                         )}
                         {recentConversations.length > 0 && (
                             <>
-                                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">Recent</p>
+                                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 px-1">// RECENT_SESSIONS</p>
                                 <div className="space-y-1">
                                 {recentConversations.map(renderConvoItem)}
                                 </div>
@@ -294,7 +336,6 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
         activeConversation, 
         updateActiveConversation,
         startNewChat,
-        conversations,
         appendChunkToLastMessage
     } = useAIAssistant();
     const { currentUser } = useAuth();
@@ -313,26 +354,48 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
     const recognitionRef = useRef<any>(null);
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const [useSearch, setUseSearch] = useState(false);
+    const [promptCategory, setPromptCategory] = useState<'ALL' | 'CODE' | 'IDEATION' | 'ANALYSIS' | 'DESIGN'>('ALL');
+
+    const promptCategories = [
+        { id: 'ALL', label: 'All Presets' },
+        { id: 'CODE', label: 'Dev & Code' },
+        { id: 'IDEATION', label: 'Ideation' },
+        { id: 'ANALYSIS', label: 'Analysis' },
+        { id: 'DESIGN', label: 'UI / UX' },
+    ] as const;
+
+    const allPresets = [
+        { category: 'CODE', text: "Generate a TypeScript architectural pattern for high-throughput state syncing", icon: CodeBracketIcon, tag: 'TYPESCRIPT' },
+        { category: 'IDEATION', text: "Brainstorm three high-impact developer tooling startups for 2026", icon: CubeIcon, tag: 'VENTURE' },
+        { category: 'ANALYSIS', text: "Explain quantum error mitigation techniques in straightforward systems terms", icon: InformationCircleIcon, tag: 'RESEARCH' },
+        { category: 'DESIGN', text: "What are the core technical principles of modern high-contrast monospace UI design?", icon: PencilSwooshIcon, tag: 'DESIGN_SYSTEM' },
+        { category: 'CODE', text: "Draft an optimized React 18 custom hook for debounced streaming search input", icon: WrenchScrewdriverIcon, tag: 'REACT' },
+        { category: 'ANALYSIS', text: "Synthesize the latest technical trade-offs between Cloud SQL and Firestore databases", icon: InformationCircleIcon, tag: 'ARCHITECTURE' },
+    ];
+
+    const filteredPresets = promptCategory === 'ALL'
+        ? allPresets
+        : allPresets.filter(p => p.category === promptCategory);
 
     const allSuggestions = [
-        "Help me draft a post about AI in cinematography",
-        "Brainstorm three startup ideas in the fintech space",
-        "Explain quantum computing in simple terms",
-        "What are some good UI/UX design principles?",
-        "How do I get started with machine learning?",
-        "Summarize the latest trends in renewable energy",
-        "Give me a recipe for a healthy dinner",
-        "Write a short poem about space exploration",
+        "Help me draft a technical specification for real-time state sync",
+        "Brainstorm three startup ideas in the developer infrastructure space",
+        "Explain quantum computing in technical but accessible terms",
+        "What are modern typography and spatial design rules for engineering dashboards?",
+        "How do I optimize WebSockets for low-latency collaboration?",
+        "Summarize the performance implications of React 19 server actions",
+        "Generate a clean REST-to-GraphQL schema conversion strategy",
+        "Write a prompt system instruction for structured code generation",
     ];
 
     useEffect(() => {
         if (!isLoading && modalRef.current) {
-            // Find all `pre code` blocks that have not been highlighted yet.
-            // highlight.js adds the `hljs` class to the `code` element.
             const blocks = modalRef.current.querySelectorAll('pre code:not(.hljs)');
             blocks.forEach((block) => {
                 try {
-                    window.hljs.highlightElement(block);
+                    if (window.hljs) {
+                        window.hljs.highlightElement(block);
+                    }
                 } catch (e) {
                     console.error('highlight.js error', e);
                 }
@@ -353,9 +416,9 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
     
     useEffect(() => {
         if (textareaRef.current) {
-            textareaRef.current.style.height = 'auto'; // Reset height
+            textareaRef.current.style.height = 'auto';
             const scrollHeight = textareaRef.current.scrollHeight;
-            textareaRef.current.style.height = `${scrollHeight}px`; // Set to content height
+            textareaRef.current.style.height = `${scrollHeight}px`;
         }
     }, [input]);
 
@@ -364,7 +427,6 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
         if (!SpeechRecognition) {
-            console.warn("Speech recognition not supported in this browser.");
             return;
         }
 
@@ -389,13 +451,13 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
         recognition.onerror = (event: any) => {
             console.error("Speech recognition error", event.error);
             if (event.error === 'not-allowed') {
-                setRecognitionError("Microphone permission denied. Please enable it in your browser settings to use voice input.");
+                setRecognitionError("Microphone permission denied. Enable microphone access in browser settings.");
             } else if (event.error === 'no-speech') {
-                setRecognitionError("No speech was detected. Please make sure your microphone is working and try again.");
+                setRecognitionError("No speech detected. Verify microphone hardware.");
             } else if (event.error === 'aborted') {
-                console.log("Speech recognition aborted by user.");
+                // Ignore aborted
             } else {
-                setRecognitionError("An error occurred during speech recognition. Please try again.");
+                setRecognitionError("Speech recognition error encountered.");
             }
             setIsListening(false);
         };
@@ -409,7 +471,7 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
 
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            setRecognitionError("Speech recognition is not supported in this browser.");
+            setRecognitionError("Speech recognition API not supported in this browser.");
             return;
         }
         
@@ -418,18 +480,17 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
         if (isListening) {
             recognitionRef.current.stop();
         } else {
-            setInput(''); // Clear input before starting
+            setInput('');
             try {
                 recognitionRef.current.start();
                 setIsListening(true);
             } catch(e) {
                 console.error("Could not start recognition", e);
-                setIsListening(false); // Ensure state is correct on error
-                setRecognitionError("Could not start listening. Please try again.");
+                setIsListening(false);
+                setRecognitionError("Could not initialize microphone.");
             }
         }
     };
-
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -453,7 +514,6 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
             mainAppWrapper.classList.remove('blur-background');
         }
 
-        // Cleanup function to remove blur when modal closes
         return () => {
             mainAppWrapper.classList.remove('blur-background');
         };
@@ -463,7 +523,7 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
         const messageToSend = messageOverride || input.trim();
         if (!activeConversation || messageToSend === '' || isLoading) return;
 
-        setSuggestions([]); // Clear suggestions on send
+        setSuggestions([]);
 
         const userMessage: ChatMessage = { role: 'user', parts: [{ text: messageToSend }] };
         const newMessages = [...activeConversation.messages, userMessage];
@@ -472,7 +532,7 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
         const messagesWithPlaceholder = [...newMessages, placeholderModelMessage];
         
         const isNewChat = activeConversation.isUnsaved;
-        const newTitle = isNewChat ? messageToSend.substring(0, 50) : activeConversation.title;
+        const newTitle = isNewChat ? messageToSend.substring(0, 45) : activeConversation.title;
         
         updateActiveConversation(messagesWithPlaceholder, newTitle);
         
@@ -528,7 +588,7 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
             const controller = getAIChatResponseStream(
                 historyForRegeneration,
                 activeConversation.context,
-                false, // Regeneration doesn't use search by default
+                false,
                 (chunk) => appendChunkToLastMessage(chunk),
                 (error) => appendChunkToLastMessage({ text: error }),
                 () => {
@@ -542,11 +602,10 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
         }
     };
 
-
     const handleSuggestionClick = (suggestion: string) => {
         if (isLoading) return;
         setInput(suggestion);
-        setSuggestions([]); // Clear suggestions after selection
+        setSuggestions([]);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -556,49 +615,35 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
         }
     };
 
-    const initialSuggestions = [
-        { text: 'Help me draft a post about AI in cinematography', icon: PencilSquareIcon },
-        { text: 'Brainstorm three startup ideas in the fintech space', icon: CubeIcon },
-        { text: 'Explain quantum computing in simple terms', icon: InformationCircleIcon },
-        { text: 'What are some good UI/UX design principles?', icon: PencilSwooshIcon },
-    ];
-
     const parseInlineMarkdown = (text: string): React.ReactNode => {
-        // Regex to capture: bold, italics, inline code, links, hashtags. Order matters.
         const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`|\[.*?\]\(.*?\)|#[\w-]+)/g;
         const parts = text.split(regex);
 
         return parts.map((part, index) => {
             if (!part) return null;
 
-            // Bold
             if (part.startsWith('**') && part.endsWith('**')) {
-                return <strong key={index} className="font-semibold text-white">{part.slice(2, -2)}</strong>;
+                return <strong key={index} className="font-bold text-white tracking-wide">{part.slice(2, -2)}</strong>;
             }
-            // Italic
             if (part.startsWith('*') && part.endsWith('*')) {
-                return <em key={index} className="italic text-gray-300">{part.slice(1, -1)}</em>;
+                return <em key={index} className="italic text-zinc-300">{part.slice(1, -1)}</em>;
             }
-            // Inline Code
             if (part.startsWith('`') && part.endsWith('`')) {
-                return <code key={index} className="bg-gray-900 text-invox-red px-1.5 py-0.5 rounded text-sm font-mono">{part.slice(1, -1)}</code>;
+                return <code key={index} className="bg-black border border-zinc-800 text-zinc-200 px-1.5 py-0.5 text-xs font-mono">{part.slice(1, -1)}</code>;
             }
-            // Link
             const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
             if (linkMatch) {
-                const text = linkMatch[1];
+                const linkText = linkMatch[1];
                 const url = linkMatch[2];
-                return <a key={index} href={url} target="_blank" rel="noopener noreferrer" className="text-invox-red hover:underline">{text}</a>;
+                return <a key={index} href={url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline underline-offset-2">{linkText}</a>;
             }
-            // Hashtag
             if (part.startsWith('#')) {
                 return (
-                    <button key={index} className="bg-gray-700 text-sky-400 px-2 py-0.5 rounded text-sm font-semibold hover:bg-gray-600 hover:text-sky-300 transition-colors mx-1">
+                    <span key={index} className="bg-[#18181b] border border-zinc-800 text-zinc-300 px-1.5 py-0.5 text-[11px] font-mono mx-1">
                         {part}
-                    </button>
+                    </span>
                 );
             }
-            // Plain text
             return part;
         });
     };
@@ -614,7 +659,7 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
         const flushList = () => {
             if (currentList) {
                 const ListTag = currentList.type;
-                elements.push(<ListTag key={`list-${elements.length}`} className={`${ListTag === 'ul' ? 'list-disc' : 'list-decimal'} list-outside pl-6 space-y-2 my-3`}>{currentList.items}</ListTag>);
+                elements.push(<ListTag key={`list-${elements.length}`} className={`${ListTag === 'ul' ? 'list-disc' : 'list-decimal'} list-outside pl-5 space-y-1.5 my-2.5 text-zinc-300 font-mono text-xs leading-relaxed`}>{currentList.items}</ListTag>);
                 currentList = null;
             }
         };
@@ -623,9 +668,15 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
             if (codeBlockContent.length > 0) {
                 const codeString = codeBlockContent.join('\n');
                 elements.push(
-                    <div key={`codeblock-${elements.length}`} className="relative group my-4">
-                        <CopyButton textToCopy={codeString} />
-                        <pre className="bg-invox-dark rounded-md p-4 pt-10 text-sm text-white overflow-x-auto font-mono">
+                    <div key={`codeblock-${elements.length}`} className="relative border border-zinc-800 my-3 font-mono">
+                        <div className="flex items-center justify-between px-3 py-1.5 bg-[#09090b] border-b border-zinc-800 text-[10px] text-zinc-400 uppercase tracking-widest font-mono">
+                            <span className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 bg-emerald-500"></span>
+                                <span>// {codeBlockLanguage || 'CODE'}</span>
+                            </span>
+                            <CopyButton textToCopy={codeString} />
+                        </div>
+                        <pre className="bg-black p-3.5 text-xs text-zinc-200 overflow-x-auto font-mono leading-relaxed">
                             <code className={`language-${codeBlockLanguage}`}>
                                 {codeString}
                             </code>
@@ -668,12 +719,12 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
                 const content = headingMatch[2];
                 const tag = `h${level}` as keyof React.JSX.IntrinsicElements;
                 const classNames = [
-                    "text-2xl font-bold mt-8 mb-4 pb-3 border-b border-gray-800 text-white", // h1
-                    "text-xl font-bold mt-7 mb-3 text-white",  // h2
-                    "text-lg font-semibold mt-6 mb-2 text-gray-200",  // h3
-                    "text-base font-semibold mt-5 mb-2 text-white", // h4
-                    "text-sm font-semibold mt-4 mb-1 text-white",  // h5
-                    "text-xs font-semibold mt-4 mb-1 text-gray-300", // h6
+                    "text-base font-bold mt-5 mb-2 pb-1.5 border-b border-zinc-800 text-white font-mono uppercase tracking-wider", // h1
+                    "text-sm font-bold mt-4 mb-2 text-white font-mono uppercase tracking-wider",  // h2
+                    "text-xs font-bold mt-3 mb-1.5 text-zinc-200 font-mono uppercase tracking-wider",  // h3
+                    "text-xs font-bold mt-3 mb-1 text-zinc-300 font-mono", // h4
+                    "text-xs font-semibold mt-2 mb-1 text-zinc-400 font-mono",  // h5
+                    "text-[11px] font-semibold mt-2 mb-1 text-zinc-400 font-mono", // h6
                 ];
                 elements.push(<tag key={`h${level}-${index}`} className={classNames[level - 1]}>{parseInlineMarkdown(content)}</tag>);
                 return;
@@ -682,7 +733,7 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
             const hrMatch = trimmedLine.match(/^(---|___|\*\*\*)\s*$/);
             if (hrMatch) {
                 flushList();
-                elements.push(<hr key={`hr-${index}`} className="border-gray-800 my-6" />);
+                elements.push(<hr key={`hr-${index}`} className="border-zinc-800 my-4" />);
                 return;
             }
 
@@ -691,7 +742,7 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
                 flushList();
                 const content = blockquoteMatch[1];
                 elements.push(
-                    <blockquote key={`bq-${index}`} className="border-l-4 border-gray-800 pl-4 italic text-gray-400 my-4">
+                    <blockquote key={`bq-${index}`} className="border-l-2 border-zinc-600 bg-[#09090b] pl-3 py-1 text-zinc-400 my-2 font-mono text-xs italic">
                         {parseInlineMarkdown(content)}
                     </blockquote>
                 );
@@ -706,94 +757,152 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
                     flushList();
                     currentList = { type: 'ul', items: [] };
                 }
-                currentList.items.push(<li key={`li-${index}`} className="leading-7">{parseInlineMarkdown(unorderedMatch[2] || '')}</li>);
+                currentList.items.push(<li key={`li-${index}`} className="leading-relaxed">{parseInlineMarkdown(unorderedMatch[2] || '')}</li>);
             } else if (orderedMatch) {
                 if (currentList?.type !== 'ol') {
                     flushList();
                     currentList = { type: 'ol', items: [] };
                 }
-                currentList.items.push(<li key={`li-${index}`} className="leading-7">{parseInlineMarkdown(orderedMatch[2] || '')}</li>);
+                currentList.items.push(<li key={`li-${index}`} className="leading-relaxed">{parseInlineMarkdown(orderedMatch[2] || '')}</li>);
             } else {
                 flushList();
-                elements.push(<p key={`p-${index}`} className="leading-7">{parseInlineMarkdown(trimmedLine)}</p>);
+                elements.push(<p key={`p-${index}`} className="leading-relaxed text-zinc-300 font-mono text-xs my-1.5">{parseInlineMarkdown(trimmedLine)}</p>);
             }
         });
 
         flushList();
         flushCodeBlock();
-        return <div className="space-y-4 text-gray-300">{elements}</div>;
+        return <div className="space-y-1">{elements}</div>;
     };
 
     const sidebarClass = isFullscreen ? 'w-64' : `absolute top-0 left-0 h-full w-64 z-20 transform transition-transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`;
-    const isWelcomeState = !activeConversation || (activeConversation.isUnsaved && !activeConversation.context);
+    const isWelcomeState = !activeConversation || (activeConversation.isUnsaved && !activeConversation.context && activeConversation.messages.length <= 1);
     
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-            <div ref={modalRef} className="bg-invox-dark-accent rounded-lg shadow-xl w-full max-w-4xl h-[80vh] flex overflow-hidden border border-gray-800">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex justify-center items-center z-50 p-2 sm:p-4">
+            <div ref={modalRef} className="bg-[#0c0c0e] border border-zinc-800/90 shadow-2xl w-full max-w-5xl h-[85vh] flex overflow-hidden font-mono">
                 <div className={sidebarClass}>
                     <ChatHistorySidebar />
                 </div>
 
-                <div className="flex-1 flex flex-col p-4">
-                    <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
+                <div className="flex-1 flex flex-col p-3 sm:p-5 overflow-hidden bg-[#0c0c0e]">
+                    {/* Header */}
+                    <div className="flex justify-between items-center pb-3 border-b border-zinc-800">
+                        <div className="flex items-center gap-2.5 truncate">
                            {!isFullscreen && (
-                                <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-gray-400 hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100">
-                                    <MenuIcon className="w-6 h-6" />
+                                <button 
+                                    onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
+                                    className="p-1.5 border border-zinc-800 bg-[#09090b] text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors"
+                                    title="Toggle Sessions History"
+                                >
+                                    <MenuIcon className="w-4 h-4" />
                                 </button>
                            )}
-                           <h2 className="text-xl font-bold text-white flex items-center truncate">
-                                <SparklesIcon useGradient className="w-6 h-6 mr-2 flex-shrink-0" />
-                                <span className="truncate">{activeConversation?.context ? `On "${activeConversation.context.title}"` : 'Spark AI'}</span>
-                           </h2>
+                           <div className="flex items-center gap-2 truncate font-mono">
+                                <div className="w-6 h-6 bg-zinc-900 border border-zinc-700 flex items-center justify-center text-white">
+                                    <SparklesIcon className="w-3.5 h-3.5" />
+                                </div>
+                                <h2 className="text-xs sm:text-sm font-bold text-white tracking-wider truncate uppercase">
+                                    {activeConversation?.context ? `// CONTEXT: ${activeConversation.context.title}` : '// SPARK_INTELLIGENCE'}
+                                </h2>
+                                <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[9px] font-mono font-bold bg-[#18181b] border border-zinc-800 text-zinc-400">
+                                    GEMINI_FLASH
+                                </span>
+                           </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                            <button onClick={toggleFullscreen} className="text-gray-400 hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100">
-                                {isFullscreen ? <ArrowsPointingInIcon className="w-6 h-6" /> : <ArrowsPointingOutIcon className="w-6 h-6" />}
+
+                        <div className="flex items-center gap-1.5 font-mono">
+                            <button 
+                                onClick={toggleFullscreen} 
+                                className="p-1.5 border border-zinc-800 bg-[#09090b] text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors"
+                                title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                            >
+                                {isFullscreen ? <ArrowsPointingInIcon className="w-4 h-4" /> : <ArrowsPointingOutIcon className="w-4 h-4" />}
                             </button>
-                            <button onClick={onClose} className="text-gray-400 hover:text-white transition-transform duration-200 transform hover:scale-110 active:scale-100">
-                                <CloseIcon />
+                            <button 
+                                onClick={onClose} 
+                                className="p-1.5 border border-zinc-800 bg-[#09090b] text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors"
+                                title="Close Modal"
+                            >
+                                <CloseIcon className="w-4 h-4" />
                             </button>
                         </div>
                     </div>
-                    <hr className="border-gray-800 my-4" />
-                    <div className="flex-grow overflow-y-auto pr-2">
-                        <div className={isFullscreen ? "max-w-5xl mx-auto" : ""}>
+
+                    {/* Messages Container / Welcome */}
+                    <div className="flex-grow overflow-y-auto py-4 pr-1 sm:pr-2">
+                        <div className={isFullscreen ? "max-w-5xl mx-auto" : "w-full"}>
                            {isWelcomeState ? (
-                                <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                                    <SparklesIcon useGradient className="w-20 h-20 mb-6" />
-                                    <h2 className="text-4xl font-bold text-gray-200">
-                                        Hello, {currentUser?.displayName?.split(' ')[0] || 'Explorer'}
+                                <div className="flex flex-col items-center justify-center min-h-[400px] text-center p-2 sm:p-4 font-mono">
+                                    <div className="w-14 h-14 bg-[#09090b] border border-zinc-800 flex items-center justify-center mb-4 text-white">
+                                        <SparklesIcon className="w-7 h-7" />
+                                    </div>
+                                    <h2 className="text-base sm:text-lg font-bold text-white uppercase tracking-widest">
+                                        // SPARK_AI: {currentUser?.displayName?.split(' ')[0] || 'ENGINEER'}
                                     </h2>
-                                    <p className="text-xl text-gray-500 mt-2">How can I help you today?</p>
+                                    <p className="text-xs text-zinc-500 mt-1 max-w-md font-mono">
+                                        Select a prompt preset below or type a command to initialize reasoning and distillation.
+                                    </p>
                                     
-                                    <div className={`grid grid-cols-1 sm:grid-cols-2 mt-12 w-full ${isFullscreen ? 'gap-6 max-w-4xl' : 'gap-4 max-w-2xl'}`}>
-                                        {initialSuggestions.map((s, index) => (
+                                    {/* Segmented Preset Category Filter Bar */}
+                                    <div className="w-full max-w-2xl bg-[#09090b] border border-zinc-800/90 p-1 grid grid-cols-5 gap-1 mt-6 mb-4">
+                                        {promptCategories.map(cat => {
+                                            const isActive = promptCategory === cat.id;
+                                            return (
+                                                <button
+                                                    key={cat.id}
+                                                    onClick={() => setPromptCategory(cat.id)}
+                                                    className={`py-1.5 px-1 text-center font-mono text-[11px] uppercase tracking-wider transition-all duration-150 flex items-center justify-center truncate ${
+                                                        isActive
+                                                            ? 'bg-[#18181b] border border-zinc-700 text-white font-bold'
+                                                            : 'bg-transparent border border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/30'
+                                                    }`}
+                                                >
+                                                    <span className="truncate">{cat.label}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Presets Grid */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-2xl text-left">
+                                        {filteredPresets.map((preset, index) => (
                                             <button
-                                                key={s.text}
-                                                onClick={() => handleSend(s.text)}
-                                                className="relative animated-gradient-border bg-invox-dark p-4 rounded-xl text-left transition-all duration-300 group flex items-center gap-4 opacity-0 animate-fadeInUp hover:-translate-y-1"
-                                                style={{ animationDelay: `${index * 100}ms` }}
+                                                key={index}
+                                                onClick={() => handleSend(preset.text)}
+                                                className="bg-[#09090b] border border-zinc-800/90 hover:border-zinc-600 p-3 text-left transition-all group flex flex-col justify-between gap-2.5 font-mono"
                                             >
-                                                <div className="bg-gray-800 p-3 rounded-full transition-colors duration-300 group-hover:bg-gradient-to-br group-hover:from-invox-red/20 group-hover:to-invox-blue/20">
-                                                    <s.icon className="w-5 h-5 text-gray-300 transition-colors duration-300 group-hover:text-white" />
+                                                <div className="flex items-center justify-between w-full">
+                                                    <span className="text-[10px] px-1.5 py-0.5 bg-[#18181d] border border-zinc-800 text-zinc-400 group-hover:text-white uppercase tracking-widest">
+                                                        // {preset.tag}
+                                                    </span>
+                                                    <preset.icon className="w-3.5 h-3.5 text-zinc-600 group-hover:text-white transition-colors" />
                                                 </div>
-                                                <p className="text-sm font-medium text-gray-300 flex-1 transition-colors duration-300 group-hover:bg-gradient-to-r group-hover:from-invox-red group-hover:to-invox-blue group-hover:text-transparent group-hover:bg-clip-text">{s.text}</p>
+                                                <p className="text-xs text-zinc-300 group-hover:text-white font-mono leading-relaxed line-clamp-2">
+                                                    {preset.text}
+                                                </p>
                                             </button>
                                         ))}
                                     </div>
                                 </div>
                            ) : (
-                            <div className="space-y-4">
+                            <div className="space-y-4 font-mono">
                                 {activeConversation?.messages.map((msg, index) => {
                                     const isLastMessage = index === activeConversation.messages.length - 1;
                                     const isStreamingMessage = (isLoading || isAnimating) && isLastMessage;
 
                                     return (
                                         <div key={index} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                                            <div className={`p-3 rounded-lg ${msg.role === 'user' ? 'bg-gray-800 text-white' : 'bg-[#262626] text-white'} ${(msg.role === 'model' && isFullscreen) ? 'max-w-3xl' : 'max-w-md'}`}>
+                                            <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 px-1">
+                                                {msg.role === 'user' ? '// USER_INPUT' : '// SPARK_INTELLIGENCE'}
+                                            </div>
+                                            <div className={`p-3.5 border ${
+                                                msg.role === 'user' 
+                                                    ? 'bg-[#18181b] border-zinc-700 text-white max-w-xl text-xs font-mono leading-relaxed' 
+                                                    : 'bg-[#09090b] border-zinc-800/90 text-zinc-200 w-full max-w-3xl text-xs font-mono leading-relaxed'
+                                            }`}>
                                                 {msg.role === 'user' ? (
-                                                    <p>{msg.parts[0].text}</p>
+                                                    <p className="whitespace-pre-wrap">{msg.parts[0].text}</p>
                                                 ) : (
                                                     <div>
                                                         {isStreamingMessage ? (
@@ -807,16 +916,16 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
                                                         )}
                                                         
                                                         {isStreamingMessage && (
-                                                            <span className="inline-block w-2 h-5 bg-white animate-pulse ml-1 translate-y-1"></span>
+                                                            <span className="inline-block w-2 h-3.5 bg-emerald-400 animate-pulse ml-1 align-middle"></span>
                                                         )}
                                                          {msg.sources && msg.sources.length > 0 && (
-                                                            <div className="mt-4 pt-3 border-t border-gray-800/50">
-                                                                <h4 className="font-semibold text-sm text-gray-400 mb-2">Sources</h4>
-                                                                <ol className="text-sm space-y-2">
+                                                            <div className="mt-3.5 pt-3 border-t border-zinc-800">
+                                                                <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 font-mono">// SOURCES_RETRIEVED</h4>
+                                                                <ol className="text-xs space-y-1 font-mono">
                                                                     {msg.sources.map((source, idx) => (
                                                                         source && (
-                                                                            <li key={source.uri || idx} className="flex items-start gap-2 animate-fadeInUp" style={{ animationDelay: `${idx * 50}ms`, opacity: 0 }}>
-                                                                                <span className="text-gray-500 font-medium">{idx + 1}.</span>
+                                                                            <li key={source.uri || idx} className="flex items-start gap-1.5 text-zinc-400">
+                                                                                <span className="text-zinc-600">{idx + 1}.</span>
                                                                                 <a href={source.uri} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline truncate" title={source.uri}>
                                                                                     {source.title || (source.uri && new URL(source.uri).hostname)}
                                                                                 </a>
@@ -841,83 +950,98 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
                         </div>
                     </div>
                     
-                    <div className="mt-4 relative">
+                    {/* Command Input Area */}
+                    <div className="mt-2 pt-2 border-t border-zinc-800 font-mono relative">
                         {suggestions.length > 0 && (
-                            <div className="absolute bottom-full left-0 right-0 mb-2 bg-invox-dark p-2 rounded-lg border border-gray-800 space-y-1">
+                            <div className="absolute bottom-full left-0 right-0 mb-2 bg-[#09090b] p-1.5 border border-zinc-800 space-y-1 shadow-2xl z-30 font-mono">
+                                <div className="px-2 py-1 text-[10px] text-zinc-500 uppercase tracking-wider">// AUTOCOMPLETE</div>
                                 {suggestions.map(s => (
                                     <button 
                                         key={s} 
                                         onClick={() => handleSuggestionClick(s)}
-                                        className="w-full text-left text-sm p-2 rounded hover:bg-gray-700 text-gray-300"
+                                        className="w-full text-left text-xs p-2 bg-[#121215] hover:bg-[#18181d] hover:text-white text-zinc-300 border border-transparent hover:border-zinc-700 transition-colors"
                                     >
-                                        {s}
+                                        &gt; {s}
                                     </button>
                                 ))}
                             </div>
                         )}
-                        <div className={`flex items-end bg-invox-dark border border-gray-800 rounded-xl transition-all duration-300 focus-within:ring-2 focus-within:ring-gray-800 focus-within:border-transparent ${isFullscreen ? 'py-4 px-3' : 'p-1.5'}`}>
+
+                        {/* Top action flags row */}
+                        <div className="flex items-center justify-between text-[10px] text-zinc-500 mb-1.5 px-1 font-mono uppercase tracking-wider">
+                            <span className="flex items-center gap-2">
+                                <span>// PROMPT_INPUT</span>
+                                {useSearch && <span className="text-blue-400">[WEB_SEARCH_ACTIVE]</span>}
+                                {isListening && <span className="text-emerald-400 animate-pulse">[MIC_LISTENING]</span>}
+                            </span>
+                            <span>SHIFT+ENTER = NEWLINE</span>
+                        </div>
+
+                        <div className="flex items-end bg-[#09090b] border border-zinc-800 p-2 focus-within:border-zinc-600 transition-colors">
+                            <span className="text-zinc-600 font-mono text-sm px-1.5 pb-1">&gt;</span>
                             <textarea
                                 ref={textareaRef}
                                 rows={1}
                                 value={input}
                                 onChange={(e) => {
-                                    setInput(e.target.value)
+                                    setInput(e.target.value);
                                     if (recognitionError) setRecognitionError(null);
                                 }}
                                 onKeyDown={handleKeyDown}
-                                placeholder={isListening ? "Listening..." : "Ask me anything... (Shift+Enter for new line)"}
-                                className="flex-grow bg-transparent p-2 text-white placeholder-gray-500 focus:outline-none resize-none overflow-y-auto max-h-52"
+                                placeholder={isListening ? "Listening to voice audio..." : "Enter prompt or command..."}
+                                className="flex-grow bg-transparent p-1.5 text-white placeholder-zinc-600 focus:outline-none resize-none overflow-y-auto max-h-40 text-xs font-mono"
                                 disabled={isLoading}
                             />
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 pl-2 font-mono">
                                 <button
                                     onClick={() => setUseSearch(prev => !prev)}
                                     disabled={isLoading}
-                                    className={`p-2 text-gray-400 rounded-lg transition-colors duration-200 hover:bg-invox-dark-accent hover:text-white focus:outline-none focus:ring-2 focus:ring-gray-800 ${useSearch ? 'text-white bg-gray-800' : ''}`}
+                                    className={`p-1.5 border text-xs transition-colors ${
+                                        useSearch 
+                                            ? 'bg-blue-950/40 border-blue-800 text-blue-400' 
+                                            : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                                    }`}
                                     aria-label={useSearch ? 'Web search enabled' : 'Web search disabled'}
-                                    title="Web search"
+                                    title={useSearch ? "Web Search: Enabled" : "Web Search: Disabled"}
                                 >
-                                    <GlobeAltIcon className="w-5 h-5" />
+                                    <GlobeAltIcon className="w-4 h-4" />
                                 </button>
                                 <button
                                     onClick={handleToggleListening}
                                     disabled={isLoading}
-                                    className={`p-2 text-gray-400 rounded-lg transition-colors duration-200 hover:bg-invox-dark-accent hover:text-white focus:outline-none focus:ring-2 focus:ring-gray-800 ${isListening ? 'text-white bg-gray-800' : ''}`}
+                                    className={`p-1.5 border text-xs transition-colors ${
+                                        isListening 
+                                            ? 'bg-red-950/40 border-red-800 text-red-400 animate-pulse' 
+                                            : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                                    }`}
                                     aria-label={isListening ? 'Stop listening' : 'Start voice input'}
+                                    title="Voice Input"
                                 >
-                                    {isListening ? (
-                                        <div className="w-5 h-5 relative flex justify-center items-center">
-                                            <div className="absolute w-full h-full bg-invox-red rounded-lg animate-ping opacity-75"></div>
-                                            <MicrophoneIcon className="relative w-5 h-5 text-white" />
-                                        </div>
-                                    ) : (
-                                        <MicrophoneIcon className="w-5 h-5" />
-                                    )}
+                                    <MicrophoneIcon className="w-4 h-4" />
                                 </button>
                                 {isLoading ? (
                                     <button
                                         onClick={handleStop}
-                                        className="bg-gray-800 text-white p-2 rounded-lg hover:bg-gray-700 flex items-center justify-center transition-colors duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-800"
+                                        className="bg-red-950/50 border border-red-800 text-red-300 px-3 py-1.5 text-xs font-mono uppercase tracking-wider hover:bg-red-900/60 flex items-center gap-1.5 transition-colors"
                                         aria-label="Stop generating response"
                                     >
-                                        <div className="w-5 h-5 relative flex items-center justify-center">
-                                            <div className="absolute w-full h-full rounded-full border-2 border-t-white/80 border-r-white/80 border-b-transparent border-l-transparent animate-spin"></div>
-                                            <StopIcon className="w-2.5 h-2.5 text-white" />
-                                        </div>
+                                        <StopIcon className="w-3.5 h-3.5" />
+                                        <span>STOP</span>
                                     </button>
                                 ) : (
                                     <button
                                         onClick={() => handleSend()}
                                         disabled={isListening || !input.trim()}
-                                        className="bg-gray-800 text-white p-2 rounded-lg hover:bg-gray-700 disabled:bg-transparent disabled:text-gray-600 disabled:cursor-not-allowed flex items-center justify-center transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-800"
+                                        className="bg-zinc-900 border border-zinc-700 hover:border-zinc-500 hover:bg-zinc-800 text-white disabled:opacity-40 disabled:hover:border-zinc-800 disabled:hover:bg-zinc-900 px-3 py-1.5 text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 transition-colors font-bold"
                                     >
-                                        <SendIcon className="w-5 h-5"/>
+                                        <span>SEND</span>
+                                        <SendIcon className="w-3.5 h-3.5"/>
                                     </button>
                                 )}
                             </div>
                         </div>
                         {recognitionError && (
-                            <p className="text-red-500 text-xs mt-2 text-center animate-fadeInUp">{recognitionError}</p>
+                            <p className="text-red-400 text-[11px] mt-1.5 font-mono text-center">{recognitionError}</p>
                         )}
                     </div>
                 </div>
@@ -933,10 +1057,11 @@ export const AIAssistantButton = () => {
     return (
         <button
             onClick={() => openModal()}
-            className="fixed bottom-8 right-8 bg-gradient-to-br from-invox-red to-invox-blue p-4 rounded-full shadow-lg transform hover:scale-110 active:scale-100 transition-transform duration-200 z-40"
+            className="fixed bottom-6 right-6 bg-[#09090b] border border-zinc-700/90 hover:border-zinc-400 text-white p-3.5 shadow-2xl hover:bg-zinc-900 transition-all z-40 font-mono group flex items-center gap-2"
             aria-label="Open AI Assistant"
         >
-            <SparklesIcon className="w-8 h-8 text-white" />
+            <SparklesIcon className="w-5 h-5 text-zinc-300 group-hover:text-white transition-colors" />
+            <span className="text-xs font-bold uppercase tracking-wider hidden sm:inline-block">// SPARK_AI</span>
         </button>
     );
 };

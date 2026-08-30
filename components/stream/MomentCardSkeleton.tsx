@@ -2,34 +2,34 @@ import React from 'react';
 
 const MomentCardSkeleton = () => {
     return (
-        <div className="bg-invox-dark-accent rounded-lg border border-gray-800 p-4 mb-4 animate-pulse">
+        <div className="bg-[#0c0c0e] border border-zinc-800 p-4 mb-4 animate-pulse">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gray-700"></div>
-                    <div className="flex flex-col gap-2">
-                        <div className="h-4 w-24 bg-gray-700 rounded"></div>
+                    <div className="w-9 h-9 bg-zinc-800 border border-zinc-700"></div>
+                    <div className="flex flex-col gap-1.5">
+                        <div className="h-3 w-20 bg-zinc-800"></div>
+                        <div className="h-2.5 w-14 bg-zinc-900"></div>
                     </div>
                 </div>
-                <div className="w-6 h-6 bg-gray-700 rounded-md"></div>
+                <div className="w-5 h-5 bg-zinc-800"></div>
             </div>
 
             {/* Media */}
-            <div className="mt-4 h-80 bg-gray-700 rounded-2xl"></div>
+            <div className="h-64 bg-zinc-900 border border-zinc-800 mb-3"></div>
             
             {/* Action Bar */}
-            <div className="mt-4 border border-gray-700 rounded-lg px-4 py-2 flex justify-around items-center">
-                <div className="h-6 w-12 bg-gray-700 rounded-md"></div>
-                <div className="h-6 w-12 bg-gray-700 rounded-md"></div>
-                <div className="h-6 w-12 bg-gray-700 rounded-md"></div>
-                <div className="h-6 w-6 bg-gray-700 rounded-md"></div>
-                <div className="h-6 w-6 bg-gray-700 rounded-md"></div>
+            <div className="border border-zinc-800 px-4 py-2 flex justify-between items-center bg-zinc-950 mb-3">
+                <div className="h-4 w-12 bg-zinc-800"></div>
+                <div className="h-4 w-12 bg-zinc-800"></div>
+                <div className="h-4 w-12 bg-zinc-800"></div>
+                <div className="h-4 w-5 bg-zinc-800"></div>
             </div>
 
             {/* Content */}
-            <div className="mt-4 space-y-2">
-                <div className="h-4 w-full bg-gray-700 rounded"></div>
-                <div className="h-4 w-1/4 bg-gray-700 rounded"></div>
+            <div className="space-y-2">
+                <div className="h-3 w-full bg-zinc-800"></div>
+                <div className="h-3 w-3/4 bg-zinc-900"></div>
             </div>
         </div>
     );

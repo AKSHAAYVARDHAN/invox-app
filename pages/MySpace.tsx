@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { SparklesIcon, ChevronDownIcon, ClockIcon, CheckIcon, GlobeAltIcon } from '../components/ui/Icons';
+import { SparklesIcon, ChevronDownIcon, ClockIcon, CheckIcon, GlobeAltIcon, RadioIcon, CubeIcon } from '../components/ui/Icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useAIAssistant } from '../contexts/AIAssistantContext';
 import { subscribeToUserPosts } from '../services/postService';
@@ -79,8 +79,8 @@ const DataGalaxy: React.FC<{ uploads: number; score: number; activity: string; t
         const colors = new Float32Array(particleCount * 3);
         const sizes = new Float32Array(particleCount);
 
-        const colorCore = new THREE.Color(0xFF2211); 
-        const colorArm = new THREE.Color(0x0052FF);  
+        const colorCore = new THREE.Color(0xFFFFFF); 
+        const colorArm = new THREE.Color(0x71717A);  
 
         for (let i = 0; i < particleCount; i++) {
             const armIndex = i % spiralArms;
@@ -100,8 +100,8 @@ const DataGalaxy: React.FC<{ uploads: number; score: number; activity: string; t
             
             const coreFactor = Math.max(0, 1 - mixRatio);
             colors[i * 3] = mixedColor.r + coreFactor * 0.2;
-            colors[i * 3 + 1] = mixedColor.g + coreFactor * 0.05;
-            colors[i * 3 + 2] = mixedColor.b + coreFactor * 0.05;
+            colors[i * 3 + 1] = mixedColor.g + coreFactor * 0.1;
+            colors[i * 3 + 2] = mixedColor.b + coreFactor * 0.1;
 
             sizes[i] = (Math.random() * basePointSize + 1.5) * (1.2 - mixRatio * 0.4);
         }
@@ -129,11 +129,11 @@ const DataGalaxy: React.FC<{ uploads: number; score: number; activity: string; t
         const starOffsets = new Float32Array(starCount);
 
         const spectralTypes = [
-            new THREE.Color(0xCAD8FF), 
-            new THREE.Color(0xFFF4EA), 
-            new THREE.Color(0xFFF1D1), 
-            new THREE.Color(0xFFD2A1), 
-            new THREE.Color(0xFFCC6F)  
+            new THREE.Color(0xFFFFFF), 
+            new THREE.Color(0xD4D4D8), 
+            new THREE.Color(0xA1A1AA), 
+            new THREE.Color(0xE4E4E7), 
+            new THREE.Color(0x71717A)  
         ];
 
         for (let i = 0; i < starCount; i++) {
@@ -231,10 +231,10 @@ const DataGalaxy: React.FC<{ uploads: number; score: number; activity: string; t
 
     if (webglError) {
         return (
-            <div className="w-full h-full flex flex-col items-center justify-center bg-black/40 backdrop-blur-md">
-                <GlobeAltIcon className="w-12 h-12 text-gray-800 mb-4" />
-                <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest max-w-[200px] text-center">
-                    Neural visualization unavailable. Using simplified data stream.
+            <div className="w-full h-full flex flex-col items-center justify-center bg-black/40 backdrop-blur-md border border-zinc-800">
+                <GlobeAltIcon className="w-10 h-10 text-zinc-700 mb-3" />
+                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider max-w-[240px] text-center">
+                    Neural visualization restricted. Using telemetry feed.
                 </p>
             </div>
         );
@@ -245,29 +245,32 @@ const DataGalaxy: React.FC<{ uploads: number; score: number; activity: string; t
 
 interface MetricItemProps {
     label: string;
+    code: string;
     value: string | number;
     colorClass?: string;
     tooltipTitle: string;
     tooltipBody: string;
-    accentColor: string;
     delay?: string;
 }
 
-const MetricItem: React.FC<MetricItemProps> = ({ label, value, colorClass = "text-white", tooltipTitle, tooltipBody, accentColor, delay = "0ms" }) => (
-    <div className="flex flex-col group relative pointer-events-auto cursor-help animate-fadeInUp" style={{ animationDelay: delay }}>
-        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 group-hover:text-gray-400 transition-colors">{label}</span>
-        <span className={`text-3xl font-bold tabular-nums transition-all duration-500 ${colorClass}`}>{value}</span>
+const MetricItem: React.FC<MetricItemProps> = ({ label, code, value, colorClass = "text-white", tooltipTitle, tooltipBody, delay = "0ms" }) => (
+    <div className="flex flex-col group relative pointer-events-auto cursor-help bg-[#0c0c0e]/85 backdrop-blur-md border border-zinc-800/90 hover:border-zinc-700 p-4 transition-all duration-200 min-w-[140px] md:min-w-[160px]" style={{ animationDelay: delay }}>
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+            <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-wider group-hover:text-zinc-400 transition-colors">{label}</span>
+            <span className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest">{code}</span>
+        </div>
+        <span className={`text-2xl md:text-3xl font-mono font-bold tabular-nums tracking-tight transition-all duration-300 ${colorClass}`}>{value}</span>
         
-        <div className="absolute bottom-full left-0 mb-6 w-72 opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none translate-y-4 group-hover:translate-y-0 z-50">
-            <div className="bg-invox-dark-accent/90 backdrop-blur-2xl border border-white/10 p-5 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-                <div className="flex items-center gap-2 mb-2">
-                    <div className={`w-1.5 h-4 rounded-full ${accentColor}`}></div>
-                    <p className="text-white font-black text-[11px] uppercase tracking-widest">{tooltipTitle}</p>
+        {/* Tooltip */}
+        <div className="absolute bottom-full left-0 mb-3 w-64 md:w-72 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none translate-y-2 group-hover:translate-y-0 z-50">
+            <div className="bg-[#0c0c0e]/95 backdrop-blur-xl border border-zinc-700/80 p-4 shadow-2xl">
+                <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-zinc-850">
+                    <span className="w-1.5 h-1.5 bg-zinc-400"></span>
+                    <p className="text-white font-mono font-bold text-[11px] uppercase tracking-wider">{tooltipTitle}</p>
                 </div>
-                <p className="text-gray-400 text-xs leading-relaxed font-medium">
+                <p className="text-zinc-400 text-xs leading-relaxed font-sans">
                     {tooltipBody}
                 </p>
-                <div className="absolute top-full left-6 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-invox-dark-accent/90"></div>
             </div>
         </div>
     </div>
@@ -293,16 +296,16 @@ const TimeframeDropdown: React.FC<{ current: Timeframe; onChange: (t: Timeframe)
         <div className="relative pointer-events-auto" ref={dropdownRef}>
             <button 
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-3 bg-white/5 hover:bg-white/10 backdrop-blur-xl border border-white/10 px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white transition-all duration-300"
+                className="flex items-center gap-2.5 bg-[#0c0c0e]/90 hover:bg-zinc-900 backdrop-blur-md border border-zinc-750 hover:border-zinc-500 px-4 py-2 text-xs font-mono font-bold uppercase tracking-wider text-white transition-all duration-150 shadow-sm"
             >
-                <ClockIcon className="w-4 h-4 text-invox-red" />
+                <ClockIcon className="w-3.5 h-3.5 text-zinc-400" />
                 <span>{timeframeLabels[current]}</span>
-                <ChevronDownIcon className={`w-4 h-4 text-gray-500 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDownIcon className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isOpen && (
-                <div className="absolute top-full right-0 mt-3 w-56 bg-invox-dark-accent/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-[60] animate-fadeInUp">
-                    <div className="p-2 space-y-1">
+                <div className="absolute top-full right-0 mt-2 w-48 bg-[#0c0c0e] border border-zinc-750 shadow-2xl z-[60] animate-fadeIn">
+                    <div className="p-1 space-y-0.5">
                         {options.map((opt) => (
                             <button
                                 key={opt}
@@ -310,12 +313,14 @@ const TimeframeDropdown: React.FC<{ current: Timeframe; onChange: (t: Timeframe)
                                     onChange(opt);
                                     setIsOpen(false);
                                 }}
-                                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all duration-200 ${
-                                    current === opt ? 'bg-invox-red text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-mono uppercase tracking-wider transition-all duration-150 ${
+                                    current === opt 
+                                        ? 'bg-zinc-800 text-white font-bold border border-zinc-700' 
+                                        : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-white border border-transparent'
                                 }`}
                             >
                                 <span>{timeframeLabels[opt]}</span>
-                                {current === opt && <CheckIcon className="w-4 h-4" />}
+                                {current === opt && <CheckIcon className="w-3.5 h-3.5 text-zinc-300" />}
                             </button>
                         ))}
                     </div>
@@ -419,6 +424,7 @@ Ask anything to synthesize your signals, spot trends in your audience engagement
 
     return (
         <div className="relative overflow-hidden flex flex-col -mx-4 sm:-mx-6 lg:-mx-8 -mt-4 md:-mt-6 -mb-4 md:-mb-10 h-[calc(100vh-4rem)] md:h-screen transition-all duration-500 bg-black">
+            {/* 3D Galaxy Canvas */}
             <div className="absolute inset-0 z-0 opacity-100">
                 <DataGalaxy 
                     uploads={currentMetrics.uploads} 
@@ -428,63 +434,70 @@ Ask anything to synthesize your signals, spot trends in your audience engagement
                 />
             </div>
 
-            <div className="relative z-10 p-6 md:p-10 pointer-events-none flex flex-col h-full flex-grow justify-between">
-                <div className="flex justify-between items-start">
+            {/* Subtle Grid Background Lines */}
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:24px_24px] opacity-40"></div>
+
+            <div className="relative z-10 p-4 md:p-8 pointer-events-none flex flex-col h-full flex-grow justify-between">
+                {/* Header Bar */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-850 pb-4 bg-black/40 backdrop-blur-sm px-4">
                     <div>
-                        <h1 className="text-2xl md:text-4xl font-black text-white leading-tight animate-fadeInUp tracking-tighter uppercase">
-                            My<br />
-                            <span className="text-invox-red">Space</span>
+                        <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                            <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">// TELEMETRY_SPACE</span>
+                            <span className="text-zinc-700">|</span>
+                            <span className="font-mono text-[10px] text-zinc-600 uppercase">NODE: {currentUser?.uid ? currentUser.uid.slice(0, 8) : 'ANONYMOUS'}</span>
+                        </div>
+                        <h1 className="text-xl md:text-2xl font-mono font-bold text-white tracking-tight uppercase mt-0.5">
+                            MY SPACE <span className="text-zinc-500 font-normal text-sm">// GALAXY_MAP</span>
                         </h1>
-                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-1">Invox Intelligence System</p>
                     </div>
                     
-                    <div className="animate-fadeInUp">
+                    <div className="flex items-center gap-3">
                         <TimeframeDropdown current={currentTimeframe} onChange={setCurrentTimeframe} />
                     </div>
                 </div>
 
-                <div className="flex items-center gap-12 mb-12">
-                    <MetricItem 
-                        label="Total Uploads"
-                        value={currentMetrics.uploads}
-                        accentColor="bg-invox-blue"
-                        tooltipTitle="Intelligence Footprint"
-                        tooltipBody="Expands your intelligence footprint. Each upload extends the spiral outward, forming new data layers."
-                        delay="100ms"
-                    />
-                    <MetricItem 
-                        label="Analytics Score"
-                        value={currentMetrics.score}
-                        accentColor="bg-invox-red"
-                        tooltipTitle="Clarity & Coherence"
-                        tooltipBody="Defines clarity and coherence. Higher scores produce brighter, cleaner, more stable spiral patterns."
-                        delay="200ms"
-                    />
-                    <MetricItem 
-                        label="Activity Level"
-                        value={currentMetrics.activity}
-                        colorClass={
-                            currentMetrics.activity === 'High' ? "text-invox-red" : 
-                            currentMetrics.activity === 'Medium' ? "text-yellow-500" : 
-                            "text-green-500"
-                        }
-                        accentColor={
-                            currentMetrics.activity === 'High' ? "bg-invox-red" : 
-                            currentMetrics.activity === 'Medium' ? "bg-yellow-500" : 
-                            "bg-green-500"
-                        }
-                        tooltipTitle="Energy & Motion"
-                        tooltipBody="Drives energy and motion. Active engagement increases spiral flow and rotational dynamics."
-                        delay="300ms"
-                    />
+                {/* Bottom Metric Deck & Actions */}
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 px-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <MetricItem 
+                            label="Total Uploads"
+                            code="SIG_CNT"
+                            value={currentMetrics.uploads}
+                            tooltipTitle="Intelligence Footprint"
+                            tooltipBody="Expands your intelligence footprint. Each upload extends the spiral outward, forming new data layers."
+                            delay="100ms"
+                        />
+                        <MetricItem 
+                            label="Analytics Score"
+                            code="CLR_INDX"
+                            value={currentMetrics.score}
+                            tooltipTitle="Clarity & Coherence"
+                            tooltipBody="Defines clarity and coherence. Higher scores produce brighter, cleaner, more stable spiral patterns."
+                            delay="200ms"
+                        />
+                        <MetricItem 
+                            label="Activity Level"
+                            code="DYN_FLOW"
+                            value={currentMetrics.activity}
+                            colorClass={
+                                currentMetrics.activity === 'High' ? "text-white" : 
+                                currentMetrics.activity === 'Medium' ? "text-zinc-300" : 
+                                "text-zinc-400"
+                            }
+                            tooltipTitle="Energy & Motion"
+                            tooltipBody="Drives energy and motion. Active engagement increases spiral flow and rotational dynamics."
+                            delay="300ms"
+                        />
+                    </div>
                     
-                    <div className="ml-auto pointer-events-auto hidden sm:block">
+                    <div className="pointer-events-auto flex items-center gap-2">
                         <button 
                             onClick={handleDeepInsightClick}
-                            className="flex items-center gap-3 bg-white/5 hover:bg-white/10 backdrop-blur-xl border border-white/10 px-8 py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all duration-300 group shadow-2xl active:scale-95"
+                            className="flex items-center justify-center gap-2.5 bg-zinc-900/85 hover:bg-zinc-800 backdrop-blur-md border border-zinc-700/80 hover:border-zinc-500 px-6 py-3 text-xs font-mono font-bold uppercase tracking-wider text-white transition-all duration-150 shadow-md group"
                         >
-                            <SparklesIcon className="w-5 h-5 text-invox-blue group-hover:scale-125 transition-transform" />
-                            <span>Deep Insight</span>
+                            <SparklesIcon className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
+                            <span>// DEEP_INSIGHT</span>
                         </button>
                     </div>
                 </div>

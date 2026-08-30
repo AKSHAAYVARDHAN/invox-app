@@ -529,14 +529,14 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
                     <button 
                         disabled={!oneLine.trim() || isSubmitting}
                         onClick={handlePublish}
-                        className="flex items-center gap-2 bg-white hover:bg-zinc-200 disabled:bg-zinc-800 disabled:text-zinc-600 px-6 py-2 text-xs font-mono uppercase font-bold tracking-wider text-black transition-all"
+                        className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-850 disabled:bg-zinc-950 disabled:text-zinc-700 disabled:border-zinc-850 px-6 py-2 text-xs font-mono uppercase font-bold tracking-wider text-white border border-zinc-700/80 hover:border-zinc-500 transition-all shadow-sm"
                     >
                         {isSubmitting ? (
-                            <div className="w-3.5 h-3.5 border-2 border-black/20 border-t-black rounded-full animate-spin"></div>
+                            <div className="w-3.5 h-3.5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
                         ) : (
-                            <PlusIcon className="w-3.5 h-3.5 text-black" />
+                            <PlusIcon className="w-3.5 h-3.5 text-zinc-400" />
                         )}
-                        <span>Publish</span>
+                        <span>// PUBLISH</span>
                     </button>
                 </div>
             </div>

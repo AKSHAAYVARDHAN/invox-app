@@ -42,10 +42,10 @@ const ProfileSkeleton = () => {
                 {/* Skills */}
                 <div className={`border border-zinc-800 h-16 mb-4 ${shimmer}`} />
 
-                {/* Tabs */}
-                <div className="flex gap-4 border-b border-zinc-800 mb-4 pb-2">
+                {/* Segmented Tab Bar Skeleton */}
+                <div className="w-full bg-[#09090b] border border-zinc-800/90 p-1 grid grid-cols-4 gap-1 mb-4">
                     {[...Array(4)].map((_, i) => (
-                        <div key={i} className={`h-3.5 w-14 ${shimmer}`} />
+                        <div key={i} className={`h-8 border border-zinc-800/50 ${shimmer}`} />
                     ))}
                 </div>
 
