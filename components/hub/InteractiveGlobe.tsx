@@ -66,37 +66,75 @@ function latLonToVector3(lat: number, lon: number, radius: number): THREE.Vector
 }
 
 /**
- * Generate ultra-sharp 2D target reticle canvas textures for node beacons
- * Matches the concentric circle target reticle design from the reference image
+ * Generate ultra-sharp 2D cybernetic target reticle canvas textures for node beacons
+ * High-resolution canvas with tactical corner brackets, cardinal tick marks, and optical core
  */
 function createTargetReticleTexture(isCurrentUser: boolean): THREE.CanvasTexture {
-    const size = 128;
+    const size = 256;
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d')!;
 
     const center = size / 2;
+    const primaryColor = isCurrentUser ? '#34d399' : '#ffffff';
+    const glowColor = isCurrentUser ? 'rgba(52, 211, 153, 0.45)' : 'rgba(255, 255, 255, 0.35)';
+    const accentColor = isCurrentUser ? '#10b981' : '#cbd5e1';
 
-    // Outer faint targeting ring
+    // 1. Outer corner tactical bracket notches
+    const bracketRadius = 92;
+    const bracketAngle = Math.PI * 0.22;
+    const quadrants = [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
+
+    quadrants.forEach(q => {
+        ctx.beginPath();
+        ctx.arc(center, center, bracketRadius, q - bracketAngle * 0.5, q + bracketAngle * 0.5);
+        ctx.strokeStyle = glowColor;
+        ctx.lineWidth = 3.5;
+        ctx.stroke();
+
+        // Cardinal tick mark on each quadrant
+        const tx1 = center + Math.cos(q) * (bracketRadius - 12);
+        const ty1 = center + Math.sin(q) * (bracketRadius - 12);
+        const tx2 = center + Math.cos(q) * (bracketRadius + 10);
+        const ty2 = center + Math.sin(q) * (bracketRadius + 10);
+        ctx.beginPath();
+        ctx.moveTo(tx1, ty1);
+        ctx.lineTo(tx2, ty2);
+        ctx.strokeStyle = primaryColor;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+    });
+
+    // 2. Mid precision telemetry ring
+    ctx.beginPath();
+    ctx.arc(center, center, 56, 0, Math.PI * 2);
+    ctx.strokeStyle = primaryColor;
+    ctx.lineWidth = 6.0;
+    ctx.stroke();
+
+    // 3. Subtle outer radial halo aura
+    const grad = ctx.createRadialGradient(center, center, 4, center, center, 42);
+    grad.addColorStop(0, primaryColor);
+    grad.addColorStop(0.5, isCurrentUser ? 'rgba(52, 211, 153, 0.8)' : 'rgba(255, 255, 255, 0.8)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.arc(center, center, 42, 0, Math.PI * 2);
-    ctx.strokeStyle = isCurrentUser ? 'rgba(52, 211, 153, 0.4)' : 'rgba(255, 255, 255, 0.25)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // Main sharp outer concentric ring
-    ctx.beginPath();
-    ctx.arc(center, center, 28, 0, Math.PI * 2);
-    ctx.strokeStyle = isCurrentUser ? '#34d399' : '#ffffff';
-    ctx.lineWidth = 4.0;
-    ctx.stroke();
-
-    // Inner sharp solid dot
-    ctx.beginPath();
-    ctx.arc(center, center, 9, 0, Math.PI * 2);
-    ctx.fillStyle = isCurrentUser ? '#34d399' : '#ffffff';
     ctx.fill();
+
+    // 4. Hot center core dot
+    ctx.beginPath();
+    ctx.arc(center, center, 18, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+
+    // Sharp stroke around inner core
+    ctx.beginPath();
+    ctx.arc(center, center, 18, 0, Math.PI * 2);
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 3.0;
+    ctx.stroke();
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.minFilter = THREE.LinearMipMapLinearFilter;
@@ -106,9 +144,42 @@ function createTargetReticleTexture(isCurrentUser: boolean): THREE.CanvasTexture
 }
 
 /**
- * Pulse ring texture for breathing wave around active nodes
+ * Radar ping wave texture for expanding ripples around active beacon nodes
  */
 function createPulseWaveTexture(isCurrentUser: boolean): THREE.CanvasTexture {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+
+    const center = size / 2;
+    const strokeColor = isCurrentUser ? 'rgba(52, 211, 153, 0.9)' : 'rgba(255, 255, 255, 0.85)';
+
+    // Multi-ring radar pulse
+    ctx.beginPath();
+    ctx.arc(center, center, 108, 0, Math.PI * 2);
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 4.0;
+    ctx.stroke();
+
+    // Faint inner secondary echo ring
+    ctx.beginPath();
+    ctx.arc(center, center, 74, 0, Math.PI * 2);
+    ctx.strokeStyle = isCurrentUser ? 'rgba(52, 211, 153, 0.4)' : 'rgba(255, 255, 255, 0.35)';
+    ctx.lineWidth = 2.0;
+    ctx.stroke();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    return texture;
+}
+
+/**
+ * Glowing energy packet sprite texture for photon data packets gliding over arcs
+ */
+function createPacketSpriteTexture(isSpecial: boolean): THREE.CanvasTexture {
     const size = 128;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -116,11 +187,16 @@ function createPulseWaveTexture(isCurrentUser: boolean): THREE.CanvasTexture {
     const ctx = canvas.getContext('2d')!;
 
     const center = size / 2;
+    const grad = ctx.createRadialGradient(center, center, 0, center, center, size / 2);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.2, isSpecial ? '#34d399' : '#e0f2fe');
+    grad.addColorStop(0.55, isSpecial ? 'rgba(16, 185, 129, 0.5)' : 'rgba(148, 163, 184, 0.4)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(center, center, 48, 0, Math.PI * 2);
-    ctx.strokeStyle = isCurrentUser ? '#34d399' : '#ffffff';
-    ctx.lineWidth = 3.0;
-    ctx.stroke();
+    ctx.arc(center, center, size / 2, 0, Math.PI * 2);
+    ctx.fill();
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.minFilter = THREE.LinearFilter;
@@ -561,22 +637,27 @@ const InteractiveGlobe: React.FC = () => {
         const currentUserReticleTexture = createTargetReticleTexture(true);
         const defaultPulseTexture = createPulseWaveTexture(false);
         const currentUserPulseTexture = createPulseWaveTexture(true);
+        const defaultPacketTexture = createPacketSpriteTexture(false);
+        const specialPacketTexture = createPacketSpriteTexture(true);
 
         const lineMeshes: Array<{
             mesh: THREE.Line;
+            glowMesh: THREE.Line;
             arcId: string;
             fullPoints: THREE.Vector3[];
             status: ArcStatus;
             drawProgress: number;
         }> = [];
 
-        const packetParticles: Array<{
-            mesh: THREE.Mesh;
+        const packetComets: Array<{
+            headSprite: THREE.Sprite;
+            tailSprites: THREE.Sprite[];
             curve: THREE.CubicBezierCurve3;
             speed: number;
             progress: number;
             fromId: string;
             toId: string;
+            isSpecial: boolean;
         }> = [];
 
         const rebuildVisualNetwork = () => {
@@ -590,85 +671,124 @@ const InteractiveGlobe: React.FC = () => {
 
             const currentNodes = nodesRef.current;
             const currentArcs = arcsRef.current;
+            const selected = selectedNodeRef.current;
 
-            // 1. Build Target Reticle Billboard Sprites (Always pixel-sharp and camera-facing)
+            // 1. Build Target Reticle Billboard Sprites & 3D Ground Stems
             currentNodes.forEach((node, idx) => {
                 const isCurrent = node.isCurrentUser;
+                const isSelected = selected && selected.id === node.id;
                 const reticleTex = isCurrent ? currentUserReticleTexture : defaultReticleTexture;
                 const pulseTex = isCurrent ? currentUserPulseTexture : defaultPulseTexture;
 
-                // Main Reticle Sprite
+                // A. Ground Anchor Ring directly on the sphere's surface
+                const groundPos = node.position.clone().normalize().multiplyScalar(GLOBE_RADIUS + 0.3);
+                const surfaceNormal = groundPos.clone().normalize();
+                
+                const ringGeo = new THREE.RingGeometry(1.8, 2.4, 24);
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: isCurrent ? 0x34d399 : (isSelected ? 0x67e8f9 : 0xffffff),
+                    transparent: true,
+                    opacity: isCurrent ? 0.85 : 0.45,
+                    side: THREE.DoubleSide,
+                    depthWrite: false,
+                });
+                const groundRing = new THREE.Mesh(ringGeo, ringMat);
+                groundRing.position.copy(groundPos);
+                groundRing.lookAt(groundPos.clone().add(surfaceNormal));
+                nodesGroup.add(groundRing);
+
+                // B. Vertical Beacon Light Spike connecting ground to elevated reticle
+                const elevatedPos = node.position.clone().normalize().multiplyScalar(GLOBE_RADIUS + 3.8);
+                const spikeGeo = new THREE.BufferGeometry().setFromPoints([groundPos, elevatedPos]);
+                const spikeMat = new THREE.LineBasicMaterial({
+                    color: isCurrent ? 0x34d399 : (isSelected ? 0x67e8f9 : 0x94a3b8),
+                    transparent: true,
+                    opacity: isCurrent ? 0.9 : 0.5,
+                });
+                const spikeLine = new THREE.Line(spikeGeo, spikeMat);
+                nodesGroup.add(spikeLine);
+
+                // C. Main Tactical Reticle Sprite (Elevated slightly for optimal 3D parallax)
                 const spriteMat = new THREE.SpriteMaterial({
                     map: reticleTex,
                     transparent: true,
-                    opacity: 0.95,
+                    opacity: 0.98,
                     depthWrite: false,
                 });
                 const sprite = new THREE.Sprite(spriteMat);
-                sprite.position.copy(node.position.clone().multiplyScalar(1.003));
-                const spriteSize = isCurrent ? 12 : 10;
+                sprite.position.copy(elevatedPos);
+                const spriteSize = isCurrent ? 13.5 : (isSelected ? 14 : 11.5);
                 sprite.scale.set(spriteSize, spriteSize, 1);
                 nodesGroup.add(sprite);
 
-                // Animated Concentric Pulse Ring Sprite
+                // D. Animated Concentric Radar Pulse Ring Sprite
                 const pulseMat = new THREE.SpriteMaterial({
                     map: pulseTex,
                     transparent: true,
-                    opacity: isCurrent ? 0.8 : 0.4,
+                    opacity: isCurrent ? 0.85 : 0.45,
                     depthWrite: false,
                 });
                 const pulseSprite = new THREE.Sprite(pulseMat);
-                pulseSprite.position.copy(node.position.clone().multiplyScalar(1.004));
+                pulseSprite.position.copy(elevatedPos);
                 pulseSprite.scale.set(spriteSize, spriteSize, 1);
                 nodesGroup.add(pulseSprite);
-                pulseSprites.push({ sprite: pulseSprite, seed: idx * 1.4, isCurrentUser: isCurrent });
+                pulseSprites.push({ sprite: pulseSprite, seed: idx * 1.35, isCurrentUser: isCurrent });
 
-                // Precision Hitbox for Hover Raycasting
-                const hitGeo = new THREE.SphereGeometry(8.0, 12, 12);
+                // E. Precision Hitbox for Hover Raycasting
+                const hitGeo = new THREE.SphereGeometry(9.0, 12, 12);
                 const hitMat = new THREE.MeshBasicMaterial({ visible: false });
                 const hitMesh = new THREE.Mesh(hitGeo, hitMat);
-                hitMesh.position.copy(node.position);
+                hitMesh.position.copy(elevatedPos);
                 hitMesh.userData = { node };
                 nodesGroup.add(hitMesh);
                 nodeHitboxes.push(hitMesh);
             });
 
-            // 2. Build Connection Arcs
+            // 2. Build Multi-Layer Connection Arcs & Comet Packet Systems
             while (arcsGroup.children.length > 0) {
                 const child = arcsGroup.children[0];
                 arcsGroup.remove(child);
             }
-            packetParticles.length = 0;
+            packetComets.length = 0;
             lineMeshes.length = 0;
-
-            const packetGeo = new THREE.SphereGeometry(1.2, 12, 12);
-            const selected = selectedNodeRef.current;
 
             currentArcs.forEach((arc, i) => {
                 const isConnectedToSelected = selected && (arc.fromUserId === selected.id || arc.toUserId === selected.id);
 
-                // Silky high-contrast white/silver trajectories matching reference screenshot
+                // Color definition based on connection telemetry status
                 let arcColor = 0xffffff;
-                let opacity = 0.72;
+                let glowColor = 0x93c5fd;
+                let opacity = 0.75;
+                let glowOpacity = 0.28;
 
                 if (isConnectedToSelected) {
-                    arcColor = 0xffffff;
+                    arcColor = 0x34d399;
+                    glowColor = 0x10b981;
                     opacity = 1.0;
+                    glowOpacity = 0.65;
                 } else if (arc.status === 'ACTIVE') {
-                    arcColor = 0xe2e8f0;
-                    opacity = 0.68;
+                    arcColor = 0xf1f5f9;
+                    glowColor = 0x94a3b8;
+                    opacity = 0.72;
+                    glowOpacity = 0.22;
                 } else if (arc.status === 'CONNECTING') {
                     arcColor = 0x34d399;
-                    opacity = 0.85;
+                    glowColor = 0x059669;
+                    opacity = 0.9;
+                    glowOpacity = 0.45;
                 } else if (arc.status === 'DISCONNECTING') {
                     arcColor = 0xf87171;
-                    opacity = 0.4;
+                    glowColor = 0xdc2626;
+                    opacity = 0.45;
+                    glowOpacity = 0.15;
                 }
 
                 if (selected && !isConnectedToSelected) {
-                    opacity = 0.08;
+                    opacity = 0.06;
+                    glowOpacity = 0.02;
                 }
 
+                // Layer 1: Core crisp trajectory line
                 const lineGeometry = new THREE.BufferGeometry().setFromPoints(arc.curvePoints);
                 const lineMaterial = new THREE.LineBasicMaterial({
                     color: arcColor,
@@ -676,36 +796,76 @@ const InteractiveGlobe: React.FC = () => {
                     opacity: opacity,
                     linewidth: 1.5,
                 });
-
                 const lineMesh = new THREE.Line(lineGeometry, lineMaterial);
                 arcsGroup.add(lineMesh);
 
+                // Layer 2: Ambient optical bloom glow line
+                const glowGeometry = new THREE.BufferGeometry().setFromPoints(arc.curvePoints);
+                const glowMaterial = new THREE.LineBasicMaterial({
+                    color: glowColor,
+                    transparent: true,
+                    opacity: glowOpacity,
+                    blending: THREE.AdditiveBlending,
+                });
+                const glowMesh = new THREE.Line(glowGeometry, glowMaterial);
+                arcsGroup.add(glowMesh);
+
                 lineMeshes.push({
                     mesh: lineMesh,
+                    glowMesh: glowMesh,
                     arcId: arc.id,
                     fullPoints: arc.curvePoints,
                     status: arc.status,
                     drawProgress: arc.drawProgress,
                 });
 
-                // Energy Packet Particle gliding along arc
+                // Layer 3: High-Speed Photon Energy Comet (Head + Trailing Sparks)
                 if (arc.status === 'ACTIVE' || arc.status === 'CONNECTING' || isConnectedToSelected) {
-                    const packetMat = new THREE.MeshBasicMaterial({
-                        color: isConnectedToSelected ? 0xffffff : (arc.status === 'CONNECTING' ? 0x34d399 : 0xffffff),
-                        transparent: true,
-                        opacity: isConnectedToSelected ? 1.0 : 0.85,
-                    });
-                    const packetMesh = new THREE.Mesh(packetGeo, packetMat);
-                    packetMesh.position.copy(arc.curvePoints[0]);
-                    arcsGroup.add(packetMesh);
+                    const isSpecial = isConnectedToSelected || arc.status === 'CONNECTING';
+                    const packetTex = isSpecial ? specialPacketTexture : defaultPacketTexture;
 
-                    packetParticles.push({
-                        mesh: packetMesh,
+                    // Comet Head Sprite
+                    const headMat = new THREE.SpriteMaterial({
+                        map: packetTex,
+                        transparent: true,
+                        opacity: isSpecial ? 1.0 : 0.88,
+                        blending: THREE.AdditiveBlending,
+                        depthWrite: false,
+                    });
+                    const headSprite = new THREE.Sprite(headMat);
+                    const headSize = isSpecial ? 5.5 : 4.2;
+                    headSprite.scale.set(headSize, headSize, 1);
+                    headSprite.position.copy(arc.curvePoints[0]);
+                    arcsGroup.add(headSprite);
+
+                    // Trailing Tail Particles
+                    const tailCount = 3;
+                    const tailSprites: THREE.Sprite[] = [];
+                    for (let t = 0; t < tailCount; t++) {
+                        const tailMat = new THREE.SpriteMaterial({
+                            map: packetTex,
+                            transparent: true,
+                            opacity: (0.55 - t * 0.15) * (isSpecial ? 1.0 : 0.8),
+                            blending: THREE.AdditiveBlending,
+                            depthWrite: false,
+                        });
+                        const tailSprite = new THREE.Sprite(tailMat);
+                        const tailSize = headSize * (0.75 - t * 0.18);
+                        tailSprite.scale.set(tailSize, tailSize, 1);
+                        tailSprite.position.copy(arc.curvePoints[0]);
+                        arcsGroup.add(tailSprite);
+                        tailSprites.push(tailSprite);
+                    }
+
+                    packetComets.push({
+                        headSprite,
+                        tailSprites,
                         curve: arc.curve,
-                        speed: 0.003 + (i % 4) * 0.001,
-                        progress: (i * 0.22) % 1.0,
+                        speed: 0.0035 + (i % 4) * 0.0012,
+                        progress: (i * 0.24) % 1.0,
                         fromId: arc.fromUserId,
                         toId: arc.toUserId,
+                        isSpecial,
                     });
                 }
             });
@@ -745,6 +905,8 @@ const InteractiveGlobe: React.FC = () => {
             if (intersects.length > 0) {
                 const node = intersects[0].object.userData.node as UserGlobeNode;
                 setSelectedNode(node);
+                selectedNodeRef.current = node;
+                rebuildVisualNetwork();
 
                 // Compute world space position of node for camera focus
                 const worldPos = node.position.clone().applyMatrix4(globeGroup.matrixWorld);
@@ -755,7 +917,9 @@ const InteractiveGlobe: React.FC = () => {
             } else {
                 if (selectedNodeRef.current) {
                     setSelectedNode(null);
+                    selectedNodeRef.current = null;
                     targetCameraLookAt.current = null;
+                    rebuildVisualNetwork();
                 }
             }
         };
@@ -805,28 +969,44 @@ const InteractiveGlobe: React.FC = () => {
                 if (item.status === 'CONNECTING' && item.drawProgress < 1.0) {
                     item.drawProgress = Math.min(1.0, item.drawProgress + 0.015);
                     const pointCount = Math.max(2, Math.floor(item.fullPoints.length * item.drawProgress));
-                    item.mesh.geometry.setFromPoints(item.fullPoints.slice(0, pointCount));
+                    const currentPoints = item.fullPoints.slice(0, pointCount);
+                    item.mesh.geometry.setFromPoints(currentPoints);
+                    item.glowMesh.geometry.setFromPoints(currentPoints);
                 }
             });
 
-            // Pulse Concentric Node Rings Animation
+            // Pulse & Rotate Concentric Node Rings Animation
             pulseSprites.forEach(({ sprite, seed, isCurrentUser }) => {
-                const speed = isCurrentUser ? 2.5 : 1.8;
+                const speed = isCurrentUser ? 2.2 : 1.6;
                 const cycle = (elapsedTime * speed + seed) % (Math.PI * 2);
-                const scaleMultiplier = 1.0 + (Math.sin(cycle) + 1.0) * (isCurrentUser ? 0.45 : 0.35);
-                const baseSize = isCurrentUser ? 12 : 10;
+                const scaleMultiplier = 1.0 + (Math.sin(cycle) + 1.0) * (isCurrentUser ? 0.5 : 0.4);
+                const baseSize = isCurrentUser ? 13.5 : 11.5;
                 sprite.scale.set(baseSize * scaleMultiplier, baseSize * scaleMultiplier, 1);
-                (sprite.material as THREE.SpriteMaterial).opacity = Math.max(0.05, 0.7 - Math.sin(cycle) * 0.4);
+                (sprite.material as THREE.SpriteMaterial).opacity = Math.max(0.04, 0.8 - Math.sin(cycle) * 0.5);
+                (sprite.material as THREE.SpriteMaterial).rotation = elapsedTime * (isCurrentUser ? 0.8 : -0.5) + seed;
             });
 
-            // Flow Connection Packet Particles along Bezier Arcs
-            packetParticles.forEach(packet => {
-                packet.progress = (packet.progress + packet.speed) % 1.0;
-                const pt = packet.curve.getPoint(packet.progress);
-                packet.mesh.position.copy(pt);
+            // Flow Connection Packet Comets & Trailing Photon Sparks
+            packetComets.forEach(comet => {
+                comet.progress = (comet.progress + comet.speed) % 1.0;
+                
+                // Head photon packet position
+                const headPt = comet.curve.getPoint(comet.progress);
+                comet.headSprite.position.copy(headPt);
 
-                const s = 1.0 + Math.sin(packet.progress * Math.PI) * 0.4;
-                packet.mesh.scale.set(s, s, s);
+                const pulseFactor = 1.0 + Math.sin(comet.progress * Math.PI) * 0.35;
+                const baseHeadSize = comet.isSpecial ? 5.5 : 4.2;
+                comet.headSprite.scale.set(baseHeadSize * pulseFactor, baseHeadSize * pulseFactor, 1);
+
+                // Trailing photon sparks along arc
+                comet.tailSprites.forEach((tail, tIdx) => {
+                    const tailProgress = (comet.progress - (tIdx + 1) * 0.016 + 1.0) % 1.0;
+                    const tailPt = comet.curve.getPoint(tailProgress);
+                    tail.position.copy(tailPt);
+
+                    const tailSize = (baseHeadSize * (0.75 - tIdx * 0.18)) * pulseFactor;
+                    tail.scale.set(tailSize, tailSize, 1);
+                });
             });
 
             controls.update();
@@ -876,6 +1056,8 @@ const InteractiveGlobe: React.FC = () => {
             currentUserReticleTexture.dispose();
             defaultPulseTexture.dispose();
             currentUserPulseTexture.dispose();
+            defaultPacketTexture.dispose();
+            specialPacketTexture.dispose();
             renderer.dispose();
         };
     }, []);
@@ -885,6 +1067,7 @@ const InteractiveGlobe: React.FC = () => {
         if (cameraRef.current && controlsRef.current) {
             targetCameraLookAt.current = new THREE.Vector3(0, 45, 660);
             setSelectedNode(null);
+            selectedNodeRef.current = null;
         }
     };
 
