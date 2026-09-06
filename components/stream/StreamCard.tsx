@@ -90,5 +90,3 @@ const StreamCard: React.FC<StreamCardProps> = ({ moment }) => {
 };
 
 export default StreamCard;
-
-export default StreamCard;

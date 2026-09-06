@@ -123,14 +123,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [profileKey]);
 
-    const role = userProfile?.role ?? null;
+    // Administrator access is granted either via role in Firestore or verified platform owner email
+    const ADMIN_EMAILS = ['akshaayvardhans@gmail.com'];
+    const role: UserRole | null = userProfile?.role ?? null;
+    const isOwnerAdmin = !!currentUser?.email && ADMIN_EMAILS.includes(currentUser.email.toLowerCase());
+    const isAdmin = role === 'admin' || isOwnerAdmin;
+    const isModerator = role === 'moderator' || isAdmin;
+    const effectiveRole: UserRole | null = isAdmin ? 'admin' : role;
 
     const value: AuthContextType = {
         currentUser,
         userProfile,
-        role,
-        isModerator: role === 'moderator' || role === 'admin',
-        isAdmin: role === 'admin',
+        role: effectiveRole,
+        isModerator,
+        isAdmin,
         loading,
         refreshProfile,
     };

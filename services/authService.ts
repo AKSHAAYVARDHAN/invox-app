@@ -27,36 +27,41 @@ const emptyReputation = {
     collaboration: 0,
 };
 
+export const ADMIN_EMAILS = ['akshaayvardhans@gmail.com'];
+
 /** Build a complete, safe profile document for a new user. */
-const buildUserProfile = (user: FirebaseUser, overrides: Partial<InvoxUser> = {}) => ({
-    uid: user.uid,
-    email: user.email,
-    username: overrides.username ?? user.email?.split('@')[0] ?? 'user' + Date.now().toString().slice(-4),
-    displayName: overrides.displayName ?? user.displayName ?? user.email?.split('@')[0] ?? 'Invox User',
-    photoURL: overrides.photoURL ?? user.photoURL ?? null,
-    role: overrides.role ?? 'user',
-    emailVerified: user.emailVerified,
-    headline: overrides.headline ?? '',
-    bio: overrides.bio ?? '',
-    coverPhotoURL: overrides.coverPhotoURL ?? null,
-    skills: overrides.skills ?? [],
-    interests: overrides.interests ?? [],
-    links: overrides.links ?? [],
-    location: overrides.location ?? '',
-    website: overrides.website ?? '',
-    portfolioURL: overrides.portfolioURL ?? '',
-    followerCount: overrides.followerCount ?? 0,
-    followingCount: overrides.followingCount ?? 0,
-    savedPostCount: overrides.savedPostCount ?? 0,
-    savedProjectCount: overrides.savedProjectCount ?? 0,
-    savedOpportunityCount: overrides.savedOpportunityCount ?? 0,
-    reputation: overrides.reputation ?? emptyReputation,
-    onboardingCompleted: overrides.onboardingCompleted ?? false,
-    profileCompletion: overrides.profileCompletion ?? 0,
-    createdAt: overrides.createdAt ?? serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    lastSeenAt: serverTimestamp(),
-});
+const buildUserProfile = (user: FirebaseUser, overrides: Partial<InvoxUser> = {}) => {
+    const isOwnerAdmin = !!user.email && ADMIN_EMAILS.includes(user.email.toLowerCase());
+    return {
+        uid: user.uid,
+        email: user.email,
+        username: overrides.username ?? user.email?.split('@')[0] ?? 'user' + Date.now().toString().slice(-4),
+        displayName: overrides.displayName ?? user.displayName ?? user.email?.split('@')[0] ?? 'Invox User',
+        photoURL: overrides.photoURL ?? user.photoURL ?? null,
+        role: overrides.role ?? (isOwnerAdmin ? 'admin' : 'user'),
+        emailVerified: user.emailVerified,
+        headline: overrides.headline ?? '',
+        bio: overrides.bio ?? '',
+        coverPhotoURL: overrides.coverPhotoURL ?? null,
+        skills: overrides.skills ?? [],
+        interests: overrides.interests ?? [],
+        links: overrides.links ?? [],
+        location: overrides.location ?? '',
+        website: overrides.website ?? '',
+        portfolioURL: overrides.portfolioURL ?? '',
+        followerCount: overrides.followerCount ?? 0,
+        followingCount: overrides.followingCount ?? 0,
+        savedPostCount: overrides.savedPostCount ?? 0,
+        savedProjectCount: overrides.savedProjectCount ?? 0,
+        savedOpportunityCount: overrides.savedOpportunityCount ?? 0,
+        reputation: overrides.reputation ?? emptyReputation,
+        onboardingCompleted: overrides.onboardingCompleted ?? false,
+        profileCompletion: overrides.profileCompletion ?? 0,
+        createdAt: overrides.createdAt ?? serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        lastSeenAt: serverTimestamp(),
+    };
+};
 
 export const initializeAuthPersistence = () => setPersistence(auth, browserLocalPersistence);
 
@@ -101,6 +106,9 @@ export const ensureUserProfile = async (
             const existing = snapshot.data();
             console.log(`[PROFILE_LOAD] users/${user.uid} found. Syncing auth fields.`);
 
+            const isOwnerAdmin = !!user.email && ADMIN_EMAILS.includes(user.email.toLowerCase());
+            const roleUpdates = (isOwnerAdmin && existing.role !== 'admin') ? { role: 'admin' } : {};
+
             await updateDoc(userRef, {
                 email: user.email,
                 emailVerified: user.emailVerified,
@@ -108,6 +116,7 @@ export const ensureUserProfile = async (
                 displayName: existing.displayName || user.displayName || '',
                 // Prefer stored photoURL; fall back to Auth only if empty
                 photoURL: existing.photoURL || user.photoURL || null,
+                ...roleUpdates,
                 updatedAt: serverTimestamp(),
                 lastSeenAt: serverTimestamp(),
             });

@@ -4,15 +4,24 @@ import React, { useState, useRef, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { HomeIcon, ExploreIcon, SpotlightIcon, CommunityIcon, HubIcon, LogoutIcon, TrendingUpIcon, MicrophoneIcon, CubeIcon, CometIcon, ProfileIcon, CogIcon } from '../ui/Icons';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePlatformConfig } from '../../contexts/PlatformConfigContext';
 import { logout } from '../../services/authService';
+import type { SectionId } from '../../types';
 
-const navItems = [
-    { name: 'Explore', path: '/explore', icon: ExploreIcon },
-    { name: 'Trendz', path: '/trendz', icon: TrendingUpIcon },
-    { name: 'Spotlight', path: '/spotlight', icon: SpotlightIcon },
-    { name: 'Communities', path: '/communities', icon: CommunityIcon },
-    { name: 'Hub', path: '/hub', icon: HubIcon },
-    { name: 'My Space', path: '/myspace', icon: CubeIcon },
+interface NavItem {
+    name: string;
+    path: string;
+    icon: React.ComponentType<{ className?: string }>;
+    sectionId?: SectionId;
+}
+
+const navItems: NavItem[] = [
+    { name: 'Explore', path: '/explore', icon: ExploreIcon, sectionId: 'explore' },
+    { name: 'Trendz', path: '/trendz', icon: TrendingUpIcon, sectionId: 'trendz' },
+    { name: 'Spotlight', path: '/spotlight', icon: SpotlightIcon, sectionId: 'spotlight' },
+    { name: 'Communities', path: '/communities', icon: CommunityIcon, sectionId: 'communities' },
+    { name: 'Hub', path: '/hub', icon: HubIcon, sectionId: 'hub' },
+    { name: 'My Space', path: '/myspace', icon: CubeIcon, sectionId: 'mySpace' },
     { name: 'Duppor', path: '/duppor', icon: CometIcon },
 ];
 
@@ -25,10 +34,19 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHub }) => {
     const navLinkClasses = "flex items-center space-x-3.5 px-3.5 py-2.5 rounded-none text-zinc-400 hover:bg-zinc-900/80 hover:text-white border border-transparent hover:border-zinc-800/80 transition-all duration-150 text-sm font-medium tracking-wide";
     const activeLinkClasses = "bg-zinc-900 text-white border-zinc-700/90 shadow-none font-semibold";
-    const { currentUser, userProfile } = useAuth();
+    const { currentUser, userProfile, isAdmin } = useAuth();
+    const { isSectionVisible } = usePlatformConfig();
     const location = ReactRouterDOM.useLocation();
     const navigate = ReactRouterDOM.useNavigate();
     
+    // Dynamically filter sections based on centralized platform configuration
+    // Normal users will not see any sections where visibleToUsers = false or enabled = false
+    const visibleNavItems = navItems.filter((item) => {
+        if (!item.sectionId) return true;
+        if (isAdmin) return true;
+        return isSectionVisible(item.sectionId);
+    });
+
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -118,7 +136,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHu
                     </div>
                     <nav className="flex-1 overflow-y-auto no-scrollbar space-y-1">
                         <ul>
-                            {navItems.map(item => (
+                            {visibleNavItems.map(item => (
                                 <li key={item.name} className="mb-1">
                                     <ReactRouterDOM.NavLink
                                         to={item.path}
@@ -183,6 +201,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHu
                                         Account
                                     </div>
                                     <ul className="py-1" role="menu">
+                                        {isAdmin && (
+                                            <li className="border-b border-zinc-800/80 mb-1 pb-1">
+                                                <button
+                                                    onClick={() => handleMenuNavigation('/admin')}
+                                                    className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs font-mono text-emerald-400 hover:bg-emerald-950/40 hover:text-emerald-300 transition-colors"
+                                                    role="menuitem"
+                                                >
+                                                    <CogIcon className="w-4 h-4 text-emerald-400" />
+                                                    <span className="font-bold">Admin Center</span>
+                                                </button>
+                                            </li>
+                                        )}
                                         <li>
                                             <button
                                                 onClick={() => handleMenuNavigation('/profile')}

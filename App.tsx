@@ -21,14 +21,17 @@ import ComingSoonPage from './pages/ComingSoon';
 import OnboardingPage from './pages/Onboarding';
 import SettingsPage from './pages/Settings';
 import { LandingPage } from './pages/LandingPage';
+import AdminPage from './pages/admin/AdminPage';
+import AdminRoute from './components/admin/AdminRoute';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { AIAssistantButton, AIChatModal } from './components/ui/AIAssistant';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { PlatformConfigProvider, usePlatformConfig } from './contexts/PlatformConfigContext';
 import GoForItFilterModal from './components/spotlight/GoForItFilterModal';
 import { usePullToRefresh } from './components/hooks/usePullToRefresh';
 import PullToRefreshIndicator from './components/ui/PullToRefreshIndicator';
 import { AIAssistantProvider, useAIAssistant, FilterProvider } from './contexts/AIAssistantContext';
-import type { HubConversation, Message } from './types';
+import type { HubConversation, Message, SectionId } from './types';
 
 
 const pageTitles: { [key: string]: string } = {
@@ -303,6 +306,40 @@ const ProtectedLayout = () => {
     );
 };
 
+const DefaultPlatformRedirect = () => {
+    const { getDefaultRoute, loading } = usePlatformConfig();
+    if (loading) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-[#080808] gap-4">
+                <div className="w-8 h-8 border-2 border-zinc-800 border-t-white animate-spin"></div>
+            </div>
+        );
+    }
+    return <ReactRouterDOM.Navigate to={getDefaultRoute()} replace />;
+};
+
+const SectionRouteGuard: React.FC<{ sectionId: SectionId; children: React.ReactNode }> = ({ sectionId, children }) => {
+    const { isSectionAccessible, getDefaultRoute, loading } = usePlatformConfig();
+    const { isAdmin } = useAuth();
+
+    if (loading) {
+        return (
+            <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
+                <div className="w-8 h-8 border-2 border-zinc-800 border-t-white animate-spin"></div>
+                <p className="font-mono text-xs text-zinc-500 tracking-widest uppercase">// VERIFYING SECTION ACCESS...</p>
+            </div>
+        );
+    }
+
+    // Administrators always retain access to inspect and preview all sections
+    if (isAdmin || isSectionAccessible(sectionId)) {
+        return <>{children}</>;
+    }
+
+    // Normal users attempting to access a disabled or hidden section are gracefully redirected
+    return <ReactRouterDOM.Navigate to={getDefaultRoute()} replace />;
+};
+
 const AppRoutes = () => {
     const { currentUser, loading } = useAuth();
 
@@ -317,11 +354,21 @@ const AppRoutes = () => {
 
     return (
         <ReactRouterDOM.Routes>
-            <ReactRouterDOM.Route path="/" element={!currentUser ? <LandingPage /> : <ReactRouterDOM.Navigate to="/explore" />} />
+            <ReactRouterDOM.Route path="/" element={!currentUser ? <LandingPage /> : <DefaultPlatformRedirect />} />
             <ReactRouterDOM.Route path="/landing" element={<LandingPage />} />
-            <ReactRouterDOM.Route path="/login" element={!currentUser ? <LoginPage /> : <ReactRouterDOM.Navigate to="/explore" />} />
-            <ReactRouterDOM.Route path="/signup" element={!currentUser ? <SignupPage /> : <ReactRouterDOM.Navigate to="/explore" />} />
+            <ReactRouterDOM.Route path="/login" element={!currentUser ? <LoginPage /> : <DefaultPlatformRedirect />} />
+            <ReactRouterDOM.Route path="/signup" element={!currentUser ? <SignupPage /> : <DefaultPlatformRedirect />} />
             
+            {/* Admin Control Center Route - Isolated from normal user feed */}
+            <ReactRouterDOM.Route
+                path="/admin"
+                element={
+                    <AdminRoute>
+                        <AdminPage />
+                    </AdminRoute>
+                }
+            />
+
             <ReactRouterDOM.Route element={<ProtectedRoute />}>
                 <ReactRouterDOM.Route path="/onboarding" element={<OnboardingPage />} />
                 <ReactRouterDOM.Route path="/*" element={<MainAppRoutes />} />
@@ -333,24 +380,24 @@ const AppRoutes = () => {
 const MainAppRoutes = () => (
     <ReactRouterDOM.Routes>
         <ReactRouterDOM.Route element={<ProtectedLayout />}>
-            <ReactRouterDOM.Route path="/" element={<ReactRouterDOM.Navigate to="/explore" />} />
-            <ReactRouterDOM.Route path="/explore" element={<ExplorePage />} />
-            <ReactRouterDOM.Route path="/trendz" element={<TrendzPage />} />
-            <ReactRouterDOM.Route path="/spotlight" element={<SpotlightPage />} />
-            <ReactRouterDOM.Route path="/communities" element={<CommunitiesPage />} />
-            <ReactRouterDOM.Route path="/hub" element={<HubPage />} />
-            <ReactRouterDOM.Route path="/myspace" element={<MySpacePage />} />
-            <ReactRouterDOM.Route path="/myspace/uploads" element={<UploadsPage />} />
+            <ReactRouterDOM.Route path="/" element={<DefaultPlatformRedirect />} />
+            <ReactRouterDOM.Route path="/explore" element={<SectionRouteGuard sectionId="explore"><ExplorePage /></SectionRouteGuard>} />
+            <ReactRouterDOM.Route path="/trendz" element={<SectionRouteGuard sectionId="trendz"><TrendzPage /></SectionRouteGuard>} />
+            <ReactRouterDOM.Route path="/spotlight" element={<SectionRouteGuard sectionId="spotlight"><SpotlightPage /></SectionRouteGuard>} />
+            <ReactRouterDOM.Route path="/communities" element={<SectionRouteGuard sectionId="communities"><CommunitiesPage /></SectionRouteGuard>} />
+            <ReactRouterDOM.Route path="/hub" element={<SectionRouteGuard sectionId="hub"><HubPage /></SectionRouteGuard>} />
+            <ReactRouterDOM.Route path="/myspace" element={<SectionRouteGuard sectionId="mySpace"><MySpacePage /></SectionRouteGuard>} />
+            <ReactRouterDOM.Route path="/myspace/uploads" element={<SectionRouteGuard sectionId="mySpace"><UploadsPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/duppor" element={<ComingSoonPage pageName="Duppor" subtitle="16 days to go" />} />
             <ReactRouterDOM.Route path="/profile" element={<ProfilePage />} />
             <ReactRouterDOM.Route path="/settings" element={<SettingsPage />} />
-            <ReactRouterDOM.Route path="/applications" element={<ApplicationStatusPage />} />
-            <ReactRouterDOM.Route path="/saved-applications" element={<SavedApplicationsPage />} />
-            <ReactRouterDOM.Route path="*" element={<ReactRouterDOM.Navigate to="/explore" />} />
+            <ReactRouterDOM.Route path="/applications" element={<SectionRouteGuard sectionId="spotlight"><ApplicationStatusPage /></SectionRouteGuard>} />
+            <ReactRouterDOM.Route path="/saved-applications" element={<SectionRouteGuard sectionId="spotlight"><SavedApplicationsPage /></SectionRouteGuard>} />
+            <ReactRouterDOM.Route path="*" element={<DefaultPlatformRedirect />} />
         </ReactRouterDOM.Route>
-        <ReactRouterDOM.Route path="/apply/:offerId" element={<ApplicationFormPage />} />
+        <ReactRouterDOM.Route path="/apply/:offerId" element={<SectionRouteGuard sectionId="spotlight"><ApplicationFormPage /></SectionRouteGuard>} />
     </ReactRouterDOM.Routes>
-)
+);
 
 const AIChatManager = () => {
     const { isModalOpen, closeModal } = useAIAssistant();
@@ -363,14 +410,16 @@ function App() {
   return (
     <ReactRouterDOM.HashRouter>
         <AuthProvider>
-            <FilterProvider>
-                <AIAssistantProvider>
-                    <div id="main-app-wrapper">
-                        <AppRoutes />
-                    </div>
-                    <AIChatManager />
-                </AIAssistantProvider>
-            </FilterProvider>
+            <PlatformConfigProvider>
+                <FilterProvider>
+                    <AIAssistantProvider>
+                        <div id="main-app-wrapper">
+                            <AppRoutes />
+                        </div>
+                        <AIChatManager />
+                    </AIAssistantProvider>
+                </FilterProvider>
+            </PlatformConfigProvider>
         </AuthProvider>
     </ReactRouterDOM.HashRouter>
   );

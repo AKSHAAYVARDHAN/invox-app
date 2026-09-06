@@ -54,6 +54,20 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["authorId", "title", "status", "createdAt"]
+    },
+    "PlatformSections": {
+      "title": "PlatformSections",
+      "description": "Centralized platform section availability, status, and visibility configuration.",
+      "type": "object",
+      "properties": {
+        "sections": {
+          "type": "object",
+          "description": "Map of platform sections and their runtime configuration"
+        },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["sections"]
     }
   },
   "firestore": {
@@ -68,6 +82,10 @@
     "/projects/{projectId}": {
       "schema": "Project",
       "description": "Collaborative projects and venture briefs."
+    },
+    "/platformConfig/{configId}": {
+      "schema": "PlatformSections",
+      "description": "Platform configuration documents including module sections management."
     }
   }
 }

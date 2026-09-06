@@ -303,3 +303,19 @@ export interface StreamLoop {
     content: string;
     imageUrl: string;
 }
+
+export type SectionId = 'explore' | 'trendz' | 'spotlight' | 'communities' | 'hub' | 'mySpace';
+
+export type SectionStatus = 'live' | 'development' | 'coming_soon' | 'disabled';
+
+export interface SectionConfig {
+    id: SectionId;
+    name: string;
+    enabled: boolean;
+    visibleToUsers: boolean;
+    status: SectionStatus;
+    path: string;
+    description?: string;
+}
+
+export type PlatformSectionsConfig = Record<SectionId, SectionConfig>;

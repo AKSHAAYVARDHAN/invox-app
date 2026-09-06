@@ -1,9 +1,11 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePlatformConfig } from '../../contexts/PlatformConfigContext';
 
 export const ProtectedRoute = () => {
     const { currentUser, userProfile, loading } = useAuth();
+    const { getDefaultRoute } = usePlatformConfig();
     const location = useLocation();
 
     if (loading) {
@@ -23,9 +25,9 @@ export const ProtectedRoute = () => {
         return <Navigate to="/onboarding" replace />;
     }
 
-    // If onboarding is completed and user tries to access /onboarding, send them to /explore
+    // If onboarding is completed and user tries to access /onboarding, send them to dynamic default route
     if (userProfile && userProfile.onboardingCompleted && location.pathname === '/onboarding') {
-         return <Navigate to="/explore" replace />;
+         return <Navigate to={getDefaultRoute()} replace />;
     }
 
     return <Outlet />;

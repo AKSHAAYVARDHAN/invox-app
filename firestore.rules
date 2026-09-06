@@ -29,7 +29,8 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return hasRole('admin');
+      return (signedIn() && exists(userPath(uid())) && currentUser().role == 'admin')
+        || (signedIn() && request.auth.token.email in ['akshaayvardhans@gmail.com']);
     }
 
     function owns(field) {
@@ -167,6 +168,11 @@ service cloud.firestore {
         allow update, delete: if signedIn()
           && (resource.data.senderId == uid() || isModerator());
       }
+    }
+
+    match /platformConfig/{configId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
     }
   }
 }
