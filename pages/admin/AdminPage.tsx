@@ -655,13 +655,13 @@ export const AdminPage: React.FC = () => {
                                                 <SharpSwitch
                                                     checked={section.visibleToUsers}
                                                     onChange={() => handleToggleVisibility(key)}
-                                                    label="Visible to users"
+                                                    label="User Visibility"
                                                     description="Shows in user navigation"
                                                 />
                                                 <SharpSwitch
                                                     checked={section.enabled}
                                                     onChange={() => handleToggleEnabled(key)}
-                                                    label="Module enabled"
+                                                    label="Module Status"
                                                     description="Active section processor"
                                                 />
 
@@ -699,7 +699,7 @@ export const AdminPage: React.FC = () => {
                                     <span className="text-2xl font-semibold text-white mt-1 block">{totalCount}</span>
                                 </div>
                                 <div className="p-5 rounded-none bg-[#0c0c0e] border border-zinc-800">
-                                    <span className="text-xs font-medium text-zinc-500 block font-mono">Visible to users</span>
+                                    <span className="text-xs font-medium text-zinc-500 block font-mono">User Visibility</span>
                                     <span className="text-2xl font-semibold text-white mt-1 block">
                                         {visibleCount}
                                     </span>
@@ -728,8 +728,8 @@ export const AdminPage: React.FC = () => {
                                                 <th className="py-3 px-5 font-medium">Section</th>
                                                 <th className="py-3 px-5 font-medium">Route</th>
                                                 <th className="py-3 px-5 font-medium">Status</th>
-                                                <th className="py-3 px-5 font-medium">Module enabled</th>
-                                                <th className="py-3 px-5 font-medium">User visibility</th>
+                                                <th className="py-3 px-5 font-medium">Module Status</th>
+                                                <th className="py-3 px-5 font-medium">User Visibility</th>
                                                 <th className="py-3 px-5 font-medium text-right">Action</th>
                                             </tr>
                                         </thead>
