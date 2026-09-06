@@ -1,16 +1,98 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePlatformConfig } from '../../contexts/PlatformConfigContext';
 import {
     PlatformSectionsConfig,
-    SectionConfig,
     SectionId,
     SectionStatus,
 } from '../../types';
 import { SECTION_KEYS, DEFAULT_SECTIONS_CONFIG } from '../../services/platformConfigService';
 
-type AdminTab = 'dashboard' | 'sections' | 'settings';
+type AdminTab = 'sections' | 'overview' | 'settings';
+
+interface StatusOption {
+    value: SectionStatus;
+    label: string;
+}
+
+const STATUS_OPTIONS: StatusOption[] = [
+    { value: 'live', label: 'Live' },
+    { value: 'development', label: 'Development' },
+    { value: 'coming_soon', label: 'Coming soon' },
+    { value: 'disabled', label: 'Disabled' },
+];
+
+/** Clean, minimal status dot and label */
+const StatusIndicator: React.FC<{ status: SectionStatus }> = ({ status }) => {
+    switch (status) {
+        case 'live':
+            return (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400">
+                    <span className="w-1.5 h-1.5 bg-emerald-400"></span>
+                    Live
+                </span>
+            );
+        case 'development':
+            return (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-400">
+                    <span className="w-1.5 h-1.5 bg-amber-400"></span>
+                    Development
+                </span>
+            );
+        case 'coming_soon':
+            return (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-sky-400">
+                    <span className="w-1.5 h-1.5 bg-sky-400"></span>
+                    Coming soon
+                </span>
+            );
+        case 'disabled':
+        default:
+            return (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500">
+                    <span className="w-1.5 h-1.5 bg-zinc-600"></span>
+                    Disabled
+                </span>
+            );
+    }
+};
+
+/** Sharp Invox-themed modern toggle switch */
+const SharpSwitch: React.FC<{
+    checked: boolean;
+    onChange: () => void;
+    label: string;
+    description?: string;
+    disabled?: boolean;
+}> = ({ checked, onChange, label, description, disabled }) => {
+    return (
+        <div className="flex items-center justify-between gap-4 py-2.5">
+            <div className="flex flex-col">
+                <span className="text-sm font-medium text-zinc-200">{label}</span>
+                {description && <span className="text-xs text-zinc-500 mt-0.5">{description}</span>}
+            </div>
+            <button
+                type="button"
+                role="switch"
+                aria-checked={checked}
+                disabled={disabled}
+                onClick={onChange}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-none border transition-colors duration-150 ease-in-out focus:outline-none ${
+                    checked
+                        ? 'bg-white border-white'
+                        : 'bg-zinc-900 border-zinc-700 hover:border-zinc-600'
+                } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+            >
+                <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-none transition duration-150 ease-in-out ${
+                        checked ? 'translate-x-6 bg-zinc-950' : 'translate-x-1 bg-zinc-400'
+                    }`}
+                />
+            </button>
+        </div>
+    );
+};
 
 export const AdminPage: React.FC = () => {
     const { currentUser, userProfile } = useAuth();
@@ -23,6 +105,8 @@ export const AdminPage: React.FC = () => {
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
     // Keep draft in sync with live sections when not dirty
     useEffect(() => {
@@ -32,46 +116,37 @@ export const AdminPage: React.FC = () => {
     }, [sections, hasUnsavedChanges]);
 
     const handleToggleEnabled = (sectionId: SectionId) => {
-        setDraftSections((prev) => {
-            const next = {
-                ...prev,
-                [sectionId]: {
-                    ...prev[sectionId],
-                    enabled: !prev[sectionId].enabled,
-                },
-            };
-            return next;
-        });
+        setDraftSections((prev) => ({
+            ...prev,
+            [sectionId]: {
+                ...prev[sectionId],
+                enabled: !prev[sectionId].enabled,
+            },
+        }));
         setHasUnsavedChanges(true);
         setSaveSuccess(false);
     };
 
     const handleToggleVisibility = (sectionId: SectionId) => {
-        setDraftSections((prev) => {
-            const next = {
-                ...prev,
-                [sectionId]: {
-                    ...prev[sectionId],
-                    visibleToUsers: !prev[sectionId].visibleToUsers,
-                },
-            };
-            return next;
-        });
+        setDraftSections((prev) => ({
+            ...prev,
+            [sectionId]: {
+                ...prev[sectionId],
+                visibleToUsers: !prev[sectionId].visibleToUsers,
+            },
+        }));
         setHasUnsavedChanges(true);
         setSaveSuccess(false);
     };
 
     const handleStatusChange = (sectionId: SectionId, status: SectionStatus) => {
-        setDraftSections((prev) => {
-            const next = {
-                ...prev,
-                [sectionId]: {
-                    ...prev[sectionId],
-                    status,
-                },
-            };
-            return next;
-        });
+        setDraftSections((prev) => ({
+            ...prev,
+            [sectionId]: {
+                ...prev[sectionId],
+                status,
+            },
+        }));
         setHasUnsavedChanges(true);
         setSaveSuccess(false);
     };
@@ -80,7 +155,6 @@ export const AdminPage: React.FC = () => {
         let preset: PlatformSectionsConfig = { ...draftSections };
 
         if (presetName === 'focus_communities') {
-            // Explore OFF, Trendz OFF, Spotlight OFF, Communities ON, Hub OFF, My Space OFF
             preset = {
                 explore: { ...preset.explore, enabled: false, visibleToUsers: false },
                 trendz: { ...preset.trendz, enabled: false, visibleToUsers: false },
@@ -89,7 +163,7 @@ export const AdminPage: React.FC = () => {
                 hub: { ...preset.hub, enabled: false, visibleToUsers: false },
                 mySpace: { ...preset.mySpace, enabled: false, visibleToUsers: false },
             };
-            setStatusMessage('Applied preset: FOCUS_COMMUNITIES (Only Communities enabled & visible)');
+            setStatusMessage('Applied preset: Communities only');
         } else if (presetName === 'focus_explore') {
             preset = {
                 explore: { ...preset.explore, enabled: true, visibleToUsers: true, status: 'live' },
@@ -99,7 +173,7 @@ export const AdminPage: React.FC = () => {
                 hub: { ...preset.hub, enabled: false, visibleToUsers: false },
                 mySpace: { ...preset.mySpace, enabled: false, visibleToUsers: false },
             };
-            setStatusMessage('Applied preset: FOCUS_EXPLORE (Only Explore enabled & visible)');
+            setStatusMessage('Applied preset: Explore only');
         } else if (presetName === 'all_live') {
             preset = {
                 explore: { ...preset.explore, enabled: true, visibleToUsers: true, status: 'live' },
@@ -109,10 +183,10 @@ export const AdminPage: React.FC = () => {
                 hub: { ...preset.hub, enabled: true, visibleToUsers: true, status: 'live' },
                 mySpace: { ...preset.mySpace, enabled: true, visibleToUsers: true, status: 'live' },
             };
-            setStatusMessage('Applied preset: ALL_LIVE (Explore, Hub, My Space enabled)');
+            setStatusMessage('Applied preset: All live sections');
         } else if (presetName === 'default_all') {
             preset = { ...DEFAULT_SECTIONS_CONFIG };
-            setStatusMessage('Applied preset: DEFAULT_SCHEMA (All 6 sections enabled with initial roles)');
+            setStatusMessage('Applied preset: Reset all sections');
         }
 
         setDraftSections(preset);
@@ -127,10 +201,10 @@ export const AdminPage: React.FC = () => {
             await saveSections(draftSections);
             setHasUnsavedChanges(false);
             setSaveSuccess(true);
-            setStatusMessage('Platform section configuration successfully synced to Firestore.');
+            setStatusMessage('Configuration saved successfully.');
             setTimeout(() => setSaveSuccess(false), 4000);
         } catch (err: any) {
-            setStatusMessage(`Error saving to Firestore: ${err.message}`);
+            setStatusMessage(`Error saving changes: ${err.message}`);
         } finally {
             setSaving(false);
         }
@@ -139,18 +213,18 @@ export const AdminPage: React.FC = () => {
     const handleDiscardDraft = () => {
         setDraftSections(sections);
         setHasUnsavedChanges(false);
-        setStatusMessage('Unsaved draft reverted to current live configuration.');
+        setStatusMessage('Unsaved changes discarded.');
     };
 
     const handleResetToSystemDefaults = async () => {
-        if (window.confirm('Are you sure you want to reset all 6 sections to system defaults in Firestore?')) {
+        if (window.confirm('Reset all sections to platform defaults?')) {
             setSaving(true);
             try {
                 await resetToDefaults();
                 setDraftSections(DEFAULT_SECTIONS_CONFIG);
                 setHasUnsavedChanges(false);
                 setSaveSuccess(true);
-                setStatusMessage('System default configuration restored and saved.');
+                setStatusMessage('Reset to default configuration.');
             } catch (err: any) {
                 setStatusMessage(`Reset error: ${err.message}`);
             } finally {
@@ -159,561 +233,633 @@ export const AdminPage: React.FC = () => {
         }
     };
 
-    // Calculate metrics
+    // Metrics
     const totalCount = SECTION_KEYS.length;
     const enabledCount = SECTION_KEYS.filter((k) => draftSections[k]?.enabled).length;
     const visibleCount = SECTION_KEYS.filter((k) => draftSections[k]?.enabled && draftSections[k]?.visibleToUsers).length;
+    const hiddenCount = totalCount - visibleCount;
     const liveCount = SECTION_KEYS.filter((k) => draftSections[k]?.status === 'live').length;
-    const devCount = SECTION_KEYS.filter((k) => draftSections[k]?.status === 'development').length;
-    const comingSoonCount = SECTION_KEYS.filter((k) => draftSections[k]?.status === 'coming_soon').length;
 
-    const visibleList = SECTION_KEYS.filter((k) => draftSections[k]?.enabled && draftSections[k]?.visibleToUsers).map(
-        (k) => draftSections[k]?.name
-    );
-    const hiddenList = SECTION_KEYS.filter((k) => !draftSections[k]?.enabled || !draftSections[k]?.visibleToUsers).map(
-        (k) => draftSections[k]?.name
-    );
+    // Filtered keys
+    const filteredSectionKeys = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        if (!query) return SECTION_KEYS;
+        return SECTION_KEYS.filter((key) => {
+            const sec = draftSections[key];
+            if (!sec) return false;
+            return (
+                sec.name.toLowerCase().includes(query) ||
+                sec.id.toLowerCase().includes(query) ||
+                sec.path.toLowerCase().includes(query) ||
+                (sec.description && sec.description.toLowerCase().includes(query))
+            );
+        });
+    }, [draftSections, searchQuery]);
 
     return (
-        <div className="min-h-screen bg-[#070709] text-zinc-300 font-sans selection:bg-zinc-800">
-            {/* Top Command Bar */}
-            <header className="border-b border-zinc-800/90 bg-[#0c0c0f] sticky top-0 z-40">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                            <div className="w-2.5 h-2.5 bg-emerald-500 rounded-none animate-pulse"></div>
-                            <span className="font-mono text-xs font-bold text-white tracking-widest uppercase">
-                                INVOX // ADMIN_CONTROL_CENTER
-                            </span>
-                        </div>
-                        <span className="hidden md:inline-block px-2 py-0.5 bg-zinc-800/80 border border-zinc-700 text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
-                            RBAC // OPERATOR: {currentUser?.email || 'ADMIN'}
-                        </span>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        <Link
-                            to={getDefaultRoute()}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-mono text-zinc-200 uppercase tracking-wider transition-colors"
-                        >
-                            <span>← Exit to Invox App</span>
-                        </Link>
-                    </div>
-                </div>
-
-                {/* Subnav Navigation */}
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between border-t border-zinc-800/60 text-xs font-mono">
-                    <div className="flex gap-1">
-                        <button
-                            onClick={() => setActiveTab('sections')}
-                            className={`px-4 py-2.5 border-b-2 uppercase tracking-wider transition-colors ${
-                                activeTab === 'sections'
-                                    ? 'border-emerald-500 text-white font-bold bg-zinc-900/50'
-                                    : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
-                            }`}
-                        >
-                            [01] Sections Management
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('dashboard')}
-                            className={`px-4 py-2.5 border-b-2 uppercase tracking-wider transition-colors ${
-                                activeTab === 'dashboard'
-                                    ? 'border-emerald-500 text-white font-bold bg-zinc-900/50'
-                                    : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
-                            }`}
-                        >
-                            [02] Overview & Telemetry
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('settings')}
-                            className={`px-4 py-2.5 border-b-2 uppercase tracking-wider transition-colors ${
-                                activeTab === 'settings'
-                                    ? 'border-emerald-500 text-white font-bold bg-zinc-900/50'
-                                    : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
-                            }`}
-                        >
-                            [03] System & Security
-                        </button>
-                    </div>
-
-                    <div className="hidden sm:flex items-center gap-2 text-[11px] text-zinc-500">
-                        <span>FIRESTORE:</span>
-                        <span className="text-zinc-300 font-bold">platformConfig/sections</span>
-                    </div>
-                </div>
-            </header>
-
-            {/* Notification / Status Bar */}
-            {statusMessage && (
+        <div className="min-h-screen bg-[#080808] text-zinc-100 font-sans antialiased flex">
+            {/* Mobile Sidebar Overlay */}
+            {isMobileSidebarOpen && (
                 <div
-                    className={`border-b text-xs font-mono px-4 py-2 transition-all flex items-center justify-between ${
-                        statusMessage.includes('Error')
-                            ? 'bg-rose-950/60 border-rose-800 text-rose-300'
-                            : 'bg-emerald-950/60 border-emerald-800 text-emerald-300'
-                    }`}
-                >
-                    <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
-                        <span>{statusMessage}</span>
-                        <button onClick={() => setStatusMessage(null)} className="text-zinc-400 hover:text-white">
+                    className="fixed inset-0 bg-black/80 z-40 lg:hidden backdrop-blur-sm"
+                    onClick={() => setIsMobileSidebarOpen(false)}
+                />
+            )}
+
+            {/* FULL-HEIGHT LEFT SIDEBAR */}
+            <aside
+                className={`fixed top-0 left-0 h-full w-64 bg-[#080808] border-r border-zinc-800 z-50 flex flex-col justify-between p-4 transition-transform duration-200 ease-out lg:translate-x-0 ${
+                    isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+                }`}
+            >
+                {/* Top Section: Brand & Nav */}
+                <div className="flex flex-col space-y-6">
+                    {/* Brand Header */}
+                    <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-white text-black font-mono font-bold text-xs flex items-center justify-center border border-zinc-400 rounded-none">
+                                IX
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h1 className="text-base font-bold tracking-tight text-white font-mono uppercase">
+                                        INVOX
+                                    </h1>
+                                    <span className="text-[10px] font-mono px-1.5 py-0.5 bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-none">
+                                        ADMIN
+                                    </span>
+                                </div>
+                                <p className="text-[11px] text-zinc-500 font-mono tracking-wider">
+                                    Platform Control
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Mobile close button */}
+                        <button
+                            onClick={() => setIsMobileSidebarOpen(false)}
+                            className="lg:hidden text-zinc-400 hover:text-white p-1.5 border border-zinc-800 rounded-none hover:bg-zinc-900"
+                        >
                             ✕
                         </button>
                     </div>
-                </div>
-            )}
 
-            {/* Main Content Area */}
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {/* TAB 1: SECTIONS MANAGEMENT */}
-                {activeTab === 'sections' && (
+                    {/* Navigation Groups */}
                     <div className="space-y-6">
-                        {/* Control Bar & Action Header */}
-                        <div className="bg-[#0d0d10] border border-zinc-800 p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div>
-                                <h1 className="text-base sm:text-lg font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                                    <span>// SECTION_AVAILABILITY_MATRIX</span>
-                                    {hasUnsavedChanges && (
-                                        <span className="text-[10px] px-2 py-0.5 bg-amber-950/80 border border-amber-800 text-amber-300">
-                                            UNSAVED CHANGES PENDING
-                                        </span>
-                                    )}
-                                </h1>
-                                <p className="text-xs text-zinc-400 font-mono mt-1">
-                                    Configure visibility, module enablement, and development phases. All changes directly control user navigation and routing.
-                                </p>
+                        {/* Platform Group */}
+                        <div>
+                            <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 px-3 mb-2">
+                                Platform
                             </div>
-
-                            <div className="flex flex-wrap items-center gap-2.5">
-                                {hasUnsavedChanges && (
-                                    <button
-                                        onClick={handleDiscardDraft}
-                                        disabled={saving}
-                                        className="px-3 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-mono text-zinc-400 hover:text-white transition-colors"
-                                    >
-                                        Discard Changes
-                                    </button>
-                                )}
+                            <nav className="space-y-1">
                                 <button
-                                    onClick={handleSaveChanges}
-                                    disabled={saving || !hasUnsavedChanges}
-                                    className={`px-5 py-2 text-xs font-mono font-bold uppercase tracking-wider border transition-all flex items-center gap-2 ${
-                                        hasUnsavedChanges
-                                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-950/50'
-                                            : 'bg-zinc-900 border-zinc-800 text-zinc-500 cursor-not-allowed'
+                                    onClick={() => {
+                                        setActiveTab('sections');
+                                        setIsMobileSidebarOpen(false);
+                                    }}
+                                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-none text-sm font-medium transition-all duration-150 border ${
+                                        activeTab === 'sections'
+                                            ? 'bg-zinc-900 text-white border-zinc-700 font-semibold'
+                                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60 border-transparent hover:border-zinc-800'
                                     }`}
                                 >
-                                    {saving ? (
-                                        <>
-                                            <span className="w-3 h-3 border-2 border-zinc-400 border-t-white rounded-none animate-spin"></span>
-                                            <span>SAVING TO FIRESTORE...</span>
-                                        </>
-                                    ) : saveSuccess ? (
-                                        <span>✓ SAVED & SYNCED</span>
-                                    ) : (
-                                        <span>SAVE CONFIGURATION</span>
-                                    )}
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Presets Bar */}
-                        <div className="bg-[#0b0b0e] border border-zinc-800/80 p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-mono">
-                            <span className="text-zinc-400 uppercase tracking-wider text-[11px] font-bold">
-                                // RAPID_DEVELOPMENT_PRESETS:
-                            </span>
-                            <div className="flex flex-wrap gap-2">
-                                <button
-                                    onClick={() => handleApplyPreset('focus_communities')}
-                                    className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white text-[11px] transition-colors"
-                                    title="Explore OFF, Trendz OFF, Spotlight OFF, Communities ON, Hub OFF, My Space OFF"
-                                >
-                                    Focus: Communities Only
-                                </button>
-                                <button
-                                    onClick={() => handleApplyPreset('focus_explore')}
-                                    className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white text-[11px] transition-colors"
-                                >
-                                    Focus: Explore Only
-                                </button>
-                                <button
-                                    onClick={() => handleApplyPreset('all_live')}
-                                    className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white text-[11px] transition-colors"
-                                >
-                                    All Live Sections
-                                </button>
-                                <button
-                                    onClick={() => handleApplyPreset('default_all')}
-                                    className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white text-[11px] transition-colors"
-                                >
-                                    Reset All Defaults
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Real-time Normal User Simulation Box */}
-                        <div className="bg-[#0e0e13] border border-zinc-800 p-4 font-mono text-xs">
-                            <div className="flex items-center gap-2 mb-2 text-zinc-400">
-                                <div className="w-2 h-2 rounded-none bg-cyan-400"></div>
-                                <span className="font-bold uppercase tracking-wider">LIVE_AUDIT // NORMAL USER EXPERIENCE:</span>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                                <div className="border border-emerald-900/50 bg-emerald-950/20 p-3">
-                                    <span className="text-emerald-400 font-bold block mb-1">
-                                        ✓ Visible & Accessible to Normal Users ({visibleList.length}):
-                                    </span>
-                                    <span className="text-zinc-300">
-                                        {visibleList.length > 0 ? visibleList.join(', ') : 'None (All sections currently hidden)'}
-                                    </span>
-                                </div>
-                                <div className="border border-zinc-800 bg-zinc-950/40 p-3">
-                                    <span className="text-zinc-500 font-bold block mb-1">
-                                        ✕ Hidden / Inaccessible to Normal Users ({hiddenList.length}):
-                                    </span>
-                                    <span className="text-zinc-400">
-                                        {hiddenList.length > 0 ? hiddenList.join(', ') : 'None (All sections visible)'}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* The Six Section Cards Grid */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            {SECTION_KEYS.map((key) => {
-                                const section = draftSections[key];
-                                if (!section) return null;
-
-                                const isNormalUserVisible = section.enabled && section.visibleToUsers;
-
-                                return (
-                                    <div
-                                        key={section.id}
-                                        className={`bg-[#0d0d11] border transition-all p-5 font-mono flex flex-col justify-between ${
-                                            isNormalUserVisible
-                                                ? 'border-zinc-700/80 shadow-md shadow-black/40'
-                                                : 'border-zinc-800/60 opacity-90'
-                                        }`}
-                                    >
-                                        {/* Card Header */}
-                                        <div>
-                                            <div className="flex items-start justify-between gap-2 pb-3 border-b border-zinc-800/80">
-                                                <div>
-                                                    <div className="flex items-center gap-2.5">
-                                                        <h3 className="text-base font-bold text-white tracking-wider">
-                                                            {section.name}
-                                                        </h3>
-                                                        <span className="text-[10px] px-2 py-0.5 bg-zinc-900 border border-zinc-700 text-zinc-400">
-                                                            id: {section.id}
-                                                        </span>
-                                                    </div>
-                                                    <span className="text-[11px] text-zinc-500 mt-0.5 block">
-                                                        Route: {section.path}
-                                                    </span>
-                                                </div>
-
-                                                {/* Normal User Access Pill */}
-                                                <div className="text-right">
-                                                    {isNormalUserVisible ? (
-                                                        <span className="inline-block px-2.5 py-1 bg-emerald-950/60 border border-emerald-700 text-emerald-300 text-[10px] font-bold uppercase tracking-wider">
-                                                            ● USERS: VISIBLE
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-block px-2.5 py-1 bg-zinc-900 border border-zinc-700 text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
-                                                            ○ USERS: HIDDEN
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Description */}
-                                            <p className="text-xs text-zinc-400 mt-3 mb-4 leading-relaxed">
-                                                {section.description || DEFAULT_SECTIONS_CONFIG[key].description}
-                                            </p>
-
-                                            {/* Status Selector */}
-                                            <div className="mb-4">
-                                                <label className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-2 font-bold">
-                                                    Development Phase / Status:
-                                                </label>
-                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                                                    {(['live', 'development', 'coming_soon', 'disabled'] as SectionStatus[]).map(
-                                                        (statusOption) => {
-                                                            const isCurrent = section.status === statusOption;
-                                                            let colorClasses = '';
-
-                                                            if (statusOption === 'live') {
-                                                                colorClasses = isCurrent
-                                                                    ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 font-bold'
-                                                                    : 'bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:text-zinc-300';
-                                                            } else if (statusOption === 'development') {
-                                                                colorClasses = isCurrent
-                                                                    ? 'bg-amber-950/80 border-amber-500 text-amber-300 font-bold'
-                                                                    : 'bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:text-zinc-300';
-                                                            } else if (statusOption === 'coming_soon') {
-                                                                colorClasses = isCurrent
-                                                                    ? 'bg-cyan-950/80 border-cyan-500 text-cyan-300 font-bold'
-                                                                    : 'bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:text-zinc-300';
-                                                            } else {
-                                                                colorClasses = isCurrent
-                                                                    ? 'bg-rose-950/80 border-rose-500 text-rose-300 font-bold'
-                                                                    : 'bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:text-zinc-300';
-                                                            }
-
-                                                            return (
-                                                                <button
-                                                                    key={statusOption}
-                                                                    type="button"
-                                                                    onClick={() => handleStatusChange(key, statusOption)}
-                                                                    className={`py-1.5 px-2 text-[10px] uppercase tracking-wider border text-center transition-all ${colorClasses}`}
-                                                                >
-                                                                    {statusOption.replace('_', ' ')}
-                                                                </button>
-                                                            );
-                                                        }
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Toggles & Footer */}
-                                        <div className="pt-4 border-t border-zinc-800/80 space-y-3">
-                                            {/* Toggle 1: Enabled */}
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <span className="text-xs text-zinc-200 font-bold uppercase tracking-wider block">
-                                                        Module Enabled
-                                                    </span>
-                                                    <span className="text-[10px] text-zinc-500">
-                                                        Master switch for module code and processing
-                                                    </span>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleToggleEnabled(key)}
-                                                    className={`px-3 py-1 text-xs uppercase tracking-wider border transition-colors ${
-                                                        section.enabled
-                                                            ? 'bg-emerald-950/70 border-emerald-600 text-emerald-300 font-bold'
-                                                            : 'bg-zinc-900 border-zinc-700 text-zinc-500'
-                                                    }`}
-                                                >
-                                                    {section.enabled ? '[ENABLED]' : '[DISABLED]'}
-                                                </button>
-                                            </div>
-
-                                            {/* Toggle 2: Visible to Users */}
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <span className="text-xs text-zinc-200 font-bold uppercase tracking-wider block">
-                                                        Visible to Normal Users
-                                                    </span>
-                                                    <span className="text-[10px] text-zinc-500">
-                                                        Renders in sidebar navigation and permits direct user routing
-                                                    </span>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleToggleVisibility(key)}
-                                                    className={`px-3 py-1 text-xs uppercase tracking-wider border transition-colors ${
-                                                        section.visibleToUsers
-                                                            ? 'bg-emerald-950/70 border-emerald-600 text-emerald-300 font-bold'
-                                                            : 'bg-zinc-900 border-zinc-700 text-zinc-500'
-                                                    }`}
-                                                >
-                                                    {section.visibleToUsers ? '[VISIBLE]' : '[HIDDEN]'}
-                                                </button>
-                                            </div>
-
-                                            {/* Section Direct Test Link for Admin */}
-                                            <div className="pt-2 flex justify-end">
-                                                <Link
-                                                    to={section.path}
-                                                    className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1 transition-colors"
-                                                >
-                                                    <span>Inspect {section.name} Section →</span>
-                                                </Link>
-                                            </div>
-                                        </div>
+                                    <div className="flex items-center gap-3">
+                                        <svg className="w-4 h-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 6h16M4 12h16M4 18h7" />
+                                        </svg>
+                                        <span>Sections</span>
                                     </div>
-                                );
-                            })}
+                                    <span className="text-xs font-mono text-zinc-500">{totalCount}</span>
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        setActiveTab('overview');
+                                        setIsMobileSidebarOpen(false);
+                                    }}
+                                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-none text-sm font-medium transition-all duration-150 border ${
+                                        activeTab === 'overview'
+                                            ? 'bg-zinc-900 text-white border-zinc-700 font-semibold'
+                                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60 border-transparent hover:border-zinc-800'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <svg className="w-4 h-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                        </svg>
+                                        <span>Overview</span>
+                                    </div>
+                                </button>
+                            </nav>
+                        </div>
+
+                        {/* System Group */}
+                        <div>
+                            <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 px-3 mb-2">
+                                System
+                            </div>
+                            <nav className="space-y-1">
+                                <button
+                                    onClick={() => {
+                                        setActiveTab('settings');
+                                        setIsMobileSidebarOpen(false);
+                                    }}
+                                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-none text-sm font-medium transition-all duration-150 border ${
+                                        activeTab === 'settings'
+                                            ? 'bg-zinc-900 text-white border-zinc-700 font-semibold'
+                                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60 border-transparent hover:border-zinc-800'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <svg className="w-4 h-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        </svg>
+                                        <span>Settings</span>
+                                    </div>
+                                </button>
+                            </nav>
                         </div>
                     </div>
-                )}
 
-                {/* TAB 2: OVERVIEW & TELEMETRY */}
-                {activeTab === 'dashboard' && (
-                    <div className="space-y-6">
-                        {/* Metrics Bar */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 font-mono">
-                            <div className="bg-[#0d0d10] border border-zinc-800 p-4">
-                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">Total Modules</span>
-                                <span className="text-2xl font-bold text-white mt-1 block">{totalCount}</span>
-                            </div>
-                            <div className="bg-[#0d0d10] border border-zinc-800 p-4">
-                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">Enabled Modules</span>
-                                <span className="text-2xl font-bold text-white mt-1 block">{enabledCount} / {totalCount}</span>
-                            </div>
-                            <div className="bg-[#0d0d10] border border-emerald-900/60 bg-emerald-950/10 p-4">
-                                <span className="text-[10px] text-emerald-400 uppercase tracking-wider block">Normal User Visible</span>
-                                <span className="text-2xl font-bold text-emerald-300 mt-1 block">{visibleCount} / {totalCount}</span>
-                            </div>
-                            <div className="bg-[#0d0d10] border border-zinc-800 p-4">
-                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">Phase: Live</span>
-                                <span className="text-2xl font-bold text-emerald-400 mt-1 block">{liveCount}</span>
-                            </div>
-                            <div className="bg-[#0d0d10] border border-zinc-800 p-4">
-                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">Phase: Development</span>
-                                <span className="text-2xl font-bold text-amber-400 mt-1 block">{devCount}</span>
-                            </div>
-                            <div className="bg-[#0d0d10] border border-zinc-800 p-4">
-                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">Phase: Coming Soon</span>
-                                <span className="text-2xl font-bold text-cyan-400 mt-1 block">{comingSoonCount}</span>
-                            </div>
+                    {/* Sharp Platform Status Widget */}
+                    <div className="p-3.5 bg-[#0c0c0e] border border-zinc-800 rounded-none space-y-2">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider">
+                                Platform Status
+                            </span>
+                            <span className="w-2 h-2 bg-emerald-400"></span>
                         </div>
-
-                        {/* Section Status Matrix Table */}
-                        <div className="bg-[#0d0d10] border border-zinc-800 p-6 font-mono">
-                            <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-4">
-                                // COMPONENT_STATUS_TELEMETRY
-                            </h2>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left text-xs border-collapse">
-                                    <thead>
-                                        <tr className="border-b border-zinc-800 text-zinc-500 text-[10px] uppercase tracking-wider">
-                                            <th className="py-2.5 px-3">Module</th>
-                                            <th className="py-2.5 px-3">Path</th>
-                                            <th className="py-2.5 px-3">Phase Status</th>
-                                            <th className="py-2.5 px-3">Master Switch</th>
-                                            <th className="py-2.5 px-3">User Visibility</th>
-                                            <th className="py-2.5 px-3">Access State</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-zinc-800/60">
-                                        {SECTION_KEYS.map((k) => {
-                                            const s = draftSections[k];
-                                            if (!s) return null;
-                                            const isVisible = s.enabled && s.visibleToUsers;
-
-                                            return (
-                                                <tr key={s.id} className="hover:bg-zinc-900/30">
-                                                    <td className="py-3 px-3 font-bold text-white">{s.name}</td>
-                                                    <td className="py-3 px-3 text-zinc-400">{s.path}</td>
-                                                    <td className="py-3 px-3">
-                                                        <span
-                                                            className={`px-2 py-0.5 text-[10px] border uppercase tracking-wider ${
-                                                                s.status === 'live'
-                                                                    ? 'border-emerald-800 text-emerald-400 bg-emerald-950/30'
-                                                                    : s.status === 'development'
-                                                                    ? 'border-amber-800 text-amber-400 bg-amber-950/30'
-                                                                    : s.status === 'coming_soon'
-                                                                    ? 'border-cyan-800 text-cyan-400 bg-cyan-950/30'
-                                                                    : 'border-zinc-800 text-zinc-500 bg-zinc-900/30'
-                                                            }`}
-                                                        >
-                                                            {s.status}
-                                                        </span>
-                                                    </td>
-                                                    <td className="py-3 px-3">
-                                                        {s.enabled ? (
-                                                            <span className="text-emerald-400 font-bold">ON</span>
-                                                        ) : (
-                                                            <span className="text-zinc-500">OFF</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="py-3 px-3">
-                                                        {s.visibleToUsers ? (
-                                                            <span className="text-emerald-400 font-bold">ON</span>
-                                                        ) : (
-                                                            <span className="text-zinc-500">OFF</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="py-3 px-3">
-                                                        {isVisible ? (
-                                                            <span className="text-emerald-400">Normal User Accessible</span>
-                                                        ) : (
-                                                            <span className="text-amber-500">Admin Preview Only</span>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
+                        <div className="flex items-baseline justify-between text-xs font-mono">
+                            <span className="text-zinc-400">Visibility</span>
+                            <span className="text-white font-semibold">
+                                {visibleCount} / {totalCount}
+                            </span>
+                        </div>
+                        <div className="w-full bg-zinc-800 h-1 rounded-none overflow-hidden">
+                            <div
+                                className="bg-white h-full transition-all duration-300"
+                                style={{ width: `${(visibleCount / totalCount) * 100}%` }}
+                            />
                         </div>
                     </div>
-                )}
+                </div>
 
-                {/* TAB 3: SYSTEM & SECURITY */}
-                {activeTab === 'settings' && (
-                    <div className="space-y-6 max-w-4xl font-mono">
-                        {/* Security Architecture Box */}
-                        <div className="bg-[#0d0d10] border border-zinc-800 p-6">
-                            <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-2 flex items-center gap-2">
-                                <span className="text-emerald-500">🛡</span>
-                                <span>// AUTHORIZATION_AND_SECURITY_ENFORCEMENT</span>
-                            </h2>
-                            <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
-                                Access to this Admin Control Center and write authority over platform configuration documents are strictly guarded at two complementary layers:
-                            </p>
-                            <div className="space-y-3 text-xs">
-                                <div className="border border-zinc-800 bg-black/40 p-3.5">
-                                    <span className="text-white font-bold block mb-1">1. Cloud Firestore Security Rules</span>
-                                    <p className="text-zinc-400">
-                                        All writes to <code className="text-zinc-200">platformConfig/*</code> require verification via the rule <code className="text-emerald-400">isAdmin()</code>, which checks both user profile role assignment in Firestore and verified authorization token claims.
-                                    </p>
+                {/* Bottom Section: Admin Profile & Exit Button */}
+                <div className="space-y-3 pt-4 border-t border-zinc-800">
+                    {currentUser?.email && (
+                        <div className="p-2.5 bg-[#0c0c0e] border border-zinc-800/80 rounded-none flex items-center gap-2.5">
+                            <div className="w-6 h-6 bg-zinc-800 border border-zinc-700 text-zinc-300 font-mono text-[11px] flex items-center justify-center shrink-0">
+                                {currentUser.email.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <div className="text-xs text-zinc-200 truncate font-medium">
+                                    {currentUser.email}
                                 </div>
-                                <div className="border border-zinc-800 bg-black/40 p-3.5">
-                                    <span className="text-white font-bold block mb-1">2. Client-Side Route Protection</span>
-                                    <p className="text-zinc-400">
-                                        The <code className="text-zinc-200">&lt;AdminRoute&gt;</code> guard automatically inspects authenticated Firebase credentials. Normal authenticated users and guests attempting to access <code className="text-zinc-200">/admin</code> are safely blocked.
-                                    </p>
+                                <div className="text-[10px] text-zinc-500 font-mono uppercase">
+                                    {userProfile?.role || 'Administrator'}
                                 </div>
                             </div>
                         </div>
+                    )}
 
-                        {/* Active Operator Diagnostics */}
-                        <div className="bg-[#0d0d10] border border-zinc-800 p-6">
-                            <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-4">
-                                // ACTIVE_OPERATOR_IDENTITY
-                            </h2>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                                <div>
-                                    <span className="text-zinc-500 block text-[10px] uppercase">Authenticated Email</span>
-                                    <span className="text-white font-bold">{currentUser?.email || 'N/A'}</span>
-                                </div>
-                                <div>
-                                    <span className="text-zinc-500 block text-[10px] uppercase">Firebase UID</span>
-                                    <span className="text-zinc-300 text-[11px] truncate block">{currentUser?.uid || 'N/A'}</span>
-                                </div>
-                                <div>
-                                    <span className="text-zinc-500 block text-[10px] uppercase">Assigned System Role</span>
-                                    <span className="text-emerald-400 font-bold uppercase">{userProfile?.role || 'admin'}</span>
-                                </div>
-                                <div>
-                                    <span className="text-zinc-500 block text-[10px] uppercase">Firestore Target Document</span>
-                                    <span className="text-zinc-300">platformConfig/sections</span>
-                                </div>
+                    <Link
+                        to={getDefaultRoute()}
+                        className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-none text-xs font-medium text-zinc-300 hover:text-white bg-[#0e0e11] hover:bg-zinc-800 border border-zinc-700 transition-colors"
+                    >
+                        <span>Exit Admin</span>
+                        <svg className="w-3.5 h-3.5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        </svg>
+                    </Link>
+                </div>
+            </aside>
+
+            {/* MAIN CONTENT AREA */}
+            <div className="flex-1 min-w-0 lg:pl-64 flex flex-col min-h-screen">
+                {/* Top Mobile Bar */}
+                <header className="lg:hidden border-b border-zinc-800 bg-[#0c0c0e] px-4 py-3 flex items-center justify-between sticky top-0 z-30">
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setIsMobileSidebarOpen(true)}
+                            className="p-1.5 border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white rounded-none"
+                            aria-label="Open sidebar"
+                        >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                            </svg>
+                        </button>
+                        <span className="font-bold tracking-tight text-white font-mono text-sm">INVOX ADMIN</span>
+                    </div>
+
+                    <Link
+                        to={getDefaultRoute()}
+                        className="text-xs px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-none"
+                    >
+                        Exit
+                    </Link>
+                </header>
+
+                {/* Status Message Bar */}
+                {statusMessage && (
+                    <div className="bg-[#0e0e12] border-b border-zinc-800 px-6 py-3 text-xs transition-all">
+                        <div className="max-w-6xl flex items-center justify-between text-zinc-300">
+                            <div className="flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 bg-white"></span>
+                                <span>{statusMessage}</span>
                             </div>
-                        </div>
-
-                        {/* Factory Reset */}
-                        <div className="bg-[#0d0d10] border border-rose-950/60 p-6">
-                            <h2 className="text-sm font-bold text-rose-400 uppercase tracking-wider mb-2">
-                                // DANGER_ZONE: RESET_CONFIGURATION
-                            </h2>
-                            <p className="text-xs text-zinc-400 mb-4">
-                                Restore initial factory platform section settings in Firestore. This resets all six sections to their initial deployment defaults.
-                            </p>
                             <button
-                                onClick={handleResetToSystemDefaults}
-                                disabled={saving}
-                                className="px-4 py-2 bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-200 text-xs uppercase tracking-wider transition-colors"
+                                onClick={() => setStatusMessage(null)}
+                                className="text-zinc-500 hover:text-zinc-300 text-xs px-2 py-0.5 border border-zinc-800 rounded-none hover:bg-zinc-800"
                             >
-                                Reset to Default Schema
+                                Dismiss
                             </button>
                         </div>
                     </div>
                 )}
-            </main>
+
+                {/* Main Content Body */}
+                <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    {/* TAB 1: SECTIONS */}
+                    {activeTab === 'sections' && (
+                        <div className="space-y-6">
+                            {/* Page Header & Save Bar */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-zinc-800">
+                                <div>
+                                    <h1 className="text-2xl font-semibold text-white tracking-tight">Sections</h1>
+                                    <p className="text-sm text-zinc-400 mt-1">
+                                        Control which Invox sections are available to users.
+                                    </p>
+                                </div>
+
+                                {/* Save Toolbar */}
+                                <div className="flex items-center gap-2.5">
+                                    {hasUnsavedChanges && (
+                                        <button
+                                            onClick={handleDiscardDraft}
+                                            disabled={saving}
+                                            className="px-4 py-2 text-xs font-medium text-zinc-400 hover:text-white bg-transparent border border-zinc-800 hover:border-zinc-700 rounded-none transition-colors"
+                                        >
+                                            Discard
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={handleSaveChanges}
+                                        disabled={saving || !hasUnsavedChanges}
+                                        className={`px-5 py-2 text-xs font-medium rounded-none border transition-all flex items-center gap-2 ${
+                                            hasUnsavedChanges
+                                                ? 'bg-white text-zinc-950 border-white hover:bg-zinc-200 font-semibold'
+                                                : 'bg-[#0d0d10] border-zinc-800 text-zinc-600 cursor-not-allowed'
+                                        }`}
+                                    >
+                                        {saving ? (
+                                            <>
+                                                <span className="w-3.5 h-3.5 border-2 border-zinc-400 border-t-zinc-900 animate-spin"></span>
+                                                <span>Saving...</span>
+                                            </>
+                                        ) : saveSuccess ? (
+                                            <>
+                                                <span>✓ Saved</span>
+                                            </>
+                                        ) : (
+                                            <span>Save changes</span>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Development Presets Bar (Sharp) */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-[#0c0c0e] border border-zinc-800 rounded-none">
+                                <span className="text-xs font-medium text-zinc-400 font-mono">
+                                    Development presets
+                                </span>
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        onClick={() => handleApplyPreset('focus_communities')}
+                                        className="px-3 py-1.5 text-xs font-medium rounded-none bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition-colors"
+                                    >
+                                        Communities only
+                                    </button>
+                                    <button
+                                        onClick={() => handleApplyPreset('focus_explore')}
+                                        className="px-3 py-1.5 text-xs font-medium rounded-none bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition-colors"
+                                    >
+                                        Explore only
+                                    </button>
+                                    <button
+                                        onClick={() => handleApplyPreset('all_live')}
+                                        className="px-3 py-1.5 text-xs font-medium rounded-none bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition-colors"
+                                    >
+                                        All live
+                                    </button>
+                                    <button
+                                        onClick={() => handleApplyPreset('default_all')}
+                                        className="px-3 py-1.5 text-xs font-medium rounded-none bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+                                    >
+                                        Reset
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Sharp Search Bar */}
+                            <div className="relative">
+                                <svg
+                                    className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                                    />
+                                </svg>
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="Search sections..."
+                                    className="w-full bg-[#0c0c0e] border border-zinc-800 rounded-none pl-10 pr-4 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
+                                />
+                                {searchQuery && (
+                                    <button
+                                        onClick={() => setSearchQuery('')}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500 hover:text-zinc-300"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Section Cards (Sharp Borders) */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                                {filteredSectionKeys.map((key) => {
+                                    const section = draftSections[key];
+                                    if (!section) return null;
+
+                                    return (
+                                        <div
+                                            key={section.id}
+                                            className="bg-[#0c0c0e] border border-zinc-800 hover:border-zinc-700 rounded-none p-6 transition-colors duration-150 flex flex-col justify-between"
+                                        >
+                                            <div>
+                                                {/* Header: Section name + Status */}
+                                                <div className="flex items-start justify-between gap-3 mb-2">
+                                                    <div>
+                                                        <h3 className="text-base font-semibold text-white tracking-tight">
+                                                            {section.name}
+                                                        </h3>
+                                                        <span className="font-mono text-xs text-zinc-500">
+                                                            {section.path}
+                                                        </span>
+                                                    </div>
+                                                    <StatusIndicator status={section.status} />
+                                                </div>
+
+                                                {/* Description */}
+                                                <p className="text-sm text-zinc-400 leading-relaxed mt-2 mb-5">
+                                                    {section.description || DEFAULT_SECTIONS_CONFIG[key].description}
+                                                </p>
+
+                                                {/* Status Selector with Sharp Buttons */}
+                                                <div className="mb-4">
+                                                    <span className="text-xs font-medium text-zinc-400 block mb-2 font-mono">
+                                                        Status
+                                                    </span>
+                                                    <div className="grid grid-cols-4 gap-1 p-1 bg-zinc-950 border border-zinc-800 rounded-none">
+                                                        {STATUS_OPTIONS.map((opt) => {
+                                                            const isSelected = section.status === opt.value;
+                                                            return (
+                                                                <button
+                                                                    key={opt.value}
+                                                                    type="button"
+                                                                    onClick={() => handleStatusChange(key, opt.value)}
+                                                                    className={`py-1 text-xs font-medium rounded-none transition-all ${
+                                                                        isSelected
+                                                                            ? 'bg-zinc-800 text-white shadow-none font-semibold'
+                                                                            : 'text-zinc-500 hover:text-zinc-300'
+                                                                    }`}
+                                                                >
+                                                                    {opt.label}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Toggles & Manage Link */}
+                                            <div className="pt-4 border-t border-zinc-800/80 divide-y divide-zinc-800/50">
+                                                <SharpSwitch
+                                                    checked={section.visibleToUsers}
+                                                    onChange={() => handleToggleVisibility(key)}
+                                                    label="Visible to users"
+                                                    description="Shows in user navigation"
+                                                />
+                                                <SharpSwitch
+                                                    checked={section.enabled}
+                                                    onChange={() => handleToggleEnabled(key)}
+                                                    label="Module enabled"
+                                                    description="Active section processor"
+                                                />
+
+                                                <div className="pt-3 flex justify-end">
+                                                    <Link
+                                                        to={section.path}
+                                                        className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white px-2.5 py-1 border border-transparent hover:border-zinc-800 rounded-none transition-colors"
+                                                    >
+                                                        <span>Manage</span>
+                                                        <span>→</span>
+                                                    </Link>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TAB 2: OVERVIEW */}
+                    {activeTab === 'overview' && (
+                        <div className="space-y-8">
+                            <div>
+                                <h1 className="text-2xl font-semibold text-white tracking-tight">Overview</h1>
+                                <p className="text-sm text-zinc-400 mt-1">
+                                    Summary of platform section visibility and state.
+                                </p>
+                            </div>
+
+                            {/* Sharp Metric Cards */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                                <div className="p-5 rounded-none bg-[#0c0c0e] border border-zinc-800">
+                                    <span className="text-xs font-medium text-zinc-500 block font-mono">Total sections</span>
+                                    <span className="text-2xl font-semibold text-white mt-1 block">{totalCount}</span>
+                                </div>
+                                <div className="p-5 rounded-none bg-[#0c0c0e] border border-zinc-800">
+                                    <span className="text-xs font-medium text-zinc-500 block font-mono">Visible to users</span>
+                                    <span className="text-2xl font-semibold text-white mt-1 block">
+                                        {visibleCount}
+                                    </span>
+                                </div>
+                                <div className="p-5 rounded-none bg-[#0c0c0e] border border-zinc-800">
+                                    <span className="text-xs font-medium text-zinc-500 block font-mono">Hidden from users</span>
+                                    <span className="text-2xl font-semibold text-zinc-400 mt-1 block">
+                                        {hiddenCount}
+                                    </span>
+                                </div>
+                                <div className="p-5 rounded-none bg-[#0c0c0e] border border-zinc-800">
+                                    <span className="text-xs font-medium text-zinc-500 block font-mono">Live phase</span>
+                                    <span className="text-2xl font-semibold text-emerald-400 mt-1 block">{liveCount}</span>
+                                </div>
+                            </div>
+
+                            {/* Section Status Table (Sharp Borders) */}
+                            <div className="rounded-none bg-[#0c0c0e] border border-zinc-800 overflow-hidden">
+                                <div className="p-5 border-b border-zinc-800">
+                                    <h2 className="text-base font-semibold text-white">Section directory</h2>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm">
+                                        <thead>
+                                            <tr className="border-b border-zinc-800 text-xs text-zinc-500 font-mono">
+                                                <th className="py-3 px-5 font-medium">Section</th>
+                                                <th className="py-3 px-5 font-medium">Route</th>
+                                                <th className="py-3 px-5 font-medium">Status</th>
+                                                <th className="py-3 px-5 font-medium">Module enabled</th>
+                                                <th className="py-3 px-5 font-medium">User visibility</th>
+                                                <th className="py-3 px-5 font-medium text-right">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-zinc-800">
+                                            {SECTION_KEYS.map((k) => {
+                                                const s = draftSections[k];
+                                                if (!s) return null;
+
+                                                return (
+                                                    <tr key={s.id} className="hover:bg-zinc-900/40 transition-colors">
+                                                        <td className="py-3.5 px-5 font-medium text-white">{s.name}</td>
+                                                        <td className="py-3.5 px-5 font-mono text-xs text-zinc-400">
+                                                            {s.path}
+                                                        </td>
+                                                        <td className="py-3.5 px-5">
+                                                            <StatusIndicator status={s.status} />
+                                                        </td>
+                                                        <td className="py-3.5 px-5">
+                                                            <span
+                                                                className={`text-xs font-medium font-mono ${
+                                                                    s.enabled ? 'text-zinc-200' : 'text-zinc-500'
+                                                                }`}
+                                                            >
+                                                                {s.enabled ? 'ON' : 'OFF'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-3.5 px-5">
+                                                            <span
+                                                                className={`text-xs font-medium font-mono ${
+                                                                    s.visibleToUsers ? 'text-emerald-400' : 'text-zinc-500'
+                                                                }`}
+                                                            >
+                                                                {s.visibleToUsers ? 'ON' : 'OFF'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-3.5 px-5 text-right">
+                                                            <Link
+                                                                to={s.path}
+                                                                className="text-xs font-medium text-zinc-400 hover:text-white transition-colors"
+                                                            >
+                                                                Manage →
+                                                            </Link>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TAB 3: SETTINGS */}
+                    {activeTab === 'settings' && (
+                        <div className="space-y-8 max-w-3xl">
+                            <div>
+                                <h1 className="text-2xl font-semibold text-white tracking-tight">Platform settings</h1>
+                                <p className="text-sm text-zinc-400 mt-1">
+                                    Security verification and platform configuration settings.
+                                </p>
+                            </div>
+
+                            {/* Administrator Identity (Sharp) */}
+                            <div className="p-6 rounded-none bg-[#0c0c0e] border border-zinc-800">
+                                <h2 className="text-base font-semibold text-white mb-4">Administrator account</h2>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <span className="text-xs text-zinc-500 block font-mono">Email</span>
+                                        <span className="font-medium text-zinc-200">{currentUser?.email || 'N/A'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-zinc-500 block font-mono">Assigned role</span>
+                                        <span className="font-medium text-emerald-400 capitalize">
+                                            {userProfile?.role || 'Administrator'}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-zinc-500 block font-mono">Configuration collection</span>
+                                        <span className="font-mono text-xs text-zinc-400">platformConfig/sections</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-zinc-500 block font-mono">Account UID</span>
+                                        <span className="font-mono text-xs text-zinc-400 truncate block">
+                                            {currentUser?.uid || 'N/A'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Security Architecture (Sharp) */}
+                            <div className="p-6 rounded-none bg-[#0c0c0e] border border-zinc-800">
+                                <h2 className="text-base font-semibold text-white mb-2">Access & security rules</h2>
+                                <p className="text-sm text-zinc-400 mb-4 leading-relaxed">
+                                    Platform configuration documents in Firestore are guarded by strict rule verification. Only verified administrator accounts can write to these configurations.
+                                </p>
+                                <div className="space-y-3 text-xs">
+                                    <div className="p-3.5 rounded-none bg-zinc-950 border border-zinc-800">
+                                        <span className="font-medium text-zinc-200 block mb-1">Firestore Security Rules</span>
+                                        <p className="text-zinc-400">
+                                            The <code className="text-zinc-300 font-mono">isAdmin()</code> rule requires the request author to have verified administrator status before any document write is permitted.
+                                        </p>
+                                    </div>
+                                    <div className="p-3.5 rounded-none bg-zinc-950 border border-zinc-800">
+                                        <span className="font-medium text-zinc-200 block mb-1">Route Protection</span>
+                                        <p className="text-zinc-400">
+                                            The <code className="text-zinc-300 font-mono">&lt;AdminRoute&gt;</code> guard restricts dashboard access to authenticated administrators only.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Reset Section (Sharp) */}
+                            <div className="p-6 rounded-none bg-[#0c0c0e] border border-zinc-800">
+                                <h2 className="text-base font-semibold text-white mb-2">Reset platform configuration</h2>
+                                <p className="text-sm text-zinc-400 mb-4 leading-relaxed">
+                                    Reset all platform section availability and status back to the default deployment settings in Firestore.
+                                </p>
+                                <button
+                                    onClick={handleResetToSystemDefaults}
+                                    disabled={saving}
+                                    className="px-4 py-2 text-xs font-medium rounded-none text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors"
+                                >
+                                    Reset to defaults
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </main>
+            </div>
         </div>
     );
 };
