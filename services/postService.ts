@@ -20,7 +20,7 @@ import {
 import { db, auth } from '../firebase';
 import { COLLECTIONS, createDocument, deleteDocument, FirestoreRecord, getDocument, listDocuments, updateDocument } from './firestoreService';
 import { uploadFile, getStoragePath } from './storageService';
-import { incrementChannelPostCount, decrementChannelPostCount } from './channelService';
+import { incrementChannelPostCount, decrementChannelPostCount, getChannelById } from './channelService';
 import { Post, PostType } from '../types';
 
 export interface CreatePostInput {
@@ -185,10 +185,30 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
         resolvedPostType = PostType.Feed;
     }
 
+    // Enforce channel requirement for Feed posts
+    if (resolvedPostType === PostType.Feed && !input.channelId) {
+        throw new Error('A Channel is required before publishing a Feed broadcast. Please select or create a channel.');
+    }
+
+    let finalChannelName = input.channelName || null;
+    let finalChannelAvatar = input.channelAvatarUrl || null;
+
+    if (input.channelId && (!finalChannelName || !finalChannelAvatar)) {
+        try {
+            const ch = await getChannelById(input.channelId);
+            if (ch) {
+                finalChannelName = finalChannelName || ch.name;
+                finalChannelAvatar = finalChannelAvatar || ch.avatarUrl || null;
+            }
+        } catch (e) {
+            console.warn('[CHANNEL_LOOKUP_WARN]', e);
+        }
+    }
+
     const postPayload = {
         channelId: input.channelId || null,
-        channelName: input.channelName || null,
-        channelAvatarUrl: input.channelAvatarUrl || null,
+        channelName: finalChannelName,
+        channelAvatarUrl: finalChannelAvatar,
         authorId: currentUser.uid,
         author: {
             name: input.authorProfile?.displayName || currentUser.displayName || 'Invox Member',

@@ -217,3 +217,36 @@ export const decrementChannelPostCount = async (channelId: string): Promise<void
         console.warn(`[DECREMENT_CHANNEL_POST_COUNT_WARN] channelId: ${channelId}`, err);
     }
 };
+
+/**
+ * Updates channel details (name, description, domain, handle).
+ */
+export const updateChannel = async (channelId: string, updates: Partial<CreateChannelInput>): Promise<void> => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('Not authenticated');
+
+    const channelRef = doc(db, COLLECTIONS.channels, channelId);
+    const payload: Record<string, any> = {
+        updatedAt: serverTimestamp(),
+    };
+    if (updates.name) payload.name = updates.name.trim();
+    if (updates.description !== undefined) payload.description = updates.description.trim();
+    if (updates.domain) payload.domain = updates.domain;
+    if (updates.category) payload.category = updates.category;
+    if (updates.handle) payload.handle = updates.handle.trim();
+    if (updates.avatarUrl) payload.avatarUrl = updates.avatarUrl;
+
+    await updateDoc(channelRef, payload);
+};
+
+/**
+ * Deletes a channel document.
+ */
+export const deleteChannel = async (channelId: string): Promise<void> => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('Not authenticated');
+
+    const channelRef = doc(db, COLLECTIONS.channels, channelId);
+    await deleteDoc(channelRef);
+};
+

@@ -17,7 +17,6 @@ import SignupPage from './pages/Signup';
 import ApplicationFormPage from './pages/ApplicationFormPage';
 import ApplicationStatusPage from './pages/ApplicationStatusPage';
 import SavedApplicationsPage from './pages/SavedApplicationsPage';
-import ComingSoonPage from './pages/ComingSoon';
 import OnboardingPage from './pages/Onboarding';
 import SettingsPage from './pages/Settings';
 import { LandingPage } from './pages/LandingPage';
@@ -42,7 +41,6 @@ const pageTitles: { [key: string]: string } = {
     '/hub': 'Hub',
     '/myspace': 'My Space',
     '/myspace/uploads': 'Create Content',
-    '/duppor': 'Duppor',
     '/profile': 'Profile',
     '/applications': 'My Applications',
     '/saved-applications': 'Saved Opportunities',
@@ -320,7 +318,6 @@ const DefaultPlatformRedirect = () => {
 
 const SectionRouteGuard: React.FC<{ sectionId: SectionId; children: React.ReactNode }> = ({ sectionId, children }) => {
     const { isSectionAccessible, getDefaultRoute, loading } = usePlatformConfig();
-    const { isAdmin } = useAuth();
 
     if (loading) {
         return (
@@ -331,12 +328,12 @@ const SectionRouteGuard: React.FC<{ sectionId: SectionId; children: React.ReactN
         );
     }
 
-    // Administrators always retain access to inspect and preview all sections
-    if (isAdmin || isSectionAccessible(sectionId)) {
+    // Platform section visibility and access must be respected by ALL users, including admin
+    if (isSectionAccessible(sectionId)) {
         return <>{children}</>;
     }
 
-    // Normal users attempting to access a disabled or hidden section are gracefully redirected
+    // Any user attempting to access a disabled or hidden section is gracefully redirected to the default visible route
     return <ReactRouterDOM.Navigate to={getDefaultRoute()} replace />;
 };
 
@@ -388,7 +385,6 @@ const MainAppRoutes = () => (
             <ReactRouterDOM.Route path="/hub" element={<SectionRouteGuard sectionId="hub"><HubPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/myspace" element={<SectionRouteGuard sectionId="mySpace"><MySpacePage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/myspace/uploads" element={<SectionRouteGuard sectionId="mySpace"><UploadsPage /></SectionRouteGuard>} />
-            <ReactRouterDOM.Route path="/duppor" element={<ComingSoonPage pageName="Duppor" subtitle="16 days to go" />} />
             <ReactRouterDOM.Route path="/profile" element={<ProfilePage />} />
             <ReactRouterDOM.Route path="/settings" element={<SettingsPage />} />
             <ReactRouterDOM.Route path="/applications" element={<SectionRouteGuard sectionId="spotlight"><ApplicationStatusPage /></SectionRouteGuard>} />

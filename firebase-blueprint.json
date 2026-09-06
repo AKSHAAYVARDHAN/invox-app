@@ -20,11 +20,37 @@
       },
       "required": ["uid", "email", "role"]
     },
+    "Channel": {
+      "title": "Channel",
+      "description": "User-owned channel for publishing feeds and organizing content broadcasts.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "description": "Channel name" },
+        "description": { "type": "string", "description": "Channel description" },
+        "handle": { "type": "string", "description": "Channel unique handle" },
+        "domain": { "type": "string", "description": "Channel domain/category" },
+        "category": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "bannerUrl": { "type": "string" },
+        "ownerId": { "type": "string", "description": "Owner UID" },
+        "authorName": { "type": "string" },
+        "authorAvatarUrl": { "type": "string" },
+        "subscriberCount": { "type": "number" },
+        "postCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "ownerId", "createdAt"]
+    },
     "Post": {
       "title": "Post",
       "description": "Feed, Query, or Thread item with multimedia content and AI summary.",
       "type": "object",
       "properties": {
+        "channelId": { "type": "string", "description": "Channel ID for Feed posts" },
+        "channelName": { "type": "string", "description": "Channel name" },
+        "channelAvatarUrl": { "type": "string", "description": "Channel avatar URL" },
         "authorId": { "type": "string", "description": "Author UID" },
         "author": { "type": "object", "description": "Author metadata" },
         "content": { "type": "string", "description": "Post text content" },
@@ -74,6 +100,10 @@
     "/users/{userId}": {
       "schema": "User",
       "description": "User documents containing profile and system roles."
+    },
+    "/channels/{channelId}": {
+      "schema": "Channel",
+      "description": "User channels for hosting published feeds."
     },
     "/posts/{postId}": {
       "schema": "Post",

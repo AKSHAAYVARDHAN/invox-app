@@ -29,9 +29,10 @@ interface CreateFeedModalProps {
         channelAvatarUrl?: string;
     }) => Promise<void> | void;
     contextName: string;
+    preselectedChannelId?: string;
 }
 
-const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPublish, contextName }) => {
+const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPublish, contextName, preselectedChannelId }) => {
     const { currentUser, userProfile } = useAuth();
     const [oneLine, setOneLine] = useState('');
     const [description, setDescription] = useState('');
@@ -66,7 +67,11 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
                 .then(channels => {
                     setUserChannels(channels);
                     if (channels.length > 0) {
-                        setSelectedChannelId(prev => prev && channels.some(c => c.id === prev) ? prev : channels[0].id);
+                        if (preselectedChannelId && channels.some(c => c.id === preselectedChannelId)) {
+                            setSelectedChannelId(preselectedChannelId);
+                        } else {
+                            setSelectedChannelId(prev => prev && channels.some(c => c.id === prev) ? prev : channels[0].id);
+                        }
                         setIsCreatingChannelMode(false);
                     } else if (contextName.toLowerCase() === 'feed') {
                         // User has no channel yet and is creating a Feed post -> prompt channel setup

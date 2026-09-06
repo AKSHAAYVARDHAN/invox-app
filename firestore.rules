@@ -71,14 +71,22 @@ service cloud.firestore {
 
     match /channels/{channelId} {
       allow read: if signedIn();
-      allow create: if owns('ownerId');
-      allow update, delete: if existingOwner('ownerId') || isModerator();
+      allow create: if signedIn() && request.resource.data.ownerId == uid();
+      allow update, delete: if signedIn() && (resource.data.ownerId == uid() || isModerator());
     }
 
     match /posts/{postId} {
       allow read: if signedIn();
-      allow create: if owns('authorId');
-      allow update, delete: if existingOwner('authorId') || isModerator();
+      allow create: if signedIn()
+        && request.resource.data.authorId == uid()
+        && (
+          (request.resource.data.type == 'Feed' || request.resource.data.postType == 'Feed' || request.resource.data.channelId != null)
+            ? (request.resource.data.channelId is string
+               && exists(/databases/$(database)/documents/channels/$(request.resource.data.channelId))
+               && get(/databases/$(database)/documents/channels/$(request.resource.data.channelId)).data.ownerId == uid())
+            : true
+        );
+      allow update, delete: if signedIn() && (resource.data.authorId == uid() || isModerator());
     }
 
     match /projects/{projectId} {

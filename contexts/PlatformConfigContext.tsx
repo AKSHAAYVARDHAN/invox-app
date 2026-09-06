@@ -16,9 +16,9 @@ interface PlatformConfigContextType {
     sections: PlatformSectionsConfig;
     loading: boolean;
     error: string | null;
-    /** Whether normal users are permitted to see this section in navigation and links. */
+    /** Whether this section is visible in platform navigation for all users (no admin override). */
     isSectionVisible: (sectionId: SectionId | string) => boolean;
-    /** Whether current user is allowed to access the route right now (admins can access dev/hidden sections). */
+    /** Whether this section route is accessible for all users (no admin override). */
     isSectionAccessible: (sectionId: SectionId | string) => boolean;
     /** Returns the first available section path for graceful redirects. */
     getDefaultRoute: () => string;
@@ -47,7 +47,7 @@ export const usePlatformConfig = () => useContext(PlatformConfigContext);
 const PREFERRED_ROUTE_ORDER: SectionId[] = ['explore', 'communities', 'hub', 'trendz', 'spotlight', 'mySpace'];
 
 export const PlatformConfigProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { currentUser, isAdmin } = useAuth();
+    const { currentUser } = useAuth();
     const [sections, setSections] = useState<PlatformSectionsConfig>(DEFAULT_SECTIONS_CONFIG);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -75,7 +75,7 @@ export const PlatformConfigProvider: React.FC<{ children: React.ReactNode }> = (
             const normalizedId = sectionId === 'myspace' ? 'mySpace' : (sectionId as SectionId);
             const section = sections[normalizedId];
             if (!section) return true;
-            return section.enabled && section.visibleToUsers;
+            return section.enabled && section.visibleToUsers && section.status !== 'disabled';
         },
         [sections]
     );
@@ -86,15 +86,10 @@ export const PlatformConfigProvider: React.FC<{ children: React.ReactNode }> = (
             const section = sections[normalizedId];
             if (!section) return true;
 
-            // Administrators always have privilege to access and preview all sections
-            if (isAdmin) {
-                return true;
-            }
-
-            // Normal user access requirement
+            // Strict platformConfig visibility & accessibility for ALL users, including admin (no override)
             return section.enabled && section.visibleToUsers && section.status !== 'disabled';
         },
-        [sections, isAdmin]
+        [sections]
     );
 
     const getDefaultRoute = useCallback((): string => {

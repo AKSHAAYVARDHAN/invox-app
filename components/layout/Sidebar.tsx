@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 // FIX: Use namespace import for react-router-dom to avoid "no exported member" issues.
 import * as ReactRouterDOM from 'react-router-dom';
-import { HomeIcon, ExploreIcon, SpotlightIcon, CommunityIcon, HubIcon, LogoutIcon, TrendingUpIcon, MicrophoneIcon, CubeIcon, CometIcon, ProfileIcon, CogIcon } from '../ui/Icons';
+import { HomeIcon, ExploreIcon, SpotlightIcon, CommunityIcon, HubIcon, LogoutIcon, TrendingUpIcon, MicrophoneIcon, CubeIcon, ProfileIcon, CogIcon } from '../ui/Icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePlatformConfig } from '../../contexts/PlatformConfigContext';
 import { logout } from '../../services/authService';
@@ -22,7 +22,6 @@ const navItems: NavItem[] = [
     { name: 'Communities', path: '/communities', icon: CommunityIcon, sectionId: 'communities' },
     { name: 'Hub', path: '/hub', icon: HubIcon, sectionId: 'hub' },
     { name: 'My Space', path: '/myspace', icon: CubeIcon, sectionId: 'mySpace' },
-    { name: 'Duppor', path: '/duppor', icon: CometIcon },
 ];
 
 interface SidebarProps {
@@ -40,10 +39,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHu
     const navigate = ReactRouterDOM.useNavigate();
     
     // Dynamically filter sections based on centralized platform configuration
-    // Normal users will not see any sections where visibleToUsers = false or enabled = false
+    // All users (including administrators) will not see any sections where visibleToUsers = false or enabled = false
     const visibleNavItems = navItems.filter((item) => {
         if (!item.sectionId) return true;
-        if (isAdmin) return true;
         return isSectionVisible(item.sectionId);
     });
 
