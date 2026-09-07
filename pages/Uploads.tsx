@@ -695,7 +695,7 @@ const UploadsPage = () => {
                             </button>
                             <button
                                 onClick={() => setIsCreatePollModalOpen(true)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-black hover:bg-zinc-200 text-xs font-mono font-bold uppercase tracking-wider transition-all"
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-mono uppercase tracking-wider border border-zinc-700 hover:border-zinc-500 transition-all"
                             >
                                 <PlusIcon className="w-3.5 h-3.5" />
                                 <span>New Poll</span>
@@ -779,7 +779,7 @@ const UploadsPage = () => {
                                                     setOverrideContextName('Thread');
                                                     setIsModalOpen(true);
                                                 }}
-                                                className="px-3 py-2 bg-zinc-900 border border-zinc-700 text-white text-xs uppercase hover:bg-zinc-800"
+                                                className="px-3 py-2 bg-zinc-900 border border-zinc-700 text-white text-xs uppercase hover:bg-zinc-800 transition-all"
                                             >
                                                 + Thread
                                             </button>
@@ -788,13 +788,13 @@ const UploadsPage = () => {
                                                     setOverrideContextName('Query');
                                                     setIsModalOpen(true);
                                                 }}
-                                                className="px-3 py-2 bg-zinc-900 border border-zinc-700 text-white text-xs uppercase hover:bg-zinc-800"
+                                                className="px-3 py-2 bg-zinc-900 border border-zinc-700 text-white text-xs uppercase hover:bg-zinc-800 transition-all"
                                             >
                                                 + Query
                                             </button>
                                             <button
                                                 onClick={() => setIsCreatePollModalOpen(true)}
-                                                className="px-3 py-2 bg-white text-black text-xs uppercase font-bold hover:bg-zinc-200"
+                                                className="px-3 py-2 bg-zinc-900 border border-zinc-700 text-white text-xs uppercase hover:bg-zinc-800 transition-all"
                                             >
                                                 + Poll
                                             </button>
