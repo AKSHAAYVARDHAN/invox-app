@@ -3,14 +3,16 @@ import * as ReactRouterDOM from 'react-router-dom';
 import { FeedCard } from '../components/feed/FeedCard';
 import { QueryCard } from '../components/feed/QueryCard';
 import { ThreadCard } from '../components/feed/ThreadCard';
+import { PollCard } from '../components/feed/PollCard';
 import DomainFilter from '../components/ui/DomainFilter';
-import type { Post } from '../types';
+import type { Post, Poll } from '../types';
 import { PostType } from '../types';
 import ErrorBoundary from '../components/utils/ErrorBoundary';
 import FeedCardSkeleton from '../components/feed/FeedCardSkeleton';
 import { useFilters } from '../contexts/AIAssistantContext';
 import { useAuth } from '../contexts/AuthContext';
 import { subscribeToFeed, getUserLikedPostIds, getUserSavedPostIds, toggleLikePost, toggleBookmarkPost } from '../services/postService';
+import { subscribeToPolls } from '../services/pollService';
 import {
     ClipboardListIcon,
     PresentationChartBarIcon,
@@ -125,8 +127,52 @@ const initialMockPosts: Post[] = [
     }
 ];
 
+const initialMockPolls: Poll[] = [
+    {
+        id: 'mock-poll-1',
+        authorId: 'system-research',
+        author: { name: 'Invox Research', avatarUrl: 'https://picsum.photos/id/10/200/200', isVerified: true },
+        question: "Which LLM deployment architecture will dominate enterprise production by 2026?",
+        description: "Evaluating balance between inference latency, data sovereignty constraints, and hardware CapEx.",
+        options: [
+            { id: 'opt-1', text: 'Hybrid Edge + Cloud Orchestration', voteCount: 142 },
+            { id: 'opt-2', text: 'Fully Localized On-Premise SLMs', voteCount: 98 },
+            { id: 'opt-3', text: 'Centralized Frontier APIs Only', voteCount: 46 },
+            { id: 'opt-4', text: 'Decentralized P2P Inference Networks', voteCount: 29 },
+        ],
+        createdAt: new Date(Date.now() - 3600000 * 12),
+        expiresAt: new Date(Date.now() + 3600000 * 24 * 6),
+        duration: '7d',
+        totalVotes: 315,
+        status: 'active',
+        category: 'Technology',
+        stats: { likes: 340, views: 12500, comments: 52 },
+        type: PostType.Poll,
+    },
+    {
+        id: 'mock-poll-2',
+        authorId: 'system-startup',
+        author: { name: 'Venture Metrics', avatarUrl: 'https://picsum.photos/id/24/200/200', isVerified: true },
+        question: "For early-stage startups in 2026: Bootstrap to profitability or accelerate with VC debt?",
+        description: "Given the current cost of compute and seed valuation environment.",
+        options: [
+            { id: 'opt-1', text: 'Bootstrap to positive unit economics', voteCount: 218 },
+            { id: 'opt-2', text: 'Aggressive Venture Seed Round', voteCount: 84 },
+            { id: 'opt-3', text: 'Venture Debt + Grant Capital', voteCount: 41 },
+        ],
+        createdAt: new Date(Date.now() - 3600000 * 40),
+        expiresAt: new Date(Date.now() + 3600000 * 24 * 3),
+        duration: '7d',
+        totalVotes: 343,
+        status: 'active',
+        category: 'Start Up',
+        stats: { likes: 412, views: 18900, comments: 76 },
+        type: PostType.Poll,
+    }
+];
+
 const categoryFilters = ['All', 'Technology', 'Start Up', 'Sports', 'Art', 'Music', 'Science', 'Health', 'Gaming', 'Finance', 'Food', 'Travel'];
-const discoverFilters = ['All', 'Threads', 'Queries'];
+const discoverFilters = ['All', 'Threads', 'Queries', 'Polls'];
 
 const exploreDomains = [
     { name: 'Marketing', icon: ClipboardListIcon },
@@ -140,6 +186,7 @@ const exploreDomains = [
 const ExplorePage = () => {
     const { currentUser } = useAuth();
     const [firestorePosts, setFirestorePosts] = useState<Post[]>([]);
+    const [firestorePolls, setFirestorePolls] = useState<Poll[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('Feeds');
     const [activeCategory, setActiveCategory] = useState('All');
@@ -147,6 +194,21 @@ const ExplorePage = () => {
     const { domainSelections, setDomainSelection } = useFilters();
     const [likedPostIds, setLikedPostIds] = useState<Set<string>>(new Set());
     const [savedPostIds, setSavedPostIds] = useState<Set<string>>(new Set());
+
+    const [searchParams] = ReactRouterDOM.useSearchParams();
+
+    // Deep link query parameters handling
+    useEffect(() => {
+        const tabParam = searchParams.get('tab');
+        if (tabParam === 'Discover' || tabParam === 'Feeds') {
+            setActiveTab(tabParam);
+        }
+        const filterParam = searchParams.get('filter');
+        if (filterParam && discoverFilters.some(f => f.toLowerCase() === filterParam.toLowerCase())) {
+            const matched = discoverFilters.find(f => f.toLowerCase() === filterParam.toLowerCase());
+            if (matched) setDiscoverFilter(matched);
+        }
+    }, [searchParams]);
 
     const outletContext = ReactRouterDOM.useOutletContext<{
         setRightSidebarVariant: (variant: string) => void;
@@ -167,7 +229,7 @@ const ExplorePage = () => {
     // Real-time Firestore Feed Subscription
     useEffect(() => {
         setLoading(true);
-        const unsubscribe = subscribeToFeed(
+        const unsubscribePosts = subscribeToFeed(
             { pageSize: 50 },
             (posts) => {
                 setFirestorePosts(posts);
@@ -179,7 +241,19 @@ const ExplorePage = () => {
             }
         );
 
-        return () => unsubscribe();
+        const unsubscribePolls = subscribeToPolls(
+            (polls) => {
+                setFirestorePolls(polls);
+            },
+            (err) => {
+                console.error('[EXPLORE_POLLS_ERROR]', err);
+            }
+        );
+
+        return () => {
+            unsubscribePosts();
+            unsubscribePolls();
+        };
     }, [refreshKey]);
 
     useEffect(() => {
@@ -221,6 +295,13 @@ const ExplorePage = () => {
         return [...firestorePosts, ...nonDuplicateMock];
     }, [firestorePosts]);
 
+    // Merge Firestore polls with baseline discovery polls
+    const combinedPolls = useMemo(() => {
+        const firestoreIds = new Set(firestorePolls.map(p => p.id));
+        const nonDuplicateMock = initialMockPolls.filter(p => !firestoreIds.has(p.id));
+        return [...firestorePolls, ...nonDuplicateMock];
+    }, [firestorePolls]);
+
     const handleToggleLike = useCallback(async (postId: string) => {
         if (!currentUser) return;
         try {
@@ -252,39 +333,59 @@ const ExplorePage = () => {
     }, [currentUser]);
 
     const filteredPosts = useMemo(() => {
-        return combinedPosts.filter(post => {
-            if (activityFilter) {
-                if (activityFilter === 'threads') {
-                    return post.type === PostType.Thread && post.userCommented;
+        if (activeTab === 'Feeds') {
+            return combinedPosts.filter(post => {
+                if (activityFilter) {
+                    if (activityFilter === 'threads') {
+                        return post.type === PostType.Thread && post.userCommented;
+                    }
+                    if (activityFilter === 'queries') {
+                        return post.type === PostType.Query && post.userSharedInsight;
+                    }
+                    return false;
                 }
-                if (activityFilter === 'queries') {
-                    return post.type === PostType.Query && post.userSharedInsight;
-                }
-                return false;
-            }
-
-            if (activeTab === 'Feeds') {
                 const categoryMatch = activeCategory === 'All' || 
                     post.category?.toLowerCase() === activeCategory.toLowerCase();
                 const typeMatch = post.type === PostType.Feed || !post.type;
                 return categoryMatch && typeMatch;
+            });
+        }
+
+        if (activeTab === 'Discover') {
+            if (activityFilter) {
+                if (activityFilter === 'threads') {
+                    return combinedPosts.filter(p => p.type === PostType.Thread && p.userCommented);
+                }
+                if (activityFilter === 'queries') {
+                    return combinedPosts.filter(p => p.type === PostType.Query && p.userSharedInsight);
+                }
+                return [];
             }
 
-            if (activeTab === 'Discover') {
-                switch(discoverFilter) {
-                    case 'All':
-                        return post.type === PostType.Thread || post.type === PostType.Query;
-                    case 'Threads':
-                        return post.type === PostType.Thread;
-                    case 'Queries':
-                        return post.type === PostType.Query;
-                    default:
-                        return false;
+            switch(discoverFilter) {
+                case 'All': {
+                    const threadsAndQueries = combinedPosts.filter(
+                        post => post.type === PostType.Thread || post.type === PostType.Query
+                    );
+                    const allItems = [...threadsAndQueries, ...combinedPolls];
+                    return allItems.sort((a, b) => {
+                        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
+                        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
+                        return dateB - dateA;
+                    });
                 }
+                case 'Threads':
+                    return combinedPosts.filter(post => post.type === PostType.Thread);
+                case 'Queries':
+                    return combinedPosts.filter(post => post.type === PostType.Query);
+                case 'Polls':
+                    return combinedPolls;
+                default:
+                    return [];
             }
-            return false;
-        });
-    }, [combinedPosts, activityFilter, activeTab, activeCategory, discoverFilter]);
+        }
+        return [];
+    }, [combinedPosts, combinedPolls, activityFilter, activeTab, activeCategory, discoverFilter]);
 
     return (
         <div className="py-2">
@@ -323,7 +424,7 @@ const ExplorePage = () => {
                         onSelectionChange={(domains) => setDomainSelection('explore', domains)}
                     />
                     {/* Row 2: Sub-filters for Discover */}
-                     <div className="flex space-x-1 border border-zinc-800 bg-[#0c0c0e] p-1 mb-4">
+                    <div className="flex space-x-1 border border-zinc-800 bg-[#0c0c0e] p-1 mb-4">
                         {discoverFilters.map(filter => (
                             <button 
                                 key={filter}
@@ -394,6 +495,20 @@ const ExplorePage = () => {
                         const isLiked = likedPostIds.has(post.id);
                         const isSaved = savedPostIds.has(post.id);
 
+                        if ((post as any).type === PostType.Poll) {
+                            return (
+                                <React.Fragment key={post.id}>
+                                    <ErrorBoundary>
+                                        <PollCard 
+                                            poll={post as any as Poll} 
+                                            onDelete={(pollId) => {
+                                                setFirestorePolls(prev => prev.filter(p => p.id !== pollId));
+                                            }}
+                                        />
+                                    </ErrorBoundary>
+                                </React.Fragment>
+                            );
+                        }
                         if (post.type === PostType.Query) {
                             return (
                                 <React.Fragment key={post.id}>

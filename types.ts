@@ -319,3 +319,67 @@ export interface SectionConfig {
 }
 
 export type PlatformSectionsConfig = Record<SectionId, SectionConfig>;
+
+export interface PollOption {
+  id: string;
+  text: string;
+  voteCount: number;
+}
+
+export type PollDuration = '1d' | '3d' | '7d' | '30d' | 'never';
+
+export interface Poll {
+  id: string;
+  authorId: string;
+  author: {
+    name: string;
+    username?: string;
+    avatarUrl: string;
+    isVerified?: boolean;
+  };
+  question: string;
+  description?: string;
+  options: PollOption[];
+  createdAt: Date;
+  updatedAt?: Date;
+  expiresAt: Date | null;
+  duration?: PollDuration;
+  totalVotes: number;
+  status: 'active' | 'expired';
+  category: string;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'video';
+  stats: {
+    likes: number;
+    views: number;
+    comments: number;
+  };
+  likeCount?: number;
+  viewCount?: number;
+  commentCount?: number;
+  type: PostType.Poll;
+  userVotedOptionId?: string;
+}
+
+export interface CreatePollInput {
+  question: string;
+  description?: string;
+  options: string[];
+  duration: PollDuration;
+  category: string;
+  mediaFile?: File | null;
+  mediaUrl?: string;
+  authorProfile?: {
+    displayName?: string;
+    username?: string;
+    photoURL?: string;
+    role?: UserRole;
+  };
+}
+
+export interface PollVote {
+  userId: string;
+  pollId: string;
+  optionId: string;
+  votedAt: Date;
+}

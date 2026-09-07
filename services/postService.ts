@@ -282,27 +282,95 @@ export const updatePost = async (postId: string, updates: Partial<CreatePostInpu
 };
 
 /**
+ * Helper to classify and format Firestore error codes into human-readable diagnostics.
+ */
+export const formatFirestoreError = (err: any): string => {
+    if (!err) return 'An unknown error occurred during the Firestore operation.';
+    const code = err.code || '';
+    switch (code) {
+        case 'permission-denied':
+            return 'Permission denied: Firestore security rules prevented this action. You may only delete feeds that you created.';
+        case 'not-found':
+            return 'Document not found: The feed document does not exist in Firestore or was already deleted.';
+        case 'unauthenticated':
+            return 'Unauthenticated: You must be logged in to delete this broadcast.';
+        case 'unavailable':
+            return 'Network unavailable: Cannot reach Firestore backend. Check your internet connection.';
+        case 'invalid-argument':
+            return 'Invalid document reference provided for deletion.';
+        default:
+            return err.message || `Firestore operation failed with code: ${code}`;
+    }
+};
+
+/**
  * Deletes a post created by the current user.
+ * Performs complete ownership verification against authorId and Firestore Security Rules.
  */
 export const deletePost = async (postId: string): Promise<void> => {
     const currentUser = auth.currentUser;
-    if (!currentUser) throw new Error('Not authenticated');
-
-    // Retrieve post first to check channelId
-    try {
-        const postDoc = await getDoc(doc(db, COLLECTIONS.posts, postId));
-        if (postDoc.exists()) {
-            const data = postDoc.data();
-            if (data?.channelId) {
-                decrementChannelPostCount(data.channelId).catch(console.warn);
-            }
-        }
-    } catch (e) {
-        console.warn('Error fetching post prior to delete:', e);
+    if (!currentUser) {
+        throw new Error('Unauthenticated: You must be logged in to delete a post.');
     }
 
-    await deleteDocument(COLLECTIONS.posts, postId);
-    console.log(`[POST_DELETED] Post ${postId} deleted`);
+    const postPath = `${COLLECTIONS.posts}/${postId}`;
+    console.log(`[FIRESTORE_DELETE] Initiating deletion targeting document at path: ${postPath}`);
+
+    // Retrieve post first to verify existence, channelId, and ownership
+    const postRef = doc(db, COLLECTIONS.posts, postId);
+    let postDoc;
+    try {
+        postDoc = await getDoc(postRef);
+    } catch (readErr: any) {
+        console.error(`[FIRESTORE_READ_ERROR] Failed to fetch post prior to deletion:`, readErr);
+        throw new Error(formatFirestoreError(readErr));
+    }
+
+    if (!postDoc.exists()) {
+        console.warn(`[FIRESTORE_DELETE] Post not found at path: ${postPath}`);
+        throw new Error(`Post not found: No document exists at ${postPath}`);
+    }
+
+    const data = postDoc.data();
+    const docAuthorId = data?.authorId;
+
+    // Verify ownership: authorId must match currentUser.uid
+    if (!docAuthorId) {
+        // Check legacy fields (userId or author.id)
+        const legacyUid = data?.userId || data?.author?.id;
+        if (legacyUid && legacyUid === currentUser.uid) {
+            console.log(`[FIRESTORE_DELETE] Ownership confirmed via legacy user field (${legacyUid})`);
+        } else {
+            console.error(`[FIRESTORE_DELETE_DENIED] Missing authorId on document: ${postId}`, data);
+            throw new Error(`Cannot verify ownership: This legacy document at ${postPath} does not have an authorId field.`);
+        }
+    } else if (docAuthorId !== currentUser.uid) {
+        console.error(`[FIRESTORE_DELETE_DENIED] Ownership mismatch: document authorId (${docAuthorId}) !== currentUser.uid (${currentUser.uid})`);
+        throw new Error('Permission denied: You can only delete feed broadcasts that you created.');
+    }
+
+    // Decrement channel post count if affiliated with a channel
+    if (data?.channelId) {
+        try {
+            await decrementChannelPostCount(data.channelId);
+        } catch (e) {
+            console.warn(`[CHANNEL_COUNT_WARN] Failed to decrement channel post count for ${data.channelId}:`, e);
+        }
+    }
+
+    // Perform actual Firestore document deletion
+    try {
+        await deleteDocument(COLLECTIONS.posts, postId);
+        console.log(`[POST_DELETED] Successfully deleted document at ${postPath}`);
+    } catch (err: any) {
+        const errorMsg = formatFirestoreError(err);
+        console.error(`[FIRESTORE_DELETE_ERROR] Failed to delete ${postPath}:`, {
+            code: err?.code,
+            message: err?.message,
+            diagnostic: errorMsg,
+        });
+        throw new Error(errorMsg);
+    }
 };
 
 /**

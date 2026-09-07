@@ -86,7 +86,24 @@ service cloud.firestore {
                && get(/databases/$(database)/documents/channels/$(request.resource.data.channelId)).data.ownerId == uid())
             : true
         );
-      allow update, delete: if signedIn() && (resource.data.authorId == uid() || isModerator());
+      allow update, delete: if signedIn() && (('authorId' in resource.data && resource.data.authorId == uid()) || isModerator());
+    }
+
+    match /polls/{pollId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.authorId == uid();
+      allow update: if signedIn() && (
+        ('authorId' in resource.data && resource.data.authorId == uid())
+        || isModerator()
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalVotes', 'options', 'stats', 'likeCount', 'viewCount', 'commentCount', 'updatedAt'])
+      );
+      allow delete: if signedIn() && (('authorId' in resource.data && resource.data.authorId == uid()) || isModerator());
+
+      match /votes/{userId} {
+        allow read: if signedIn();
+        allow create, update: if signedIn() && userId == uid() && request.resource.data.userId == uid();
+        allow delete: if signedIn() && userId == uid();
+      }
     }
 
     match /projects/{projectId} {

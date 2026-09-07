@@ -1286,6 +1286,7 @@ const TargetSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onS
         {
             title: 'Explore',
             targets: [
+                { name: 'Channels', context: 'Channel', icon: SoundWaveIcon },
                 { name: 'Feeds', context: 'Feed', icon: ClipboardListIcon },
                 { name: 'Discover', context: 'Discover', icon: MagnifyingGlassIcon },
             ]
