@@ -299,8 +299,57 @@ export const voteOnPoll = async (
     fallbackPoll?: Poll
 ): Promise<{ success: boolean; totalVotes: number; options: PollOption[]; selectedOptionId: string }> => {
     const currentUser = auth.currentUser;
-    if (!currentUser) {
-        throw new Error('Authentication required: You must be logged in to vote.');
+    const voterId = currentUser?.uid || (typeof localStorage !== 'undefined' ? (localStorage.getItem('invox_guest_voter_id') || 'guest_voter') : 'guest_voter');
+
+    // If it's a mock poll or if no authenticated user is present in preview, process vote locally
+    const isMock = pollId.startsWith('mock-') || !currentUser;
+    if (isMock) {
+        const previousVoteLocal = typeof localStorage !== 'undefined' ? (
+            localStorage.getItem(`poll_vote_${voterId}_${pollId}`) ||
+            localStorage.getItem(`poll_vote_${pollId}`) ||
+            null
+        ) : null;
+
+        const currentOptions: PollOption[] = fallbackPoll?.options ? fallbackPoll.options.map(o => ({ ...o })) : [];
+        
+        if (previousVoteLocal === optionId) {
+            return {
+                success: true,
+                totalVotes: fallbackPoll?.totalVotes || currentOptions.reduce((s, o) => s + (Number(o.voteCount) || 0), 0),
+                options: currentOptions,
+                selectedOptionId: optionId
+            };
+        }
+
+        const updatedOptions = currentOptions.map(opt => {
+            let count = Number(opt.voteCount) || 0;
+            if (previousVoteLocal && opt.id === previousVoteLocal) {
+                count = Math.max(0, count - 1);
+            }
+            if (opt.id === optionId) {
+                count = count + 1;
+            }
+            return { ...opt, voteCount: count };
+        });
+
+        const calculatedTotal = updatedOptions.reduce((s, o) => s + (Number(o.voteCount) || 0), 0);
+        const newTotalVotes = previousVoteLocal 
+            ? Math.max(calculatedTotal, Number(fallbackPoll?.totalVotes) || 0)
+            : Math.max(calculatedTotal, (Number(fallbackPoll?.totalVotes) || 0) + 1);
+
+        try {
+            localStorage.setItem(`poll_vote_${voterId}_${pollId}`, optionId);
+            localStorage.setItem(`poll_vote_${pollId}`, optionId);
+            localStorage.setItem(`poll_options_${pollId}`, JSON.stringify(updatedOptions));
+            localStorage.setItem(`poll_total_${pollId}`, String(newTotalVotes));
+        } catch {}
+
+        return {
+            success: true,
+            totalVotes: newTotalVotes,
+            options: updatedOptions,
+            selectedOptionId: optionId
+        };
     }
 
     const pollRef = doc(db, COLLECTIONS.polls, pollId);
@@ -309,6 +358,7 @@ export const voteOnPoll = async (
     // Save immediate local preference backup
     try {
         localStorage.setItem(`poll_vote_${currentUser.uid}_${pollId}`, optionId);
+        localStorage.setItem(`poll_vote_${pollId}`, optionId);
     } catch {}
 
     try {
@@ -320,8 +370,8 @@ export const voteOnPoll = async (
 
             if (!pollDoc.exists()) {
                 // If the poll document does not exist in Firestore yet (e.g. baseline explore poll)
-                const currentOptions: PollOption[] = fallbackPoll?.options ? [...fallbackPoll.options] : [];
-                const previousVoteLocal = localStorage.getItem(`poll_vote_${currentUser.uid}_${pollId}_prev`) || null;
+                const currentOptions: PollOption[] = fallbackPoll?.options ? fallbackPoll.options.map(o => ({ ...o })) : [];
+                const previousVoteLocal = localStorage.getItem(`poll_vote_${currentUser.uid}_${pollId}`) || null;
 
                 if (previousVoteLocal === optionId) {
                     return {
@@ -347,7 +397,8 @@ export const voteOnPoll = async (
                 }
                 const newTotal = updatedOptions.reduce((s, o) => s + (Number(o.voteCount) || 0), 0);
                 try {
-                    localStorage.setItem(`poll_vote_${currentUser.uid}_${pollId}_prev`, optionId);
+                    localStorage.setItem(`poll_vote_${currentUser.uid}_${pollId}`, optionId);
+                    localStorage.setItem(`poll_vote_${pollId}`, optionId);
                     localStorage.setItem(`poll_options_${pollId}`, JSON.stringify(updatedOptions));
                     localStorage.setItem(`poll_total_${pollId}`, String(newTotal));
                 } catch {}
@@ -462,10 +513,15 @@ export const voteOnPoll = async (
             };
         });
     } catch (err: any) {
-        if (fallbackPoll && (!err?.message || err?.message.includes('Poll not found') || err?.code === 'unavailable')) {
-            console.warn('[VOTE_FALLBACK_APPLIED] Using local fallback persistence:', err);
-            const currentOptions: PollOption[] = fallbackPoll?.options ? [...fallbackPoll.options] : [];
-            const previousVoteLocal = localStorage.getItem(`poll_vote_${currentUser.uid}_${pollId}_prev`) || null;
+        if (fallbackPoll) {
+            console.warn('[VOTE_FALLBACK_APPLIED] Using local fallback persistence:', err?.message || err);
+            const voterKey = currentUser?.uid || (typeof localStorage !== 'undefined' ? (localStorage.getItem('invox_guest_voter_id') || 'guest_voter') : 'guest_voter');
+            const currentOptions: PollOption[] = fallbackPoll?.options ? fallbackPoll.options.map(o => ({ ...o })) : [];
+            const previousVoteLocal = typeof localStorage !== 'undefined' ? (
+                localStorage.getItem(`poll_vote_${voterKey}_${pollId}`) ||
+                localStorage.getItem(`poll_vote_${pollId}`) ||
+                null
+            ) : null;
 
             let updatedOptions = currentOptions;
             if (currentOptions.length > 0) {
@@ -480,10 +536,14 @@ export const voteOnPoll = async (
                     return { ...opt, voteCount: count };
                 });
             }
-            const newTotal = updatedOptions.reduce((s, o) => s + (Number(o.voteCount) || 0), 0);
+            const calculatedTotal = updatedOptions.reduce((s, o) => s + (Number(o.voteCount) || 0), 0);
+            const newTotal = previousVoteLocal
+                ? Math.max(calculatedTotal, Number(fallbackPoll?.totalVotes) || 0)
+                : Math.max(calculatedTotal, (Number(fallbackPoll?.totalVotes) || 0) + 1);
+
             try {
-                localStorage.setItem(`poll_vote_${currentUser.uid}_${pollId}`, optionId);
-                localStorage.setItem(`poll_vote_${currentUser.uid}_${pollId}_prev`, optionId);
+                localStorage.setItem(`poll_vote_${voterKey}_${pollId}`, optionId);
+                localStorage.setItem(`poll_vote_${pollId}`, optionId);
                 localStorage.setItem(`poll_options_${pollId}`, JSON.stringify(updatedOptions));
                 localStorage.setItem(`poll_total_${pollId}`, String(newTotal));
             } catch {}

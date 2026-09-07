@@ -140,23 +140,24 @@ const ProtectedLayout = () => {
     
     // Quick access content creation trigger
     const [uploadTriggerTarget, setUploadTriggerTarget] = useState<string | null>(null);
+    const [discoverSearchTerm, setDiscoverSearchTerm] = useState<string>('');
 
     const { isModalOpen, openModal } = useAIAssistant();
 
-    const toggleSaveOffer = (offerId: string) => {
+    const toggleSaveOffer = useCallback((offerId: string) => {
         setSavedOfferIds(prev =>
             prev.includes(offerId)
                 ? prev.filter(id => id !== offerId)
                 : [...prev, offerId]
         );
-    };
+    }, []);
 
-    const handleUpdateHubConversation = (updatedConvo: HubConversation) => {
+    const handleUpdateHubConversation = useCallback((updatedConvo: HubConversation) => {
         setHubConversations(prev => prev.map(c => c.id === updatedConvo.id ? updatedConvo : c));
         setSelectedHubConversation(prev => (prev?.id === updatedConvo.id ? updatedConvo : prev));
-    };
+    }, []);
 
-    const handleSelectHubConversation = (conversation: HubConversation | null) => {
+    const handleSelectHubConversation = useCallback((conversation: HubConversation | null) => {
         setSelectedHubConversation(conversation);
         if (conversation && conversation.unreadCount > 0) {
             setHubConversations(prevConvos =>
@@ -165,7 +166,7 @@ const ProtectedLayout = () => {
                 )
             );
         }
-    };
+    }, []);
 
     const location = ReactRouterDOM.useLocation();
     const mainContentRef = useRef<HTMLElement>(null);
@@ -212,13 +213,77 @@ const ProtectedLayout = () => {
     }, [location.pathname]);
 
     React.useEffect(() => {
-        setActivityFilter(null);
-        setFollowedDomainsFilter(null);
-        setShowPinnedHighlights(false);
+        setActivityFilter(prev => prev === null ? prev : null);
+        setFollowedDomainsFilter(prev => prev === null ? prev : null);
+        setShowPinnedHighlights(prev => !prev ? prev : false);
         if (rightSidebarVariant !== 'spotlight') {
-            setSpotlightBrowseState(null);
+            setSpotlightBrowseState(prev => prev === null ? prev : null);
         }
     }, [rightSidebarVariant]);
+
+    const outletContextValue = useMemo(() => ({
+        setRightSidebarVariant, 
+        activityFilter, 
+        setActivityFilter, 
+        followedDomainsFilter, 
+        setFollowedDomainsFilter, 
+        spotlightBrowseState, 
+        setSpotlightBrowseState, 
+        showPinnedHighlights, 
+        setShowPinnedHighlights, 
+        goforitFilters, 
+        setGoforitFilters, 
+        refreshKey, 
+        savedOfferIds, 
+        toggleSaveOffer, 
+        communityFilters, 
+        setCommunityFilters, 
+        communityView, 
+        setCommunityView, 
+        hubView, 
+        setHubView, 
+        hubRightSidebarView, 
+        setHubRightSidebarView, 
+        hubConversations, 
+        selectedHubConversation, 
+        setSelectedHubConversation: handleSelectHubConversation, 
+        updateHubConversation: handleUpdateHubConversation,
+        uploadTriggerTarget,
+        setUploadTriggerTarget,
+        discoverSearchTerm,
+        setDiscoverSearchTerm
+    }), [
+        setRightSidebarVariant, 
+        activityFilter, 
+        setActivityFilter, 
+        followedDomainsFilter, 
+        setFollowedDomainsFilter, 
+        spotlightBrowseState, 
+        setSpotlightBrowseState, 
+        showPinnedHighlights, 
+        setShowPinnedHighlights, 
+        goforitFilters, 
+        setGoforitFilters, 
+        refreshKey, 
+        savedOfferIds, 
+        toggleSaveOffer, 
+        communityFilters, 
+        setCommunityFilters, 
+        communityView, 
+        setCommunityView, 
+        hubView, 
+        setHubView, 
+        hubRightSidebarView, 
+        setHubRightSidebarView, 
+        hubConversations, 
+        selectedHubConversation, 
+        handleSelectHubConversation, 
+        handleUpdateHubConversation,
+        uploadTriggerTarget,
+        setUploadTriggerTarget,
+        discoverSearchTerm,
+        setDiscoverSearchTerm
+    ]);
 
     return (
         <div className="min-h-screen flex bg-invox-dark text-white overflow-x-hidden">
@@ -233,42 +298,15 @@ const ProtectedLayout = () => {
                     <main ref={mainContentRef} className="flex-1 overflow-y-auto no-scrollbar relative">
                         <PullToRefreshIndicator state={pullState} distance={pullDistance} />
                         <div className="max-w-5xl mx-auto py-4 md:py-6 px-4 sm:px-6 lg:px-8">
-                            <ReactRouterDOM.Outlet context={{ 
-                                setRightSidebarVariant, 
-                                activityFilter, 
-                                setActivityFilter, 
-                                followedDomainsFilter, 
-                                setFollowedDomainsFilter, 
-                                spotlightBrowseState, 
-                                setSpotlightBrowseState, 
-                                showPinnedHighlights, 
-                                setShowPinnedHighlights, 
-                                goforitFilters, 
-                                setGoforitFilters, 
-                                refreshKey, 
-                                savedOfferIds, 
-                                toggleSaveOffer, 
-                                communityFilters, 
-                                setCommunityFilters, 
-                                communityView, 
-                                setCommunityView, 
-                                hubView, 
-                                setHubView, 
-                                hubRightSidebarView, 
-                                setHubRightSidebarView, 
-                                hubConversations, 
-                                selectedHubConversation, 
-                                setSelectedHubConversation: handleSelectHubConversation, 
-                                updateHubConversation: handleUpdateHubConversation,
-                                uploadTriggerTarget,
-                                setUploadTriggerTarget
-                            }} />
+                            <ReactRouterDOM.Outlet context={outletContextValue} />
                         </div>
                     </main>
                     <RightSidebar 
                         variant={rightSidebarVariant} 
                         activityFilter={activityFilter} 
                         setActivityFilter={setActivityFilter} 
+                        discoverSearchTerm={discoverSearchTerm}
+                        setDiscoverSearchTerm={setDiscoverSearchTerm}
                         followedDomainsFilter={followedDomainsFilter}
                         setFollowedDomainsFilter={setFollowedDomainsFilter}
                         spotlightBrowseState={spotlightBrowseState}

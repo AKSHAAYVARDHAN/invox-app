@@ -215,9 +215,16 @@ interface RightSidebarProps {
     selectedHubConversation?: HubConversation | null;
     setSelectedHubConversation?: (conversation: HubConversation | null) => void;
     setUploadTriggerTarget?: (target: string | null) => void;
+    discoverSearchTerm?: string;
+    setDiscoverSearchTerm?: (term: string) => void;
 }
 
-const DiscoverSidebar: React.FC<Pick<RightSidebarProps, 'activityFilter' | 'setActivityFilter'>> = ({ activityFilter, setActivityFilter }) => {
+const DiscoverSidebar: React.FC<Pick<RightSidebarProps, 'activityFilter' | 'setActivityFilter' | 'discoverSearchTerm' | 'setDiscoverSearchTerm'>> = ({ 
+    activityFilter, 
+    setActivityFilter,
+    discoverSearchTerm,
+    setDiscoverSearchTerm
+}) => {
     const [isActivityView, setIsActivityView] = useState(false);
 
     useEffect(() => {
@@ -235,10 +242,12 @@ const DiscoverSidebar: React.FC<Pick<RightSidebarProps, 'activityFilter' | 'setA
         <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
             <div className="h-full flex flex-col gap-5 overflow-y-auto no-scrollbar">
                 <div className="relative px-4">
-                    <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                    <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
                     <input
                         type="search"
                         placeholder="SEARCH_THREADS_QUERIES..."
+                        value={discoverSearchTerm || ''}
+                        onChange={(e) => setDiscoverSearchTerm?.(e.target.value)}
                         className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
                     />
                 </div>
@@ -1411,9 +1420,23 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ variant, ...props }) => {
     const renderSidebarContent = () => {
         switch (variant) {
             case 'feeds':
-                return <DiscoverSidebar activityFilter={props.activityFilter} setActivityFilter={props.setActivityFilter} />;
+                return (
+                    <DiscoverSidebar 
+                        activityFilter={props.activityFilter} 
+                        setActivityFilter={props.setActivityFilter} 
+                        discoverSearchTerm={props.discoverSearchTerm}
+                        setDiscoverSearchTerm={props.setDiscoverSearchTerm}
+                    />
+                );
             case 'discover':
-                return <DiscoverSidebar activityFilter={props.activityFilter} setActivityFilter={props.setActivityFilter} />;
+                return (
+                    <DiscoverSidebar 
+                        activityFilter={props.activityFilter} 
+                        setActivityFilter={props.setActivityFilter} 
+                        discoverSearchTerm={props.discoverSearchTerm}
+                        setDiscoverSearchTerm={props.setDiscoverSearchTerm}
+                    />
+                );
             case 'trendz':
                 return <TrendzSidebar followedDomainsFilter={props.followedDomainsFilter} setFollowedDomainsFilter={props.setFollowedDomainsFilter} />;
             case 'spotlight-showcase':

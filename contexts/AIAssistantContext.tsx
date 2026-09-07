@@ -1,7 +1,7 @@
 
 
 
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback, useMemo } from 'react';
 import type { Content } from "@google/genai";
 
 export interface CardContext {
@@ -288,17 +288,23 @@ export const useFilters = () => {
 export const FilterProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [domainSelections, setDomainSelections] = useState<Record<string, string[]>>({});
 
-  const setDomainSelection = (section: string, domains: string[]) => {
-    setDomainSelections(prev => ({
-      ...prev,
-      [section]: domains,
-    }));
-  };
+  const setDomainSelection = useCallback((section: string, domains: string[]) => {
+    setDomainSelections(prev => {
+      const current = prev[section] || [];
+      if (current.length === domains.length && current.every((d, i) => d === domains[i])) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [section]: domains,
+      };
+    });
+  }, []);
 
-  const value = {
+  const value = useMemo(() => ({
     domainSelections,
     setDomainSelection,
-  };
+  }), [domainSelections, setDomainSelection]);
 
   return (
     <FilterContext.Provider value={value}>

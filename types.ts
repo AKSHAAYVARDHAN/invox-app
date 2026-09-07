@@ -104,6 +104,7 @@ export interface Post {
   type: PostType;
   postType?: string;
   category: string;
+  domain?: string;
   tags?: string[];
   visibility?: string;
   createdAt: Date;
@@ -347,6 +348,7 @@ export interface Poll {
   totalVotes: number;
   status: 'active' | 'expired';
   category: string;
+  domain?: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'video';
   stats: {

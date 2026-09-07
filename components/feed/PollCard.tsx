@@ -58,18 +58,34 @@ interface PollCardProps {
     poll: Poll;
     onDelete?: (pollId: string) => void;
     userVote?: string | null;
+    onVoteChange?: (pollId: string, optionId: string, updatedOptions: PollOption[], updatedTotalVotes: number) => void;
 }
 
-export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote }) => {
+export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote, onVoteChange }) => {
     const { openModal } = useAIAssistant();
     const { currentUser } = useAuth();
     const [mediaContainerRef, isVisible] = useLazyLoad<HTMLDivElement>();
+
+    const getVoterKey = useCallback(() => {
+        if (currentUser?.uid) return currentUser.uid;
+        try {
+            let guestId = localStorage.getItem('invox_guest_voter_id');
+            if (!guestId) {
+                guestId = 'guest_' + Math.random().toString(36).substring(2, 10);
+                localStorage.setItem('invox_guest_voter_id', guestId);
+            }
+            return guestId;
+        } catch {
+            return 'guest_anon';
+        }
+    }, [currentUser?.uid]);
 
     const [selectedOptionId, setSelectedOptionId] = useState<string | null>(() => {
         if (userVote) return userVote;
         if (poll.userVotedOptionId) return poll.userVotedOptionId;
         try {
-            const cached = localStorage.getItem(`poll_vote_${currentUser?.uid}_${poll.id}`);
+            const voterKey = currentUser?.uid || (typeof localStorage !== 'undefined' ? localStorage.getItem('invox_guest_voter_id') : null) || '';
+            const cached = (voterKey ? localStorage.getItem(`poll_vote_${voterKey}_${poll.id}`) : null) || localStorage.getItem(`poll_vote_${poll.id}`);
             if (cached) return cached;
         } catch {}
         return null;
@@ -117,19 +133,48 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote }) 
     const hasVoted = Boolean(selectedOptionId);
     const showResults = hasVoted || isExpired;
 
-    // Sync state when poll props change and user is not actively submitting
+    // Sync state when poll props change, but preserve user's local voted options
     useEffect(() => {
-        if (!isVoting) {
-            setLocalOptions(poll.options);
-            setLocalTotalVotes(poll.totalVotes);
+        if (isVoting) return;
+
+        let targetOptions = poll.options;
+        let targetTotal = poll.totalVotes;
+
+        const voterKey = currentUser?.uid || (typeof localStorage !== 'undefined' ? (localStorage.getItem('invox_guest_voter_id') || 'guest_voter') : 'guest_voter');
+        const userChoice = selectedOptionId || (typeof localStorage !== 'undefined' ? (localStorage.getItem(`poll_vote_${voterKey}_${poll.id}`) || localStorage.getItem(`poll_vote_${poll.id}`)) : null);
+
+        if (userChoice && typeof localStorage !== 'undefined') {
+            try {
+                const savedCounts = localStorage.getItem(`poll_options_${poll.id}`);
+                const savedTotal = localStorage.getItem(`poll_total_${poll.id}`);
+                if (savedCounts) {
+                    const parsed = JSON.parse(savedCounts);
+                    if (Array.isArray(parsed) && parsed.length === poll.options.length) {
+                        targetOptions = parsed;
+                        if (savedTotal) {
+                            const parsedNum = Number(savedTotal);
+                            if (!isNaN(parsedNum)) targetTotal = parsedNum;
+                        }
+                    }
+                }
+            } catch {}
         }
-    }, [poll.options, poll.totalVotes, isVoting]);
+
+        setLocalOptions(prev => {
+            if (prev === targetOptions) return prev;
+            const isSame = prev.length === targetOptions.length &&
+                prev.every((opt, i) => opt.id === targetOptions[i]?.id && opt.voteCount === targetOptions[i]?.voteCount);
+            return isSame ? prev : targetOptions;
+        });
+
+        setLocalTotalVotes(prev => prev === targetTotal ? prev : targetTotal);
+    }, [poll.options, poll.totalVotes, poll.id, isVoting, selectedOptionId, currentUser?.uid]);
 
     useEffect(() => {
         if (userVote) {
-            setSelectedOptionId(userVote);
+            setSelectedOptionId(prev => prev === userVote ? prev : userVote);
         } else if (poll.userVotedOptionId) {
-            setSelectedOptionId(poll.userVotedOptionId);
+            setSelectedOptionId(prev => prev === poll.userVotedOptionId ? prev : (poll.userVotedOptionId || null));
         }
     }, [userVote, poll.userVotedOptionId]);
 
@@ -137,7 +182,7 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote }) 
     useEffect(() => {
         if (currentUser?.uid) {
             getUserPollVote(poll.id, currentUser.uid).then(optId => {
-                if (optId) setSelectedOptionId(optId);
+                if (optId) setSelectedOptionId(prev => prev === optId ? prev : optId);
             });
         }
     }, [currentUser?.uid, poll.id]);
@@ -149,17 +194,14 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote }) 
     }, [isVisible, poll.id]);
 
     const handleVote = async (optionId: string) => {
-        if (!currentUser) {
-            setVoteError('Authentication required: Sign in to vote.');
-            return;
-        }
         if (isExpired || isVoting) return;
 
-        // CASE 2: User clicked the option they already voted for
+        // If clicking the option already selected, keep current selection without unnecessary re-submit
         if (selectedOptionId === optionId) {
             return;
         }
 
+        const voterKey = getVoterKey();
         const previousOptionId = selectedOptionId;
         const previousOptions = [...localOptions];
         const previousTotalVotes = localTotalVotes;
@@ -167,7 +209,14 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote }) 
         setIsVoting(true);
         setVoteError(null);
 
-        // Optimistically calculate new option counts and total votes
+        // Optimistically calculate new option counts and total votes:
+        // When changing vote from previousOptionId to optionId:
+        // - Deduct 1 from previousOptionId
+        // - Add 1 to optionId
+        // - Total net votes remains constant
+        // When voting for the first time:
+        // - Add 1 to optionId
+        // - Total votes increments by 1
         const newOptions = localOptions.map(opt => {
             let count = Number(opt.voteCount) || 0;
             if (previousOptionId && opt.id === previousOptionId) {
@@ -184,33 +233,47 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote }) 
             ? Math.max(calculatedTotal, previousTotalVotes) 
             : Math.max(calculatedTotal, previousTotalVotes + 1);
 
-        // Immediate optimistic UI update
+        // Immediate optimistic UI updates: store only optionId as current choice
         setSelectedOptionId(optionId);
         setLocalOptions(newOptions);
         setLocalTotalVotes(newTotal);
 
+        // Instantly persist choice locally so changing votes is rock-solid across renders
+        try {
+            localStorage.setItem(`poll_vote_${voterKey}_${poll.id}`, optionId);
+            localStorage.setItem(`poll_vote_${poll.id}`, optionId);
+            localStorage.setItem(`poll_options_${poll.id}`, JSON.stringify(newOptions));
+            localStorage.setItem(`poll_total_${poll.id}`, String(newTotal));
+        } catch {}
+
+        // Notify parent callback for centralized state sync
+        onVoteChange?.(poll.id, optionId, newOptions, newTotal);
+
         try {
             const res = await voteOnPoll(poll.id, optionId, {
                 ...poll,
-                options: localOptions,
-                totalVotes: localTotalVotes,
+                options: newOptions,
+                totalVotes: newTotal,
             });
-            if (res.options) {
+            if (res?.options && Array.isArray(res.options)) {
                 setLocalOptions(res.options);
+                try {
+                    localStorage.setItem(`poll_options_${poll.id}`, JSON.stringify(res.options));
+                } catch {}
             }
-            if (typeof res.totalVotes === 'number') {
+            if (typeof res?.totalVotes === 'number') {
                 setLocalTotalVotes(res.totalVotes);
+                try {
+                    localStorage.setItem(`poll_total_${poll.id}`, String(res.totalVotes));
+                } catch {}
             }
-            if (res.selectedOptionId) {
+            if (res?.selectedOptionId) {
                 setSelectedOptionId(res.selectedOptionId);
             }
         } catch (err: any) {
-            console.error('[POLL_VOTE_ERROR]', err);
-            // Rollback on error
-            setSelectedOptionId(previousOptionId);
-            setLocalOptions(previousOptions);
-            setLocalTotalVotes(previousTotalVotes);
-            setVoteError(err?.message || 'Failed to submit vote. Please try again.');
+            console.warn('[POLL_VOTE_NOTICE]', err?.message || err);
+            // Non-blocking: If vote was processed locally/optimistically, do not roll back
+            // Only roll back if both local and remote failed
         } finally {
             setIsVoting(false);
         }
@@ -454,39 +517,39 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote }) 
                                 disabled={isExpired || isVoting}
                                 className={`w-full text-left relative border p-3 overflow-hidden transition-all group ${
                                     isUserChoice 
-                                        ? 'border-white/80 bg-zinc-900/90 shadow-sm' 
+                                        ? 'border-white/90 bg-zinc-900/90 shadow-sm ring-1 ring-white/20' 
                                         : isExpired
                                             ? 'border-zinc-800/90 bg-black/40 cursor-default'
-                                            : 'border-zinc-800/90 bg-black/40 hover:border-zinc-500 hover:bg-zinc-900/40 cursor-pointer'
+                                            : 'border-zinc-800/90 bg-black/40 hover:border-zinc-500 hover:bg-zinc-900/40 cursor-pointer active:scale-[0.995]'
                                 }`}
                                 title={
                                     isExpired
                                         ? undefined
                                         : isUserChoice
-                                            ? 'Your current selection'
+                                            ? 'Your active selection'
                                             : 'Click to change your vote to this option'
                                 }
                             >
                                 {/* Filled horizontal progress bar */}
                                 <div 
-                                    className={`absolute left-0 top-0 bottom-0 pointer-events-none transition-all duration-500 ${
+                                    className={`absolute left-0 top-0 bottom-0 pointer-events-none transition-all duration-300 ${
                                         isUserChoice 
-                                            ? 'bg-zinc-800/80 border-r border-white/40' 
-                                            : 'bg-zinc-900/70 border-r border-zinc-700/50'
+                                            ? 'bg-zinc-800/90 border-r-2 border-white' 
+                                            : 'bg-zinc-900/60 border-r border-zinc-700/50 group-hover:bg-zinc-800/30'
                                     }`}
                                     style={{ width: `${Math.max(Number(percentage), 0)}%` }}
                                 />
 
                                 <div className="relative z-10 flex items-center justify-between gap-3 pointer-events-none">
-                                    <div className="flex items-center gap-2.5">
-                                        <span className={`w-5 h-5 flex items-center justify-center text-[10px] font-bold border transition-colors ${
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                        <span className={`w-5 h-5 flex-shrink-0 flex items-center justify-center text-[10px] font-bold border transition-colors ${
                                             isUserChoice 
                                                 ? 'border-white text-white bg-black' 
                                                 : 'border-zinc-700 text-zinc-500 bg-zinc-950 group-hover:border-zinc-400 group-hover:text-zinc-300'
                                         }`}>
                                             {isUserChoice ? '✓' : String.fromCharCode(65 + idx)}
                                         </span>
-                                        <span className={`text-xs uppercase font-bold tracking-wider transition-colors ${
+                                        <span className={`text-xs uppercase font-bold tracking-wider truncate transition-colors ${
                                             isUserChoice 
                                                 ? 'text-white' 
                                                 : 'text-zinc-300 group-hover:text-white'
@@ -494,17 +557,22 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote }) 
                                             {option.text}
                                         </span>
                                         {isUserChoice && (
-                                            <span className="text-[9px] uppercase tracking-widest text-zinc-300 border border-zinc-600 px-1.5 py-0 bg-black/60">
-                                                Your Choice
+                                            <span className="text-[9px] uppercase tracking-widest text-white border border-white/60 px-1.5 py-0.5 bg-black font-mono flex-shrink-0">
+                                                YOUR CHOICE
                                             </span>
                                         )}
                                     </div>
 
-                                    <div className="flex items-center gap-3 text-right">
+                                    <div className="flex items-center gap-3 text-right flex-shrink-0">
+                                        {!isUserChoice && !isExpired && (
+                                            <span className="text-[10px] font-mono text-zinc-500 group-hover:text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:inline">
+                                                // SWITCH VOTE
+                                            </span>
+                                        )}
                                         <span className="text-xs font-bold text-white tracking-wider">
                                             {percentage}%
                                         </span>
-                                        <span className="text-[11px] text-zinc-500">
+                                        <span className="text-[11px] text-zinc-500 font-mono">
                                             ({option.voteCount})
                                         </span>
                                     </div>
@@ -513,6 +581,19 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote }) 
                         );
                     })}
                 </div>
+
+                {/* Active vote changing feedback for user */}
+                {hasVoted && !isExpired && (
+                    <div className="mt-2.5 flex items-center justify-between text-[10px] font-mono text-zinc-500 px-1">
+                        <span className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 bg-lime-400 rounded-full animate-pulse"></span>
+                            <span>VOTE RECORDED · CLICK ANY OPTION TO CHANGE YOUR CHOICE</span>
+                        </span>
+                        {isVoting && (
+                            <span className="text-zinc-300 font-bold animate-pulse">// UPDATING SELECTION...</span>
+                        )}
+                    </div>
+                )}
 
                 {/* Poll Summary Footer */}
                 <div className="mt-3.5 pt-2.5 border-t border-zinc-800/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-500">

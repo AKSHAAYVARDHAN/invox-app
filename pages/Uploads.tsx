@@ -681,7 +681,7 @@ const UploadsPage = () => {
                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-mono uppercase tracking-wider border border-zinc-700 hover:border-zinc-500 transition-all"
                             >
                                 <PlusIcon className="w-3.5 h-3.5" />
-                                <span>New Thread</span>
+                                <span>NEW THREAD</span>
                             </button>
                             <button
                                 onClick={() => {
@@ -691,14 +691,14 @@ const UploadsPage = () => {
                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-mono uppercase tracking-wider border border-zinc-700 hover:border-zinc-500 transition-all"
                             >
                                 <PlusIcon className="w-3.5 h-3.5" />
-                                <span>New Query</span>
+                                <span>NEW QUERY</span>
                             </button>
                             <button
                                 onClick={() => setIsCreatePollModalOpen(true)}
                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-mono uppercase tracking-wider border border-zinc-700 hover:border-zinc-500 transition-all"
                             >
                                 <PlusIcon className="w-3.5 h-3.5" />
-                                <span>New Poll</span>
+                                <span>NEW POLL</span>
                             </button>
                         </div>
                     </div>
@@ -745,7 +745,7 @@ const UploadsPage = () => {
                                     {mySpaceDiscoverFilter === 'Polls' ? (
                                         <button
                                             onClick={() => setIsCreatePollModalOpen(true)}
-                                            className="flex items-center gap-2 bg-white text-black hover:bg-zinc-200 text-xs uppercase font-bold tracking-wider py-2.5 px-5 transition-all"
+                                            className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-white text-xs uppercase font-bold tracking-wider py-2.5 px-5 border border-zinc-700 hover:border-zinc-500 transition-all font-mono"
                                         >
                                             <PlusIcon className="w-4 h-4" />
                                             <span>Create First Poll</span>
@@ -756,7 +756,7 @@ const UploadsPage = () => {
                                                 setOverrideContextName('Thread');
                                                 setIsModalOpen(true);
                                             }}
-                                            className="flex items-center gap-2 bg-white text-black hover:bg-zinc-200 text-xs uppercase font-bold tracking-wider py-2.5 px-5 transition-all"
+                                            className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-white text-xs uppercase font-bold tracking-wider py-2.5 px-5 border border-zinc-700 hover:border-zinc-500 transition-all font-mono"
                                         >
                                             <PlusIcon className="w-4 h-4" />
                                             <span>Create First Thread</span>
@@ -767,7 +767,7 @@ const UploadsPage = () => {
                                                 setOverrideContextName('Query');
                                                 setIsModalOpen(true);
                                             }}
-                                            className="flex items-center gap-2 bg-white text-black hover:bg-zinc-200 text-xs uppercase font-bold tracking-wider py-2.5 px-5 transition-all"
+                                            className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-white text-xs uppercase font-bold tracking-wider py-2.5 px-5 border border-zinc-700 hover:border-zinc-500 transition-all font-mono"
                                         >
                                             <PlusIcon className="w-4 h-4" />
                                             <span>Create First Query</span>
@@ -779,24 +779,24 @@ const UploadsPage = () => {
                                                     setOverrideContextName('Thread');
                                                     setIsModalOpen(true);
                                                 }}
-                                                className="px-3 py-2 bg-zinc-900 border border-zinc-700 text-white text-xs uppercase hover:bg-zinc-800 transition-all"
+                                                className="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-white text-xs uppercase hover:bg-zinc-800 transition-all font-mono font-bold tracking-wider"
                                             >
-                                                + Thread
+                                                + THREAD
                                             </button>
                                             <button
                                                 onClick={() => {
                                                     setOverrideContextName('Query');
                                                     setIsModalOpen(true);
                                                 }}
-                                                className="px-3 py-2 bg-zinc-900 border border-zinc-700 text-white text-xs uppercase hover:bg-zinc-800 transition-all"
+                                                className="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-white text-xs uppercase hover:bg-zinc-800 transition-all font-mono font-bold tracking-wider"
                                             >
-                                                + Query
+                                                + QUERY
                                             </button>
                                             <button
                                                 onClick={() => setIsCreatePollModalOpen(true)}
-                                                className="px-3 py-2 bg-zinc-900 border border-zinc-700 text-white text-xs uppercase hover:bg-zinc-800 transition-all"
+                                                className="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-white text-xs uppercase hover:bg-zinc-800 transition-all font-mono font-bold tracking-wider"
                                             >
-                                                + Poll
+                                                + POLL
                                             </button>
                                         </div>
                                     )}
@@ -815,6 +815,9 @@ const UploadsPage = () => {
                                             <PollCard 
                                                 poll={poll} 
                                                 onDelete={() => handleDeletePoll(poll)}
+                                                onVoteChange={(pollId, optionId, updatedOptions, updatedTotalVotes) => {
+                                                    setUserPolls(prev => prev.map(p => p.id === pollId ? { ...p, options: updatedOptions, totalVotes: updatedTotalVotes, userVotedOptionId: optionId } : p));
+                                                }}
                                             />
                                             <div className="mt-1 flex items-center justify-between px-3 py-1.5 bg-[#09090b] border border-zinc-800 text-[10px] text-zinc-500 font-mono">
                                                 <span>// MY_SPACE_MANAGED · POLL_ID: {poll.id.slice(0, 8)}...</span>

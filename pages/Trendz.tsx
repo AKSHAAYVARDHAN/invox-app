@@ -156,6 +156,7 @@ const TrendzPage = () => {
     const [trends, setTrends] = useState<Trend[]>([]);
     const [selectedTrend, setSelectedTrend] = useState<Trend | null>(null);
     const [activeCategory, setActiveCategory] = useState('All');
+    const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true); // Initial page load
     const [isFetchingMore, setIsFetchingMore] = useState(false); // Subsequent loads
     const [page, setPage] = useState(1);
@@ -247,7 +248,16 @@ const TrendzPage = () => {
         if (followedDomainsFilter) {
             return trend.domain.name === followedDomainsFilter;
         }
-        return activeCategory === 'All' || trend.domain.name === activeCategory
+        const activeTrendzDomains = domainSelections.trendz || [];
+        const domainMatch = activeTrendzDomains.length === 0 || activeTrendzDomains.includes(trend.domain.name);
+        const categoryMatch = activeCategory === 'All' || trend.domain.name === activeCategory;
+        const searchLower = searchQuery.trim().toLowerCase();
+        const searchMatch = !searchLower || 
+            trend.title.toLowerCase().includes(searchLower) ||
+            trend.description.toLowerCase().includes(searchLower) ||
+            trend.domain.name.toLowerCase().includes(searchLower) ||
+            (trend.hashtags || []).some(h => h.toLowerCase().includes(searchLower));
+        return domainMatch && categoryMatch && searchMatch;
     });
 
     if (selectedTrend) {
@@ -303,6 +313,8 @@ const TrendzPage = () => {
                         <input
                             type="search"
                             placeholder="SEARCH_TRENDS_OR_DOMAINS..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full bg-[#0c0c0e] border border-zinc-800/90 px-3.5 py-2.5 text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
                         />
                     </div>

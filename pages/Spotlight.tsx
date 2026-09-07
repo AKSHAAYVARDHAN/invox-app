@@ -1431,14 +1431,20 @@ export const SpotlightPage = () => {
             }
         }
 
-        // Sync state to URL
-        const newSearchParams = new URLSearchParams();
-        newSearchParams.set('tab', activeTab);
-        if (activeTab === 'Leap') {
-            newSearchParams.set('subTab', activeLeapTab);
+        // Sync state to URL safely if changed
+        const currentTab = searchParams.get('tab');
+        const currentSubTab = searchParams.get('subTab');
+        const needsUpdate = currentTab !== activeTab || (activeTab === 'Leap' ? currentSubTab !== activeLeapTab : Boolean(currentSubTab));
+        if (needsUpdate) {
+            const newSearchParams = new URLSearchParams(searchParams);
+            newSearchParams.set('tab', activeTab);
+            if (activeTab === 'Leap') {
+                newSearchParams.set('subTab', activeLeapTab);
+            } else {
+                newSearchParams.delete('subTab');
+            }
+            setSearchParams(newSearchParams, { replace: true });
         }
-        // Use replace: true to avoid adding a new entry to the history stack for tab changes.
-        setSearchParams(newSearchParams, { replace: true });
 
         return () => {
             if (setRightSidebarVariant) {
@@ -1448,7 +1454,7 @@ export const SpotlightPage = () => {
                 setSpotlightBrowseState(null);
             }
         };
-    }, [activeTab, activeLeapTab, setRightSidebarVariant, setSpotlightBrowseState, setSearchParams]);
+    }, [activeTab, activeLeapTab, setRightSidebarVariant, setSpotlightBrowseState, setSearchParams, searchParams]);
 
     useEffect(() => {
         setLoading(true);

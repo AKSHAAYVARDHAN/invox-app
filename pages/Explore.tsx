@@ -13,13 +13,16 @@ import { useFilters } from '../contexts/AIAssistantContext';
 import { useAuth } from '../contexts/AuthContext';
 import { subscribeToFeed, getUserLikedPostIds, getUserSavedPostIds, toggleLikePost, toggleBookmarkPost } from '../services/postService';
 import { subscribeToPolls } from '../services/pollService';
+import { applyDomainAndSearchFilter, calculateContentCounts } from '../utils/domainFilter';
 import {
     ClipboardListIcon,
     PresentationChartBarIcon,
     CodeBracketIcon,
     PencilSquareIcon,
     ChatIcon,
-    CubeIcon
+    CubeIcon,
+    MagnifyingGlassIcon,
+    XMarkIcon
 } from '../components/ui/Icons';
 
 const initialMockPosts: Post[] = [
@@ -34,6 +37,7 @@ const initialMockPosts: Post[] = [
         stats: { likes: 87200, views: 42300000, comments: 11200 },
         type: PostType.Feed,
         category: 'Science',
+        domain: 'Content',
         createdAt: new Date(Date.now() - 3600000 * 24),
     },
     {
@@ -47,6 +51,7 @@ const initialMockPosts: Post[] = [
         stats: { likes: 87200, views: 42300000, comments: 11200 },
         type: PostType.Thread,
         category: 'Start Up',
+        domain: 'Content',
         createdAt: new Date(Date.now() - 3600000 * 48),
         userCommented: true,
     },
@@ -61,6 +66,7 @@ const initialMockPosts: Post[] = [
         stats: { likes: 87200, views: 42300000, comments: 11200 },
         type: PostType.Query,
         category: 'Technology',
+        domain: 'Development',
         createdAt: new Date(Date.now() - 3600000 * 72),
         userSharedInsight: true,
     },
@@ -74,6 +80,7 @@ const initialMockPosts: Post[] = [
         stats: { likes: 95000, views: 5000000, comments: 18000 },
         type: PostType.Feed,
         category: 'Technology',
+        domain: 'Development',
         createdAt: new Date(Date.now() - 3600000 * 96),
     },
     {
@@ -87,6 +94,7 @@ const initialMockPosts: Post[] = [
         stats: { likes: 120000, views: 8000000, comments: 25000 },
         type: PostType.Feed,
         category: 'Sports',
+        domain: 'Marketing',
         createdAt: new Date(Date.now() - 3600000 * 120),
     },
     {
@@ -99,6 +107,7 @@ const initialMockPosts: Post[] = [
         stats: { likes: 250000, views: 15000000, comments: 40000 },
         type: PostType.Thread,
         category: 'Start Up',
+        domain: 'Product',
         createdAt: new Date(Date.now() - 3600000 * 140),
     },
     {
@@ -111,6 +120,7 @@ const initialMockPosts: Post[] = [
         stats: { likes: 45000, views: 2000000, comments: 8000 },
         type: PostType.Query,
         category: 'Music',
+        domain: 'Design',
         createdAt: new Date(Date.now() - 3600000 * 160),
     },
     {
@@ -123,7 +133,63 @@ const initialMockPosts: Post[] = [
         stats: { likes: 78000, views: 3500000, comments: 12000 },
         type: PostType.Feed,
         category: 'Art',
+        domain: 'Design',
         createdAt: new Date(Date.now() - 3600000 * 180),
+    },
+    {
+        id: 'mock-9',
+        author: { name: 'SaaS Pulse', avatarUrl: 'https://picsum.photos/id/15/200/200', isVerified: true },
+        aiSummary: "B2B Outbound Sales Playbook for High-ACV Software",
+        content: "Breaking down how developer-focused software companies scale from $1M to $10M ARR. When should you hire your first forward-deployed engineer or technical account executive?",
+        stats: { likes: 42100, views: 1800000, comments: 6400 },
+        type: PostType.Thread,
+        category: 'Finance',
+        domain: 'Sales',
+        createdAt: new Date(Date.now() - 3600000 * 36),
+    },
+    {
+        id: 'mock-10',
+        author: { name: 'Enterprise Hub', avatarUrl: 'https://picsum.photos/id/16/200/200', isVerified: true },
+        aiSummary: "Query: PLG vs Enterprise Sales motions in 2026",
+        content: "How is your engineering or revenue organization navigating the transition between product-led user acquisition and enterprise annual contract values?",
+        stats: { likes: 31000, views: 1200000, comments: 4500 },
+        type: PostType.Query,
+        category: 'Finance',
+        domain: 'Sales',
+        createdAt: new Date(Date.now() - 3600000 * 60),
+    },
+    {
+        id: 'mock-11',
+        author: { name: 'DevRel Daily', avatarUrl: 'https://picsum.photos/id/17/200/200', isVerified: true },
+        aiSummary: "Query: Developer marketing in the post-search era",
+        content: "With generative engines summarizing technical documentation, how are developer relations and growth teams measuring technical audience mindshare?",
+        stats: { likes: 58000, views: 2400000, comments: 7200 },
+        type: PostType.Query,
+        category: 'Technology',
+        domain: 'Marketing',
+        createdAt: new Date(Date.now() - 3600000 * 80),
+    },
+    {
+        id: 'mock-12',
+        author: { name: 'Product Forge', avatarUrl: 'https://picsum.photos/id/18/200/200', isVerified: true },
+        aiSummary: "Query: Defining North Star metrics for autonomous background agents",
+        content: "Traditional active user metrics fail when background agents execute operations without direct human clicks. What retention and velocity KPIs are product leaders adopting?",
+        stats: { likes: 49000, views: 1950000, comments: 6100 },
+        type: PostType.Query,
+        category: 'Technology',
+        domain: 'Product',
+        createdAt: new Date(Date.now() - 3600000 * 100),
+    },
+    {
+        id: 'mock-13',
+        author: { name: 'Figma Lab', avatarUrl: 'https://picsum.photos/id/19/200/200', isVerified: true },
+        aiSummary: "Spatial UI design principles for next-generation canvas interfaces",
+        content: "A detailed breakdown of optical hierarchy, contrast ratios, and spatial typography in canvas-first application design. How density and negative space define readability.",
+        stats: { likes: 64000, views: 2800000, comments: 8900 },
+        type: PostType.Thread,
+        category: 'Art',
+        domain: 'Design',
+        createdAt: new Date(Date.now() - 3600000 * 110),
     }
 ];
 
@@ -146,6 +212,7 @@ const initialMockPolls: Poll[] = [
         totalVotes: 315,
         status: 'active',
         category: 'Technology',
+        domain: 'Development',
         stats: { likes: 340, views: 12500, comments: 52 },
         type: PostType.Poll,
     },
@@ -166,7 +233,92 @@ const initialMockPolls: Poll[] = [
         totalVotes: 343,
         status: 'active',
         category: 'Start Up',
+        domain: 'Product',
         stats: { likes: 412, views: 18900, comments: 76 },
+        type: PostType.Poll,
+    },
+    {
+        id: 'mock-poll-3',
+        authorId: 'system-design',
+        author: { name: 'Design Tokens Hub', avatarUrl: 'https://picsum.photos/id/25/200/200', isVerified: true },
+        question: "Design systems in 2026: Token-driven automated sync vs Code-first headless components?",
+        description: "Assessing workflow integration between product designers and frontend systems engineers.",
+        options: [
+            { id: 'opt-1', text: 'Token-driven automated Figma sync', voteCount: 165 },
+            { id: 'opt-2', text: 'Code-first headless primitives', voteCount: 198 },
+            { id: 'opt-3', text: 'AI-generated component variants', voteCount: 74 },
+        ],
+        createdAt: new Date(Date.now() - 3600000 * 55),
+        expiresAt: new Date(Date.now() + 3600000 * 24 * 5),
+        duration: '7d',
+        totalVotes: 437,
+        status: 'active',
+        category: 'Art',
+        domain: 'Design',
+        stats: { likes: 289, views: 9800, comments: 41 },
+        type: PostType.Poll,
+    },
+    {
+        id: 'mock-poll-4',
+        authorId: 'system-marketing',
+        author: { name: 'Growth Signal', avatarUrl: 'https://picsum.photos/id/26/200/200', isVerified: true },
+        question: "Primary growth lever for technical developer platforms in 2026?",
+        description: "Evaluating user acquisition efficiency and community network effects.",
+        options: [
+            { id: 'opt-1', text: 'Open-source community advocacy', voteCount: 312 },
+            { id: 'opt-2', text: 'Technical whitepapers & benchmarks', voteCount: 145 },
+            { id: 'opt-3', text: 'Interactive browser sandboxes', voteCount: 220 },
+        ],
+        createdAt: new Date(Date.now() - 3600000 * 70),
+        expiresAt: new Date(Date.now() + 3600000 * 24 * 4),
+        duration: '7d',
+        totalVotes: 677,
+        status: 'active',
+        category: 'Sports',
+        domain: 'Marketing',
+        stats: { likes: 512, views: 15400, comments: 63 },
+        type: PostType.Poll,
+    },
+    {
+        id: 'mock-poll-5',
+        authorId: 'system-sales',
+        author: { name: 'Revenue Ops', avatarUrl: 'https://picsum.photos/id/27/200/200', isVerified: true },
+        question: "Sales motion for developer tools: Bottom-up expansion vs Top-down enterprise contracts?",
+        description: "How high-growth B2B infrastructure businesses close enterprise accounts.",
+        options: [
+            { id: 'opt-1', text: 'Bottom-up product adoption first', voteCount: 280 },
+            { id: 'opt-2', text: 'Top-down executive procurement', voteCount: 110 },
+            { id: 'opt-3', text: 'Hybrid champion-led outbound', voteCount: 195 },
+        ],
+        createdAt: new Date(Date.now() - 3600000 * 85),
+        expiresAt: new Date(Date.now() + 3600000 * 24 * 6),
+        duration: '7d',
+        totalVotes: 585,
+        status: 'active',
+        category: 'Finance',
+        domain: 'Sales',
+        stats: { likes: 380, views: 11200, comments: 49 },
+        type: PostType.Poll,
+    },
+    {
+        id: 'mock-poll-6',
+        authorId: 'system-content',
+        author: { name: 'Editorial Matrix', avatarUrl: 'https://picsum.photos/id/28/200/200', isVerified: true },
+        question: "Which medium generates highest engagement for technical deep dives?",
+        description: "Assessing engineering retention and reader comprehension.",
+        options: [
+            { id: 'opt-1', text: 'Interactive text + runnable diagrams', voteCount: 340 },
+            { id: 'opt-2', text: 'Condensed visual video walkthroughs', voteCount: 185 },
+            { id: 'opt-3', text: 'Long-form narrative markdown threads', voteCount: 215 },
+        ],
+        createdAt: new Date(Date.now() - 3600000 * 95),
+        expiresAt: new Date(Date.now() + 3600000 * 24 * 5),
+        duration: '7d',
+        totalVotes: 740,
+        status: 'active',
+        category: 'Science',
+        domain: 'Content',
+        stats: { likes: 490, views: 16800, comments: 58 },
         type: PostType.Poll,
     }
 ];
@@ -187,6 +339,7 @@ const ExplorePage = () => {
     const { currentUser } = useAuth();
     const [firestorePosts, setFirestorePosts] = useState<Post[]>([]);
     const [firestorePolls, setFirestorePolls] = useState<Poll[]>([]);
+    const [mockPolls, setMockPolls] = useState<Poll[]>(initialMockPolls);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('Feeds');
     const [activeCategory, setActiveCategory] = useState('All');
@@ -194,30 +347,77 @@ const ExplorePage = () => {
     const { domainSelections, setDomainSelection } = useFilters();
     const [likedPostIds, setLikedPostIds] = useState<Set<string>>(new Set());
     const [savedPostIds, setSavedPostIds] = useState<Set<string>>(new Set());
+    const [localSearch, setLocalSearch] = useState('');
 
-    const [searchParams] = ReactRouterDOM.useSearchParams();
-
-    // Deep link query parameters handling
-    useEffect(() => {
-        const tabParam = searchParams.get('tab');
-        if (tabParam === 'Discover' || tabParam === 'Feeds') {
-            setActiveTab(tabParam);
-        }
-        const filterParam = searchParams.get('filter');
-        if (filterParam && discoverFilters.some(f => f.toLowerCase() === filterParam.toLowerCase())) {
-            const matched = discoverFilters.find(f => f.toLowerCase() === filterParam.toLowerCase());
-            if (matched) setDiscoverFilter(matched);
-        }
-    }, [searchParams]);
+    const [searchParams, setSearchParams] = ReactRouterDOM.useSearchParams();
+    const domainParam = searchParams.get('domain') || '';
+    const tabParam = searchParams.get('tab') || '';
+    const filterParam = searchParams.get('filter') || '';
 
     const outletContext = ReactRouterDOM.useOutletContext<{
         setRightSidebarVariant: (variant: string) => void;
         activityFilter: string | null;
         setActivityFilter: (filter: string | null) => void;
         refreshKey: number;
+        discoverSearchTerm?: string;
+        setDiscoverSearchTerm?: (term: string) => void;
     }>();
 
-    const { setRightSidebarVariant, activityFilter, setActivityFilter, refreshKey } = outletContext || {};
+    const { 
+        setRightSidebarVariant, 
+        activityFilter, 
+        setActivityFilter, 
+        refreshKey,
+        discoverSearchTerm,
+        setDiscoverSearchTerm
+    } = outletContext || {};
+
+    const activeSearch = (discoverSearchTerm !== undefined ? discoverSearchTerm : localSearch);
+
+    const handleSearchChange = useCallback((val: string) => {
+        setLocalSearch(val);
+        setDiscoverSearchTerm?.(val);
+    }, [setDiscoverSearchTerm]);
+
+    // Synchronize domain filter with URL search params safely
+    useEffect(() => {
+        if (!domainParam) return;
+        const domainsFromUrl = domainParam.split(',').map(s => s.trim()).filter(Boolean);
+        const currentDomains = domainSelections.explore || [];
+        const isSame = currentDomains.length === domainsFromUrl.length &&
+            currentDomains.every((d, i) => d === domainsFromUrl[i]);
+        if (!isSame && domainsFromUrl.length > 0) {
+            setDomainSelection('explore', domainsFromUrl);
+        }
+    }, [domainParam, setDomainSelection, domainSelections.explore]);
+
+    const activeDomains = useMemo(() => {
+        return domainSelections.explore || [];
+    }, [domainSelections.explore]);
+
+    const handleDomainChange = useCallback((newDomains: string[]) => {
+        setDomainSelection('explore', newDomains);
+        const newParams = new URLSearchParams(searchParams);
+        if (newDomains.length > 0) {
+            newParams.set('domain', newDomains.join(','));
+        } else {
+            newParams.delete('domain');
+        }
+        setSearchParams(newParams, { replace: true });
+    }, [searchParams, setSearchParams, setDomainSelection]);
+
+    // Deep link query parameters handling safely
+    useEffect(() => {
+        if ((tabParam === 'Discover' || tabParam === 'Feeds') && tabParam !== activeTab) {
+            setActiveTab(tabParam);
+        }
+        if (filterParam && discoverFilters.some(f => f.toLowerCase() === filterParam.toLowerCase())) {
+            const matched = discoverFilters.find(f => f.toLowerCase() === filterParam.toLowerCase());
+            if (matched && matched !== discoverFilter) {
+                setDiscoverFilter(matched);
+            }
+        }
+    }, [tabParam, filterParam, activeTab, discoverFilter]);
 
     // Load User interactions (likes and bookmarks)
     useEffect(() => {
@@ -286,7 +486,7 @@ const ExplorePage = () => {
         if (!loading) {
              document.querySelector('main')?.scrollTo(0, 0);
         }
-    }, [activeTab, activeCategory, discoverFilter, activityFilter, loading]);
+    }, [activeTab, activeCategory, discoverFilter, activityFilter, activeDomains, loading]);
 
     // Merge Firestore posts with baseline discovery items
     const combinedPosts = useMemo(() => {
@@ -298,9 +498,23 @@ const ExplorePage = () => {
     // Merge Firestore polls with baseline discovery polls
     const combinedPolls = useMemo(() => {
         const firestoreIds = new Set(firestorePolls.map(p => p.id));
-        const nonDuplicateMock = initialMockPolls.filter(p => !firestoreIds.has(p.id));
+        const nonDuplicateMock = mockPolls.filter(p => !firestoreIds.has(p.id));
         return [...firestorePolls, ...nonDuplicateMock];
-    }, [firestorePolls]);
+    }, [firestorePolls, mockPolls]);
+
+    // Step 1: Apply domain and search filters to combined posts and polls
+    const domainFilteredPosts = useMemo(() => {
+        return applyDomainAndSearchFilter(combinedPosts, activeDomains, activeSearch);
+    }, [combinedPosts, activeDomains, activeSearch]);
+
+    const domainFilteredPolls = useMemo(() => {
+        return applyDomainAndSearchFilter(combinedPolls, activeDomains, activeSearch);
+    }, [combinedPolls, activeDomains, activeSearch]);
+
+    // Step 2: Calculate dynamic counts reflecting active domain filters
+    const dynamicCounts = useMemo(() => {
+        return calculateContentCounts(domainFilteredPosts, domainFilteredPolls);
+    }, [domainFilteredPosts, domainFilteredPolls]);
 
     const handleToggleLike = useCallback(async (postId: string) => {
         if (!currentUser) return;
@@ -334,7 +548,7 @@ const ExplorePage = () => {
 
     const filteredPosts = useMemo(() => {
         if (activeTab === 'Feeds') {
-            return combinedPosts.filter(post => {
+            return domainFilteredPosts.filter(post => {
                 if (activityFilter) {
                     if (activityFilter === 'threads') {
                         return post.type === PostType.Thread && post.userCommented;
@@ -354,20 +568,20 @@ const ExplorePage = () => {
         if (activeTab === 'Discover') {
             if (activityFilter) {
                 if (activityFilter === 'threads') {
-                    return combinedPosts.filter(p => p.type === PostType.Thread && p.userCommented);
+                    return domainFilteredPosts.filter(p => p.type === PostType.Thread && p.userCommented);
                 }
                 if (activityFilter === 'queries') {
-                    return combinedPosts.filter(p => p.type === PostType.Query && p.userSharedInsight);
+                    return domainFilteredPosts.filter(p => p.type === PostType.Query && p.userSharedInsight);
                 }
                 return [];
             }
 
             switch(discoverFilter) {
                 case 'All': {
-                    const threadsAndQueries = combinedPosts.filter(
+                    const threadsAndQueries = domainFilteredPosts.filter(
                         post => post.type === PostType.Thread || post.type === PostType.Query
                     );
-                    const allItems = [...threadsAndQueries, ...combinedPolls];
+                    const allItems = [...threadsAndQueries, ...domainFilteredPolls];
                     return allItems.sort((a, b) => {
                         const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
                         const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
@@ -375,17 +589,17 @@ const ExplorePage = () => {
                     });
                 }
                 case 'Threads':
-                    return combinedPosts.filter(post => post.type === PostType.Thread);
+                    return domainFilteredPosts.filter(post => post.type === PostType.Thread);
                 case 'Queries':
-                    return combinedPosts.filter(post => post.type === PostType.Query);
+                    return domainFilteredPosts.filter(post => post.type === PostType.Query);
                 case 'Polls':
-                    return combinedPolls;
+                    return domainFilteredPolls;
                 default:
                     return [];
             }
         }
         return [];
-    }, [combinedPosts, combinedPolls, activityFilter, activeTab, activeCategory, discoverFilter]);
+    }, [domainFilteredPosts, domainFilteredPolls, activityFilter, activeTab, activeCategory, discoverFilter]);
 
     return (
         <div className="py-2">
@@ -411,8 +625,8 @@ const ExplorePage = () => {
                     {/* Row 2: Domain Dropdown */}
                     <DomainFilter 
                         domains={exploreDomains}
-                        selectedDomains={domainSelections.explore || []}
-                        onSelectionChange={(domains) => setDomainSelection('explore', domains)}
+                        selectedDomains={activeDomains}
+                        onSelectionChange={handleDomainChange}
                     />
                 </>
             ) : (
@@ -420,27 +634,88 @@ const ExplorePage = () => {
                     {/* Row 1: Domain Dropdown for Discover */}
                     <DomainFilter 
                         domains={exploreDomains}
-                        selectedDomains={domainSelections.explore || []}
-                        onSelectionChange={(domains) => setDomainSelection('explore', domains)}
+                        selectedDomains={activeDomains}
+                        onSelectionChange={handleDomainChange}
                     />
-                    {/* Row 2: Sub-filters for Discover */}
-                    <div className="flex space-x-1 border border-zinc-800 bg-[#0c0c0e] p-1 mb-4">
-                        {discoverFilters.map(filter => (
-                            <button 
-                                key={filter}
-                                onClick={() => setDiscoverFilter(filter)}
-                                className={`flex-1 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider transition-all duration-150 ${
-                                    discoverFilter === filter 
-                                        ? 'bg-zinc-800 text-white font-bold border border-zinc-700' 
-                                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent'
-                                }`}
-                            >
-                                {filter}
-                            </button>
-                        ))}
+                    {/* Row 2: Sub-filters for Discover with Dynamic Counts */}
+                    <div className="flex space-x-1 border border-zinc-800 bg-[#0c0c0e] p-1 mb-3">
+                        {discoverFilters.map(filter => {
+                            let count = dynamicCounts.all;
+                            if (filter === 'Threads') count = dynamicCounts.threads;
+                            if (filter === 'Queries') count = dynamicCounts.queries;
+                            if (filter === 'Polls') count = dynamicCounts.polls;
+
+                            return (
+                                <button 
+                                    key={filter}
+                                    onClick={() => setDiscoverFilter(filter)}
+                                    className={`flex-1 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 ${
+                                        discoverFilter === filter 
+                                            ? 'bg-zinc-800 text-white font-bold border border-zinc-700' 
+                                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent'
+                                    }`}
+                                >
+                                    <span>{filter}</span>
+                                    <span className={`text-[10px] ${discoverFilter === filter ? 'text-lime-400' : 'text-zinc-500'}`}>({count})</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {/* Telemetry Count Row */}
+                    <div className="flex items-center justify-between px-3 py-2 mb-3 bg-[#0c0c0e] border border-zinc-800 font-mono text-xs">
+                        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                            <span className="text-zinc-500 uppercase tracking-widest text-[10px]">// TRANSMISSIONS</span>
+                            <span className="text-zinc-300">
+                                THREADS <strong className="text-white font-semibold">{dynamicCounts.threads}</strong>
+                            </span>
+                            <span className="text-zinc-700">|</span>
+                            <span className="text-zinc-300">
+                                QUERIES <strong className="text-white font-semibold">{dynamicCounts.queries}</strong>
+                            </span>
+                            <span className="text-zinc-700">|</span>
+                            <span className="text-zinc-300">
+                                POLLS <strong className="text-white font-semibold">{dynamicCounts.polls}</strong>
+                            </span>
+                        </div>
+                        {activeDomains.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-lime-400 font-bold uppercase tracking-wider hidden sm:inline">
+                                    // {activeDomains.length === 1 ? activeDomains[0].toUpperCase() : `${activeDomains.length} DOMAINS`}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => handleDomainChange([])}
+                                    className="text-[10px] text-zinc-400 hover:text-white uppercase tracking-wider px-1.5 py-0.5 border border-zinc-800 hover:border-zinc-600 bg-black transition-colors"
+                                >
+                                    RESET
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </>
             )}
+
+            {/* In-page Keyword Search Input (Bi-directionally synced with right sidebar & mobile) */}
+            <div className="relative mb-4">
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                <input
+                    type="search"
+                    placeholder="SEARCH_CONTENT_BY_KEYWORD..."
+                    value={activeSearch}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    className="w-full bg-[#0c0c0e] border border-zinc-800 px-3.5 py-2 pl-9 pr-9 text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+                />
+                {activeSearch && (
+                    <button
+                        type="button"
+                        onClick={() => handleSearchChange('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white"
+                        aria-label="Clear search"
+                    >
+                        <XMarkIcon className="w-3.5 h-3.5" />
+                    </button>
+                )}
+            </div>
 
             {/* Main Tabs: Feeds/Discover */}
             <div className="flex border-b border-zinc-800 mb-5">
@@ -504,6 +779,10 @@ const ExplorePage = () => {
                                             onDelete={(pollId) => {
                                                 setFirestorePolls(prev => prev.filter(p => p.id !== pollId));
                                             }}
+                                            onVoteChange={(pollId, optionId, updatedOptions, updatedTotalVotes) => {
+                                                setFirestorePolls(prev => prev.map(p => p.id === pollId ? { ...p, options: updatedOptions, totalVotes: updatedTotalVotes, userVotedOptionId: optionId } : p));
+                                                setMockPolls(prev => prev.map(p => p.id === pollId ? { ...p, options: updatedOptions, totalVotes: updatedTotalVotes, userVotedOptionId: optionId } : p));
+                                            }}
                                         />
                                     </ErrorBoundary>
                                 </React.Fragment>
@@ -538,8 +817,42 @@ const ExplorePage = () => {
                         );
                     })
                 ) : (
-                    <div className="text-center py-16 border border-dashed border-zinc-800 bg-[#0c0c0e] p-8">
-                        <p className="font-mono text-xs text-zinc-500 tracking-wider uppercase">// NO RECORDS FOUND FOR THIS FILTER</p>
+                    <div className="text-center py-16 border border-dashed border-zinc-800 bg-[#0c0c0e] p-8 font-mono space-y-3">
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">// NO RESULTS</span>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                            {activeDomains.length > 0 
+                                ? `NO TRANSMISSIONS FOUND FOR ${activeDomains.length === 1 ? `"${activeDomains[0].toUpperCase()}"` : `${activeDomains.length} SELECTED DOMAINS`}`
+                                : activeSearch 
+                                    ? `NO TRANSMISSIONS MATCHING "${activeSearch.toUpperCase()}"`
+                                    : 'NO RECORDS FOUND FOR THIS FILTER'}
+                        </h3>
+                        <p className="text-xs text-zinc-400 max-w-sm mx-auto leading-relaxed">
+                            {activeDomains.length > 0 
+                                ? 'No transmissions found for this domain selection. Clear the filter to explore everything.'
+                                : 'No matching transmissions found. Adjust your search or filters to see content.'}
+                        </p>
+                        {(activeDomains.length > 0 || activeSearch) && (
+                            <div className="pt-2 flex items-center justify-center gap-2">
+                                {activeDomains.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDomainChange([])}
+                                        className="px-3 py-1.5 bg-black hover:bg-zinc-900 text-xs text-white border border-zinc-700 hover:border-zinc-500 transition-colors uppercase tracking-wider"
+                                    >
+                                        Clear Domain Filter
+                                    </button>
+                                )}
+                                {activeSearch && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSearchChange('')}
+                                        className="px-3 py-1.5 bg-black hover:bg-zinc-900 text-xs text-zinc-300 hover:text-white border border-zinc-700 hover:border-zinc-500 transition-colors uppercase tracking-wider"
+                                    >
+                                        Clear Search
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

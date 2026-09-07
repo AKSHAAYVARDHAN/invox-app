@@ -538,3 +538,6 @@ export const RadioIcon = ({ className = 'w-6 h-6' }: { className?: string }) => 
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 15a6 6 0 100-12 6 6 0 000 12z" />
   </svg>
 );
+
+export const XMarkIcon = CloseIcon;
+
