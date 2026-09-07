@@ -26,6 +26,7 @@ import ImageZoomModal from '../ui/ImageZoomModal';
 import { useAIAssistant } from '../../contexts/AIAssistantContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { toggleLikePost, toggleBookmarkPost, incrementPostView } from '../../services/postService';
+import { CommentSection } from './CommentSection';
 
 const formatNumber = (num: number) => {
     if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
@@ -49,7 +50,7 @@ const MediaPlaceholder: React.FC<{ thumbnailUrl?: string; isVideo: boolean }> = 
     return <div className="w-full h-full bg-gray-700"></div>;
 };
 
-export const ThreadCard: React.FC<{ post: Post }> = ({ post }) => {
+export const ThreadCard: React.FC<{ post: Post; onCommentAdded?: (postId: string) => void }> = ({ post, onCommentAdded }) => {
     const { openModal } = useAIAssistant();
     const isVideo = post.mediaType === 'video';
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -72,6 +73,8 @@ export const ThreadCard: React.FC<{ post: Post }> = ({ post }) => {
     const [likeCount, setLikeCount] = useState(post.stats.likes);
     const [isSaved, setIsSaved] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+    const [commentCount, setCommentCount] = useState(post.stats?.comments ?? post.commentCount ?? 0);
 
     useEffect(() => {
         if (isVisible) {
@@ -379,12 +382,17 @@ export const ThreadCard: React.FC<{ post: Post }> = ({ post }) => {
                         <span>{formatNumber(post.stats.views)}</span>
                     </div>
                     <button 
-                        onClick={handleAIAssistantClick}
-                        className="flex items-center gap-1.5 px-2 py-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors" 
-                        aria-label="View comments"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setIsCommentsOpen(prev => !prev);
+                        }}
+                        className={`flex items-center gap-1.5 px-2 py-1 border transition-colors ${
+                            isCommentsOpen ? 'text-white border-zinc-700 bg-zinc-850' : 'border-transparent hover:border-zinc-800 hover:text-white'
+                        }`} 
+                        aria-label={isCommentsOpen ? "Collapse comments" : "View comments"}
                     >
                         <PresentationChartBarIcon className="w-4 h-4" />
-                        <span>{formatNumber(post.stats.comments)}</span>
+                        <span>{formatNumber(commentCount)}</span>
                     </button>
                     <button 
                         onClick={handleShareClick}
@@ -414,12 +422,32 @@ export const ThreadCard: React.FC<{ post: Post }> = ({ post }) => {
                 {/* Action Button */}
                 <div className="mt-3">
                     <button 
-                        onClick={handleAIAssistantClick}
-                        className="w-full bg-zinc-900/60 border border-zinc-700/80 text-white font-mono text-xs uppercase tracking-wider py-2.5 hover:bg-zinc-800 hover:border-zinc-500 transition-all duration-150 flex items-center justify-center gap-2"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setIsCommentsOpen(prev => !prev);
+                        }}
+                        className={`w-full font-mono text-xs uppercase tracking-wider py-2.5 transition-all duration-150 flex items-center justify-center gap-2 ${
+                            isCommentsOpen
+                                ? 'bg-zinc-800 border border-zinc-500 text-white'
+                                : 'bg-zinc-900/60 border border-zinc-700/80 text-white hover:bg-zinc-800 hover:border-zinc-500'
+                        }`}
                     >
-                        <span>// COMMENT</span>
+                        <span>{isCommentsOpen ? '// CLOSE COMMENTS' : '// COMMENT'}</span>
                     </button>
                 </div>
+
+                {/* Inline Expandable Comment Section */}
+                <CommentSection
+                    post={post}
+                    isOpen={isCommentsOpen}
+                    onClose={() => setIsCommentsOpen(false)}
+                    onCommentAdded={(pid) => {
+                        setCommentCount(prev => prev + 1);
+                        post.stats.comments = (post.stats?.comments || 0) + 1;
+                        post.userCommented = true;
+                        onCommentAdded?.(pid);
+                    }}
+                />
             </div>
             <ImageZoomModal 
                 isOpen={!!zoomedImageUrl} 

@@ -19,6 +19,8 @@ interface DomainFilterProps {
     domains: Domain[];
     buttonText?: string;
     className?: string;
+    isTrending?: boolean;
+    onToggleTrending?: () => void;
 }
 
 const DomainFilter: React.FC<DomainFilterProps> = ({ 
@@ -26,7 +28,9 @@ const DomainFilter: React.FC<DomainFilterProps> = ({
     onSelectionChange, 
     domains, 
     buttonText = 'DOMAINS',
-    className = ''
+    className = '',
+    isTrending = false,
+    onToggleTrending
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -133,33 +137,54 @@ const DomainFilter: React.FC<DomainFilterProps> = ({
                         {getButtonText()}
                     </span>
                     {!isAllSelected && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-lime-400 shrink-0" title="Domain filter active" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-300 shrink-0" title="Domain filter active" />
                     )}
                     <ChevronDownIcon className={`w-3.5 h-3.5 text-zinc-400 shrink-0 transition-transform duration-150 ${isOpen ? 'transform rotate-180' : ''}`} />
                 </button>
 
                 {/* Right: Actions / Status */}
                 <div className="flex items-center gap-2 shrink-0">
-                    {!isAllSelected ? (
-                        <>
-                            <button
-                                type="button"
-                                onClick={handleClear}
-                                className="text-[10px] text-zinc-400 hover:text-white uppercase font-mono px-1.5 py-0.5 border border-zinc-800 hover:border-zinc-600 bg-black/60 transition-colors"
-                                title="Reset to All Domains"
-                            >
-                                CLEAR
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setIsOpen(!isOpen)}
-                                className="flex items-center gap-1 text-lime-400 font-mono text-[10px] hover:text-lime-300"
-                                title="Toggle domain selector"
-                            >
-                                <FireIcon className="w-3.5 h-3.5 text-lime-400" />
-                                <span className="hidden sm:inline font-bold">ACTIVE</span>
-                            </button>
-                        </>
+                    {!isAllSelected && (
+                        <button
+                            type="button"
+                            onClick={handleClear}
+                            className="text-[10px] text-zinc-400 hover:text-white uppercase font-mono px-1.5 py-0.5 border border-zinc-800 hover:border-zinc-600 bg-black/60 transition-colors"
+                            title="Reset to All Domains"
+                        >
+                            CLEAR
+                        </button>
+                    )}
+                    {onToggleTrending ? (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onToggleTrending();
+                            }}
+                            className={`flex items-center gap-1.5 font-mono text-[10px] transition-colors cursor-pointer ${
+                                isTrending 
+                                    ? 'text-white hover:text-zinc-200 font-bold' 
+                                    : 'text-zinc-500 hover:text-zinc-300'
+                            }`}
+                            title={isTrending ? "Trending active: Click to return to default ordering" : "Click to view Trending content"}
+                            aria-pressed={isTrending}
+                        >
+                            <FireIcon className={`w-4 h-4 transition-colors ${isTrending ? 'text-white' : 'text-zinc-400'}`} />
+                            <span className="uppercase font-semibold">TRENDING</span>
+                            {isTrending && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0" title="Trending active" />
+                            )}
+                        </button>
+                    ) : !isAllSelected ? (
+                        <button
+                            type="button"
+                            onClick={() => setIsOpen(!isOpen)}
+                            className="flex items-center gap-1 text-zinc-300 font-mono text-[10px] hover:text-white"
+                            title="Toggle domain selector"
+                        >
+                            <FireIcon className="w-3.5 h-3.5 text-zinc-400" />
+                            <span className="hidden sm:inline font-bold">ACTIVE</span>
+                        </button>
                     ) : (
                         <button
                             type="button"

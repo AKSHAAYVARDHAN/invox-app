@@ -113,6 +113,21 @@ export interface Post {
   userSharedInsight?: boolean;
 }
 
+export interface PostComment {
+  id: string;
+  postId: string;
+  targetId?: string;
+  targetType?: string;
+  type?: 'comment' | 'insight';
+  authorId: string;
+  authorName: string;
+  authorAvatar: string;
+  authorUsername?: string;
+  text: string;
+  createdAt: Date | any;
+  updatedAt?: Date | any;
+}
+
 export interface Project {
     id: string;
     author: {

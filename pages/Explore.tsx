@@ -14,13 +14,18 @@ import { useAuth } from '../contexts/AuthContext';
 import { subscribeToFeed, getUserLikedPostIds, getUserSavedPostIds, toggleLikePost, toggleBookmarkPost } from '../services/postService';
 import { subscribeToPolls } from '../services/pollService';
 import { applyDomainAndSearchFilter, calculateContentCounts } from '../utils/domainFilter';
+import { sortItemsByTrending } from '../utils/trendingScore';
 import {
-    ClipboardListIcon,
-    PresentationChartBarIcon,
     CodeBracketIcon,
+    GlobeAltIcon,
+    BriefcaseIcon,
+    FireIcon,
     PencilSquareIcon,
-    ChatIcon,
-    CubeIcon,
+    SparklesIcon,
+    ShieldCheckIcon,
+    AcademicCapIcon,
+    CurrencyDollarIcon,
+    UsersIcon,
     MagnifyingGlassIcon,
     XMarkIcon
 } from '../components/ui/Icons';
@@ -37,7 +42,7 @@ const initialMockPosts: Post[] = [
         stats: { likes: 87200, views: 42300000, comments: 11200 },
         type: PostType.Feed,
         category: 'Science',
-        domain: 'Content',
+        domain: 'Science',
         createdAt: new Date(Date.now() - 3600000 * 24),
     },
     {
@@ -50,8 +55,8 @@ const initialMockPosts: Post[] = [
         thumbnailUrl: 'https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?q=80&w=1280&h=720&auto=format&fit=crop',
         stats: { likes: 87200, views: 42300000, comments: 11200 },
         type: PostType.Thread,
-        category: 'Start Up',
-        domain: 'Content',
+        category: 'Society',
+        domain: 'Society & Ideas',
         createdAt: new Date(Date.now() - 3600000 * 48),
         userCommented: true,
     },
@@ -66,7 +71,7 @@ const initialMockPosts: Post[] = [
         stats: { likes: 87200, views: 42300000, comments: 11200 },
         type: PostType.Query,
         category: 'Technology',
-        domain: 'Development',
+        domain: 'Technology',
         createdAt: new Date(Date.now() - 3600000 * 72),
         userSharedInsight: true,
     },
@@ -80,7 +85,7 @@ const initialMockPosts: Post[] = [
         stats: { likes: 95000, views: 5000000, comments: 18000 },
         type: PostType.Feed,
         category: 'Technology',
-        domain: 'Development',
+        domain: 'Technology',
         createdAt: new Date(Date.now() - 3600000 * 96),
     },
     {
@@ -93,8 +98,8 @@ const initialMockPosts: Post[] = [
         thumbnailUrl: 'https://peach.blender.org/wp-content/uploads/title_anouncement.jpg?x11217',
         stats: { likes: 120000, views: 8000000, comments: 25000 },
         type: PostType.Feed,
-        category: 'Sports',
-        domain: 'Marketing',
+        category: 'Health',
+        domain: 'Health & Medicine',
         createdAt: new Date(Date.now() - 3600000 * 120),
     },
     {
@@ -107,7 +112,7 @@ const initialMockPosts: Post[] = [
         stats: { likes: 250000, views: 15000000, comments: 40000 },
         type: PostType.Thread,
         category: 'Start Up',
-        domain: 'Product',
+        domain: 'Startups & Entrepreneurship',
         createdAt: new Date(Date.now() - 3600000 * 140),
     },
     {
@@ -120,7 +125,7 @@ const initialMockPosts: Post[] = [
         stats: { likes: 45000, views: 2000000, comments: 8000 },
         type: PostType.Query,
         category: 'Music',
-        domain: 'Design',
+        domain: 'Arts & Culture',
         createdAt: new Date(Date.now() - 3600000 * 160),
     },
     {
@@ -133,7 +138,7 @@ const initialMockPosts: Post[] = [
         stats: { likes: 78000, views: 3500000, comments: 12000 },
         type: PostType.Feed,
         category: 'Art',
-        domain: 'Design',
+        domain: 'Arts & Culture',
         createdAt: new Date(Date.now() - 3600000 * 180),
     },
     {
@@ -143,8 +148,8 @@ const initialMockPosts: Post[] = [
         content: "Breaking down how developer-focused software companies scale from $1M to $10M ARR. When should you hire your first forward-deployed engineer or technical account executive?",
         stats: { likes: 42100, views: 1800000, comments: 6400 },
         type: PostType.Thread,
-        category: 'Finance',
-        domain: 'Sales',
+        category: 'Business',
+        domain: 'Business',
         createdAt: new Date(Date.now() - 3600000 * 36),
     },
     {
@@ -155,7 +160,7 @@ const initialMockPosts: Post[] = [
         stats: { likes: 31000, views: 1200000, comments: 4500 },
         type: PostType.Query,
         category: 'Finance',
-        domain: 'Sales',
+        domain: 'Finance',
         createdAt: new Date(Date.now() - 3600000 * 60),
     },
     {
@@ -165,8 +170,8 @@ const initialMockPosts: Post[] = [
         content: "With generative engines summarizing technical documentation, how are developer relations and growth teams measuring technical audience mindshare?",
         stats: { likes: 58000, views: 2400000, comments: 7200 },
         type: PostType.Query,
-        category: 'Technology',
-        domain: 'Marketing',
+        category: 'Education',
+        domain: 'Education & Research',
         createdAt: new Date(Date.now() - 3600000 * 80),
     },
     {
@@ -176,8 +181,8 @@ const initialMockPosts: Post[] = [
         content: "Traditional active user metrics fail when background agents execute operations without direct human clicks. What retention and velocity KPIs are product leaders adopting?",
         stats: { likes: 49000, views: 1950000, comments: 6100 },
         type: PostType.Query,
-        category: 'Technology',
-        domain: 'Product',
+        category: 'Start Up',
+        domain: 'Startups & Entrepreneurship',
         createdAt: new Date(Date.now() - 3600000 * 100),
     },
     {
@@ -187,7 +192,7 @@ const initialMockPosts: Post[] = [
         content: "A detailed breakdown of optical hierarchy, contrast ratios, and spatial typography in canvas-first application design. How density and negative space define readability.",
         stats: { likes: 64000, views: 2800000, comments: 8900 },
         type: PostType.Thread,
-        category: 'Art',
+        category: 'Design',
         domain: 'Design',
         createdAt: new Date(Date.now() - 3600000 * 110),
     }
@@ -212,7 +217,7 @@ const initialMockPolls: Poll[] = [
         totalVotes: 315,
         status: 'active',
         category: 'Technology',
-        domain: 'Development',
+        domain: 'Technology',
         stats: { likes: 340, views: 12500, comments: 52 },
         type: PostType.Poll,
     },
@@ -233,7 +238,7 @@ const initialMockPolls: Poll[] = [
         totalVotes: 343,
         status: 'active',
         category: 'Start Up',
-        domain: 'Product',
+        domain: 'Startups & Entrepreneurship',
         stats: { likes: 412, views: 18900, comments: 76 },
         type: PostType.Poll,
     },
@@ -253,42 +258,42 @@ const initialMockPolls: Poll[] = [
         duration: '7d',
         totalVotes: 437,
         status: 'active',
-        category: 'Art',
+        category: 'Design',
         domain: 'Design',
         stats: { likes: 289, views: 9800, comments: 41 },
         type: PostType.Poll,
     },
     {
         id: 'mock-poll-4',
-        authorId: 'system-marketing',
-        author: { name: 'Growth Signal', avatarUrl: 'https://picsum.photos/id/26/200/200', isVerified: true },
-        question: "Primary growth lever for technical developer platforms in 2026?",
-        description: "Evaluating user acquisition efficiency and community network effects.",
+        authorId: 'system-education',
+        author: { name: 'Academic Signal', avatarUrl: 'https://picsum.photos/id/26/200/200', isVerified: true },
+        question: "Primary growth lever for technical research platforms in 2026?",
+        description: "Evaluating open reproducibility and community citation networks.",
         options: [
-            { id: 'opt-1', text: 'Open-source community advocacy', voteCount: 312 },
-            { id: 'opt-2', text: 'Technical whitepapers & benchmarks', voteCount: 145 },
-            { id: 'opt-3', text: 'Interactive browser sandboxes', voteCount: 220 },
+            { id: 'opt-1', text: 'Open-access peer reproduction datasets', voteCount: 312 },
+            { id: 'opt-2', text: 'Interactive runnable benchmark papers', voteCount: 220 },
+            { id: 'opt-3', text: 'Decentralized preprint governance', voteCount: 145 },
         ],
         createdAt: new Date(Date.now() - 3600000 * 70),
         expiresAt: new Date(Date.now() + 3600000 * 24 * 4),
         duration: '7d',
         totalVotes: 677,
         status: 'active',
-        category: 'Sports',
-        domain: 'Marketing',
+        category: 'Education',
+        domain: 'Education & Research',
         stats: { likes: 512, views: 15400, comments: 63 },
         type: PostType.Poll,
     },
     {
         id: 'mock-poll-5',
-        authorId: 'system-sales',
-        author: { name: 'Revenue Ops', avatarUrl: 'https://picsum.photos/id/27/200/200', isVerified: true },
-        question: "Sales motion for developer tools: Bottom-up expansion vs Top-down enterprise contracts?",
-        description: "How high-growth B2B infrastructure businesses close enterprise accounts.",
+        authorId: 'system-finance',
+        author: { name: 'Capital Matrix', avatarUrl: 'https://picsum.photos/id/27/200/200', isVerified: true },
+        question: "Fintech treasury management: Multi-currency digital assets vs Centralized yield vaults?",
+        description: "Evaluating corporate treasury diversification in modern high-interest regimes.",
         options: [
-            { id: 'opt-1', text: 'Bottom-up product adoption first', voteCount: 280 },
-            { id: 'opt-2', text: 'Top-down executive procurement', voteCount: 110 },
-            { id: 'opt-3', text: 'Hybrid champion-led outbound', voteCount: 195 },
+            { id: 'opt-1', text: 'Centralized Tier-1 yield vaults', voteCount: 280 },
+            { id: 'opt-2', text: 'Multi-currency tokenized T-bills', voteCount: 195 },
+            { id: 'opt-3', text: 'Autonomous algorithmic treasury hedging', voteCount: 110 },
         ],
         createdAt: new Date(Date.now() - 3600000 * 85),
         expiresAt: new Date(Date.now() + 3600000 * 24 * 6),
@@ -296,20 +301,20 @@ const initialMockPolls: Poll[] = [
         totalVotes: 585,
         status: 'active',
         category: 'Finance',
-        domain: 'Sales',
+        domain: 'Finance',
         stats: { likes: 380, views: 11200, comments: 49 },
         type: PostType.Poll,
     },
     {
         id: 'mock-poll-6',
-        authorId: 'system-content',
-        author: { name: 'Editorial Matrix', avatarUrl: 'https://picsum.photos/id/28/200/200', isVerified: true },
-        question: "Which medium generates highest engagement for technical deep dives?",
-        description: "Assessing engineering retention and reader comprehension.",
+        authorId: 'system-science',
+        author: { name: 'Science Frontiers', avatarUrl: 'https://picsum.photos/id/28/200/200', isVerified: true },
+        question: "Which medium best communicates breakthrough scientific discoveries to practitioners?",
+        description: "Assessing interdisciplinary comprehension and knowledge transfer.",
         options: [
-            { id: 'opt-1', text: 'Interactive text + runnable diagrams', voteCount: 340 },
+            { id: 'opt-1', text: 'Interactive data models + runnable simulations', voteCount: 340 },
             { id: 'opt-2', text: 'Condensed visual video walkthroughs', voteCount: 185 },
-            { id: 'opt-3', text: 'Long-form narrative markdown threads', voteCount: 215 },
+            { id: 'opt-3', text: 'Structured narrative whitepaper threads', voteCount: 215 },
         ],
         createdAt: new Date(Date.now() - 3600000 * 95),
         expiresAt: new Date(Date.now() + 3600000 * 24 * 5),
@@ -317,8 +322,92 @@ const initialMockPolls: Poll[] = [
         totalVotes: 740,
         status: 'active',
         category: 'Science',
-        domain: 'Content',
+        domain: 'Science',
         stats: { likes: 490, views: 16800, comments: 58 },
+        type: PostType.Poll,
+    },
+    {
+        id: 'mock-poll-7',
+        authorId: 'system-business',
+        author: { name: 'Executive Operations', avatarUrl: 'https://picsum.photos/id/29/200/200', isVerified: true },
+        question: "Enterprise operating model: Async-first distributed teams vs Synchronous campus hubs?",
+        description: "Balancing velocity, institutional knowledge retention, and cross-functional focus.",
+        options: [
+            { id: 'opt-1', text: 'Async-first globally distributed', voteCount: 324 },
+            { id: 'opt-2', text: 'Hybrid 3-day regional hubs', voteCount: 241 },
+            { id: 'opt-3', text: 'Fully co-located headquarters', voteCount: 88 },
+        ],
+        createdAt: new Date(Date.now() - 3600000 * 105),
+        expiresAt: new Date(Date.now() + 3600000 * 24 * 5),
+        duration: '7d',
+        totalVotes: 653,
+        status: 'active',
+        category: 'Business',
+        domain: 'Business',
+        stats: { likes: 375, views: 13200, comments: 44 },
+        type: PostType.Poll,
+    },
+    {
+        id: 'mock-poll-8',
+        authorId: 'system-health',
+        author: { name: 'BioMetrics Lab', avatarUrl: 'https://picsum.photos/id/30/200/200', isVerified: true },
+        question: "Next leap in preventative medicine: Continuous multi-analyte monitors vs Epigenetic age clocks?",
+        description: "Assessing clinical utility and accessible preventive wellness technology.",
+        options: [
+            { id: 'opt-1', text: 'Continuous multi-analyte wearable sensors', voteCount: 412 },
+            { id: 'opt-2', text: 'Longitudinal epigenetic methylation testing', voteCount: 198 },
+            { id: 'opt-3', text: 'AI-driven full-body MRI diagnostics', voteCount: 231 },
+        ],
+        createdAt: new Date(Date.now() - 3600000 * 115),
+        expiresAt: new Date(Date.now() + 3600000 * 24 * 6),
+        duration: '7d',
+        totalVotes: 841,
+        status: 'active',
+        category: 'Health',
+        domain: 'Health & Medicine',
+        stats: { likes: 462, views: 17400, comments: 68 },
+        type: PostType.Poll,
+    },
+    {
+        id: 'mock-poll-9',
+        authorId: 'system-arts',
+        author: { name: 'Culture Nexus', avatarUrl: 'https://picsum.photos/id/31/200/200', isVerified: true },
+        question: "Generative tools in cinematic and musical composition: Amplification or commoditization?",
+        description: "Evaluating artistic authorship and creative expression in digital media.",
+        options: [
+            { id: 'opt-1', text: 'Empowering multiplier for solo creators', voteCount: 388 },
+            { id: 'opt-2', text: 'Over-saturation of formulaic content', voteCount: 310 },
+            { id: 'opt-3', text: 'New hybrid collaborative medium', voteCount: 245 },
+        ],
+        createdAt: new Date(Date.now() - 3600000 * 125),
+        expiresAt: new Date(Date.now() + 3600000 * 24 * 4),
+        duration: '7d',
+        totalVotes: 943,
+        status: 'active',
+        category: 'Art',
+        domain: 'Arts & Culture',
+        stats: { likes: 528, views: 20100, comments: 85 },
+        type: PostType.Poll,
+    },
+    {
+        id: 'mock-poll-10',
+        authorId: 'system-society',
+        author: { name: 'Civic Futures', avatarUrl: 'https://picsum.photos/id/32/200/200', isVerified: true },
+        question: "Digital commons in 2026: Open interoperable protocols vs Platform-governed safety enclaves?",
+        description: "How public discourse and digital freedom of information should be structured.",
+        options: [
+            { id: 'opt-1', text: 'Open decentralized verifiable protocols', voteCount: 460 },
+            { id: 'opt-2', text: 'Curated safety-moderated networks', voteCount: 184 },
+            { id: 'opt-3', text: 'Community-governed sovereign DAOs', voteCount: 219 },
+        ],
+        createdAt: new Date(Date.now() - 3600000 * 135),
+        expiresAt: new Date(Date.now() + 3600000 * 24 * 7),
+        duration: '7d',
+        totalVotes: 863,
+        status: 'active',
+        category: 'Society',
+        domain: 'Society & Ideas',
+        stats: { likes: 590, views: 22800, comments: 92 },
         type: PostType.Poll,
     }
 ];
@@ -327,12 +416,16 @@ const categoryFilters = ['All', 'Technology', 'Start Up', 'Sports', 'Art', 'Musi
 const discoverFilters = ['All', 'Threads', 'Queries', 'Polls'];
 
 const exploreDomains = [
-    { name: 'Marketing', icon: ClipboardListIcon },
-    { name: 'Sales', icon: PresentationChartBarIcon },
-    { name: 'Development', icon: CodeBracketIcon },
+    { name: 'Technology', icon: CodeBracketIcon },
+    { name: 'Science', icon: GlobeAltIcon },
+    { name: 'Business', icon: BriefcaseIcon },
+    { name: 'Startups & Entrepreneurship', icon: FireIcon },
     { name: 'Design', icon: PencilSquareIcon },
-    { name: 'Content', icon: ChatIcon },
-    { name: 'Product', icon: CubeIcon },
+    { name: 'Arts & Culture', icon: SparklesIcon },
+    { name: 'Health & Medicine', icon: ShieldCheckIcon },
+    { name: 'Education & Research', icon: AcademicCapIcon },
+    { name: 'Finance', icon: CurrencyDollarIcon },
+    { name: 'Society & Ideas', icon: UsersIcon },
 ];
 
 const ExplorePage = () => {
@@ -353,6 +446,30 @@ const ExplorePage = () => {
     const domainParam = searchParams.get('domain') || '';
     const tabParam = searchParams.get('tab') || '';
     const filterParam = searchParams.get('filter') || '';
+    const trendingParam = searchParams.get('trending') === 'true';
+
+    const [isTrending, setIsTrending] = useState(() => searchParams.get('trending') === 'true');
+
+    // Synchronize trending state with URL parameter safely
+    useEffect(() => {
+        if (trendingParam !== isTrending) {
+            setIsTrending(trendingParam);
+        }
+    }, [trendingParam]);
+
+    const handleToggleTrending = useCallback(() => {
+        setIsTrending(prev => {
+            const next = !prev;
+            const newParams = new URLSearchParams(searchParams);
+            if (next) {
+                newParams.set('trending', 'true');
+            } else {
+                newParams.delete('trending');
+            }
+            setSearchParams(newParams, { replace: true });
+            return next;
+        });
+    }, [searchParams, setSearchParams]);
 
     const outletContext = ReactRouterDOM.useOutletContext<{
         setRightSidebarVariant: (variant: string) => void;
@@ -547,8 +664,10 @@ const ExplorePage = () => {
     }, [currentUser]);
 
     const filteredPosts = useMemo(() => {
+        let result: (Post | Poll)[] = [];
+
         if (activeTab === 'Feeds') {
-            return domainFilteredPosts.filter(post => {
+            result = domainFilteredPosts.filter(post => {
                 if (activityFilter) {
                     if (activityFilter === 'threads') {
                         return post.type === PostType.Thread && post.userCommented;
@@ -563,43 +682,51 @@ const ExplorePage = () => {
                 const typeMatch = post.type === PostType.Feed || !post.type;
                 return categoryMatch && typeMatch;
             });
-        }
-
-        if (activeTab === 'Discover') {
+        } else if (activeTab === 'Discover') {
             if (activityFilter) {
                 if (activityFilter === 'threads') {
-                    return domainFilteredPosts.filter(p => p.type === PostType.Thread && p.userCommented);
+                    result = domainFilteredPosts.filter(p => p.type === PostType.Thread && p.userCommented);
+                } else if (activityFilter === 'queries') {
+                    result = domainFilteredPosts.filter(p => p.type === PostType.Query && p.userSharedInsight);
+                } else {
+                    result = [];
                 }
-                if (activityFilter === 'queries') {
-                    return domainFilteredPosts.filter(p => p.type === PostType.Query && p.userSharedInsight);
+            } else {
+                switch(discoverFilter) {
+                    case 'All': {
+                        const threadsAndQueries = domainFilteredPosts.filter(
+                            post => post.type === PostType.Thread || post.type === PostType.Query
+                        );
+                        result = [...threadsAndQueries, ...domainFilteredPolls];
+                        break;
+                    }
+                    case 'Threads':
+                        result = domainFilteredPosts.filter(post => post.type === PostType.Thread);
+                        break;
+                    case 'Queries':
+                        result = domainFilteredPosts.filter(post => post.type === PostType.Query);
+                        break;
+                    case 'Polls':
+                        result = domainFilteredPolls;
+                        break;
+                    default:
+                        result = [];
+                        break;
                 }
-                return [];
-            }
-
-            switch(discoverFilter) {
-                case 'All': {
-                    const threadsAndQueries = domainFilteredPosts.filter(
-                        post => post.type === PostType.Thread || post.type === PostType.Query
-                    );
-                    const allItems = [...threadsAndQueries, ...domainFilteredPolls];
-                    return allItems.sort((a, b) => {
-                        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
-                        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
-                        return dateB - dateA;
-                    });
-                }
-                case 'Threads':
-                    return domainFilteredPosts.filter(post => post.type === PostType.Thread);
-                case 'Queries':
-                    return domainFilteredPosts.filter(post => post.type === PostType.Query);
-                case 'Polls':
-                    return domainFilteredPolls;
-                default:
-                    return [];
             }
         }
-        return [];
-    }, [domainFilteredPosts, domainFilteredPolls, activityFilter, activeTab, activeCategory, discoverFilter]);
+
+        // Apply Trending ranking if active, otherwise default chronological order
+        if (isTrending) {
+            return sortItemsByTrending(result);
+        }
+
+        return [...result].sort((a, b) => {
+            const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
+            const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
+            return dateB - dateA;
+        });
+    }, [domainFilteredPosts, domainFilteredPolls, activityFilter, activeTab, activeCategory, discoverFilter, isTrending]);
 
     return (
         <div className="py-2">
@@ -627,6 +754,8 @@ const ExplorePage = () => {
                         domains={exploreDomains}
                         selectedDomains={activeDomains}
                         onSelectionChange={handleDomainChange}
+                        isTrending={isTrending}
+                        onToggleTrending={handleToggleTrending}
                     />
                 </>
             ) : (
@@ -636,61 +765,24 @@ const ExplorePage = () => {
                         domains={exploreDomains}
                         selectedDomains={activeDomains}
                         onSelectionChange={handleDomainChange}
+                        isTrending={isTrending}
+                        onToggleTrending={handleToggleTrending}
                     />
-                    {/* Row 2: Sub-filters for Discover with Dynamic Counts */}
+                    {/* Row 2: Sub-filters for Discover */}
                     <div className="flex space-x-1 border border-zinc-800 bg-[#0c0c0e] p-1 mb-3">
-                        {discoverFilters.map(filter => {
-                            let count = dynamicCounts.all;
-                            if (filter === 'Threads') count = dynamicCounts.threads;
-                            if (filter === 'Queries') count = dynamicCounts.queries;
-                            if (filter === 'Polls') count = dynamicCounts.polls;
-
-                            return (
-                                <button 
-                                    key={filter}
-                                    onClick={() => setDiscoverFilter(filter)}
-                                    className={`flex-1 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 ${
-                                        discoverFilter === filter 
-                                            ? 'bg-zinc-800 text-white font-bold border border-zinc-700' 
-                                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent'
-                                    }`}
-                                >
-                                    <span>{filter}</span>
-                                    <span className={`text-[10px] ${discoverFilter === filter ? 'text-lime-400' : 'text-zinc-500'}`}>({count})</span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                    {/* Telemetry Count Row */}
-                    <div className="flex items-center justify-between px-3 py-2 mb-3 bg-[#0c0c0e] border border-zinc-800 font-mono text-xs">
-                        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                            <span className="text-zinc-500 uppercase tracking-widest text-[10px]">// TRANSMISSIONS</span>
-                            <span className="text-zinc-300">
-                                THREADS <strong className="text-white font-semibold">{dynamicCounts.threads}</strong>
-                            </span>
-                            <span className="text-zinc-700">|</span>
-                            <span className="text-zinc-300">
-                                QUERIES <strong className="text-white font-semibold">{dynamicCounts.queries}</strong>
-                            </span>
-                            <span className="text-zinc-700">|</span>
-                            <span className="text-zinc-300">
-                                POLLS <strong className="text-white font-semibold">{dynamicCounts.polls}</strong>
-                            </span>
-                        </div>
-                        {activeDomains.length > 0 && (
-                            <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-lime-400 font-bold uppercase tracking-wider hidden sm:inline">
-                                    // {activeDomains.length === 1 ? activeDomains[0].toUpperCase() : `${activeDomains.length} DOMAINS`}
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => handleDomainChange([])}
-                                    className="text-[10px] text-zinc-400 hover:text-white uppercase tracking-wider px-1.5 py-0.5 border border-zinc-800 hover:border-zinc-600 bg-black transition-colors"
-                                >
-                                    RESET
-                                </button>
-                            </div>
-                        )}
+                        {discoverFilters.map(filter => (
+                            <button 
+                                key={filter}
+                                onClick={() => setDiscoverFilter(filter)}
+                                className={`flex-1 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 ${
+                                    discoverFilter === filter 
+                                        ? 'bg-zinc-800 text-white font-bold border border-zinc-700' 
+                                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent'
+                                }`}
+                            >
+                                <span>{filter}</span>
+                            </button>
+                        ))}
                     </div>
                 </>
             )}
@@ -742,6 +834,29 @@ const ExplorePage = () => {
                     <span>// Discover</span>
                 </button>
             </div>
+
+            {isTrending && (
+                <div className="bg-[#0c0c0e] p-2.5 px-3 border border-zinc-800 mb-4 flex items-center justify-between font-mono text-xs">
+                    <div className="flex items-center gap-2">
+                        <FireIcon className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                        <span className="text-zinc-500 text-[10px] uppercase tracking-widest">// MODE:</span>
+                        <span className="text-white font-semibold tracking-wider uppercase text-[11px]">
+                            TRENDING &bull; {activeDomains.length === 1 ? activeDomains[0] : activeDomains.length > 1 ? `${activeDomains.length} DOMAINS` : 'ALL DOMAINS'}
+                        </span>
+                        <span className="text-zinc-500 text-[10px] hidden sm:inline">
+                            (Ranked by engagement)
+                        </span>
+                    </div>
+                    <button 
+                        type="button"
+                        onClick={handleToggleTrending} 
+                        className="text-[10px] font-mono text-zinc-400 hover:text-white uppercase tracking-wider px-2 py-0.5 border border-zinc-800 hover:border-zinc-600 bg-black transition-colors"
+                        title="Return to default feed order"
+                    >
+                        DEFAULT ORDER &times;
+                    </button>
+                </div>
+            )}
 
             {activityFilter && (
                 <div className="bg-[#0c0c0e] p-3 border border-zinc-800 mb-4 flex items-center justify-between">
@@ -820,19 +935,33 @@ const ExplorePage = () => {
                     <div className="text-center py-16 border border-dashed border-zinc-800 bg-[#0c0c0e] p-8 font-mono space-y-3">
                         <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">// NO RESULTS</span>
                         <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                            {activeDomains.length > 0 
-                                ? `NO TRANSMISSIONS FOUND FOR ${activeDomains.length === 1 ? `"${activeDomains[0].toUpperCase()}"` : `${activeDomains.length} SELECTED DOMAINS`}`
-                                : activeSearch 
-                                    ? `NO TRANSMISSIONS MATCHING "${activeSearch.toUpperCase()}"`
-                                    : 'NO RECORDS FOUND FOR THIS FILTER'}
+                            {isTrending
+                                ? `NO TRENDING TRANSMISSIONS FOUND FOR ${activeDomains.length === 1 ? `"${activeDomains[0].toUpperCase()}"` : activeDomains.length > 1 ? `${activeDomains.length} SELECTED DOMAINS` : 'THIS FILTER'}`
+                                : activeDomains.length > 0 
+                                    ? `NO TRANSMISSIONS FOUND FOR ${activeDomains.length === 1 ? `"${activeDomains[0].toUpperCase()}"` : `${activeDomains.length} SELECTED DOMAINS`}`
+                                    : activeSearch 
+                                        ? `NO TRANSMISSIONS MATCHING "${activeSearch.toUpperCase()}"`
+                                        : 'NO RECORDS FOUND FOR THIS FILTER'}
                         </h3>
                         <p className="text-xs text-zinc-400 max-w-sm mx-auto leading-relaxed">
-                            {activeDomains.length > 0 
-                                ? 'No transmissions found for this domain selection. Clear the filter to explore everything.'
-                                : 'No matching transmissions found. Adjust your search or filters to see content.'}
+                            {isTrending
+                                ? 'No trending transmissions met the engagement threshold. Switch to default order to see latest items.'
+                                : activeDomains.length > 0 
+                                    ? 'No transmissions found for this domain selection. Clear the filter to explore everything.'
+                                    : 'No matching transmissions found. Adjust your search or filters to see content.'}
                         </p>
-                        {(activeDomains.length > 0 || activeSearch) && (
-                            <div className="pt-2 flex items-center justify-center gap-2">
+                        {(activeDomains.length > 0 || activeSearch || isTrending) && (
+                            <div className="pt-2 flex items-center justify-center gap-2 flex-wrap">
+                                {isTrending && (
+                                    <button
+                                        type="button"
+                                        onClick={handleToggleTrending}
+                                        className="px-3 py-1.5 bg-black hover:bg-zinc-900 text-xs text-white border border-zinc-700 hover:border-zinc-500 transition-colors uppercase tracking-wider font-mono flex items-center gap-1.5"
+                                    >
+                                        <FireIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                        Default Order
+                                    </button>
+                                )}
                                 {activeDomains.length > 0 && (
                                     <button
                                         type="button"

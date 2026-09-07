@@ -5,12 +5,24 @@ import { Post, Poll, PostType } from '../types';
  * Allows cross-matching between domain classifications and category tags.
  */
 const DOMAIN_SYNONYMS: Record<string, string[]> = {
-    development: ['development', 'coding', 'technology', 'tech', 'software', 'engineering', 'dev', 'ai', 'artificial intelligence', 'robotics'],
-    design: ['design', 'ui', 'ux', 'art', 'product design', 'creative', 'graphics', 'visual'],
-    product: ['product', 'start up', 'startup', 'management', 'roadmap', 'business', 'venture'],
-    marketing: ['marketing', 'growth', 'advertising', 'brand', 'seo', 'sports', 'pr', 'advocacy'],
-    sales: ['sales', 'revenue', 'business', 'deals', 'finance', 'b2b', 'crm', 'contracts'],
-    content: ['content', 'editorial', 'writing', 'media', 'science', 'research', 'music', 'journalism', 'space'],
+    // 10 Top-Level Domains
+    'technology': ['technology', 'tech', 'development', 'coding', 'software', 'engineering', 'dev', 'ai', 'artificial intelligence', 'robotics', 'code', 'hardware', 'cybersecurity', 'web3', 'it'],
+    'science': ['science', 'scientific', 'physics', 'astronomy', 'space', 'cosmos', 'biology', 'chemistry', 'laboratory', 'quantum', 'nature', 'genetics', 'ecology', 'neuroscience'],
+    'business': ['business', 'commerce', 'sales', 'deals', 'marketing', 'enterprise', 'management', 'corporate', 'strategy', 'contracts', 'b2b', 'crm', 'procurement', 'advertising', 'pr', 'brand'],
+    'startups & entrepreneurship': ['startups & entrepreneurship', 'startup', 'start up', 'startups', 'entrepreneurship', 'founder', 'product', 'venture', 'growth', 'incubator', 'pitch', 'mvp', 'scaleup', 'vc', 'bootstrapping'],
+    'design': ['design', 'ui', 'ux', 'product design', 'creative', 'graphics', 'visual', 'figma', 'prototype', 'typography', 'spatial', 'wireframe', 'art direction', 'interface'],
+    'arts & culture': ['arts & culture', 'art', 'arts', 'culture', 'music', 'creative', 'entertainment', 'film', 'photography', 'writing', 'literature', 'museum', 'painting', 'media', 'heritage'],
+    'health & medicine': ['health & medicine', 'health', 'medicine', 'healthcare', 'health care', 'medical', 'wellness', 'biotech', 'fitness', 'mental health', 'clinical', 'pharma', 'sports'],
+    'education & research': ['education & research', 'education', 'research', 'academic', 'learning', 'school', 'university', 'study', 'teaching', 'content', 'editorial', 'benchmarks', 'whitepapers', 'edtech', 'curriculum'],
+    'finance': ['finance', 'financial', 'fintech', 'trading', 'stock market', 'investing', 'crypto', 'revenue', 'money', 'banking', 'venture capital', 'arr', 'valuation', 'capital', 'economics'],
+    'society & ideas': ['society & ideas', 'society', 'ideas', 'community', 'culture', 'philosophy', 'social', 'policy', 'humanities', 'governance', 'opinion', 'discussions', 'ethics', 'future', 'sociology', 'public'],
+
+    // Legacy domain synonym fallbacks (backward compatibility)
+    'development': ['development', 'coding', 'technology', 'tech', 'software', 'engineering', 'dev', 'ai'],
+    'product': ['product', 'start up', 'startup', 'startups & entrepreneurship', 'business', 'venture'],
+    'marketing': ['marketing', 'growth', 'advertising', 'brand', 'business', 'pr'],
+    'sales': ['sales', 'revenue', 'business', 'deals', 'finance', 'b2b'],
+    'content': ['content', 'editorial', 'writing', 'education & research', 'science', 'research', 'media'],
 };
 
 /**

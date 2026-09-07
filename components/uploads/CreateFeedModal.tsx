@@ -399,13 +399,15 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
                                             className="bg-[#0c0c0e] border border-zinc-700 p-2.5 text-white text-xs font-mono focus:outline-none focus:border-zinc-500"
                                         >
                                             <option value="Technology">Technology</option>
-                                            <option value="Start Up">Start Up</option>
                                             <option value="Science">Science</option>
+                                            <option value="Business">Business</option>
+                                            <option value="Startups & Entrepreneurship">Startups & Entrepreneurship</option>
                                             <option value="Design">Design</option>
-                                            <option value="Development">Development</option>
-                                            <option value="Marketing">Marketing</option>
-                                            <option value="Art">Art</option>
-                                            <option value="Music">Music</option>
+                                            <option value="Arts & Culture">Arts & Culture</option>
+                                            <option value="Health & Medicine">Health & Medicine</option>
+                                            <option value="Education & Research">Education & Research</option>
+                                            <option value="Finance">Finance</option>
+                                            <option value="Society & Ideas">Society & Ideas</option>
                                             <option value="General">General</option>
                                         </select>
                                         <button
