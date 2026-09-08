@@ -14,6 +14,7 @@ import { handleImageError } from '../utils/imageUtils';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserChannels, createChannel } from '../../services/channelService';
 import type { Channel } from '../../types';
+import { TargetDomainSelector } from '../ui/TargetDomainSelector';
 
 interface CreateFeedModalProps {
     isOpen: boolean;
@@ -27,6 +28,8 @@ interface CreateFeedModalProps {
         channelId?: string;
         channelName?: string;
         channelAvatarUrl?: string;
+        category?: string;
+        domain?: string;
     }) => Promise<void> | void;
     contextName: string;
     preselectedChannelId?: string;
@@ -43,6 +46,10 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
     const [isDragging, setIsDragging] = useState(false);
     const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+    // Target domain state
+    const [targetDomain, setTargetDomain] = useState('Technology');
+    const [isTargetDomainValid, setIsTargetDomainValid] = useState(true);
 
     // Channel state
     const [userChannels, setUserChannels] = useState<Channel[]>([]);
@@ -93,9 +100,12 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
             const savedDraft = localStorage.getItem(draftKey);
             if (savedDraft) {
                 try {
-                    const { oneLine: savedOneLine, description: savedDescription } = JSON.parse(savedDraft);
+                    const { oneLine: savedOneLine, description: savedDescription, targetDomain: savedDomain } = JSON.parse(savedDraft);
                     setOneLine(savedOneLine || '');
                     setDescription(savedDescription || '');
+                    if (savedDomain) {
+                        setTargetDomain(savedDomain);
+                    }
                 } catch (e) {
                     console.error("Failed to parse draft", e);
                 }
@@ -162,7 +172,7 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
     };
 
     const handleSaveDraft = () => {
-        const draft = { oneLine, description };
+        const draft = { oneLine, description, targetDomain };
         localStorage.setItem(draftKey, JSON.stringify(draft));
         onClose();
     };
@@ -202,6 +212,11 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
     const handlePublish = async () => {
         if (!oneLine.trim()) return;
 
+        if (!isTargetDomainValid || !targetDomain.trim()) {
+            setErrorMsg('A valid target domain is required.');
+            return;
+        }
+
         // If in Feed context and user has no channels / is creating channel
         let finalChannelId = selectedChannelId;
         let finalChannelName = '';
@@ -215,8 +230,8 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
                     const channel = await createChannel({
                         name: newChannelName.trim(),
                         description: newChannelDescription.trim(),
-                        domain: newChannelDomain,
-                        category: newChannelDomain,
+                        domain: targetDomain.trim() || newChannelDomain,
+                        category: targetDomain.trim() || newChannelDomain,
                         authorProfile: userProfile ? {
                             displayName: userProfile.displayName || currentUser?.displayName || undefined,
                             username: userProfile.username || undefined,
@@ -259,6 +274,8 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
                 channelId: finalChannelId || undefined,
                 channelName: finalChannelName || undefined,
                 channelAvatarUrl: finalChannelAvatar || undefined,
+                category: targetDomain.trim(),
+                domain: targetDomain.trim(),
             });
             // Clear draft on successful publish
             localStorage.removeItem(draftKey);
@@ -274,6 +291,8 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
     const resetForm = () => {
         setOneLine('');
         setDescription('');
+        setTargetDomain('Technology');
+        setIsTargetDomainValid(true);
         setMedia(null);
         setPreviewUrl(null);
         setUploadProgress(0);
@@ -443,6 +462,21 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
                         </div>
                     )}
 
+                    {/* Target Domain */}
+                    <TargetDomainSelector
+                        value={targetDomain}
+                        label="Target Domain"
+                        subLabel="// DOMAIN"
+                        onChange={(domainVal, isValid) => {
+                            setTargetDomain(domainVal);
+                            setIsTargetDomainValid(isValid);
+                            if (isValid && errorMsg?.toLowerCase().includes('domain')) {
+                                setErrorMsg(null);
+                            }
+                        }}
+                        disabled={isSubmitting}
+                    />
+
                     {/* The Hook */}
                     <div className="space-y-1.5">
                         <div className="flex justify-between items-center">
@@ -534,7 +568,7 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
                         Save as Draft
                     </button>
                     <button 
-                        disabled={!oneLine.trim() || isSubmitting}
+                        disabled={!oneLine.trim() || isSubmitting || !isTargetDomainValid || !targetDomain.trim()}
                         onClick={handlePublish}
                         className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-850 disabled:bg-zinc-950 disabled:text-zinc-700 disabled:border-zinc-850 px-6 py-2 text-xs font-mono uppercase font-bold tracking-wider text-white border border-zinc-700/80 hover:border-zinc-500 transition-all shadow-sm"
                     >

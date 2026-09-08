@@ -10,23 +10,13 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { createPoll } from '../../services/pollService';
 import type { Poll, PollDuration } from '../../types';
+import { TargetDomainSelector } from '../ui/TargetDomainSelector';
 
 interface CreatePollModalProps {
     isOpen: boolean;
     onClose: () => void;
     onCreated?: (poll: Poll) => void;
 }
-
-const DOMAINS = [
-    'Technology',
-    'Artificial Intelligence',
-    'Start Up',
-    'Coding',
-    'Design',
-    'Science',
-    'Product',
-    'Business',
-];
 
 const DURATION_OPTIONS: { label: string; value: PollDuration }[] = [
     { label: '1 Day', value: '1d' },
@@ -47,6 +37,7 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({
     const [options, setOptions] = useState<string[]>(['', '']);
     const [duration, setDuration] = useState<PollDuration>('7d');
     const [category, setCategory] = useState('Technology');
+    const [isDomainValid, setIsDomainValid] = useState(true);
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -84,6 +75,7 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({
         setOptions(['', '']);
         setDuration('7d');
         setCategory('Technology');
+        setIsDomainValid(true);
         setMediaFile(null);
         setPreviewUrl(null);
         setErrorMsg(null);
@@ -161,6 +153,11 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({
             return;
         }
 
+        if (!isDomainValid || !category.trim()) {
+            setErrorMsg('A valid target domain is required.');
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             const created = await createPoll(
@@ -169,7 +166,8 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({
                     description: description.trim() || undefined,
                     options: cleanedOptions,
                     duration,
-                    category,
+                    category: category.trim(),
+                    domain: category.trim(),
                     mediaFile,
                     authorProfile: userProfile ? {
                         displayName: userProfile.displayName || currentUser.displayName || undefined,
@@ -327,27 +325,17 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({
                     </div>
 
                     {/* Domain / Category */}
-                    <div>
-                        <label className="block text-zinc-400 uppercase tracking-wider mb-2 font-bold">
-                            Target Domain
-                        </label>
-                        <div className="flex flex-wrap gap-1.5">
-                            {DOMAINS.map((dom) => (
-                                <button
-                                    key={dom}
-                                    type="button"
-                                    onClick={() => setCategory(dom)}
-                                    className={`py-1.5 px-2.5 border text-[11px] uppercase tracking-wider transition-all ${
-                                        category === dom
-                                            ? 'border-white bg-zinc-900 text-white font-bold'
-                                            : 'border-zinc-800 bg-black/40 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700'
-                                    }`}
-                                >
-                                    {dom}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                    <TargetDomainSelector
+                        value={category}
+                        onChange={(domainValue, isValid) => {
+                            setCategory(domainValue);
+                            setIsDomainValid(isValid);
+                            if (isValid && errorMsg?.toLowerCase().includes('domain')) {
+                                setErrorMsg(null);
+                            }
+                        }}
+                        disabled={isSubmitting}
+                    />
 
                     {/* Optional Media Upload */}
                     <div>
@@ -425,7 +413,7 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({
                         </button>
                         <button
                             type="submit"
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || !isDomainValid || !category.trim()}
                             className="flex items-center gap-2 px-5 py-2 bg-white text-black hover:bg-zinc-200 text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50"
                         >
                             {isSubmitting ? (

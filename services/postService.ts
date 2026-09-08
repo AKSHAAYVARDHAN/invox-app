@@ -35,6 +35,7 @@ export interface CreatePostInput {
     thumbnailUrl?: string;
     type?: string;
     category?: string;
+    domain?: string;
     tags?: string[];
     visibility?: 'public' | 'unlisted' | 'private';
     authorProfile?: {
@@ -145,7 +146,8 @@ export const normalizeFirestorePost = (id: string, data: Record<string, any>): P
         saveCount: Number(data.saveCount ?? 0),
         type: postType,
         postType: data.postType || postType,
-        category: data.category || 'General',
+        category: data.category || data.domain || 'General',
+        domain: data.domain || data.category || 'General',
         tags: data.tags || [],
         visibility: data.visibility || 'public',
         createdAt: createdAtDate,
@@ -233,7 +235,8 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
         saveCount: 0,
         type: resolvedPostType,
         postType: input.type || resolvedPostType,
-        category: input.category || input.type || 'General',
+        category: input.domain || input.category || input.type || 'General',
+        domain: input.domain || input.category || 'General',
         tags: input.tags || [],
         visibility: input.visibility || 'public',
     };

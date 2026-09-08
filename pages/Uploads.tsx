@@ -247,6 +247,8 @@ const UploadsPage = () => {
         channelId?: string;
         channelName?: string;
         channelAvatarUrl?: string;
+        category?: string;
+        domain?: string;
     }) => {
         if (!currentUser) return;
 
@@ -259,7 +261,8 @@ const UploadsPage = () => {
             mediaFile: data.mediaFile,
             mediaUrl: data.previewUrl,
             type: data.type,
-            category: data.type,
+            category: data.domain || data.category || data.type,
+            domain: data.domain || data.category || 'Technology',
             authorProfile: userProfile ? {
                 displayName: userProfile.displayName || currentUser.displayName || undefined,
                 username: userProfile.username || undefined,

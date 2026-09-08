@@ -384,6 +384,7 @@ export interface CreatePollInput {
   options: string[];
   duration: PollDuration;
   category: string;
+  domain?: string;
   mediaFile?: File | null;
   mediaUrl?: string;
   authorProfile?: {

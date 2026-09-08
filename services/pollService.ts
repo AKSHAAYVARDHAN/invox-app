@@ -72,7 +72,8 @@ export const normalizeFirestorePoll = (id: string, data: any): Poll => {
         duration: data.duration as PollDuration,
         totalVotes,
         status,
-        category: data.category || 'General',
+        category: data.category || data.domain || 'General',
+        domain: data.domain || data.category || 'General',
         mediaUrl: data.mediaUrl || undefined,
         mediaType: data.mediaType || undefined,
         stats: {
@@ -179,7 +180,8 @@ export const createPoll = async (
         expiresAt,
         totalVotes: 0,
         status: 'active',
-        category: input.category || 'Technology',
+        category: input.domain || input.category || 'Technology',
+        domain: input.domain || input.category || 'Technology',
         mediaUrl: uploadedMediaUrl || null,
         mediaType: detectedMediaType || null,
         stats: {
