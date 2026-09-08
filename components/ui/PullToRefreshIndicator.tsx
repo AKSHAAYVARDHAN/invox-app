@@ -12,7 +12,8 @@ const PULL_THRESHOLD = 80; // Should match the value in the hook
 
 const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({ state, distance }) => {
   const isVisible = state !== 'idle' || distance > 0;
-  // FIX: Use Tailwind classes for rotation instead of an inline style for better maintainability.
+  if (!isVisible) return null;
+
   const rotationClass = state === 'ready' || state === 'refreshing' ? 'rotate-0' : 'rotate-180';
   const opacity = Math.min(distance / (PULL_THRESHOLD * 0.8), 1);
 
