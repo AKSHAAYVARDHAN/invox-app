@@ -597,16 +597,40 @@ const ExplorePage = () => {
 
     // Merge Firestore posts with baseline discovery items
     const combinedPosts = useMemo(() => {
-        const firestoreIds = new Set(firestorePosts.map(p => p.id));
-        const nonDuplicateMock = initialMockPosts.filter(p => !firestoreIds.has(p.id));
-        return [...firestorePosts, ...nonDuplicateMock];
+        const seen = new Set<string>();
+        const result: Post[] = [];
+        for (const p of firestorePosts) {
+            if (p && p.id && !seen.has(p.id)) {
+                seen.add(p.id);
+                result.push(p);
+            }
+        }
+        for (const p of initialMockPosts) {
+            if (p && p.id && !seen.has(p.id)) {
+                seen.add(p.id);
+                result.push(p);
+            }
+        }
+        return result;
     }, [firestorePosts]);
 
     // Raw discovery and Firestore polls
     const rawPolls = useMemo(() => {
-        const firestoreIds = new Set(firestorePolls.map(p => p.id));
-        const nonDuplicateMock = mockPolls.filter(p => !firestoreIds.has(p.id));
-        return [...firestorePolls, ...nonDuplicateMock];
+        const seen = new Set<string>();
+        const result: Poll[] = [];
+        for (const p of firestorePolls) {
+            if (p && p.id && !seen.has(p.id)) {
+                seen.add(p.id);
+                result.push(p);
+            }
+        }
+        for (const p of mockPolls) {
+            if (p && p.id && !seen.has(p.id)) {
+                seen.add(p.id);
+                result.push(p);
+            }
+        }
+        return result;
     }, [firestorePolls, mockPolls]);
 
     // Merge Firestore polls with baseline discovery polls and attach user votes
@@ -786,12 +810,20 @@ const ExplorePage = () => {
             }
         }
 
+        // Strictly deduplicate result by ID to ensure unique items
+        const seen = new Set<string>();
+        const deduplicatedResult = result.filter(item => {
+            if (!item || !item.id || seen.has(item.id)) return false;
+            seen.add(item.id);
+            return true;
+        });
+
         // Apply Trending ranking if active, otherwise default chronological order
         if (isTrending) {
-            return sortItemsByTrending(result);
+            return sortItemsByTrending(deduplicatedResult);
         }
 
-        return [...result].sort((a, b) => {
+        return [...deduplicatedResult].sort((a, b) => {
             const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
             const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
             return dateB - dateA;
@@ -975,10 +1007,12 @@ const ExplorePage = () => {
                     filteredPosts.map(post => {
                         const isLiked = likedPostIds.has(post.id);
                         const isSaved = savedPostIds.has(post.id);
+                        const itemType = (post as any).type === PostType.Poll ? 'poll' : (post.type || 'post');
+                        const uniqueKey = `${itemType}-${post.id}`;
 
                         if ((post as any).type === PostType.Poll) {
                             return (
-                                <React.Fragment key={post.id}>
+                                <React.Fragment key={uniqueKey}>
                                     <ErrorBoundary>
                                         <PollCard 
                                             poll={post as any as Poll} 
@@ -994,7 +1028,7 @@ const ExplorePage = () => {
                         }
                         if (post.type === PostType.Query) {
                             return (
-                                <React.Fragment key={post.id}>
+                                <React.Fragment key={uniqueKey}>
                                     <ErrorBoundary>
                                         <QueryCard post={post} />
                                     </ErrorBoundary>
@@ -1003,7 +1037,7 @@ const ExplorePage = () => {
                         }
                         if (post.type === PostType.Thread) {
                             return (
-                                <React.Fragment key={post.id}>
+                                <React.Fragment key={uniqueKey}>
                                     <ErrorBoundary>
                                         <ThreadCard post={post} />
                                     </ErrorBoundary>
@@ -1011,7 +1045,7 @@ const ExplorePage = () => {
                             );
                         }
                         return (
-                            <React.Fragment key={post.id}>
+                            <React.Fragment key={uniqueKey}>
                                 <ErrorBoundary>
                                     <FeedCard 
                                         post={post} 

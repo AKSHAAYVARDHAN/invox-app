@@ -37,7 +37,13 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
         const unsubscribe = subscribeToPostComments(
             post.id,
             (items) => {
-                setComments(items);
+                const seen = new Set<string>();
+                const uniqueComments = items.filter(c => {
+                    if (!c || !c.id || seen.has(c.id)) return false;
+                    seen.add(c.id);
+                    return true;
+                });
+                setComments(uniqueComments);
                 setLoading(false);
             },
             (err) => {

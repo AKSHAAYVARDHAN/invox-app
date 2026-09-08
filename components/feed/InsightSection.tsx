@@ -37,7 +37,13 @@ export const InsightSection: React.FC<InsightSectionProps> = ({
         const unsubscribe = subscribeToPostComments(
             post.id,
             (items) => {
-                setInsights(items);
+                const seen = new Set<string>();
+                const uniqueInsights = items.filter(i => {
+                    if (!i || !i.id || seen.has(i.id)) return false;
+                    seen.add(i.id);
+                    return true;
+                });
+                setInsights(uniqueInsights);
                 setLoading(false);
             },
             (err) => {

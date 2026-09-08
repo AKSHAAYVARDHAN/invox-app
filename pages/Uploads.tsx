@@ -100,7 +100,13 @@ const UploadsPage = () => {
         const unsubscribe = subscribeToUserPosts(
             currentUser.uid,
             (posts) => {
-                setUserPosts(posts);
+                const seen = new Set<string>();
+                const uniquePosts = posts.filter(p => {
+                    if (!p || !p.id || seen.has(p.id)) return false;
+                    seen.add(p.id);
+                    return true;
+                });
+                setUserPosts(uniquePosts);
                 setLoading(false);
             },
             (err) => {
@@ -123,7 +129,13 @@ const UploadsPage = () => {
         const unsubscribe = subscribeToUserPolls(
             currentUser.uid,
             (polls) => {
-                setUserPolls(polls);
+                const seen = new Set<string>();
+                const uniquePolls = polls.filter(p => {
+                    if (!p || !p.id || seen.has(p.id)) return false;
+                    seen.add(p.id);
+                    return true;
+                });
+                setUserPolls(uniquePolls);
                 setPollsLoading(false);
             },
             (err) => {
@@ -194,7 +206,9 @@ const UploadsPage = () => {
             return [];
         }
         const targetCategory = name.toLowerCase();
+        const seen = new Set<string>();
         return userPosts.filter(item => {
+            if (!item || !item.id || seen.has(item.id)) return false;
             const cat = (item.category || '').toLowerCase();
             const postType = (item.type || '').toLowerCase();
             const matchesCategory = cat === targetCategory || postType === targetCategory || (targetCategory === 'feed' && (cat === 'general' || cat === 'feed' || postType === 'feed'));
@@ -202,40 +216,64 @@ const UploadsPage = () => {
             
             // If filtering by specific channel in Feeds view
             if (activeTab === 'Explore' && exploreSubTab === 'Feeds' && channelFeedFilter) {
-                return item.channelId === channelFeedFilter;
+                if (item.channelId !== channelFeedFilter) return false;
             }
+            seen.add(item.id);
             return true;
         });
     }, [userPosts, name, activeTab, exploreSubTab, channelFeedFilter]);
 
     // Discover management items (Threads, Queries, Polls)
     const userThreads = useMemo(() => {
-        return userPosts.filter(p => (p.type || '').toLowerCase() === 'thread' || (p.category || '').toLowerCase() === 'thread');
+        return userPosts.filter(p => {
+            const t = (p.type || '').toLowerCase();
+            const c = (p.category || '').toLowerCase();
+            return t === 'thread' || (c === 'thread' && t !== 'query' && t !== 'feed');
+        });
     }, [userPosts]);
 
     const userQueries = useMemo(() => {
-        return userPosts.filter(p => (p.type || '').toLowerCase() === 'query' || (p.category || '').toLowerCase() === 'query');
+        return userPosts.filter(p => {
+            const t = (p.type || '').toLowerCase();
+            const c = (p.category || '').toLowerCase();
+            return t === 'query' || (c === 'query' && t !== 'thread' && t !== 'feed');
+        });
     }, [userPosts]);
 
     const filteredDiscoverItems = useMemo(() => {
+        let items: (Post | Poll)[] = [];
         switch (mySpaceDiscoverFilter) {
             case 'All': {
-                const combined: (Post | Poll)[] = [...userThreads, ...userQueries, ...userPolls];
-                return combined.sort((a, b) => {
-                    const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
-                    const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
-                    return dateB - dateA;
-                });
+                items = [...userThreads, ...userQueries, ...userPolls];
+                break;
             }
             case 'Threads':
-                return userThreads;
+                items = userThreads;
+                break;
             case 'Queries':
-                return userQueries;
+                items = userQueries;
+                break;
             case 'Polls':
-                return userPolls;
+                items = userPolls;
+                break;
             default:
-                return [];
+                items = [];
+                break;
         }
+
+        // Strictly deduplicate by ID to prevent duplicate React keys
+        const seen = new Set<string>();
+        const uniqueItems = items.filter(item => {
+            if (!item || !item.id || seen.has(item.id)) return false;
+            seen.add(item.id);
+            return true;
+        });
+
+        return uniqueItems.sort((a, b) => {
+            const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
+            const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
+            return dateB - dateA;
+        });
     }, [mySpaceDiscoverFilter, userThreads, userQueries, userPolls]);
 
     const handlePublish = async (data: {
@@ -814,7 +852,7 @@ const UploadsPage = () => {
                                 if (isPoll) {
                                     const poll = item as Poll;
                                     return (
-                                        <div key={poll.id} className="relative group">
+                                        <div key={`poll-${poll.id}`} className="relative group">
                                             <PollCard 
                                                 poll={poll} 
                                                 onDelete={() => handleDeletePoll(poll)}
@@ -838,7 +876,7 @@ const UploadsPage = () => {
                                 const post = item as Post;
                                 const postTypeBadge = post.type || post.category || 'Discover';
                                 return (
-                                    <div key={post.id} className="bg-[#0c0c0e] border border-zinc-800 p-4 transition-all hover:border-zinc-700">
+                                    <div key={`post-${post.id}`} className="bg-[#0c0c0e] border border-zinc-800 p-4 transition-all hover:border-zinc-700">
                                         <div className="flex items-center justify-between mb-2">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-[10px] font-bold text-white uppercase tracking-widest border border-zinc-700 px-1.5 py-0.5 bg-zinc-900/50">
@@ -1035,7 +1073,7 @@ const UploadsPage = () => {
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {filteredItems.map(item => (
-                                    <div key={item.id} className="bg-[#0c0c0e] border border-zinc-800 flex flex-col group hover:border-zinc-700 transition-all relative">
+                                    <div key={`feed-item-${item.id}`} className="bg-[#0c0c0e] border border-zinc-800 flex flex-col group hover:border-zinc-700 transition-all relative">
                                         {item.mediaUrl && (
                                             <div className="aspect-video bg-black overflow-hidden relative border-b border-zinc-800">
                                                 {item.mediaType === 'video' ? (
@@ -1328,7 +1366,10 @@ const UploadsPage = () => {
                 isOpen={isCreatePollModalOpen}
                 onClose={() => setIsCreatePollModalOpen(false)}
                 onCreated={(newPoll) => {
-                    setUserPolls(prev => [newPoll, ...prev]);
+                    setUserPolls(prev => {
+                        if (prev.some(p => p.id === newPoll.id)) return prev;
+                        return [newPoll, ...prev];
+                    });
                     setMySpaceDiscoverFilter('Polls');
                 }}
             />
