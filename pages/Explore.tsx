@@ -5,14 +5,14 @@ import { QueryCard } from '../components/feed/QueryCard';
 import { ThreadCard } from '../components/feed/ThreadCard';
 import { PollCard } from '../components/feed/PollCard';
 import DomainFilter from '../components/ui/DomainFilter';
-import type { Post, Poll } from '../types';
+import type { Post, Poll, PollOption } from '../types';
 import { PostType } from '../types';
 import ErrorBoundary from '../components/utils/ErrorBoundary';
 import FeedCardSkeleton from '../components/feed/FeedCardSkeleton';
 import { useFilters } from '../contexts/AIAssistantContext';
 import { useAuth } from '../contexts/AuthContext';
 import { subscribeToFeed, getUserLikedPostIds, getUserSavedPostIds, toggleLikePost, toggleBookmarkPost } from '../services/postService';
-import { subscribeToPolls } from '../services/pollService';
+import { subscribeToPolls, getUserVotedPolls } from '../services/pollService';
 import { applyDomainAndSearchFilter, calculateContentCounts } from '../utils/domainFilter';
 import { sortItemsByTrending } from '../utils/trendingScore';
 import {
@@ -433,6 +433,28 @@ const ExplorePage = () => {
     const [firestorePosts, setFirestorePosts] = useState<Post[]>([]);
     const [firestorePolls, setFirestorePolls] = useState<Poll[]>([]);
     const [mockPolls, setMockPolls] = useState<Poll[]>(initialMockPolls);
+    const [userPollVotes, setUserPollVotes] = useState<Record<string, string>>(() => {
+        const initialVotes: Record<string, string> = {};
+        try {
+            if (typeof localStorage !== 'undefined') {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith('poll_vote_')) {
+                        const val = localStorage.getItem(key);
+                        if (val) {
+                            const parts = key.split('_');
+                            const pollId = parts[parts.length - 1];
+                            if (pollId && !initialVotes[pollId]) {
+                                initialVotes[pollId] = val;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch {}
+        return initialVotes;
+    });
+    const [pollActivityError, setPollActivityError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('Feeds');
     const [activeCategory, setActiveCategory] = useState('All');
@@ -573,6 +595,66 @@ const ExplorePage = () => {
         };
     }, [refreshKey]);
 
+    // Merge Firestore posts with baseline discovery items
+    const combinedPosts = useMemo(() => {
+        const firestoreIds = new Set(firestorePosts.map(p => p.id));
+        const nonDuplicateMock = initialMockPosts.filter(p => !firestoreIds.has(p.id));
+        return [...firestorePosts, ...nonDuplicateMock];
+    }, [firestorePosts]);
+
+    // Raw discovery and Firestore polls
+    const rawPolls = useMemo(() => {
+        const firestoreIds = new Set(firestorePolls.map(p => p.id));
+        const nonDuplicateMock = mockPolls.filter(p => !firestoreIds.has(p.id));
+        return [...firestorePolls, ...nonDuplicateMock];
+    }, [firestorePolls, mockPolls]);
+
+    // Merge Firestore polls with baseline discovery polls and attach user votes
+    const combinedPolls = useMemo(() => {
+        return rawPolls.map(poll => {
+            const votedOpt = poll.userVotedOptionId || userPollVotes[poll.id];
+            return votedOpt ? { ...poll, userVotedOptionId: votedOpt } : poll;
+        });
+    }, [rawPolls, userPollVotes]);
+
+    const refreshUserVotes = useCallback(async () => {
+        if (!currentUser?.uid) return;
+        try {
+            setPollActivityError(null);
+            const votes = await getUserVotedPolls(currentUser.uid, rawPolls);
+            setUserPollVotes(prev => ({ ...prev, ...votes }));
+        } catch (err: any) {
+            console.warn('[LOAD_POLL_ACTIVITY_ERROR]', err);
+            setPollActivityError(err?.message || 'Failed to load participated polls');
+        }
+    }, [currentUser?.uid, rawPolls]);
+
+    useEffect(() => {
+        refreshUserVotes();
+    }, [refreshUserVotes]);
+
+    useEffect(() => {
+        if (activityFilter === 'polls' && currentUser?.uid) {
+            refreshUserVotes();
+        }
+    }, [activityFilter, currentUser?.uid, refreshUserVotes]);
+
+    const handleVoteChange = useCallback((pollId: string, optionId: string, updatedOptions: PollOption[], updatedTotalVotes: number) => {
+        setUserPollVotes(prev => ({ ...prev, [pollId]: optionId }));
+        setFirestorePolls(prev => prev.map(p => p.id === pollId ? { ...p, options: updatedOptions, totalVotes: updatedTotalVotes, userVotedOptionId: optionId } : p));
+        setMockPolls(prev => prev.map(p => p.id === pollId ? { ...p, options: updatedOptions, totalVotes: updatedTotalVotes, userVotedOptionId: optionId } : p));
+    }, []);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && activityFilter) {
+                setActivityFilter?.(null);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [activityFilter, setActivityFilter]);
+
     useEffect(() => {
         if (setRightSidebarVariant) {
             if (activeTab === 'Feeds') {
@@ -604,20 +686,6 @@ const ExplorePage = () => {
              document.querySelector('main')?.scrollTo(0, 0);
         }
     }, [activeTab, activeCategory, discoverFilter, activityFilter, activeDomains, loading]);
-
-    // Merge Firestore posts with baseline discovery items
-    const combinedPosts = useMemo(() => {
-        const firestoreIds = new Set(firestorePosts.map(p => p.id));
-        const nonDuplicateMock = initialMockPosts.filter(p => !firestoreIds.has(p.id));
-        return [...firestorePosts, ...nonDuplicateMock];
-    }, [firestorePosts]);
-
-    // Merge Firestore polls with baseline discovery polls
-    const combinedPolls = useMemo(() => {
-        const firestoreIds = new Set(firestorePolls.map(p => p.id));
-        const nonDuplicateMock = mockPolls.filter(p => !firestoreIds.has(p.id));
-        return [...firestorePolls, ...nonDuplicateMock];
-    }, [firestorePolls, mockPolls]);
 
     // Step 1: Apply domain and search filters to combined posts and polls
     const domainFilteredPosts = useMemo(() => {
@@ -688,6 +756,8 @@ const ExplorePage = () => {
                     result = domainFilteredPosts.filter(p => p.type === PostType.Thread && p.userCommented);
                 } else if (activityFilter === 'queries') {
                     result = domainFilteredPosts.filter(p => p.type === PostType.Query && p.userSharedInsight);
+                } else if (activityFilter === 'polls') {
+                    result = domainFilteredPolls.filter(poll => Boolean(poll.userVotedOptionId || userPollVotes[poll.id]));
                 } else {
                     result = [];
                 }
@@ -862,7 +932,13 @@ const ExplorePage = () => {
                 <div className="bg-[#0c0c0e] p-3 border border-zinc-800 mb-4 flex items-center justify-between">
                     <p className="font-mono text-xs text-zinc-300">
                         <span className="text-zinc-500">// ACTIVE_FILTER: </span>
-                        {`Showing ${activityFilter === 'threads' ? "threads you've commented on" : "queries you've shared insights on"}`}
+                        {`Showing ${
+                            activityFilter === 'threads' 
+                                ? "threads you've commented on" 
+                                : activityFilter === 'queries' 
+                                    ? "queries you've shared insights on" 
+                                    : "polls you've participated in"
+                        }`}
                     </p>
                     <button 
                         onClick={() => setActivityFilter?.(null)} 
@@ -870,6 +946,21 @@ const ExplorePage = () => {
                     >
                         Clear [ESC]
                     </button>
+                </div>
+            )}
+
+            {pollActivityError && activityFilter === 'polls' && (
+                <div className="bg-[#0c0c0e] border border-red-900/60 p-4 mb-4 font-mono">
+                    <div className="flex items-center justify-between">
+                        <span className="text-red-400 text-xs font-bold uppercase tracking-wider">// ERROR: FAILED_TO_LOAD_POLL_ACTIVITY</span>
+                        <button 
+                            onClick={refreshUserVotes} 
+                            className="text-xs uppercase text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 px-2 py-0.5"
+                        >
+                            Retry
+                        </button>
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-2 font-mono">{pollActivityError}</p>
                 </div>
             )}
 
@@ -891,13 +982,11 @@ const ExplorePage = () => {
                                     <ErrorBoundary>
                                         <PollCard 
                                             poll={post as any as Poll} 
+                                            userVote={(post as any).userVotedOptionId || userPollVotes[post.id]}
                                             onDelete={(pollId) => {
                                                 setFirestorePolls(prev => prev.filter(p => p.id !== pollId));
                                             }}
-                                            onVoteChange={(pollId, optionId, updatedOptions, updatedTotalVotes) => {
-                                                setFirestorePolls(prev => prev.map(p => p.id === pollId ? { ...p, options: updatedOptions, totalVotes: updatedTotalVotes, userVotedOptionId: optionId } : p));
-                                                setMockPolls(prev => prev.map(p => p.id === pollId ? { ...p, options: updatedOptions, totalVotes: updatedTotalVotes, userVotedOptionId: optionId } : p));
-                                            }}
+                                            onVoteChange={handleVoteChange}
                                         />
                                     </ErrorBoundary>
                                 </React.Fragment>
@@ -931,6 +1020,49 @@ const ExplorePage = () => {
                             </React.Fragment>
                         );
                     })
+                ) : activityFilter === 'polls' ? (
+                    <div className="text-center py-16 border border-dashed border-zinc-800 bg-[#0c0c0e] p-8 font-mono space-y-3">
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">// POLL_ACTIVITY</span>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                            NO POLL ACTIVITY YET
+                        </h3>
+                        <p className="text-xs text-zinc-400 max-w-sm mx-auto leading-relaxed">
+                            Vote in a poll to see it here.
+                        </p>
+                        <div className="pt-2 flex items-center justify-center">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setActivityFilter?.(null);
+                                    setActiveTab('Discover');
+                                    setDiscoverFilter('Polls');
+                                }}
+                                className="px-3 py-1.5 bg-black hover:bg-zinc-900 text-xs text-white border border-zinc-700 hover:border-zinc-500 transition-colors uppercase tracking-wider font-mono"
+                            >
+                                Explore Polls &gt;&gt;
+                            </button>
+                        </div>
+                    </div>
+                ) : activityFilter === 'threads' ? (
+                    <div className="text-center py-16 border border-dashed border-zinc-800 bg-[#0c0c0e] p-8 font-mono space-y-3">
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">// THREAD_ACTIVITY</span>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                            NO THREAD ACTIVITY YET
+                        </h3>
+                        <p className="text-xs text-zinc-400 max-w-sm mx-auto leading-relaxed">
+                            Comment on a thread to see it here.
+                        </p>
+                    </div>
+                ) : activityFilter === 'queries' ? (
+                    <div className="text-center py-16 border border-dashed border-zinc-800 bg-[#0c0c0e] p-8 font-mono space-y-3">
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">// QUERY_ACTIVITY</span>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                            NO QUERY ACTIVITY YET
+                        </h3>
+                        <p className="text-xs text-zinc-400 max-w-sm mx-auto leading-relaxed">
+                            Share insights on a query to see it here.
+                        </p>
+                    </div>
                 ) : (
                     <div className="text-center py-16 border border-dashed border-zinc-800 bg-[#0c0c0e] p-8 font-mono space-y-3">
                         <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">// NO RESULTS</span>

@@ -584,6 +584,58 @@ export const getUserPollVote = async (pollId: string, userId: string): Promise<s
 };
 
 /**
+ * Checks which polls the user has participated in from a list of polls.
+ * Inspects both Firestore vote subcollections and fast local cache.
+ * Returns a dictionary of pollId -> selectedOptionId.
+ */
+export const getUserVotedPolls = async (userId: string, polls: Poll[]): Promise<Record<string, string>> => {
+    const votes: Record<string, string> = {};
+    if (!userId || !Array.isArray(polls) || polls.length === 0) {
+        return votes;
+    }
+
+    // 1. Initial check from fast cache or existing poll object properties
+    polls.forEach(p => {
+        if (p.userVotedOptionId) {
+            votes[p.id] = p.userVotedOptionId;
+        } else {
+            try {
+                const cached = localStorage.getItem(`poll_vote_${userId}_${p.id}`) ||
+                               localStorage.getItem(`poll_vote_${p.id}`);
+                if (cached) {
+                    votes[p.id] = cached;
+                }
+            } catch {}
+        }
+    });
+
+    // 2. Fetch fresh vote state from Firestore votes subcollections in parallel
+    try {
+        const fetchTasks = polls.map(async (p) => {
+            try {
+                const voteRef = doc(db, COLLECTIONS.polls, p.id, 'votes', userId);
+                const snap = await getDoc(voteRef);
+                if (snap.exists() && snap.data()?.optionId) {
+                    const optId = snap.data().optionId;
+                    votes[p.id] = optId;
+                    try {
+                        localStorage.setItem(`poll_vote_${userId}_${p.id}`, optId);
+                    } catch {}
+                }
+            } catch (err) {
+                // Non-blocking for individual poll
+            }
+        });
+
+        await Promise.allSettled(fetchTasks);
+    } catch (e) {
+        console.warn('[GET_USER_VOTED_POLLS_WARN]', e);
+    }
+
+    return votes;
+};
+
+/**
  * Deletes a poll from Firestore with full ownership verification.
  */
 export const deletePoll = async (pollId: string): Promise<void> => {

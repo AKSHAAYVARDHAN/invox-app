@@ -262,7 +262,7 @@ const DiscoverSidebar: React.FC<Pick<RightSidebarProps, 'activityFilter' | 'setA
                         </div>
                         <div className="bg-[#0c0c0e] border border-zinc-800 p-4 mx-4">
                             <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider mb-2">// ACTIVITY_LOGS</h3>
-                            <p className="text-xs text-zinc-400 font-mono mb-4">View commented threads and shared insights.</p>
+                            <p className="text-xs text-zinc-400 font-mono mb-4">View commented threads, shared insights, and participated polls.</p>
                             <div className="space-y-2">
                                 <button
                                     onClick={() => setActivityFilter('threads')}
@@ -275,6 +275,12 @@ const DiscoverSidebar: React.FC<Pick<RightSidebarProps, 'activityFilter' | 'setA
                                     className={`w-full text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${activityFilter === 'queries' ? 'bg-[#18181d] text-white border-zinc-700 font-bold' : 'bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600'}`}
                                 >
                                     &gt; QUERIES
+                                </button>
+                                <button
+                                    onClick={() => setActivityFilter('polls')}
+                                    className={`w-full text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${activityFilter === 'polls' ? 'bg-[#18181d] text-white border-zinc-700 font-bold' : 'bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600'}`}
+                                >
+                                    &gt; POLLS
                                 </button>
                             </div>
                         </div>

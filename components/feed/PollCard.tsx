@@ -534,7 +534,7 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote, on
                                 <div 
                                     className={`absolute left-0 top-0 bottom-0 pointer-events-none transition-all duration-300 ${
                                         isUserChoice 
-                                            ? 'bg-zinc-800/90 border-r-2 border-white' 
+                                            ? 'bg-zinc-800/90 border-r-2 border-white/20' 
                                             : 'bg-zinc-900/60 border-r border-zinc-700/50 group-hover:bg-zinc-800/30'
                                     }`}
                                     style={{ width: `${Math.max(Number(percentage), 0)}%` }}
@@ -556,11 +556,6 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote, on
                                         }`}>
                                             {option.text}
                                         </span>
-                                        {isUserChoice && (
-                                            <span className="text-[9px] uppercase tracking-widest text-white border border-white/60 px-1.5 py-0.5 bg-black font-mono flex-shrink-0">
-                                                YOUR CHOICE
-                                            </span>
-                                        )}
                                     </div>
 
                                     <div className="flex items-center gap-3 text-right flex-shrink-0">
