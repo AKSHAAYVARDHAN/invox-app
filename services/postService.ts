@@ -21,7 +21,7 @@ import { db, auth } from '../firebase';
 import { COLLECTIONS, createDocument, deleteDocument, FirestoreRecord, getDocument, listDocuments, updateDocument } from './firestoreService';
 import { uploadFile, getStoragePath } from './storageService';
 import { incrementChannelPostCount, decrementChannelPostCount, getChannelById } from './channelService';
-import { Post, PostType } from '../types';
+import { Post, PostType, CollabDetails, Project } from '../types';
 
 export interface CreatePostInput {
     channelId?: string;
@@ -38,6 +38,7 @@ export interface CreatePostInput {
     domain?: string;
     tags?: string[];
     visibility?: 'public' | 'unlisted' | 'private';
+    collabDetails?: CollabDetails;
     authorProfile?: {
         displayName?: string;
         username?: string;
@@ -75,8 +76,10 @@ export interface PostDocumentData {
     type: PostType;
     postType?: string;
     category: string;
+    domain?: string;
     tags?: string[];
     visibility?: 'public' | 'unlisted' | 'private';
+    collabDetails?: CollabDetails | null;
     createdAt?: unknown;
     updatedAt?: unknown;
 }
@@ -106,13 +109,18 @@ export const normalizeFirestorePost = (id: string, data: Record<string, any>): P
     }
 
     let postType = PostType.Feed;
-    const rawType = data.type || data.postType;
-    if (rawType === 'Thread' || rawType === PostType.Thread) {
+    const rawType = (data.type || data.postType || '').toString().toLowerCase();
+    const rawCat = (data.category || '').toString().toLowerCase();
+    const rawDom = (data.domain || '').toString().toLowerCase();
+
+    if (rawType === 'thread') {
         postType = PostType.Thread;
-    } else if (rawType === 'Query' || rawType === PostType.Query) {
+    } else if (rawType === 'query') {
         postType = PostType.Query;
-    } else if (rawType === 'Poll' || rawType === PostType.Poll) {
+    } else if (rawType === 'poll') {
         postType = PostType.Poll;
+    } else if (rawType === 'collab' || rawCat === 'collab' || rawDom === 'collab' || Boolean(data.collabDetails)) {
+        postType = PostType.Collab;
     } else {
         postType = PostType.Feed;
     }
@@ -151,6 +159,7 @@ export const normalizeFirestorePost = (id: string, data: Record<string, any>): P
         tags: data.tags || [],
         visibility: data.visibility || 'public',
         createdAt: createdAtDate,
+        collabDetails: data.collabDetails || undefined,
     };
 };
 
@@ -168,13 +177,20 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
 
     // Handle media file upload if provided
     if (input.mediaFile) {
-        const file = input.mediaFile;
-        const storagePath = getStoragePath('postMedia', currentUser.uid, file.name);
-        const uploaded = await uploadFile(storagePath, file, {
-            onProgress: (progress) => onUploadProgress?.(progress),
-        });
-        uploadedMediaUrl = uploaded.url;
-        detectedMediaType = file.type.startsWith('video') ? 'video' : 'image';
+        try {
+            const file = input.mediaFile;
+            const storagePath = getStoragePath('postMedia', currentUser.uid, file.name);
+            const uploaded = await uploadFile(storagePath, file, {
+                onProgress: (progress) => onUploadProgress?.(progress),
+            });
+            uploadedMediaUrl = uploaded.url;
+            detectedMediaType = file.type.startsWith('video') ? 'video' : 'image';
+        } catch (uploadErr) {
+            console.warn('[POST_MEDIA_UPLOAD_WARN] Storage upload failed, falling back to preview URL if available:', uploadErr);
+            if (!uploadedMediaUrl && input.mediaUrl) {
+                uploadedMediaUrl = input.mediaUrl;
+            }
+        }
     }
 
     let resolvedPostType = PostType.Feed;
@@ -183,19 +199,24 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
         resolvedPostType = PostType.Thread;
     } else if (inputType === 'query' || inputType === 'knack') {
         resolvedPostType = PostType.Query;
+    } else if (inputType === 'collab' || Boolean(input.collabDetails)) {
+        resolvedPostType = PostType.Collab;
     } else {
         resolvedPostType = PostType.Feed;
     }
 
-    // Enforce channel requirement for Feed posts
-    if (resolvedPostType === PostType.Feed && !input.channelId) {
+    // Enforce channel requirement ONLY for actual Feed posts
+    if (resolvedPostType === PostType.Feed && inputType === 'feed' && !input.channelId) {
         throw new Error('A Channel is required before publishing a Feed broadcast. Please select or create a channel.');
     }
 
-    let finalChannelName = input.channelName || null;
-    let finalChannelAvatar = input.channelAvatarUrl || null;
+    // Collabs never use channel affiliations
+    const isCollab = resolvedPostType === PostType.Collab;
+    let finalChannelId = isCollab ? null : (input.channelId || null);
+    let finalChannelName = isCollab ? null : (input.channelName || null);
+    let finalChannelAvatar = isCollab ? null : (input.channelAvatarUrl || null);
 
-    if (input.channelId && (!finalChannelName || !finalChannelAvatar)) {
+    if (!isCollab && input.channelId && (!finalChannelName || !finalChannelAvatar)) {
         try {
             const ch = await getChannelById(input.channelId);
             if (ch) {
@@ -207,8 +228,35 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
         }
     }
 
+    let cleanCollabDetails: Record<string, any> | null = null;
+    if (input.collabDetails) {
+        cleanCollabDetails = {
+            roles: Array.isArray(input.collabDetails.roles)
+                ? input.collabDetails.roles.map(r => {
+                    const roleObj: any = {
+                        id: r.id || `role-${Math.random().toString(36).substring(2, 9)}`,
+                        title: r.title?.trim() || 'Collaborator',
+                        count: Number(r.count) || 1,
+                        skills: Array.isArray(r.skills) ? r.skills : [],
+                    };
+                    if (r.responsibilities && r.responsibilities.trim()) {
+                        roleObj.responsibilities = r.responsibilities.trim();
+                    }
+                    return roleObj;
+                })
+                : [],
+        };
+        if (input.collabDetails.experience?.trim()) cleanCollabDetails.experience = input.collabDetails.experience.trim();
+        if (input.collabDetails.background?.trim()) cleanCollabDetails.background = input.collabDetails.background.trim();
+        if (input.collabDetails.availability?.trim()) cleanCollabDetails.availability = input.collabDetails.availability.trim();
+        if (input.collabDetails.location?.trim()) cleanCollabDetails.location = input.collabDetails.location.trim();
+        if (input.collabDetails.specificLocation?.trim()) cleanCollabDetails.specificLocation = input.collabDetails.specificLocation.trim();
+        if (input.collabDetails.collabTypes && input.collabDetails.collabTypes.length > 0) cleanCollabDetails.collabTypes = input.collabDetails.collabTypes;
+        if (input.collabDetails.projectStatus?.trim()) cleanCollabDetails.projectStatus = input.collabDetails.projectStatus.trim();
+    }
+
     const postPayload = {
-        channelId: input.channelId || null,
+        channelId: finalChannelId,
         channelName: finalChannelName,
         channelAvatarUrl: finalChannelAvatar,
         authorId: currentUser.uid,
@@ -234,19 +282,22 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
         commentCount: 0,
         saveCount: 0,
         type: resolvedPostType,
-        postType: input.type || resolvedPostType,
-        category: input.domain || input.category || input.type || 'General',
-        domain: input.domain || input.category || 'General',
+        postType: resolvedPostType,
+        status: 'published',
+        isPublished: true,
+        category: input.domain || input.category || (isCollab ? 'Collab' : 'General'),
+        domain: input.domain || input.category || (isCollab ? 'Collab' : 'General'),
         tags: input.tags || [],
         visibility: input.visibility || 'public',
+        collabDetails: cleanCollabDetails,
     };
 
     const newDocId = await createDocument(COLLECTIONS.posts, postPayload);
     console.log(`[POST_CREATED] Successfully created post ${newDocId}`);
 
     // If channelId is present, increment channel post count
-    if (input.channelId) {
-        incrementChannelPostCount(input.channelId).catch(console.warn);
+    if (finalChannelId) {
+        incrementChannelPostCount(finalChannelId).catch(console.warn);
     }
 
     return normalizeFirestorePost(newDocId, {
@@ -593,3 +644,122 @@ export const incrementPostView = async (postId: string): Promise<void> => {
         // Non-critical, ignore silent error
     }
 };
+
+/**
+ * Transforms a Post into a Project format for Spotlight Showcase and Collabs.
+ */
+export const postToProject = (post: Post): Project => {
+    const rawRoles = post.collabDetails?.roles;
+    const cleanRoles = Array.isArray(rawRoles)
+        ? rawRoles
+        : (rawRoles && typeof rawRoles === 'object' ? Object.values(rawRoles) : []);
+
+    const safeCollabDetails = post.collabDetails ? {
+        ...post.collabDetails,
+        roles: cleanRoles,
+    } : undefined;
+
+    return {
+        id: post.id,
+        author: {
+            name: post.author?.name || 'Invox Member',
+            avatarUrl: post.author?.avatarUrl || `https://picsum.photos/seed/${post.authorId || post.id}/200`,
+            isVerified: Boolean(post.author?.isVerified),
+        },
+        aiSummary: post.aiSummary || post.oneLine || 'Collaboration Signal',
+        oneLine: post.oneLine || post.aiSummary || '',
+        description: post.content || '',
+        mediaUrl: post.mediaUrl || undefined,
+        mediaType: post.mediaType || (post.mediaUrl ? (post.mediaUrl.match(/\.(mp4|webm|mov)$/i) ? 'video' : 'image') : undefined),
+        thumbnailUrl: post.thumbnailUrl || undefined,
+        stats: {
+            likes: Number(post.stats?.likes ?? post.likeCount ?? 0),
+            views: Number(post.stats?.views ?? post.viewCount ?? 0),
+            comments: Number(post.stats?.comments ?? post.commentCount ?? 0),
+        },
+        category: post.domain || post.category || 'Technology',
+        domain: post.domain || post.category || 'Technology',
+        createdAt: post.createdAt instanceof Date ? post.createdAt : new Date(post.createdAt || Date.now()),
+        collabDetails: safeCollabDetails,
+    };
+};
+
+/**
+ * Checks if a normalized post or raw Firestore post data represents a Collab signal.
+ */
+export const isCollabSignal = (post: Post, rawData?: any): boolean => {
+    const typeStr = (post.type || post.postType || rawData?.type || rawData?.postType || '').toString().toLowerCase();
+    const catStr = (post.category || rawData?.category || '').toString().toLowerCase();
+    const domStr = (post.domain || rawData?.domain || '').toString().toLowerCase();
+    return (
+        typeStr === 'collab' ||
+        catStr === 'collab' ||
+        domStr === 'collab' ||
+        Boolean(post.collabDetails) ||
+        Boolean(rawData?.collabDetails)
+    );
+};
+
+/**
+ * Fetches Collab posts across the network (for initial Spotlight -> Collabs load).
+ */
+export const getCollabPosts = async (): Promise<Post[]> => {
+    try {
+        const q = query(
+            collection(db, COLLECTIONS.posts),
+            limit(100)
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs
+            .filter(docSnap => {
+                const data = docSnap.data();
+                return isCollabSignal(normalizeFirestorePost(docSnap.id, data), data);
+            })
+            .map(docSnap => normalizeFirestorePost(docSnap.id, docSnap.data()))
+            .sort((a, b) => {
+                const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+                const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+                return dateB - dateA;
+            });
+    } catch (err) {
+        console.warn('[GET_COLLAB_POSTS_WARN]', err);
+        return [];
+    }
+};
+
+/**
+ * Subscribes to real-time Collab posts across the network (for Spotlight -> Collabs).
+ */
+export const subscribeToCollabPosts = (
+    onPosts: (posts: Post[]) => void,
+    onError?: (error: Error) => void
+) => {
+    const q = query(
+        collection(db, COLLECTIONS.posts),
+        limit(100)
+    );
+
+    return onSnapshot(
+        q,
+        (snapshot) => {
+            const posts = snapshot.docs
+                .filter(docSnap => {
+                    const data = docSnap.data();
+                    return isCollabSignal(normalizeFirestorePost(docSnap.id, data), data);
+                })
+                .map(docSnap => normalizeFirestorePost(docSnap.id, docSnap.data()))
+                .sort((a, b) => {
+                    const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+                    const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+                    return dateB - dateA;
+                });
+            console.log(`[SPOTLIGHT_COLLABS] Live Collabs update: found ${posts.length} collabs`);
+            onPosts(posts);
+        },
+        (err) => {
+            console.error('[COLLAB_POSTS_SUBSCRIBE_ERROR]', err);
+            onError?.(err);
+        }
+    );
+};
+

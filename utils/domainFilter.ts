@@ -90,6 +90,7 @@ export function matchesContentSearch(
         description?: string;
         category?: string;
         domain?: string;
+        tags?: string[];
         author?: { name?: string; username?: string };
         options?: Array<{ text: string }>;
     },
@@ -108,6 +109,7 @@ export function matchesContentSearch(
         item.description,
         item.category,
         item.domain,
+        ...(item.tags || []),
         item.author?.name,
         item.author?.username,
         ...(item.options?.map(o => o.text) || [])

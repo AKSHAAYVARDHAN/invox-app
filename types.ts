@@ -52,6 +52,7 @@ export enum PostType {
   Thread = 'Thread',
   Query = 'Query',
   Poll = 'Poll',
+  Collab = 'Collab',
 }
 
 export interface Channel {
@@ -111,6 +112,26 @@ export interface Post {
   updatedAt?: Date;
   userCommented?: boolean;
   userSharedInsight?: boolean;
+  collabDetails?: CollabDetails;
+}
+
+export interface CollabRole {
+  id: string;
+  title: string;
+  count: number | string;
+  skills: string[];
+  responsibilities: string;
+}
+
+export interface CollabDetails {
+  roles: CollabRole[];
+  experience?: string;
+  background?: string;
+  availability?: string;
+  location?: string;
+  specificLocation?: string;
+  collabTypes?: string[];
+  projectStatus?: string;
 }
 
 export interface PostComment {
@@ -136,6 +157,7 @@ export interface Project {
         isVerified?: boolean;
     };
     aiSummary: string;
+    oneLine?: string;
     description: string;
     mediaUrl?: string;
     mediaType?: 'image' | 'video';
@@ -146,7 +168,9 @@ export interface Project {
         comments: number;
     };
     category: string;
+    domain?: string;
     createdAt: Date;
+    collabDetails?: CollabDetails;
 }
 
 export interface QuickCollab {

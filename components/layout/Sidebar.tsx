@@ -104,18 +104,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHu
                 <div className="flex-1 flex flex-col min-h-0">
                     {/* Brand header */}
                     <div className="mb-6 pt-1 pb-4 border-b border-zinc-800/80 flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 bg-white text-black font-mono font-bold text-xs flex items-center justify-center border border-zinc-400">
-                                IX
-                            </div>
-                            <div>
-                                <div className="flex items-center gap-1.5">
-                                    <h1 className="text-lg font-bold tracking-tight text-white font-mono uppercase">Invox</h1>
-                                    <span className="text-[10px] font-mono px-1.5 py-0.2 bg-zinc-900 border border-zinc-800 text-zinc-400">v2.0</span>
-                                </div>
-                                <p className="text-[11px] font-mono text-zinc-500 tracking-wider">SYSTEM.FEED</p>
-                            </div>
-                        </div>
+                        <h1 className="text-lg font-bold tracking-tight text-white font-mono uppercase">
+                            INVOX
+                        </h1>
                         {/* Close button — only visible on mobile/tablet where sidebar is a drawer */}
                         <button
                             onClick={toggleSidebar}

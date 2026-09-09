@@ -830,6 +830,35 @@ const ExplorePage = () => {
         });
     }, [domainFilteredPosts, domainFilteredPolls, activityFilter, activeTab, activeCategory, discoverFilter, isTrending]);
 
+    const allExploreDomains = useMemo(() => {
+        const baseNames = new Set(exploreDomains.map(d => d.name.toLowerCase()));
+        const customList: { name: string; icon: React.FC<{ className?: string }> }[] = [];
+        const seenCustom = new Set<string>();
+
+        for (const post of combinedPosts) {
+            const d = post.domain?.trim();
+            if (d && !baseNames.has(d.toLowerCase()) && !seenCustom.has(d.toLowerCase())) {
+                seenCustom.add(d.toLowerCase());
+                customList.push({ name: d, icon: GlobeAltIcon });
+            }
+        }
+        for (const poll of combinedPolls) {
+            const d = poll.domain?.trim();
+            if (d && !baseNames.has(d.toLowerCase()) && !seenCustom.has(d.toLowerCase())) {
+                seenCustom.add(d.toLowerCase());
+                customList.push({ name: d, icon: GlobeAltIcon });
+            }
+        }
+        for (const active of activeDomains) {
+            const d = active.trim();
+            if (d && !baseNames.has(d.toLowerCase()) && !seenCustom.has(d.toLowerCase())) {
+                seenCustom.add(d.toLowerCase());
+                customList.push({ name: d, icon: GlobeAltIcon });
+            }
+        }
+        return [...exploreDomains, ...customList];
+    }, [combinedPosts, combinedPolls, activeDomains]);
+
     return (
         <div className="py-2">
             {/* Conditional Header: Filters change based on active main tab */}
@@ -853,7 +882,7 @@ const ExplorePage = () => {
                     </div>
                     {/* Row 2: Domain Dropdown */}
                     <DomainFilter 
-                        domains={exploreDomains}
+                        domains={allExploreDomains}
                         selectedDomains={activeDomains}
                         onSelectionChange={handleDomainChange}
                         isTrending={isTrending}
@@ -864,7 +893,7 @@ const ExplorePage = () => {
                 <>
                     {/* Row 1: Domain Dropdown for Discover */}
                     <DomainFilter 
-                        domains={exploreDomains}
+                        domains={allExploreDomains}
                         selectedDomains={activeDomains}
                         onSelectionChange={handleDomainChange}
                         isTrending={isTrending}

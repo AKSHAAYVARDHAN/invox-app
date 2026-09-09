@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { PlusIcon, SparklesIcon, HeartIcon, TrendingUpIcon, ChatBubbleBottomCenterTextIcon, TrashIcon, CloseIcon } from '../components/ui/Icons';
 import CreateFeedModal from '../components/uploads/CreateFeedModal';
+import { CreateCollabModal } from '../components/uploads/CreateCollabModal';
 import CreateChannelModal from '../components/uploads/CreateChannelModal';
 import { CreatePollModal } from '../components/uploads/CreatePollModal';
 import { PollCard } from '../components/feed/PollCard';
@@ -10,7 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { createPost, deletePost, subscribeToUserPosts } from '../services/postService';
 import { subscribeToUserChannels, deleteChannel } from '../services/channelService';
 import { subscribeToUserPolls, deletePoll } from '../services/pollService';
-import { Post, Channel, Poll, PostType } from '../types';
+import { Post, Channel, Poll, PostType, CollabDetails } from '../types';
 
 const mainTabs = ['Explore', 'Spotlight', 'Hub'] as const;
 type MainTab = typeof mainTabs[number];
@@ -211,7 +212,14 @@ const UploadsPage = () => {
             if (!item || !item.id || seen.has(item.id)) return false;
             const cat = (item.category || '').toLowerCase();
             const postType = (item.type || '').toLowerCase();
-            const matchesCategory = cat === targetCategory || postType === targetCategory || (targetCategory === 'feed' && (cat === 'general' || cat === 'feed' || postType === 'feed'));
+            let matchesCategory = false;
+            if (targetCategory === 'collab') {
+                matchesCategory = postType === 'collab' || cat === 'collab' || Boolean(item.collabDetails);
+            } else if (targetCategory === 'feed') {
+                matchesCategory = cat === 'general' || cat === 'feed' || postType === 'feed';
+            } else {
+                matchesCategory = cat === targetCategory || postType === targetCategory;
+            }
             if (!matchesCategory) return false;
             
             // If filtering by specific channel in Feeds view
@@ -275,6 +283,52 @@ const UploadsPage = () => {
             return dateB - dateA;
         });
     }, [mySpaceDiscoverFilter, userThreads, userQueries, userPolls]);
+
+    const [expandedCollabIds, setExpandedCollabIds] = useState<Set<string>>(new Set());
+    const toggleCollabDetails = (id: string) => {
+        setExpandedCollabIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const handlePublishCollab = async (data: {
+        domain: string;
+        oneLine: string;
+        description: string;
+        mediaFile?: File | null;
+        previewUrl?: string | null;
+        type: string;
+        collabDetails: CollabDetails;
+    }) => {
+        if (!currentUser) {
+            throw new Error('Authentication required: You must be logged in to publish a collaboration signal.');
+        }
+
+        await createPost({
+            oneLine: data.oneLine,
+            content: data.description,
+            mediaFile: data.mediaFile,
+            mediaUrl: data.previewUrl,
+            type: 'Collab',
+            category: data.domain || 'Technology',
+            domain: data.domain || 'Technology',
+            collabDetails: data.collabDetails,
+            authorProfile: userProfile ? {
+                displayName: userProfile.displayName || currentUser.displayName || undefined,
+                username: userProfile.username || undefined,
+                photoURL: userProfile.photoURL || currentUser.photoURL || undefined,
+                role: userProfile.role,
+            } : undefined,
+        });
+
+        setIsModalOpen(false);
+        setOverrideContextName(null);
+        setActionSuccess('Collaboration signal published successfully.');
+        setTimeout(() => setActionSuccess(null), 4000);
+    };
 
     const handlePublish = async (data: {
         oneLine: string;
@@ -1071,53 +1125,209 @@ const UploadsPage = () => {
                                     <span>New {name}</span>
                                 </button>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {filteredItems.map(item => (
-                                    <div key={`feed-item-${item.id}`} className="bg-[#0c0c0e] border border-zinc-800 flex flex-col group hover:border-zinc-700 transition-all relative">
-                                        {item.mediaUrl && (
-                                            <div className="aspect-video bg-black overflow-hidden relative border-b border-zinc-800">
-                                                {item.mediaType === 'video' ? (
-                                                    <video src={item.mediaUrl} className="w-full h-full object-cover" controls />
-                                                ) : (
-                                                    <img src={item.mediaUrl} className="w-full h-full object-cover" onError={handleImageError} alt="Media" />
-                                                )}
-                                            </div>
-                                        )}
-                                        <div className="p-4 flex-grow">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-[10px] font-bold text-white uppercase tracking-widest border border-zinc-700 px-1.5 py-0.5 bg-zinc-900/50">{item.category}</span>
-                                                    {item.channelName && (
-                                                        <span className="text-[10px] text-zinc-400">· // {item.channelName}</span>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {filteredItems.map(item => {
+                                        const isCollabItem = activeTab === 'Spotlight' && spotlightSubTab === 'Collabs';
+                                        
+                                        if (isCollabItem) {
+                                            const uniqueSkills = Array.from(new Set((item.collabDetails?.roles || []).flatMap(r => r.skills || [])));
+                                            const isExpanded = expandedCollabIds.has(item.id);
+
+                                            return (
+                                                <div key={`collab-item-${item.id}`} className="bg-[#0c0c0e] border border-zinc-800 flex flex-col group hover:border-zinc-700 transition-all relative font-mono">
+                                                    {/* Header */}
+                                                    <div className="p-3.5 border-b border-zinc-800/80 flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] font-bold text-white uppercase tracking-widest border border-zinc-700 px-1.5 py-0.5 bg-zinc-900/50">
+                                                                {item.domain || item.category || 'Technology'}
+                                                            </span>
+                                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">// COLLAB_SIGNAL</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] text-zinc-500">{new Date(item.createdAt).toLocaleDateString()}</span>
+                                                            <button
+                                                                onClick={() => handleDelete(item.id)}
+                                                                disabled={deletingId === item.id}
+                                                                className="text-zinc-500 hover:text-red-400 p-1 transition-colors"
+                                                                title="Delete signal"
+                                                            >
+                                                                {deletingId === item.id ? (
+                                                                    <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
+                                                                ) : (
+                                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                                )}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Media Preview (if attached) */}
+                                                    {item.mediaUrl && (
+                                                        <div className="aspect-video bg-black overflow-hidden relative border-b border-zinc-800">
+                                                            {item.mediaType === 'video' ? (
+                                                                <video src={item.mediaUrl} className="w-full h-full object-cover" controls />
+                                                            ) : (
+                                                                <img src={item.mediaUrl} className="w-full h-full object-cover" onError={handleImageError} alt="Media" />
+                                                            )}
+                                                        </div>
                                                     )}
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-[10px] text-zinc-500">{new Date(item.createdAt).toLocaleDateString()}</span>
-                                                    <button
-                                                        onClick={() => handleDelete(item.id)}
-                                                        disabled={deletingId === item.id}
-                                                        className="text-zinc-500 hover:text-red-400 p-1 transition-colors"
-                                                        title="Delete signal"
-                                                    >
-                                                        {deletingId === item.id ? (
-                                                            <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
-                                                        ) : (
-                                                            <TrashIcon className="w-3.5 h-3.5" />
+
+                                                    {/* Body */}
+                                                    <div className="p-4 flex-grow space-y-3">
+                                                        {/* Hook */}
+                                                        <div>
+                                                            <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-0.5">// THE_HOOK</span>
+                                                            <h4 className="text-sm font-bold text-white leading-snug uppercase tracking-wider">
+                                                                "{item.aiSummary || item.oneLine}"
+                                                            </h4>
+                                                        </div>
+
+                                                        {/* Project Overview */}
+                                                        <div>
+                                                            <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-0.5">// PROJECT_OVERVIEW</span>
+                                                            <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">{item.content}</p>
+                                                        </div>
+
+                                                        {/* Structured Collab info */}
+                                                        {item.collabDetails && (
+                                                            <div className="p-3 bg-black/60 border border-zinc-800/80 space-y-2.5 text-xs">
+                                                                {/* Looking for */}
+                                                                {item.collabDetails.roles && item.collabDetails.roles.length > 0 && (
+                                                                    <div>
+                                                                        <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// LOOKING_FOR</span>
+                                                                        <div className="flex flex-wrap gap-1.5">
+                                                                            {item.collabDetails.roles.map((r, rIdx) => (
+                                                                                <span key={rIdx} className="text-[11px] bg-zinc-900 border border-zinc-800 text-zinc-200 px-2 py-0.5 font-medium">
+                                                                                    {r.title} <span className="text-zinc-400 font-bold">×{r.count}</span>
+                                                                                </span>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Skills */}
+                                                                {uniqueSkills.length > 0 && (
+                                                                    <div>
+                                                                        <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// SKILLS</span>
+                                                                        <div className="flex flex-wrap gap-1 text-[10px] text-zinc-400">
+                                                                            {uniqueSkills.map((s, sIdx) => (
+                                                                                <span key={sIdx} className="bg-zinc-900/80 border border-zinc-800 px-1.5 py-0.5 text-zinc-300">
+                                                                                    {s}
+                                                                                </span>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Status & Collaboration */}
+                                                                <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-zinc-800/60 text-[11px]">
+                                                                    {item.collabDetails.projectStatus && (
+                                                                        <div>
+                                                                            <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// PROJECT_STATUS</span>
+                                                                            <span className="text-zinc-200 font-bold bg-zinc-900 px-1.5 py-0.5 border border-zinc-800 inline-block">
+                                                                                {item.collabDetails.projectStatus}
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                    {(item.collabDetails.collabTypes || item.collabDetails.location) && (
+                                                                        <div>
+                                                                            <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// COLLABORATION</span>
+                                                                            <span className="text-zinc-300 truncate block">
+                                                                                {[...(item.collabDetails.collabTypes || []), item.collabDetails.location === 'Specific Location' ? item.collabDetails.specificLocation : item.collabDetails.location].filter(Boolean).join(' • ')}
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Expanded Details */}
+                                                                {isExpanded && (
+                                                                    <div className="pt-2 border-t border-zinc-800/60 space-y-2 text-[11px]">
+                                                                        {item.collabDetails.roles.map((r, rIdx) => r.responsibilities ? (
+                                                                            <div key={rIdx} className="p-2 bg-zinc-950 border border-zinc-800/60">
+                                                                                <span className="text-white font-bold block">{r.title} Responsibilities:</span>
+                                                                                <p className="text-zinc-400 mt-0.5 leading-relaxed">{r.responsibilities}</p>
+                                                                            </div>
+                                                                        ) : null)}
+
+                                                                        {(item.collabDetails.experience || item.collabDetails.background || item.collabDetails.availability) && (
+                                                                            <div className="p-2 bg-zinc-950 border border-zinc-800/60 flex flex-wrap gap-2 text-[10px] text-zinc-400">
+                                                                                {item.collabDetails.experience && <div><span className="text-zinc-500 font-bold">EXP:</span> {item.collabDetails.experience}</div>}
+                                                                                {item.collabDetails.background && <div><span className="text-zinc-500 font-bold">BG:</span> {item.collabDetails.background}</div>}
+                                                                                {item.collabDetails.availability && <div><span className="text-zinc-500 font-bold">AVAIL:</span> {item.collabDetails.availability}</div>}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="pt-1 flex justify-end">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => toggleCollabDetails(item.id)}
+                                                                        className="text-[10px] text-white hover:text-zinc-300 underline font-bold uppercase tracking-wider"
+                                                                    >
+                                                                        {isExpanded ? '// HIDE DETAILS' : '// VIEW DETAILS'}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
                                                         )}
-                                                    </button>
+                                                    </div>
+
+                                                    {/* Footer Stats */}
+                                                    <div className="p-3 border-t border-zinc-800/80 flex items-center justify-around text-zinc-400 text-xs">
+                                                        <div className="flex items-center gap-1.5"><HeartIcon className="w-3.5 h-3.5" /> <span>{item.stats.likes}</span></div>
+                                                        <div className="flex items-center gap-1.5"><TrendingUpIcon className="w-3.5 h-3.5" /> <span>{item.stats.views}</span></div>
+                                                        <div className="flex items-center gap-1.5"><ChatBubbleBottomCenterTextIcon className="w-3.5 h-3.5" /> <span>{item.stats.comments}</span></div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+
+                                        return (
+                                            <div key={`feed-item-${item.id}`} className="bg-[#0c0c0e] border border-zinc-800 flex flex-col group hover:border-zinc-700 transition-all relative">
+                                                {item.mediaUrl && (
+                                                    <div className="aspect-video bg-black overflow-hidden relative border-b border-zinc-800">
+                                                        {item.mediaType === 'video' ? (
+                                                            <video src={item.mediaUrl} className="w-full h-full object-cover" controls />
+                                                        ) : (
+                                                            <img src={item.mediaUrl} className="w-full h-full object-cover" onError={handleImageError} alt="Media" />
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <div className="p-4 flex-grow">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] font-bold text-white uppercase tracking-widest border border-zinc-700 px-1.5 py-0.5 bg-zinc-900/50">{item.category}</span>
+                                                            {item.channelName && (
+                                                                <span className="text-[10px] text-zinc-400">· // {item.channelName}</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] text-zinc-500">{new Date(item.createdAt).toLocaleDateString()}</span>
+                                                            <button
+                                                                onClick={() => handleDelete(item.id)}
+                                                                disabled={deletingId === item.id}
+                                                                className="text-zinc-500 hover:text-red-400 p-1 transition-colors"
+                                                                title="Delete signal"
+                                                            >
+                                                                {deletingId === item.id ? (
+                                                                    <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
+                                                                ) : (
+                                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                                )}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <h4 className="text-sm font-bold text-white mb-2 leading-tight uppercase tracking-wider">{item.aiSummary || item.oneLine}</h4>
+                                                    <p className="text-xs text-zinc-400 line-clamp-3 leading-relaxed">{item.content}</p>
+                                                </div>
+                                                <div className="p-3 border-t border-zinc-800/80 flex items-center justify-around text-zinc-400 text-xs">
+                                                    <div className="flex items-center gap-1.5"><HeartIcon className="w-3.5 h-3.5" /> <span>{item.stats.likes}</span></div>
+                                                    <div className="flex items-center gap-1.5"><TrendingUpIcon className="w-3.5 h-3.5" /> <span>{item.stats.views}</span></div>
+                                                    <div className="flex items-center gap-1.5"><ChatBubbleBottomCenterTextIcon className="w-3.5 h-3.5" /> <span>{item.stats.comments}</span></div>
                                                 </div>
                                             </div>
-                                            <h4 className="text-sm font-bold text-white mb-2 leading-tight uppercase tracking-wider">{item.aiSummary || item.oneLine}</h4>
-                                            <p className="text-xs text-zinc-400 line-clamp-3 leading-relaxed">{item.content}</p>
-                                        </div>
-                                        <div className="p-3 border-t border-zinc-800/80 flex items-center justify-around text-zinc-400 text-xs">
-                                            <div className="flex items-center gap-1.5"><HeartIcon className="w-3.5 h-3.5" /> <span>{item.stats.likes}</span></div>
-                                            <div className="flex items-center gap-1.5"><TrendingUpIcon className="w-3.5 h-3.5" /> <span>{item.stats.views}</span></div>
-                                            <div className="flex items-center gap-1.5"><ChatBubbleBottomCenterTextIcon className="w-3.5 h-3.5" /> <span>{item.stats.comments}</span></div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                                        );
+                                    })}
+                                </div>
                         </div>
                     )}
                 </div>
@@ -1133,14 +1343,22 @@ const UploadsPage = () => {
                 }}
             />
 
-            {/* Create Feed / Post Modal */}
-            <CreateFeedModal 
-                isOpen={isModalOpen} 
-                onClose={handleCloseModal} 
-                onPublish={handlePublish}
-                contextName={currentContextName}
-                preselectedChannelId={selectedChannelForFeed}
-            />
+            {/* Create Feed / Post Modal or Collab Modal */}
+            {currentContextName === 'Collab' ? (
+                <CreateCollabModal
+                    isOpen={isModalOpen}
+                    onClose={handleCloseModal}
+                    onPublish={handlePublishCollab}
+                />
+            ) : (
+                <CreateFeedModal 
+                    isOpen={isModalOpen} 
+                    onClose={handleCloseModal} 
+                    onPublish={handlePublish}
+                    contextName={currentContextName}
+                    preselectedChannelId={selectedChannelForFeed}
+                />
+            )}
 
             {/* Feed Broadcast Deletion Confirmation Modal */}
             {postToDelete && (

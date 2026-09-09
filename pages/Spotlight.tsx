@@ -59,6 +59,7 @@ import GoForItOpportunityCard from '../components/spotlight/GoForItOpportunityCa
 import GoForItOpportunityCardSkeleton from '../components/spotlight/GoForItOpportunityCardSkeleton';
 import { useAIAssistant } from '../contexts/AIAssistantContext';
 import { useFilters } from '../contexts/AIAssistantContext';
+import { subscribeToCollabPosts, getCollabPosts, postToProject } from '../services/postService';
 
 
 const formatNumber = (num: number) => {
@@ -161,6 +162,28 @@ const mockForYouProjects: Project[] = [
         stats: { likes: 87200, views: 42300000, comments: 11200 },
         category: 'Design',
         createdAt: new Date(),
+        collabDetails: {
+            roles: [
+                {
+                    title: 'Frontend Developer',
+                    count: 1,
+                    skills: ['React', 'TypeScript', 'Tailwind'],
+                    responsibilities: 'Implement collaborative interfaces, canvas rendering, and responsive controls.'
+                },
+                {
+                    title: 'Product Designer',
+                    count: 1,
+                    skills: ['Figma', 'UI/UX', 'Design Systems'],
+                    responsibilities: 'Design intuitive workflows for real-time team collaboration.'
+                }
+            ],
+            experience: 'Intermediate',
+            background: 'Professional',
+            availability: 'Flexible',
+            location: 'Remote',
+            collabTypes: ['Open Collaboration', 'Equity'],
+            projectStatus: 'MVP',
+        }
     },
     {
         id: 'collab2',
@@ -172,6 +195,22 @@ const mockForYouProjects: Project[] = [
         stats: { likes: 45000, views: 15000000, comments: 6500 },
         category: 'App Development',
         createdAt: new Date(),
+        collabDetails: {
+            roles: [
+                {
+                    title: 'Backend Developer',
+                    count: 1,
+                    skills: ['Go', 'PostgreSQL', 'Distributed Systems'],
+                    responsibilities: 'Architect high-throughput event queues, database sharding, and API endpoints.'
+                }
+            ],
+            experience: 'Advanced',
+            background: 'Professional',
+            availability: 'Part-Time',
+            location: 'Remote',
+            collabTypes: ['Equity', 'Open Collaboration'],
+            projectStatus: 'Prototype',
+        }
     },
     {
         id: 'collab3',
@@ -184,6 +223,22 @@ const mockForYouProjects: Project[] = [
         stats: { likes: 125000, views: 62000000, comments: 21000 },
         category: 'Machine Learning',
         createdAt: new Date(),
+        collabDetails: {
+            roles: [
+                {
+                    title: 'ML Engineer',
+                    count: 1,
+                    skills: ['Python', 'PyTorch', 'Time Series', 'Financial Modeling'],
+                    responsibilities: 'Fine-tune predictive algorithms on high-frequency time series data.'
+                }
+            ],
+            experience: 'Advanced',
+            background: 'Researcher',
+            availability: 'Full-Time',
+            location: 'Remote',
+            collabTypes: ['Paid'],
+            projectStatus: 'Active Project',
+        }
     },
     {
         id: 'collab4',
@@ -195,6 +250,22 @@ const mockForYouProjects: Project[] = [
         stats: { likes: 68000, views: 28000000, comments: 9800 },
         category: 'Design',
         createdAt: new Date(),
+        collabDetails: {
+            roles: [
+                {
+                    title: 'UI/UX Designer',
+                    count: 1,
+                    skills: ['Figma', 'Design Systems', 'Responsive Web'],
+                    responsibilities: 'Design modern, conversion-optimized storefront interfaces and checkout flows.'
+                }
+            ],
+            experience: 'Intermediate',
+            background: 'Creator',
+            availability: 'Flexible',
+            location: 'Anywhere',
+            collabTypes: ['Open Collaboration'],
+            projectStatus: 'Early Concept',
+        }
     }
 ];
 
@@ -1211,6 +1282,19 @@ const PinnedHighlightsView: React.FC<{ loading: boolean }> = ({ loading }) => {
 export const SpotlightPage = () => {
     const { openModal } = useAIAssistant();
     const [searchParams, setSearchParams] = ReactRouterDOM.useSearchParams();
+    const outletContext = ReactRouterDOM.useOutletContext<{
+        setRightSidebarVariant: (variant: string) => void;
+        spotlightBrowseState: string | null;
+        setSpotlightBrowseState: (filter: string | null) => void;
+        showPinnedHighlights: boolean;
+        setShowPinnedHighlights: (show: boolean) => void;
+        goforitFilters: { company: string, skills: string, location: string, opportunityType: string, category: string, experienceLevel: string, searchTerm: string };
+        refreshKey: number;
+        savedOfferIds: string[];
+        toggleSaveOffer: (offerId: string) => void;
+    }>();
+
+    const { setRightSidebarVariant, spotlightBrowseState, setSpotlightBrowseState, showPinnedHighlights, goforitFilters, refreshKey, savedOfferIds = [], toggleSaveOffer } = outletContext || {};
     const { domainSelections, setDomainSelection } = useFilters();
 
     const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'Showcase');
@@ -1223,8 +1307,37 @@ export const SpotlightPage = () => {
     const { currentUser } = useAuth();
     const [viewedOfferIds, setViewedOfferIds] = useState<string[]>([]);
     const [messagingOffer, setMessagingOffer] = useState<Offer | null>(null);
+    const [liveCollabProjects, setLiveCollabProjects] = useState<Project[]>([]);
     const mainTabs = ['Showcase', 'Collabs', 'Leap'];
     const sectionKey = `spotlight-${activeTab.toLowerCase()}`;
+
+    useEffect(() => {
+        let isMounted = true;
+
+        // Immediate snapshot fetch
+        getCollabPosts().then(posts => {
+            if (isMounted && posts.length > 0) {
+                setLiveCollabProjects(posts.map(postToProject));
+            }
+        }).catch(err => console.warn('[SPOTLIGHT_COLLABS_INITIAL_WARN]', err));
+
+        const unsubscribe = subscribeToCollabPosts(
+            (collabPosts) => {
+                if (isMounted) {
+                    const projects = collabPosts.map(postToProject);
+                    setLiveCollabProjects(projects);
+                }
+            },
+            (err) => {
+                console.warn('[SPOTLIGHT_COLLABS_FEED_WARN]', err);
+            }
+        );
+
+        return () => {
+            isMounted = false;
+            unsubscribe();
+        };
+    }, [currentUser?.uid, refreshKey]);
 
     const OpportunityDetailModal: React.FC<{
         offer: Offer;
@@ -1404,20 +1517,6 @@ export const SpotlightPage = () => {
         );
     };
 
-    const outletContext = ReactRouterDOM.useOutletContext<{
-        setRightSidebarVariant: (variant: string) => void;
-        spotlightBrowseState: string | null;
-        setSpotlightBrowseState: (filter: string | null) => void;
-        showPinnedHighlights: boolean;
-        setShowPinnedHighlights: (show: boolean) => void;
-        goforitFilters: { company: string, skills: string, location: string, opportunityType: string, category: string, experienceLevel: string, searchTerm: string };
-        refreshKey: number;
-        savedOfferIds: string[];
-        toggleSaveOffer: (offerId: string) => void;
-    }>();
-
-    const { setRightSidebarVariant, spotlightBrowseState, setSpotlightBrowseState, showPinnedHighlights, goforitFilters, refreshKey, savedOfferIds, toggleSaveOffer } = outletContext || {};
-
     useEffect(() => {
         if (setRightSidebarVariant) {
             if (activeTab === 'Leap' && activeLeapTab === 'GoForIt') {
@@ -1473,9 +1572,94 @@ export const SpotlightPage = () => {
         activeCategory === 'All' || project.category === activeCategory
     );
 
-    const filteredCollabProjects = mockForYouProjects.filter(project =>
-        activeCategory === 'All' || project.category === activeCategory
-    );
+    const matchesProjectCategoryOrDomain = (project: Project, targetFilter: string): boolean => {
+        if (!targetFilter || targetFilter === 'All') return true;
+        const tf = targetFilter.trim().toLowerCase();
+
+        // 1. Direct match with project category or domain
+        const projCat = (project.category || '').toLowerCase();
+        const projDom = ((project as any).domain || '').toLowerCase();
+        if (projCat === tf || projDom === tf) return true;
+
+        // 2. Cross-domain / semantic matching for domains like Figma -> Design, UI/UX
+        const DOMAIN_ALIASES: Record<string, string[]> = {
+            'design': ['figma', 'ui/ux', 'ui design', 'ux design', 'graphic design', 'product design', 'design systems'],
+            'ui/ux': ['figma', 'design', 'ui design', 'ux design', 'user experience', 'user interface'],
+            'app development': ['mobile', 'react', 'react native', 'flutter', 'ios', 'android', 'frontend', 'backend', 'fullstack', 'web development', 'typescript', 'javascript'],
+            'machine learning': ['ai', 'data science', 'deep learning', 'nlp', 'computer vision', 'python', 'pytorch', 'tensorflow'],
+            'web3': ['blockchain', 'crypto', 'solidity', 'ethereum', 'smart contracts', 'decentralized'],
+            'cybersecurity': ['security', 'infosec', 'pentesting', 'ethical hacking'],
+            'fintech': ['finance', 'payments', 'crypto', 'banking', 'trading'],
+            'gaming': ['game dev', 'unity', 'unreal', 'godot'],
+            'hardware': ['iot', 'embedded', 'robotics', 'arduino', 'raspberry pi'],
+        };
+
+        const aliases = DOMAIN_ALIASES[tf] || [];
+        if (aliases.some(a => projCat.includes(a) || projDom.includes(a))) return true;
+
+        for (const [parentCategory, childAliases] of Object.entries(DOMAIN_ALIASES)) {
+            if (childAliases.includes(projCat) || childAliases.includes(projDom)) {
+                if (parentCategory === tf || tf.includes(parentCategory)) return true;
+            }
+        }
+
+        // 3. Check tags
+        if (Array.isArray((project as any).tags)) {
+            if ((project as any).tags.some((t: string) => t && t.toLowerCase().includes(tf))) return true;
+        }
+
+        // 4. Check roles & skills in collabDetails
+        if (project.collabDetails?.roles) {
+            const rolesArr = Array.isArray(project.collabDetails.roles)
+                ? project.collabDetails.roles
+                : Object.values(project.collabDetails.roles);
+
+            for (const role of rolesArr as any[]) {
+                if (role.title && role.title.toLowerCase().includes(tf)) return true;
+                const skillsArr = Array.isArray(role.skills) ? role.skills : (role.skills ? [role.skills] : []);
+                if (skillsArr.some((s: string) => s && (s.toLowerCase() === tf || s.toLowerCase().includes(tf) || (aliases.length > 0 && aliases.some(a => s.toLowerCase().includes(a)))))) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    };
+
+    const allCollabProjects = React.useMemo(() => {
+        const seen = new Set<string>();
+        const list: Project[] = [];
+        for (const p of liveCollabProjects) {
+            if (!seen.has(p.id)) {
+                seen.add(p.id);
+                list.push(p);
+            }
+        }
+        for (const p of mockForYouProjects) {
+            if (!seen.has(p.id)) {
+                seen.add(p.id);
+                list.push(p);
+            }
+        }
+        return list;
+    }, [liveCollabProjects]);
+
+    const filteredCollabProjects = React.useMemo(() => {
+        const selectedDomains = domainSelections[sectionKey] || [];
+        return allCollabProjects.filter(project => {
+            // 1. Check category filter
+            const matchesCategory = activeCategory === 'All' || matchesProjectCategoryOrDomain(project, activeCategory);
+            if (!matchesCategory) return false;
+
+            // 2. Check domain filter (if any domains explicitly selected)
+            if (selectedDomains.length > 0) {
+                const matchesAnyDomain = selectedDomains.some(d => matchesProjectCategoryOrDomain(project, d));
+                if (!matchesAnyDomain) return false;
+            }
+
+            return true;
+        });
+    }, [allCollabProjects, activeCategory, domainSelections, sectionKey]);
     
     const Showcase = ({ projects }: { projects: Project[] }) => (
         <div>
@@ -1700,16 +1884,32 @@ export const SpotlightPage = () => {
             setPlaybackRate(playbackRates[nextIndex]);
         };
     
+        const rawRoles = project.collabDetails?.roles;
+        const normalizedRoles: any[] = Array.isArray(rawRoles)
+            ? rawRoles
+            : (rawRoles && typeof rawRoles === 'object' ? Object.values(rawRoles) : []);
+
+        const allSkills = Array.from(new Set(
+            normalizedRoles.flatMap((r: any) => Array.isArray(r?.skills) ? r.skills : (typeof r?.skills === 'string' ? [r.skills] : []))
+        ));
+
+        const collabDomain = project.domain || project.category;
+    
         return (
             <>
                 <div className="bg-[#0c0c0e] border border-zinc-800 p-5 mb-4 hover:border-zinc-700 transition-colors">
                     {/* Header */}
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <img src={project.author.avatarUrl} onError={handleImageError} alt={project.author.name} className="w-10 h-10 border border-zinc-700 object-cover" />
-                            <div className="flex items-center gap-1.5">
-                                <p className="font-bold text-white font-mono text-sm">{project.author.name}</p>
-                                {project.author.isVerified && <CheckBadgeIcon className="w-4 h-4 text-zinc-400" />}
+                            <img src={project.author?.avatarUrl || `https://picsum.photos/seed/${project.id}/200`} onError={handleImageError} alt={project.author?.name || 'Author'} className="w-10 h-10 border border-zinc-700 object-cover" />
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className="font-bold text-white font-mono text-sm">{project.author?.name || 'Anonymous'}</p>
+                                {project.author?.isVerified && <CheckBadgeIcon className="w-4 h-4 text-zinc-400" />}
+                                {collabDomain && (
+                                    <span className="text-[10px] uppercase font-mono px-2 py-0.5 bg-zinc-900 border border-zinc-800 text-zinc-300">
+                                        {collabDomain}
+                                    </span>
+                                )}
                             </div>
                         </div>
                         <div className="flex items-center gap-1 text-zinc-400">
@@ -1719,14 +1919,125 @@ export const SpotlightPage = () => {
                     </div>
         
                     {/* Content */}
-                    <div className="mt-4">
-                        <p className="text-base font-mono font-semibold text-zinc-100">"{project.aiSummary}"</p>
-                        <p className="text-zinc-400 font-mono text-xs mt-2 leading-relaxed">
-                            {showMore ? project.description : `${project.description.substring(0, 150)}...`}
-                            <button onClick={() => setShowMore(!showMore)} className="text-white font-semibold ml-1 underline hover:text-zinc-300">
-                                {showMore ? 'Show Less' : 'Show More'}
-                            </button>
+                    <div className="mt-4 space-y-2.5 font-mono">
+                        {/* Hook */}
+                        <p className="text-base font-semibold text-white leading-snug">"{project.aiSummary}"</p>
+
+                        {/* Project Overview */}
+                        <p className="text-zinc-300 text-xs leading-relaxed">
+                            {showMore ? project.description : `${project.description.substring(0, 160)}${project.description.length > 160 ? '...' : ''}`}
                         </p>
+
+                        {/* Structured Collaboration Details */}
+                        {project.collabDetails && (
+                            <div className="p-3.5 bg-black/60 border border-zinc-800 space-y-2.5 text-xs">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {/* LOOKING FOR */}
+                                    {normalizedRoles.length > 0 && (
+                                        <div>
+                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// LOOKING_FOR</span>
+                                            <div className="space-y-1">
+                                                {normalizedRoles.map((r: any, idx: number) => (
+                                                    <div key={idx} className="text-xs text-white font-medium flex items-center justify-between bg-zinc-900/80 px-2 py-1 border border-zinc-800">
+                                                        <span>{r.title}</span>
+                                                        <span className="text-[10px] text-zinc-400 font-bold">×{r.count || 1}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* SKILLS */}
+                                    {allSkills.length > 0 && (
+                                        <div>
+                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// SKILLS</span>
+                                            <div className="flex flex-wrap gap-1 text-xs">
+                                                {allSkills.slice(0, 8).map((s, idx) => (
+                                                    <span key={idx} className="text-[10px] bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-zinc-300">
+                                                        {s}
+                                                    </span>
+                                                ))}
+                                                {allSkills.length > 8 && (
+                                                    <span className="text-[10px] text-zinc-500 px-1">+{allSkills.length - 8}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Status & Collaboration */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-zinc-800/80">
+                                    {project.collabDetails.projectStatus && (
+                                        <div>
+                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block mb-0.5">// PROJECT_STATUS</span>
+                                            <span className="text-xs text-white font-bold bg-zinc-900 border border-zinc-700 px-2 py-0.5 inline-block">
+                                                {project.collabDetails.projectStatus}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {(project.collabDetails.collabTypes || project.collabDetails.location) && (
+                                        <div>
+                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block mb-0.5">// COLLABORATION</span>
+                                            <span className="text-xs text-zinc-300">
+                                                {[
+                                                    ...(project.collabDetails.collabTypes || []),
+                                                    project.collabDetails.location === 'Specific Location' 
+                                                        ? project.collabDetails.specificLocation 
+                                                        : project.collabDetails.location
+                                                ].filter(Boolean).join(' • ') || 'Open Collaboration • Remote'}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Extended Details (Role responsibilities, who can collaborate) */}
+                                {showMore && (
+                                    <div className="pt-2.5 border-t border-zinc-800/80 space-y-2.5">
+                                        {/* Detailed Role Responsibilities */}
+                                        {normalizedRoles.some((r: any) => r.responsibilities) && (
+                                            <div className="space-y-1.5">
+                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// ROLE_RESPONSIBILITIES</span>
+                                                {normalizedRoles.map((r: any, idx: number) => r.responsibilities ? (
+                                                    <div key={`resp-${idx}`} className="bg-zinc-950 p-2 border border-zinc-800/80">
+                                                        <span className="text-white font-bold text-[11px] block">{r.title}:</span>
+                                                        <p className="text-zinc-400 text-[11px] leading-relaxed mt-0.5">{r.responsibilities}</p>
+                                                    </div>
+                                                ) : null)}
+                                            </div>
+                                        )}
+
+                                        {/* Who Can Collaborate Snapshot */}
+                                        {(project.collabDetails.experience || project.collabDetails.background || project.collabDetails.availability) && (
+                                            <div className="space-y-1">
+                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// WHO_CAN_COLLABORATE</span>
+                                                <div className="flex flex-wrap gap-2 text-[11px] text-zinc-400 bg-zinc-950 p-2 border border-zinc-800/80">
+                                                    {project.collabDetails.experience && (
+                                                        <div><span className="text-zinc-500 font-bold">EXPERIENCE:</span> <span className="text-zinc-200">{project.collabDetails.experience}</span></div>
+                                                    )}
+                                                    {project.collabDetails.background && (
+                                                        <div><span className="text-zinc-500 font-bold">BACKGROUND:</span> <span className="text-zinc-200">{project.collabDetails.background}</span></div>
+                                                    )}
+                                                    {project.collabDetails.availability && (
+                                                        <div><span className="text-zinc-500 font-bold">AVAILABILITY:</span> <span className="text-zinc-200">{project.collabDetails.availability}</span></div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* View Details / Show Less button */}
+                        <div className="flex justify-end pt-1">
+                            <button 
+                                onClick={() => setShowMore(!showMore)} 
+                                className="text-white font-bold text-xs uppercase tracking-wider underline hover:text-zinc-300 transition-colors"
+                            >
+                                {showMore ? '// SHOW LESS' : '// VIEW DETAILS'}
+                            </button>
+                        </div>
                     </div>
                     
                     {/* Media */}

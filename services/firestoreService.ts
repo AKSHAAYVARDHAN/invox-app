@@ -38,14 +38,44 @@ export const COLLECTIONS = {
 export type CollectionName = typeof COLLECTIONS[keyof typeof COLLECTIONS];
 export type FirestoreRecord<T> = T & { id: string };
 
+/**
+ * Recursively strips undefined fields from an object or array,
+ * preventing Firestore's "Unsupported field value: undefined" errors.
+ */
+export const sanitizeForFirestore = <T>(value: T): T => {
+    if (value === undefined) {
+        return null as unknown as T;
+    }
+    if (value === null || typeof value !== 'object') {
+        return value;
+    }
+    // Retain Date instances, FieldValue instances, or other special Firestore objects
+    if (value instanceof Date || (value as any)?._methodName || typeof (value as any)?.toMillis === 'function') {
+        return value;
+    }
+    if (Array.isArray(value)) {
+        return value
+            .filter((item) => item !== undefined)
+            .map((item) => sanitizeForFirestore(item)) as unknown as T;
+    }
+
+    const cleanObj: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+        if (val !== undefined) {
+            cleanObj[key] = sanitizeForFirestore(val);
+        }
+    }
+    return cleanObj as T;
+};
+
 const withCreateTimestamps = <T extends Record<string, unknown>>(data: T) => ({
-    ...data,
+    ...sanitizeForFirestore(data),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
 });
 
 const withUpdateTimestamp = <T extends Record<string, unknown>>(data: T) => ({
-    ...data,
+    ...sanitizeForFirestore(data),
     updatedAt: serverTimestamp(),
 });
 
