@@ -11,12 +11,14 @@ import {
     where,
     Timestamp,
     deleteDoc,
-    setDoc
+    setDoc,
+    updateDoc
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { COLLECTIONS, createDocument } from './firestoreService';
 import { uploadFile, getStoragePath } from './storageService';
-import { Poll, PollOption, CreatePollInput, PostType, PollDuration } from '../types';
+import type { Poll, PollOption, CreatePollInput, PollDuration } from '../types';
+import { PostType } from '../types';
 
 export const normalizeFirestorePoll = (id: string, data: any): Poll => {
     let createdAtDate = new Date();
@@ -744,4 +746,156 @@ export const toggleBookmarkPoll = async (pollId: string): Promise<{ saved: boole
         return { saved: true };
     }
 };
+
+export interface UpdatePollInput {
+    question?: string;
+    description?: string;
+    category?: string;
+    domain?: string;
+    duration?: PollDuration;
+    options?: { id?: string; text: string }[];
+    mediaFile?: File | null;
+    mediaUrl?: string | null;
+    mediaType?: 'image' | 'video';
+}
+
+/**
+ * Updates an existing Poll document in Firestore.
+ * Preserves existing vote counts, total votes, comments, likes, and saves.
+ */
+export const updatePoll = async (
+    pollId: string,
+    updates: UpdatePollInput,
+    onUploadProgress?: (progress: number) => void
+): Promise<Poll> => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        throw new Error('Authentication required: You must be logged in to edit a poll.');
+    }
+
+    const pollRef = doc(db, COLLECTIONS.polls, pollId);
+    const pollSnap = await getDoc(pollRef);
+    if (!pollSnap.exists()) {
+        throw new Error('Poll not found.');
+    }
+
+    const existingData = pollSnap.data();
+    if (existingData.authorId && existingData.authorId !== currentUser.uid && existingData.author?.id !== currentUser.uid) {
+        throw new Error('Permission denied: You can only edit your own polls.');
+    }
+
+    let uploadedMediaUrl: string | undefined = updates.mediaUrl !== undefined ? (updates.mediaUrl || undefined) : existingData.mediaUrl;
+    let detectedMediaType: 'image' | 'video' | undefined = updates.mediaType !== undefined ? updates.mediaType : existingData.mediaType;
+
+    if (updates.mediaFile) {
+        try {
+            const file = updates.mediaFile;
+            const storagePath = getStoragePath('pollMedia', currentUser.uid, file.name);
+            const uploaded = await uploadFile(storagePath, file, {
+                onProgress: (progress) => onUploadProgress?.(progress),
+            });
+            uploadedMediaUrl = uploaded.url;
+            detectedMediaType = file.type.startsWith('video') ? 'video' : 'image';
+        } catch (uploadErr) {
+            console.warn('[POLL_MEDIA_UPLOAD_WARN] Media upload failed during poll update:', uploadErr);
+            if (updates.mediaUrl) {
+                uploadedMediaUrl = updates.mediaUrl;
+            }
+        }
+    }
+
+    const updatePayload: Record<string, any> = {
+        updatedAt: serverTimestamp(),
+    };
+
+    if (updates.question !== undefined) {
+        const trimmed = updates.question.trim();
+        if (!trimmed) throw new Error('Poll question cannot be empty.');
+        if (trimmed.length > 280) throw new Error('Poll question exceeds 280 characters limit.');
+        updatePayload.question = trimmed;
+    }
+
+    if (updates.description !== undefined) {
+        updatePayload.description = updates.description.trim();
+    }
+
+    if (updates.category !== undefined) {
+        updatePayload.category = updates.category.trim();
+        updatePayload.domain = updates.domain ? updates.domain.trim() : updates.category.trim();
+    } else if (updates.domain !== undefined) {
+        updatePayload.domain = updates.domain.trim();
+        updatePayload.category = updates.domain.trim();
+    }
+
+    if (updates.mediaFile || updates.mediaUrl !== undefined) {
+        updatePayload.mediaUrl = uploadedMediaUrl || null;
+        updatePayload.mediaType = detectedMediaType || null;
+    }
+
+    // Options update while preserving vote counts
+    if (updates.options !== undefined) {
+        const validOptions = updates.options.map(o => ({ ...o, text: o.text.trim() })).filter(o => Boolean(o.text));
+        if (validOptions.length < 2) {
+            throw new Error('A poll requires at least 2 options.');
+        }
+        if (validOptions.length > 6) {
+            throw new Error('A poll allows a maximum of 6 options.');
+        }
+
+        const existingOptions: PollOption[] = Array.isArray(existingData.options) ? existingData.options : [];
+        const mergedOptions: PollOption[] = validOptions.map((opt, idx) => {
+            const matchedExisting = opt.id
+                ? existingOptions.find(e => e.id === opt.id)
+                : existingOptions[idx];
+
+            return {
+                id: opt.id || matchedExisting?.id || `opt-${Date.now()}-${idx}`,
+                text: opt.text,
+                voteCount: matchedExisting?.voteCount || 0,
+            };
+        });
+
+        updatePayload.options = mergedOptions;
+        const newTotalVotes = mergedOptions.reduce((sum, o) => sum + (o.voteCount || 0), 0);
+        updatePayload.totalVotes = Math.max(newTotalVotes, Number(existingData.totalVotes) || 0);
+    }
+
+    // Duration update
+    if (updates.duration !== undefined) {
+        updatePayload.duration = updates.duration;
+        let durationHours = 24;
+        switch (updates.duration) {
+            case PollDuration.ThreeDays:
+                durationHours = 72;
+                break;
+            case PollDuration.OneWeek:
+                durationHours = 168;
+                break;
+            case PollDuration.TwoWeeks:
+                durationHours = 336;
+                break;
+            case PollDuration.OneDay:
+            default:
+                durationHours = 24;
+                break;
+        }
+
+        const createdAtBase = existingData.createdAt?.toDate ? existingData.createdAt.toDate() : new Date();
+        const newExpiresAt = new Date(createdAtBase.getTime() + durationHours * 3600 * 1000);
+        updatePayload.expiresAt = Timestamp.fromDate(newExpiresAt);
+        updatePayload.status = newExpiresAt.getTime() > Date.now() ? 'active' : 'expired';
+    }
+
+    await updateDoc(pollRef, updatePayload);
+    console.log(`[POLL_UPDATED] Successfully updated poll document: ${pollId}`);
+
+    const updatedMerged = {
+        ...existingData,
+        ...updatePayload,
+        updatedAt: new Date(),
+    };
+
+    return normalizeFirestorePoll(pollId, updatedMerged);
+};
+
 

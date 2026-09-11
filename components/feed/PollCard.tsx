@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import type { Poll } from '../../types';
 import {
     SparklesIcon,
@@ -10,12 +11,14 @@ import {
     ForwardIcon,
     BookmarkIcon,
     TrashIcon,
-    CloseIcon
+    CloseIcon,
+    PencilSquareIcon
 } from '../ui/Icons';
 import { handleImageError } from '../utils/imageUtils';
 import { useLazyLoad } from '../hooks/useLazyLoad';
 import AspectRatioBox from '../ui/AspectRatioBox';
 import ImageZoomModal from '../ui/ImageZoomModal';
+import { EditPollModal } from './EditPollModal';
 import { useAIAssistant } from '../../contexts/AIAssistantContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -59,11 +62,14 @@ interface PollCardProps {
     onDelete?: (pollId: string) => void;
     userVote?: string | null;
     onVoteChange?: (pollId: string, optionId: string, updatedOptions: PollOption[], updatedTotalVotes: number) => void;
+    isMySpaceContext?: boolean;
 }
 
-export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote, onVoteChange }) => {
+export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote, onVoteChange, isMySpaceContext }) => {
     const { openModal } = useAIAssistant();
     const { currentUser } = useAuth();
+    const location = useLocation();
+    const inMySpace = isMySpaceContext !== undefined ? isMySpaceContext : location.pathname.startsWith('/myspace');
     const [mediaContainerRef, isVisible] = useLazyLoad<HTMLDivElement>();
 
     const getVoterKey = useCallback(() => {
@@ -121,6 +127,12 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote, on
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [activePoll, setActivePoll] = useState<Poll>(poll);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+    useEffect(() => {
+        setActivePoll(poll);
+    }, [poll]);
 
     const [isLiked, setIsLiked] = useState(false);
     const [likeCount, setLikeCount] = useState(poll.stats?.likes || poll.likeCount || 0);
@@ -129,6 +141,7 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote, on
     const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
 
     const isOwner = currentUser?.uid && poll.authorId === currentUser.uid;
+    const canEdit = Boolean(isOwner && inMySpace);
     const isExpired = poll.status === 'expired' || (poll.expiresAt ? poll.expiresAt.getTime() <= Date.now() : false);
     const hasVoted = Boolean(selectedOptionId);
     const showResults = hasVoted || isExpired;
@@ -420,13 +433,24 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote, on
                                         <span>Share Poll</span>
                                     </button>
                                     {isOwner && (
-                                        <button 
-                                            onClick={() => { setShowDeleteModal(true); setIsMenuOpen(false); }}
-                                            className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-950/30 hover:text-red-300 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1"
-                                        >
-                                            <TrashIcon className="w-3.5 h-3.5" />
-                                            <span>Delete Poll</span>
-                                        </button>
+                                        <>
+                                            {canEdit && (
+                                                <button 
+                                                    onClick={() => { setIsEditModalOpen(true); setIsMenuOpen(false); }}
+                                                    className="w-full text-left px-3 py-2 text-xs text-white hover:bg-zinc-900 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1"
+                                                >
+                                                    <PencilSquareIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                    <span>// EDIT</span>
+                                                </button>
+                                            )}
+                                            <button 
+                                                onClick={() => { setShowDeleteModal(true); setIsMenuOpen(false); }}
+                                                className={`w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-950/30 hover:text-red-300 uppercase tracking-wider flex items-center gap-2 ${!canEdit ? 'border-t border-zinc-800/80 mt-1' : ''}`}
+                                            >
+                                                <TrashIcon className="w-3.5 h-3.5" />
+                                                <span>Delete Poll</span>
+                                            </button>
+                                        </>
                                     )}
                                 </div>
                             )}
@@ -437,27 +461,27 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote, on
                 {/* Poll Question & Context */}
                 <div className="mt-3.5">
                     <h3 className="text-sm sm:text-base font-bold text-white tracking-wide leading-snug uppercase">
-                        {poll.question}
+                        {activePoll.question}
                     </h3>
-                    {poll.description && (
+                    {activePoll.description && (
                         <p className="mt-1.5 text-xs text-zinc-400 leading-relaxed font-sans">
-                            {poll.description}
+                            {activePoll.description}
                         </p>
                     )}
                 </div>
 
                 {/* Optional Media */}
-                {poll.mediaUrl && (
+                {activePoll.mediaUrl && (
                     <div ref={mediaContainerRef} className="mt-3 overflow-hidden border border-zinc-800/80">
                         <AspectRatioBox ratio="16:9">
-                            {poll.mediaType === 'video' ? (
-                                <video src={poll.mediaUrl} controls className="w-full h-full object-cover" />
+                            {activePoll.mediaType === 'video' ? (
+                                <video src={activePoll.mediaUrl} controls className="w-full h-full object-cover" />
                             ) : (
                                 <img 
-                                    src={poll.mediaUrl} 
+                                    src={activePoll.mediaUrl} 
                                     onError={handleImageError} 
                                     alt="Poll media" 
-                                    onClick={() => setZoomedImageUrl(poll.mediaUrl || null)}
+                                    onClick={() => setZoomedImageUrl(activePoll.mediaUrl || null)}
                                     className="w-full h-full object-cover cursor-zoom-in" 
                                 />
                             )}
@@ -731,6 +755,17 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onDelete, userVote, on
                 isOpen={!!zoomedImageUrl} 
                 onClose={() => setZoomedImageUrl(null)} 
                 imageUrl={zoomedImageUrl || ''}
+            />
+
+            <EditPollModal
+                isOpen={isEditModalOpen}
+                poll={activePoll}
+                onClose={() => setIsEditModalOpen(false)}
+                onUpdated={(updated) => {
+                    setActivePoll(updated);
+                    setLocalOptions(updated.options);
+                    setLocalTotalVotes(updated.totalVotes);
+                }}
             />
         </>
     );

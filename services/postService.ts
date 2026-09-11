@@ -308,12 +308,52 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
 
 /**
  * Updates an existing post in Firestore.
+ * Preserves stats, likes, comments, author credentials, and existing engagement.
  */
-export const updatePost = async (postId: string, updates: Partial<CreatePostInput>): Promise<void> => {
+export const updatePost = async (
+    postId: string, 
+    updates: Partial<CreatePostInput> & { domain?: string },
+    onUploadProgress?: (progress: number) => void
+): Promise<Post> => {
     const currentUser = auth.currentUser;
-    if (!currentUser) throw new Error('Not authenticated');
+    if (!currentUser) throw new Error('Unauthenticated: You must be signed in to edit a post.');
 
-    const updatePayload: Record<string, any> = {};
+    const postRef = doc(db, COLLECTIONS.posts, postId);
+    const postSnap = await getDoc(postRef);
+    if (!postSnap.exists()) {
+        throw new Error('Post does not exist.');
+    }
+
+    const existingData = postSnap.data();
+    if (existingData.authorId && existingData.authorId !== currentUser.uid && existingData.author?.id !== currentUser.uid) {
+        throw new Error('Permission denied: You may only edit posts that you authored.');
+    }
+
+    let uploadedMediaUrl: string | undefined = updates.mediaUrl !== undefined ? (updates.mediaUrl || undefined) : existingData.mediaUrl;
+    let detectedMediaType: 'image' | 'video' | undefined = updates.mediaType !== undefined ? updates.mediaType : existingData.mediaType;
+
+    // Handle new media file upload if provided
+    if (updates.mediaFile) {
+        try {
+            const file = updates.mediaFile;
+            const storagePath = getStoragePath('postMedia', currentUser.uid, file.name);
+            const uploaded = await uploadFile(storagePath, file, {
+                onProgress: (progress) => onUploadProgress?.(progress),
+            });
+            uploadedMediaUrl = uploaded.url;
+            detectedMediaType = file.type.startsWith('video') ? 'video' : 'image';
+        } catch (uploadErr) {
+            console.warn('[POST_MEDIA_UPLOAD_WARN] Storage upload failed during edit, falling back:', uploadErr);
+            if (updates.mediaUrl) {
+                uploadedMediaUrl = updates.mediaUrl;
+            }
+        }
+    }
+
+    const updatePayload: Record<string, any> = {
+        updatedAt: serverTimestamp(),
+    };
+
     if (updates.oneLine !== undefined) {
         updatePayload.oneLine = updates.oneLine.trim();
         updatePayload.aiSummary = updates.oneLine.trim();
@@ -322,18 +362,96 @@ export const updatePost = async (postId: string, updates: Partial<CreatePostInpu
         updatePayload.content = updates.content.trim();
     }
     if (updates.category !== undefined) {
-        updatePayload.category = updates.category;
-    }
-    if (updates.channelId !== undefined) {
-        updatePayload.channelId = updates.channelId;
-    }
-    if (updates.channelName !== undefined) {
-        updatePayload.channelName = updates.channelName;
+        updatePayload.category = updates.category.trim();
+        updatePayload.domain = updates.domain ? updates.domain.trim() : updates.category.trim();
+    } else if (updates.domain !== undefined) {
+        updatePayload.domain = updates.domain.trim();
+        updatePayload.category = updates.domain.trim();
     }
 
-    await updateDocument(COLLECTIONS.posts, postId, updatePayload);
-    console.log(`[POST_UPDATED] Post ${postId} updated`);
+    // Media update handling
+    if (updates.mediaFile || updates.mediaUrl !== undefined) {
+        updatePayload.mediaUrl = uploadedMediaUrl || null;
+        updatePayload.mediaType = detectedMediaType || null;
+    }
+
+    if (updates.thumbnailUrl !== undefined) {
+        updatePayload.thumbnailUrl = updates.thumbnailUrl || null;
+    }
+
+    // Channel update handling (for Feeds)
+    if (updates.channelId !== undefined) {
+        const oldChannelId = existingData.channelId;
+        const newChannelId = updates.channelId || null;
+
+        updatePayload.channelId = newChannelId;
+        updatePayload.channelName = updates.channelName || null;
+        updatePayload.channelAvatarUrl = updates.channelAvatarUrl || null;
+
+        if (newChannelId && (!updatePayload.channelName || !updatePayload.channelAvatarUrl)) {
+            try {
+                const ch = await getChannelById(newChannelId);
+                if (ch) {
+                    updatePayload.channelName = updatePayload.channelName || ch.name;
+                    updatePayload.channelAvatarUrl = updatePayload.channelAvatarUrl || ch.avatarUrl || null;
+                }
+            } catch (e) {
+                console.warn('[CHANNEL_LOOKUP_WARN]', e);
+            }
+        }
+
+        // Adjust post counts if channel changed
+        if (oldChannelId !== newChannelId) {
+            if (oldChannelId) decrementChannelPostCount(oldChannelId).catch(console.warn);
+            if (newChannelId) incrementChannelPostCount(newChannelId).catch(console.warn);
+        }
+    }
+
+    // Collab details update handling
+    if (updates.collabDetails !== undefined) {
+        if (updates.collabDetails === null) {
+            updatePayload.collabDetails = null;
+        } else {
+            const cleanCollabDetails: Record<string, any> = {
+                roles: Array.isArray(updates.collabDetails.roles)
+                    ? updates.collabDetails.roles.map(r => {
+                        const roleObj: any = {
+                            id: r.id || `role-${Math.random().toString(36).substring(2, 9)}`,
+                            title: r.title?.trim() || 'Collaborator',
+                            count: Number(r.count) || 1,
+                            skills: Array.isArray(r.skills) ? r.skills : [],
+                        };
+                        if (r.responsibilities && r.responsibilities.trim()) {
+                            roleObj.responsibilities = r.responsibilities.trim();
+                        }
+                        return roleObj;
+                    })
+                    : [],
+            };
+            if (updates.collabDetails.experience?.trim()) cleanCollabDetails.experience = updates.collabDetails.experience.trim();
+            if (updates.collabDetails.background?.trim()) cleanCollabDetails.background = updates.collabDetails.background.trim();
+            if (updates.collabDetails.availability?.trim()) cleanCollabDetails.availability = updates.collabDetails.availability.trim();
+            if (updates.collabDetails.location?.trim()) cleanCollabDetails.location = updates.collabDetails.location.trim();
+            if (updates.collabDetails.specificLocation?.trim()) cleanCollabDetails.specificLocation = updates.collabDetails.specificLocation.trim();
+            if (Array.isArray(updates.collabDetails.collabTypes)) cleanCollabDetails.collabTypes = updates.collabDetails.collabTypes;
+            if (updates.collabDetails.projectStatus?.trim()) cleanCollabDetails.projectStatus = updates.collabDetails.projectStatus.trim();
+
+            updatePayload.collabDetails = cleanCollabDetails;
+        }
+    }
+
+    await updateDoc(postRef, updatePayload);
+    console.log(`[POST_UPDATED] Successfully updated post document: ${postId}`);
+
+    const updatedMerged = {
+        ...existingData,
+        ...updatePayload,
+        updatedAt: new Date(),
+    };
+
+    return normalizeFirestorePost(postId, updatedMerged);
 };
+
 
 /**
  * Helper to classify and format Firestore error codes into human-readable diagnostics.
@@ -661,6 +779,7 @@ export const postToProject = (post: Post): Project => {
 
     return {
         id: post.id,
+        authorId: post.authorId,
         author: {
             name: post.author?.name || 'Invox Member',
             avatarUrl: post.author?.avatarUrl || `https://picsum.photos/seed/${post.authorId || post.id}/200`,

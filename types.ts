@@ -151,6 +151,7 @@ export interface PostComment {
 
 export interface Project {
     id: string;
+    authorId?: string;
     author: {
         name: string;
         avatarUrl: string;

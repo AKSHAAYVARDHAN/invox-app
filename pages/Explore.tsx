@@ -1046,6 +1046,7 @@ const ExplorePage = () => {
                                         <PollCard 
                                             poll={post as any as Poll} 
                                             userVote={(post as any).userVotedOptionId || userPollVotes[post.id]}
+                                            isMySpaceContext={false}
                                             onDelete={(pollId) => {
                                                 setFirestorePolls(prev => prev.filter(p => p.id !== pollId));
                                             }}
@@ -1059,7 +1060,7 @@ const ExplorePage = () => {
                             return (
                                 <React.Fragment key={uniqueKey}>
                                     <ErrorBoundary>
-                                        <QueryCard post={post} />
+                                        <QueryCard post={post} isMySpaceContext={false} />
                                     </ErrorBoundary>
                                 </React.Fragment>
                             );
@@ -1068,7 +1069,7 @@ const ExplorePage = () => {
                             return (
                                 <React.Fragment key={uniqueKey}>
                                     <ErrorBoundary>
-                                        <ThreadCard post={post} />
+                                        <ThreadCard post={post} isMySpaceContext={false} />
                                     </ErrorBoundary>
                                 </React.Fragment>
                             );
@@ -1078,6 +1079,7 @@ const ExplorePage = () => {
                                 <ErrorBoundary>
                                     <FeedCard 
                                         post={post} 
+                                        isMySpaceContext={false}
                                     />
                                 </ErrorBoundary>
                             </React.Fragment>

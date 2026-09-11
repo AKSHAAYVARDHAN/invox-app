@@ -1,6 +1,7 @@
 
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import type { Post } from '../../types';
 import { 
     HeartIcon, 
@@ -17,13 +18,15 @@ import {
     VolumeUpIcon,
     VolumeOffIcon,
     ArrowsPointingOutIcon,
-    ArrowsPointingInIcon
+    ArrowsPointingInIcon,
+    PencilSquareIcon
 } from '../ui/Icons';
 import { handleImageError } from '../utils/imageUtils';
 import { useFullscreen } from '../hooks/useFullscreen';
 import { useLazyLoad } from '../hooks/useLazyLoad';
 import AspectRatioBox from '../ui/AspectRatioBox';
 import ImageZoomModal from '../ui/ImageZoomModal';
+import { EditPostModal } from './EditPostModal';
 import { useAIAssistant } from '../../contexts/AIAssistantContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { toggleLikePost, toggleBookmarkPost, incrementPostView } from '../../services/postService';
@@ -51,9 +54,25 @@ const MediaPlaceholder: React.FC<{ thumbnailUrl?: string; isVideo: boolean }> = 
     return <div className="w-full h-full bg-gray-700"></div>;
 };
 
-export const FeedCard: React.FC<{ post: Post }> = ({ post }) => {
+interface FeedCardProps {
+    post: Post;
+    onPostUpdated?: (updated: Post) => void;
+    isMySpaceContext?: boolean;
+}
+
+export const FeedCard: React.FC<FeedCardProps> = ({ post, onPostUpdated, isMySpaceContext }) => {
     const { openModal } = useAIAssistant();
-    const isVideo = post.mediaType === 'video';
+    const location = useLocation();
+    const inMySpace = isMySpaceContext !== undefined ? isMySpaceContext : location.pathname.startsWith('/myspace');
+    const [currentPost, setCurrentPost] = useState<Post>(post);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+    useEffect(() => {
+        setCurrentPost(post);
+    }, [post]);
+
+    const isVideo = currentPost.mediaType === 'video';
     const videoRef = useRef<HTMLVideoElement>(null);
     const videoContainerRef = useRef<HTMLDivElement>(null);
 
@@ -71,10 +90,18 @@ export const FeedCard: React.FC<{ post: Post }> = ({ post }) => {
     
     const { currentUser } = useAuth();
     const [isLiked, setIsLiked] = useState(false);
-    const [likeCount, setLikeCount] = useState(post.stats.likes);
+    const [likeCount, setLikeCount] = useState(currentPost.stats.likes);
     const [isSaved, setIsSaved] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [copied, setCopied] = useState(false);
+
+    const isOwner = Boolean(
+        currentUser && (
+            (currentPost.authorId && currentPost.authorId === currentUser.uid) ||
+            (currentUser.displayName && currentPost.author?.name === currentUser.displayName)
+        )
+    );
+    const canEdit = Boolean(isOwner && inMySpace);
 
     // Increment view once on mount / visibility
     useEffect(() => {
@@ -298,22 +325,46 @@ export const FeedCard: React.FC<{ post: Post }> = ({ post }) => {
                         >
                             <SparklesIcon className="w-4 h-4" />
                         </button>
-                        <button 
-                            className="p-1.5 border border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-800 hover:text-white transition-colors"
-                        >
-                            <EllipsisVerticalIcon className="w-4 h-4" />
-                        </button>
+                        <div className="relative">
+                            <button 
+                                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                                className="p-1.5 border border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-800 hover:text-white transition-colors"
+                                aria-label="More options"
+                            >
+                                <EllipsisVerticalIcon className="w-4 h-4" />
+                            </button>
+                            {isMenuOpen && (
+                                <div className="absolute right-0 mt-1 w-44 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono">
+                                    <button 
+                                        onClick={(e) => { handleShareClick(e); setIsMenuOpen(false); }}
+                                        className="w-full text-left px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-900 hover:text-white uppercase tracking-wider flex items-center gap-2"
+                                    >
+                                        <ForwardIcon className="w-3.5 h-3.5" />
+                                        <span>Share Post</span>
+                                    </button>
+                                    {canEdit && (
+                                        <button 
+                                            onClick={() => { setIsEditModalOpen(true); setIsMenuOpen(false); }}
+                                            className="w-full text-left px-3 py-2 text-xs text-white hover:bg-zinc-900 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1"
+                                        >
+                                            <PencilSquareIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                            <span>// EDIT</span>
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
                 {/* Content */}
                 <div className="mt-3.5">
-                    <p className="text-base font-semibold font-mono text-white tracking-tight">"{post.aiSummary}"</p>
-                    <p className="text-zinc-400 text-xs sm:text-sm mt-2 leading-relaxed font-sans">{post.content}</p>
+                    <p className="text-base font-semibold font-mono text-white tracking-tight">"{currentPost.aiSummary}"</p>
+                    <p className="text-zinc-400 text-xs sm:text-sm mt-2 leading-relaxed font-sans">{currentPost.content}</p>
                 </div>
 
                 {/* Media */}
-                {post.mediaUrl && (
+                {currentPost.mediaUrl && (
                     <div className="mt-3.5">
                         <AspectRatioBox
                             ref={mediaContainerRef}
@@ -321,7 +372,7 @@ export const FeedCard: React.FC<{ post: Post }> = ({ post }) => {
                             className={`border border-zinc-800 bg-black group ${!isVisible || (!isVideo ? 'cursor-zoom-in' : 'cursor-pointer')}`}
                             onMouseEnter={() => setIsControlsVisible(true)}
                             onMouseLeave={() => setIsControlsVisible(false)}
-                            onClick={isVisible ? (isVideo ? togglePlayPause : () => setZoomedImageUrl(post.mediaUrl || null)) : undefined}
+                            onClick={isVisible ? (isVideo ? togglePlayPause : () => setZoomedImageUrl(currentPost.mediaUrl || null)) : undefined}
                         >
                             {isVisible ? (
                                 isVideo ? (
@@ -463,6 +514,15 @@ export const FeedCard: React.FC<{ post: Post }> = ({ post }) => {
                 isOpen={!!zoomedImageUrl} 
                 onClose={() => setZoomedImageUrl(null)} 
                 imageUrl={zoomedImageUrl || ''}
+            />
+            <EditPostModal
+                isOpen={isEditModalOpen}
+                post={currentPost}
+                onClose={() => setIsEditModalOpen(false)}
+                onUpdated={(updated) => {
+                    setCurrentPost(updated);
+                    onPostUpdated?.(updated);
+                }}
             />
         </>
     );

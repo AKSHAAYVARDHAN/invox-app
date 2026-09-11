@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import type { Project, QuickCollab, ActivePing, Offer } from '../types';
+import type { Project, QuickCollab, ActivePing, Offer, Post } from '../types';
+import { PostType } from '../types';
+import { EditPostModal } from '../components/feed/EditPostModal';
 import { 
     HeartIcon, 
     TrendingUpIcon, 
@@ -1762,8 +1764,27 @@ export const SpotlightPage = () => {
     );
     
     const CollaborationCard: React.FC<{ project: Project }> = ({ project }) => {
+        const { currentUser } = useAuth();
+        const [currentProject, setCurrentProject] = useState<Project>(project);
+        const [isMenuOpen, setIsMenuOpen] = useState(false);
+        const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+        useEffect(() => {
+            setCurrentProject(project);
+        }, [project]);
+
+        const location = ReactRouterDOM.useLocation();
+        const isMySpaceContext = location.pathname.startsWith('/myspace');
+        const isOwner = Boolean(
+            currentUser && (
+                (currentProject.authorId && currentProject.authorId === currentUser.uid) ||
+                (currentUser.displayName && currentProject.author?.name === currentUser.displayName)
+            )
+        );
+        const canEdit = Boolean(isOwner && isMySpaceContext);
+
         const [showMore, setShowMore] = useState(false);
-        const isVideo = project.mediaType === 'video';
+        const isVideo = currentProject.mediaType === 'video';
         const videoRef = useRef<HTMLVideoElement>(null);
         const videoContainerRef = useRef<HTMLDivElement>(null);
     
@@ -1884,7 +1905,7 @@ export const SpotlightPage = () => {
             setPlaybackRate(playbackRates[nextIndex]);
         };
     
-        const rawRoles = project.collabDetails?.roles;
+        const rawRoles = currentProject.collabDetails?.roles;
         const normalizedRoles: any[] = Array.isArray(rawRoles)
             ? rawRoles
             : (rawRoles && typeof rawRoles === 'object' ? Object.values(rawRoles) : []);
@@ -1893,7 +1914,24 @@ export const SpotlightPage = () => {
             normalizedRoles.flatMap((r: any) => Array.isArray(r?.skills) ? r.skills : (typeof r?.skills === 'string' ? [r.skills] : []))
         ));
 
-        const collabDomain = project.domain || project.category;
+        const collabDomain = currentProject.domain || currentProject.category;
+
+        const postForEditing: Post = {
+            id: currentProject.id,
+            authorId: currentProject.authorId,
+            author: currentProject.author,
+            aiSummary: currentProject.aiSummary,
+            content: currentProject.description,
+            mediaUrl: currentProject.mediaUrl,
+            mediaType: currentProject.mediaType,
+            thumbnailUrl: currentProject.thumbnailUrl,
+            stats: currentProject.stats,
+            type: PostType.Collab,
+            category: currentProject.category,
+            domain: currentProject.domain,
+            createdAt: currentProject.createdAt,
+            collabDetails: currentProject.collabDetails,
+        };
     
         return (
             <>
@@ -1901,10 +1939,10 @@ export const SpotlightPage = () => {
                     {/* Header */}
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <img src={project.author?.avatarUrl || `https://picsum.photos/seed/${project.id}/200`} onError={handleImageError} alt={project.author?.name || 'Author'} className="w-10 h-10 border border-zinc-700 object-cover" />
+                            <img src={currentProject.author?.avatarUrl || `https://picsum.photos/seed/${currentProject.id}/200`} onError={handleImageError} alt={currentProject.author?.name || 'Author'} className="w-10 h-10 border border-zinc-700 object-cover" />
                             <div className="flex items-center gap-1.5 flex-wrap">
-                                <p className="font-bold text-white font-mono text-sm">{project.author?.name || 'Anonymous'}</p>
-                                {project.author?.isVerified && <CheckBadgeIcon className="w-4 h-4 text-zinc-400" />}
+                                <p className="font-bold text-white font-mono text-sm">{currentProject.author?.name || 'Anonymous'}</p>
+                                {currentProject.author?.isVerified && <CheckBadgeIcon className="w-4 h-4 text-zinc-400" />}
                                 {collabDomain && (
                                     <span className="text-[10px] uppercase font-mono px-2 py-0.5 bg-zinc-900 border border-zinc-800 text-zinc-300">
                                         {collabDomain}
@@ -1914,22 +1952,56 @@ export const SpotlightPage = () => {
                         </div>
                         <div className="flex items-center gap-1 text-zinc-400">
                             <button onClick={handleAIAssistantClick} className="p-1.5 hover:text-white border border-transparent hover:border-zinc-800 transition-colors"><SparklesIcon className="w-5 h-5" /></button>
-                            <button className="p-1.5 hover:text-white border border-transparent hover:border-zinc-800 transition-colors"><EllipsisVerticalIcon className="w-5 h-5" /></button>
+                            <div className="relative">
+                                <button 
+                                    onClick={() => setIsMenuOpen(!isMenuOpen)}
+                                    className="p-1.5 hover:text-white border border-transparent hover:border-zinc-800 transition-colors"
+                                >
+                                    <EllipsisVerticalIcon className="w-5 h-5" />
+                                </button>
+                                {isMenuOpen && (
+                                    <div className="absolute right-0 mt-1 w-44 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono">
+                                        <button 
+                                            onClick={() => {
+                                                if (navigator.share) {
+                                                    navigator.share({ title: currentProject.name, url: window.location.href });
+                                                } else {
+                                                    navigator.clipboard.writeText(window.location.href);
+                                                }
+                                                setIsMenuOpen(false);
+                                            }}
+                                            className="w-full text-left px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-900 hover:text-white uppercase tracking-wider flex items-center gap-2"
+                                        >
+                                            <ForwardIcon className="w-3.5 h-3.5" />
+                                            <span>Share Collab</span>
+                                        </button>
+                                        {canEdit && (
+                                            <button 
+                                                onClick={() => { setIsEditModalOpen(true); setIsMenuOpen(false); }}
+                                                className="w-full text-left px-3 py-2 text-xs text-white hover:bg-zinc-900 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1"
+                                            >
+                                                <PencilSquareIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                <span>// EDIT</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
         
                     {/* Content */}
                     <div className="mt-4 space-y-2.5 font-mono">
                         {/* Hook */}
-                        <p className="text-base font-semibold text-white leading-snug">"{project.aiSummary}"</p>
+                        <p className="text-base font-semibold text-white leading-snug">"{currentProject.aiSummary}"</p>
 
                         {/* Project Overview */}
                         <p className="text-zinc-300 text-xs leading-relaxed">
-                            {showMore ? project.description : `${project.description.substring(0, 160)}${project.description.length > 160 ? '...' : ''}`}
+                            {showMore ? currentProject.description : `${currentProject.description.substring(0, 160)}${currentProject.description.length > 160 ? '...' : ''}`}
                         </p>
 
                         {/* Structured Collaboration Details */}
-                        {project.collabDetails && (
+                        {currentProject.collabDetails && (
                             <div className="p-3.5 bg-black/60 border border-zinc-800 space-y-2.5 text-xs">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     {/* LOOKING FOR */}
@@ -2164,6 +2236,23 @@ export const SpotlightPage = () => {
                     isOpen={!!zoomedImageUrl} 
                     onClose={() => setZoomedImageUrl(null)} 
                     imageUrl={zoomedImageUrl || ''}
+                />
+                <EditPostModal
+                    isOpen={isEditModalOpen}
+                    post={postForEditing}
+                    onClose={() => setIsEditModalOpen(false)}
+                    onUpdated={(updatedPost) => {
+                        setCurrentProject(prev => ({
+                            ...prev,
+                            aiSummary: updatedPost.aiSummary,
+                            description: updatedPost.content,
+                            collabDetails: updatedPost.collabDetails,
+                            domain: updatedPost.domain,
+                            category: updatedPost.category,
+                            mediaUrl: updatedPost.mediaUrl,
+                            mediaType: updatedPost.mediaType,
+                        }));
+                    }}
                 />
             </>
         );

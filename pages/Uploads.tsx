@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { PlusIcon, SparklesIcon, HeartIcon, TrendingUpIcon, ChatBubbleBottomCenterTextIcon, TrashIcon, CloseIcon } from '../components/ui/Icons';
+import { PlusIcon, SparklesIcon, HeartIcon, TrendingUpIcon, ChatBubbleBottomCenterTextIcon, TrashIcon, CloseIcon, PencilSquareIcon, EllipsisVerticalIcon } from '../components/ui/Icons';
 import CreateFeedModal from '../components/uploads/CreateFeedModal';
 import { CreateCollabModal } from '../components/uploads/CreateCollabModal';
 import CreateChannelModal from '../components/uploads/CreateChannelModal';
 import { CreatePollModal } from '../components/uploads/CreatePollModal';
 import { PollCard } from '../components/feed/PollCard';
+import { EditPostModal } from '../components/feed/EditPostModal';
 import { handleImageError } from '../components/utils/imageUtils';
 import { useAuth } from '../contexts/AuthContext';
 import { createPost, deletePost, subscribeToUserPosts } from '../services/postService';
@@ -42,6 +43,8 @@ const UploadsPage = () => {
     const [pollToDelete, setPollToDelete] = useState<Poll | null>(null);
 
     const [userPosts, setUserPosts] = useState<Post[]>([]);
+    const [editingPost, setEditingPost] = useState<Post | null>(null);
+    const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [overrideContextName, setOverrideContextName] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -66,6 +69,14 @@ const UploadsPage = () => {
             }
         };
     }, [setRightSidebarVariant]);
+
+    useEffect(() => {
+        const handleGlobalClick = () => setActiveMenuId(null);
+        if (activeMenuId) {
+            window.addEventListener('click', handleGlobalClick);
+            return () => window.removeEventListener('click', handleGlobalClick);
+        }
+    }, [activeMenuId]);
 
     // Real-time Firestore subscription to user's channels
     useEffect(() => {
@@ -910,6 +921,7 @@ const UploadsPage = () => {
                                             <PollCard 
                                                 poll={poll} 
                                                 onDelete={() => handleDeletePoll(poll)}
+                                                isMySpaceContext={true}
                                                 onVoteChange={(pollId, optionId, updatedOptions, updatedTotalVotes) => {
                                                     setUserPolls(prev => prev.map(p => p.id === pollId ? { ...p, options: updatedOptions, totalVotes: updatedTotalVotes, userVotedOptionId: optionId } : p));
                                                 }}
@@ -946,18 +958,46 @@ const UploadsPage = () => {
                                                 <span className="text-[10px] text-zinc-500">
                                                     {new Date(post.createdAt).toLocaleDateString()}
                                                 </span>
-                                                <button
-                                                    onClick={() => handleDelete(post.id)}
-                                                    disabled={deletingId === post.id}
-                                                    className="text-zinc-500 hover:text-red-400 p-1 transition-colors"
-                                                    title="Delete signal"
-                                                >
-                                                    {deletingId === post.id ? (
-                                                        <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
-                                                    ) : (
-                                                        <TrashIcon className="w-3.5 h-3.5" />
+                                                <div className="relative">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setActiveMenuId(activeMenuId === post.id ? null : post.id);
+                                                        }}
+                                                        className="text-zinc-500 hover:text-white p-1 transition-colors border border-transparent hover:border-zinc-800"
+                                                        title="Options"
+                                                    >
+                                                        <EllipsisVerticalIcon className="w-4 h-4" />
+                                                    </button>
+                                                    {activeMenuId === post.id && (
+                                                        <div 
+                                                            onClick={(e) => e.stopPropagation()} 
+                                                            className="absolute right-0 mt-1 w-36 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono"
+                                                        >
+                                                            <button
+                                                                onClick={() => {
+                                                                    setActiveMenuId(null);
+                                                                    setEditingPost(post);
+                                                                }}
+                                                                className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-zinc-900 uppercase tracking-wider flex items-center gap-2"
+                                                            >
+                                                                <PencilSquareIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                                <span>// EDIT</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setActiveMenuId(null);
+                                                                    handleDelete(post.id);
+                                                                }}
+                                                                disabled={deletingId === post.id}
+                                                                className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-red-950/30 hover:text-red-300 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1"
+                                                            >
+                                                                <TrashIcon className="w-3.5 h-3.5" />
+                                                                <span>// DELETE</span>
+                                                            </button>
+                                                        </div>
                                                     )}
-                                                </button>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -1145,18 +1185,46 @@ const UploadsPage = () => {
                                                         </div>
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-[10px] text-zinc-500">{new Date(item.createdAt).toLocaleDateString()}</span>
-                                                            <button
-                                                                onClick={() => handleDelete(item.id)}
-                                                                disabled={deletingId === item.id}
-                                                                className="text-zinc-500 hover:text-red-400 p-1 transition-colors"
-                                                                title="Delete signal"
-                                                            >
-                                                                {deletingId === item.id ? (
-                                                                    <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
-                                                                ) : (
-                                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                            <div className="relative">
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setActiveMenuId(activeMenuId === item.id ? null : item.id);
+                                                                    }}
+                                                                    className="text-zinc-500 hover:text-white p-1 transition-colors border border-transparent hover:border-zinc-800"
+                                                                    title="Options"
+                                                                >
+                                                                    <EllipsisVerticalIcon className="w-4 h-4" />
+                                                                </button>
+                                                                {activeMenuId === item.id && (
+                                                                    <div 
+                                                                        onClick={(e) => e.stopPropagation()} 
+                                                                        className="absolute right-0 mt-1 w-36 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono"
+                                                                    >
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setActiveMenuId(null);
+                                                                                setEditingPost(item);
+                                                                            }}
+                                                                            className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-zinc-900 uppercase tracking-wider flex items-center gap-2"
+                                                                        >
+                                                                            <PencilSquareIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                                            <span>// EDIT</span>
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setActiveMenuId(null);
+                                                                                handleDelete(item.id);
+                                                                            }}
+                                                                            disabled={deletingId === item.id}
+                                                                            className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-red-950/30 hover:text-red-300 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1"
+                                                                        >
+                                                                            <TrashIcon className="w-3.5 h-3.5" />
+                                                                            <span>// DELETE</span>
+                                                                        </button>
+                                                                    </div>
                                                                 )}
-                                                            </button>
+                                                            </div>
                                                         </div>
                                                     </div>
 
@@ -1302,18 +1370,46 @@ const UploadsPage = () => {
                                                         </div>
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-[10px] text-zinc-500">{new Date(item.createdAt).toLocaleDateString()}</span>
-                                                            <button
-                                                                onClick={() => handleDelete(item.id)}
-                                                                disabled={deletingId === item.id}
-                                                                className="text-zinc-500 hover:text-red-400 p-1 transition-colors"
-                                                                title="Delete signal"
-                                                            >
-                                                                {deletingId === item.id ? (
-                                                                    <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
-                                                                ) : (
-                                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                            <div className="relative">
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setActiveMenuId(activeMenuId === item.id ? null : item.id);
+                                                                    }}
+                                                                    className="text-zinc-500 hover:text-white p-1 transition-colors border border-transparent hover:border-zinc-800"
+                                                                    title="Options"
+                                                                >
+                                                                    <EllipsisVerticalIcon className="w-4 h-4" />
+                                                                </button>
+                                                                {activeMenuId === item.id && (
+                                                                    <div 
+                                                                        onClick={(e) => e.stopPropagation()} 
+                                                                        className="absolute right-0 mt-1 w-36 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono"
+                                                                    >
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setActiveMenuId(null);
+                                                                                setEditingPost(item);
+                                                                            }}
+                                                                            className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-zinc-900 uppercase tracking-wider flex items-center gap-2"
+                                                                        >
+                                                                            <PencilSquareIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                                            <span>// EDIT</span>
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setActiveMenuId(null);
+                                                                                handleDelete(item.id);
+                                                                            }}
+                                                                            disabled={deletingId === item.id}
+                                                                            className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-red-950/30 hover:text-red-300 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1"
+                                                                        >
+                                                                            <TrashIcon className="w-3.5 h-3.5" />
+                                                                            <span>// DELETE</span>
+                                                                        </button>
+                                                                    </div>
                                                                 )}
-                                                            </button>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     <h4 className="text-sm font-bold text-white mb-2 leading-tight uppercase tracking-wider">{item.aiSummary || item.oneLine}</h4>
@@ -1591,6 +1687,21 @@ const UploadsPage = () => {
                     setMySpaceDiscoverFilter('Polls');
                 }}
             />
+
+            {/* Edit Post Modal (Exclusively accessible from My Space) */}
+            {editingPost && (
+                <EditPostModal
+                    isOpen={Boolean(editingPost)}
+                    post={editingPost}
+                    onClose={() => setEditingPost(null)}
+                    onUpdated={(updatedPost) => {
+                        setUserPosts(prev => prev.map(p => p.id === updatedPost.id ? updatedPost : p));
+                        setEditingPost(null);
+                        setActionSuccess('Broadcast updated successfully.');
+                        setTimeout(() => setActionSuccess(null), 4000);
+                    }}
+                />
+            )}
 
             {/* Non-intrusive Success Banner */}
             {actionSuccess && (
