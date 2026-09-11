@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import type { Project, QuickCollab, ActivePing, Offer, Post } from '../types';
+import type { Project, QuickCollab, ActivePing, Offer, Post, CollabApplication } from '../types';
 import { PostType } from '../types';
 import { EditPostModal } from '../components/feed/EditPostModal';
+import { CollabApplicationModal } from '../components/spotlight/CollabApplicationModal';
+import { subscribeToCollabApplications, getRoleCapacity } from '../services/collabApplicationService';
 import { 
     HeartIcon, 
     TrendingUpIcon, 
@@ -1768,6 +1770,17 @@ export const SpotlightPage = () => {
         const [currentProject, setCurrentProject] = useState<Project>(project);
         const [isMenuOpen, setIsMenuOpen] = useState(false);
         const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+        const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
+        const [collabApps, setCollabApps] = useState<CollabApplication[]>([]);
+
+        useEffect(() => {
+            if (!currentProject?.id) return;
+            const unsubscribe = subscribeToCollabApplications(
+                currentProject.id,
+                (apps) => setCollabApps(apps)
+            );
+            return () => unsubscribe();
+        }, [currentProject?.id]);
 
         useEffect(() => {
             setCurrentProject(project);
@@ -2226,9 +2239,54 @@ export const SpotlightPage = () => {
         
                      {/* Collaborate Button */}
                     <div className="mt-3">
-                        <button className="w-full bg-zinc-900 border border-zinc-800 text-white font-mono text-xs uppercase font-bold py-2.5 hover:bg-zinc-800 transition-colors">
-                            Collaborate
-                        </button>
+                        {isOwner ? (
+                            <div className="w-full bg-zinc-950 border border-zinc-800 text-zinc-500 font-mono text-xs uppercase font-bold py-2.5 text-center flex items-center justify-center gap-2">
+                                <span>// YOUR COLLAB (CREATOR)</span>
+                            </div>
+                        ) : (() => {
+                            const userCollabApps = collabApps.filter(a => a.applicantId === currentUser?.uid);
+                            const acceptedApp = userCollabApps.find(a => a.status === 'ACCEPTED');
+                            const pendingApp = userCollabApps.find(a => a.status === 'PENDING');
+                            const allRolesFilled = normalizedRoles.length > 0 && normalizedRoles.every((r: any) => {
+                                const cap = getRoleCapacity(r, collabApps);
+                                return cap.isFilled;
+                            });
+
+                            if (acceptedApp) {
+                                return (
+                                    <div className="w-full bg-emerald-950/40 border border-emerald-800/80 text-emerald-400 font-mono text-xs uppercase font-bold py-2.5 px-3 text-center flex items-center justify-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                                        <span>// ACCEPTED • {acceptedApp.roleTitle}</span>
+                                    </div>
+                                );
+                            }
+
+                            if (pendingApp) {
+                                return (
+                                    <div className="w-full bg-amber-950/30 border border-amber-800/80 text-amber-400 font-mono text-xs uppercase font-bold py-2.5 px-3 text-center flex items-center justify-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                                        <span>// APPLICATION SENT • {pendingApp.roleTitle} (PENDING)</span>
+                                    </div>
+                                );
+                            }
+
+                            if (allRolesFilled) {
+                                return (
+                                    <button disabled className="w-full bg-zinc-950 border border-zinc-800 text-zinc-600 font-mono text-xs uppercase font-bold py-2.5 cursor-not-allowed text-center">
+                                        // ROLES FILLED
+                                    </button>
+                                );
+                            }
+
+                            return (
+                                <button 
+                                    onClick={() => setIsApplyModalOpen(true)}
+                                    className="w-full bg-zinc-900 border border-zinc-800 text-white font-mono text-xs uppercase font-bold py-2.5 hover:bg-zinc-800 hover:border-zinc-700 transition-colors cursor-pointer"
+                                >
+                                    // COLLABORATE
+                                </button>
+                            );
+                        })()}
                     </div>
         
                 </div>
@@ -2252,6 +2310,14 @@ export const SpotlightPage = () => {
                             mediaUrl: updatedPost.mediaUrl,
                             mediaType: updatedPost.mediaType,
                         }));
+                    }}
+                />
+                <CollabApplicationModal
+                    isOpen={isApplyModalOpen}
+                    collab={currentProject}
+                    onClose={() => setIsApplyModalOpen(false)}
+                    onApplied={(newApp) => {
+                        setCollabApps(prev => [...prev.filter(a => a.id !== newApp.id), newApp]);
                     }}
                 />
             </>

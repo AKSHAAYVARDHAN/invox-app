@@ -1,3 +1,23 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* AVAILABLE_ROLES Card Border Hierarchy */
+.invox-role-card {
+  border-width: 1px !important;
+  border-style: solid !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.invox-role-card:not(.is-disabled):not(.is-selected):hover {
+  border-color: rgba(255, 255, 255, 0.30) !important;
+}
+
+.invox-role-card.is-selected {
+  border-color: rgba(255, 255, 255, 0.60) !important;
+}
+
+.invox-role-card.is-disabled {
+  border-color: rgba(255, 255, 255, 0.10) !important;
+}

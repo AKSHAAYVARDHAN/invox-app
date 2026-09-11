@@ -157,9 +157,9 @@ service cloud.firestore {
     }
 
     match /applications/{applicationId} {
-      allow read: if signedIn() && (resource.data.applicantId == uid() || resource.data.ownerId == uid() || isModerator());
+      allow read: if signedIn() && (resource.data.applicantId == uid() || resource.data.ownerId == uid() || (('creatorId' in resource.data) && resource.data.creatorId == uid()) || isModerator());
       allow create: if owns('applicantId');
-      allow update: if signedIn() && (resource.data.applicantId == uid() || resource.data.ownerId == uid() || isModerator());
+      allow update: if signedIn() && (resource.data.applicantId == uid() || resource.data.ownerId == uid() || (('creatorId' in resource.data) && resource.data.creatorId == uid()) || isModerator());
       allow delete: if isModerator();
     }
 

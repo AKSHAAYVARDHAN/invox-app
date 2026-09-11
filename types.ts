@@ -134,6 +134,47 @@ export interface CollabDetails {
   projectStatus?: string;
 }
 
+export type CollabApplicationStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'WITHDRAWN';
+
+export interface CollabApplication {
+  id: string;
+  collabId: string;
+  creatorId: string;
+  ownerId?: string;
+  applicantId: string;
+  roleId: string;
+  roleTitle: string;
+  applicant: {
+    uid: string;
+    displayName: string;
+    username: string;
+    photoURL?: string | null;
+    headline?: string;
+    bio?: string;
+    skills: string[];
+    location?: string;
+    portfolioURL?: string;
+    website?: string;
+    email?: string | null;
+  };
+  collabTitle: string;
+  collabDomain?: string;
+  collabOverview?: string;
+  collabCreatorName?: string;
+  collabCreatorAvatar?: string;
+  message?: string;
+  supportingDocument?: {
+    name: string;
+    url: string;
+    size?: number;
+    type?: string;
+    uploadedAt?: string;
+  };
+  status: CollabApplicationStatus;
+  createdAt: Date | any;
+  updatedAt?: Date | any;
+}
+
 export interface PostComment {
   id: string;
   postId: string;

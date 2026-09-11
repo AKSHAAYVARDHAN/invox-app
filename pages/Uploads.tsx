@@ -7,6 +7,7 @@ import CreateChannelModal from '../components/uploads/CreateChannelModal';
 import { CreatePollModal } from '../components/uploads/CreatePollModal';
 import { PollCard } from '../components/feed/PollCard';
 import { EditPostModal } from '../components/feed/EditPostModal';
+import { CollabManagementHub } from '../components/spotlight/CollabManagementHub';
 import { handleImageError } from '../components/utils/imageUtils';
 import { useAuth } from '../contexts/AuthContext';
 import { createPost, deletePost, subscribeToUserPosts } from '../services/postService';
@@ -1099,7 +1100,18 @@ const UploadsPage = () => {
                         </div>
                     )}
 
-                    {loading ? (
+                    {activeTab === 'Spotlight' && spotlightSubTab === 'Collabs' ? (
+                        <CollabManagementHub
+                            userCollabs={filteredItems}
+                            onEditCollab={(collab) => setEditingPost(collab)}
+                            onDeleteCollab={handleDelete}
+                            onCreateCollab={() => {
+                                setOverrideContextName('Collab');
+                                setIsModalOpen(true);
+                            }}
+                            deletingId={deletingId}
+                        />
+                    ) : loading ? (
                         <div className="py-20 flex justify-center items-center">
                             <div className="w-8 h-8 border-2 border-zinc-500 border-t-white rounded-full animate-spin"></div>
                         </div>
