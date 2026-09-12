@@ -58,12 +58,15 @@ import { useAuth } from '../contexts/AuthContext';
 import { useFullscreen } from '../components/hooks/useFullscreen';
 import { useLazyLoad } from '../components/hooks/useLazyLoad';
 import AspectRatioBox from '../components/ui/AspectRatioBox';
+import SegmentedSlideBar from '../components/ui/SegmentedSlideBar';
 import ImageZoomModal from '../components/ui/ImageZoomModal';
 import GoForItOpportunityCard from '../components/spotlight/GoForItOpportunityCard';
 import GoForItOpportunityCardSkeleton from '../components/spotlight/GoForItOpportunityCardSkeleton';
 import { useAIAssistant } from '../contexts/AIAssistantContext';
 import { useFilters } from '../contexts/AIAssistantContext';
 import { subscribeToCollabPosts, getCollabPosts, postToProject } from '../services/postService';
+import { CollabDashboardModal } from '../components/spotlight/CollabDashboardModal';
+import { useCollabDashboardData } from '../components/spotlight/useCollabDashboardData';
 
 
 const formatNumber = (num: number) => {
@@ -1312,8 +1315,21 @@ export const SpotlightPage = () => {
     const [viewedOfferIds, setViewedOfferIds] = useState<string[]>([]);
     const [messagingOffer, setMessagingOffer] = useState<Offer | null>(null);
     const [liveCollabProjects, setLiveCollabProjects] = useState<Project[]>([]);
+    const [isCollabDashboardOpen, setIsCollabDashboardOpen] = useState(() => searchParams.get('openCollabDashboard') === 'true');
+    const [collabDashboardTab, setCollabDashboardTab] = useState<'applications' | 'my_applications' | 'active' | 'published'>('applications');
+    const collabData = useCollabDashboardData();
     const mainTabs = ['Showcase', 'Collabs', 'Leap'];
     const sectionKey = `spotlight-${activeTab.toLowerCase()}`;
+
+    useEffect(() => {
+        if (searchParams.get('openCollabDashboard') === 'true') {
+            setIsCollabDashboardOpen(true);
+        }
+        const urlTab = searchParams.get('tab');
+        if (urlTab && (urlTab === 'Showcase' || urlTab === 'Collabs' || urlTab === 'Leap')) {
+            setActiveTab(urlTab);
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         let isMounted = true;
@@ -1683,7 +1699,7 @@ export const SpotlightPage = () => {
     );
     
     const Collabs = () => (
-        <div className="text-white">
+        <div className="text-white space-y-4">
             {loading ? (
                  <>
                     <div className="animate-pulse">
@@ -2020,7 +2036,7 @@ export const SpotlightPage = () => {
                                     {/* LOOKING FOR */}
                                     {normalizedRoles.length > 0 && (
                                         <div>
-                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// LOOKING_FOR</span>
+                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// LOOKING FOR</span>
                                             <div className="space-y-1">
                                                 {normalizedRoles.map((r: any, idx: number) => (
                                                     <div key={idx} className="text-xs text-white font-medium flex items-center justify-between bg-zinc-900/80 px-2 py-1 border border-zinc-800">
@@ -2054,7 +2070,7 @@ export const SpotlightPage = () => {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-zinc-800/80">
                                     {project.collabDetails.projectStatus && (
                                         <div>
-                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block mb-0.5">// PROJECT_STATUS</span>
+                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block mb-0.5">// PROJECT STATUS</span>
                                             <span className="text-xs text-white font-bold bg-zinc-900 border border-zinc-700 px-2 py-0.5 inline-block">
                                                 {project.collabDetails.projectStatus}
                                             </span>
@@ -2082,7 +2098,7 @@ export const SpotlightPage = () => {
                                         {/* Detailed Role Responsibilities */}
                                         {normalizedRoles.some((r: any) => r.responsibilities) && (
                                             <div className="space-y-1.5">
-                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// ROLE_RESPONSIBILITIES</span>
+                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// ROLE RESPONSIBILITIES</span>
                                                 {normalizedRoles.map((r: any, idx: number) => r.responsibilities ? (
                                                     <div key={`resp-${idx}`} className="bg-zinc-950 p-2 border border-zinc-800/80">
                                                         <span className="text-white font-bold text-[11px] block">{r.title}:</span>
@@ -2095,7 +2111,7 @@ export const SpotlightPage = () => {
                                         {/* Who Can Collaborate Snapshot */}
                                         {(project.collabDetails.experience || project.collabDetails.background || project.collabDetails.availability) && (
                                             <div className="space-y-1">
-                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// WHO_CAN_COLLABORATE</span>
+                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// WHO CAN COLLABORATE</span>
                                                 <div className="flex flex-wrap gap-2 text-[11px] text-zinc-400 bg-zinc-950 p-2 border border-zinc-800/80">
                                                     {project.collabDetails.experience && (
                                                         <div><span className="text-zinc-500 font-bold">EXPERIENCE:</span> <span className="text-zinc-200">{project.collabDetails.experience}</span></div>
@@ -3086,53 +3102,39 @@ export const SpotlightPage = () => {
 
     return (
         <div className="space-y-4">
-            {/* Conditional Filters & Main Tabs */}
-            {!selectedOfferType && !showPinnedHighlights && (
+            {/* Top Navigation Bar: Exact Segmented Slide-Bar UI System from My Space / Explore */}
+            {!selectedOfferType && !showPinnedHighlights && !spotlightBrowseState && (
+                <SegmentedSlideBar
+                    tabs={mainTabs}
+                    activeTab={activeTab}
+                    onChange={(tab) => setActiveTab(tab as 'Showcase' | 'Collabs' | 'Leap')}
+                />
+            )}
+
+            {/* Conditional Category & Domain Filters for Showcase / Collabs */}
+            {!selectedOfferType && !showPinnedHighlights && activeTab !== 'Leap' && !spotlightBrowseState && (
                 <>
-                    {activeTab !== 'Leap' && !spotlightBrowseState && (
-                        <>
-                             <div className="flex items-center gap-1.5 overflow-x-auto pb-3 mb-3 no-scrollbar">
-                                {categoryFilters.map(category => (
-                                    <button
-                                        key={category}
-                                        onClick={() => setActiveCategory(category)}
-                                        className={`px-3 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider whitespace-nowrap transition-all duration-150 border ${
-                                            activeCategory === category
-                                                ? 'bg-[#18181d] text-white border-zinc-700 font-bold'
-                                                : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
-                                        }`}
-                                    >
-                                        {category}
-                                    </button>
-                                ))}
-                            </div>
-        
-                            <DomainFilter 
-                                domains={spotlightDomains}
-                                selectedDomains={domainSelections[sectionKey] || []}
-                                onSelectionChange={(domains) => setDomainSelection(sectionKey, domains)}
-                            />
-                        </>
-                    )}
-    
-                    {!spotlightBrowseState && (
-                        <div className="flex border-b border-zinc-800 mb-5">
-                            {mainTabs.map(tab => (
-                                <button
-                                    key={tab}
-                                    onClick={() => setActiveTab(tab)}
-                                    className={`flex-1 text-center py-2.5 text-xs font-mono uppercase tracking-widest transition-all duration-150 flex items-center justify-center gap-2 ${
-                                        activeTab === tab 
-                                            ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/40' 
-                                            : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
-                                    }`}
-                                >
-                                    <span className="w-1.5 h-1.5 bg-zinc-300 opacity-0 transition-opacity" style={{ opacity: activeTab === tab ? 1 : 0 }}></span>
-                                    <span>// {tab}</span>
-                                </button>
-                            ))}
-                        </div>
-                    )}
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-3 mb-3 no-scrollbar">
+                        {categoryFilters.map(category => (
+                            <button
+                                key={category}
+                                onClick={() => setActiveCategory(category)}
+                                className={`px-3 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider whitespace-nowrap transition-all duration-150 border ${
+                                    activeCategory === category
+                                        ? 'bg-[#18181d] text-white border-zinc-700 font-bold'
+                                        : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
+                                }`}
+                            >
+                                {category}
+                            </button>
+                        ))}
+                    </div>
+
+                    <DomainFilter 
+                        domains={spotlightDomains}
+                        selectedDomains={domainSelections[sectionKey] || []}
+                        onSelectionChange={(domains) => setDomainSelection(sectionKey, domains)}
+                    />
                 </>
             )}
            
@@ -3177,6 +3179,15 @@ export const SpotlightPage = () => {
                         setInitialOfferStatus(messagingOffer.status as 'New' | 'Active' | 'Expired');
                     }}
                     showViewButton={messagingOffer.type !== 'Invites' && messagingOffer.type !== 'Others'}
+                />
+            )}
+
+            {isCollabDashboardOpen && (
+                <CollabDashboardModal
+                    isOpen={isCollabDashboardOpen}
+                    onClose={() => setIsCollabDashboardOpen(false)}
+                    initialTab={collabDashboardTab}
+                    viewMode="spotlight"
                 />
             )}
         </div>

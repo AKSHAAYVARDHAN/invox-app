@@ -45,6 +45,8 @@ import {
 import { handleImageError } from '../utils/imageUtils';
 import MyCommunityCardSkeleton from '../communities/MyCommunityCardSkeleton';
 import DomainFilter from '../ui/DomainFilter';
+import { CollabDashboardModal } from '../spotlight/CollabDashboardModal';
+import { useCollabDashboardData } from '../spotlight/useCollabDashboardData';
 
 const trendingTopics = [
     { name: '#QuantumLeap', posts: '12.1K posts' },
@@ -498,6 +500,9 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
     const [isBrowsingView, setIsBrowsingView] = useState(false);
     const [isPinnedView, setIsPinnedView] = useState(false);
     const [pinnedViewMode, setPinnedViewMode] = useState<'options' | 'profiles'>('options');
+    const [isCollabDashboardOpen, setIsCollabDashboardOpen] = useState(false);
+    const [collabDashboardTab, setCollabDashboardTab] = useState<'applications' | 'my_applications' | 'active' | 'published'>('applications');
+    const collabData = useCollabDashboardData();
 
     useEffect(() => {
         setIsBrowsingView(false);
@@ -660,24 +665,53 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                         {variant === 'spotlight-collabs' && (
                             <div className="bg-[#0c0c0e] border border-zinc-800 mx-4 flex flex-col">
                                 <div className="flex items-center justify-between p-3.5 border-b border-zinc-800">
-                                    <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// MY_COLLABORATIONS</h3>
-                                    <EllipsisVerticalIcon className="w-4 h-4 text-zinc-500" />
+                                    <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// MY COLLABS</h3>
+                                    <span className="text-[10px] text-zinc-500 font-mono">WORKSPACE</span>
                                 </div>
 
-                                <div className="p-3.5 space-y-2.5 font-mono text-xs">
-                                    <div className="flex items-center justify-between p-2.5 bg-black/60 border border-zinc-800/90 hover:border-zinc-700 transition-colors">
-                                        <span className="text-zinc-400">PENDING_REQUESTS:</span>
-                                        <span className="text-white font-bold bg-zinc-800 px-2 py-0.5 border border-zinc-700 text-[11px]">12</span>
-                                    </div>
-                                    <div className="flex items-center justify-between p-2.5 bg-black/60 border border-zinc-800/90 hover:border-zinc-700 transition-colors">
-                                        <span className="text-zinc-400">ACTIVE_COLLABS:</span>
-                                        <span className="text-white font-bold bg-zinc-800 px-2 py-0.5 border border-zinc-700 text-[11px]">4</span>
-                                    </div>
-                                </div>
+                                <div className="p-3.5 space-y-2 font-mono text-xs">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setCollabDashboardTab('applications');
+                                            setIsCollabDashboardOpen(true);
+                                        }}
+                                        className="w-full flex items-center justify-between p-2.5 bg-black/60 border border-zinc-800/90 hover:border-zinc-700 transition-colors text-left group"
+                                        title="View Incoming Collabs"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-zinc-500 font-bold">//</span>
+                                            <span className="text-zinc-400 group-hover:text-white transition-colors">INCOMING COLLABS</span>
+                                        </div>
+                                        <span className={`font-bold px-2 py-0.5 border text-[11px] ${
+                                            collabData.pendingIncomingCount > 0
+                                                ? 'bg-amber-950/60 text-amber-400 border-amber-800'
+                                                : 'bg-zinc-800 text-white border-zinc-700'
+                                        }`}>
+                                            {collabData.pendingIncomingCount}
+                                        </span>
+                                    </button>
 
-                                <div className="p-3 border-t border-zinc-800 bg-black/40">
-                                    <button className="w-full bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700/80 hover:border-zinc-500 text-white font-mono text-xs uppercase tracking-wider py-2 font-bold transition-all flex items-center justify-center gap-2">
-                                        <span>// OPEN_DASHBOARD</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setCollabDashboardTab('active');
+                                            setIsCollabDashboardOpen(true);
+                                        }}
+                                        className="w-full flex items-center justify-between p-2.5 bg-black/60 border border-zinc-800/90 hover:border-zinc-700 transition-colors text-left group"
+                                        title="View Active Collaborations"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-zinc-500 font-bold">//</span>
+                                            <span className="text-zinc-400 group-hover:text-white transition-colors">ACTIVE COLLABS</span>
+                                        </div>
+                                        <span className={`font-bold px-2 py-0.5 border text-[11px] ${
+                                            collabData.activeCollabsCount > 0
+                                                ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
+                                                : 'bg-zinc-800 text-white border-zinc-700'
+                                        }`}>
+                                            {collabData.activeCollabsCount}
+                                        </span>
                                     </button>
                                 </div>
                             </div>
@@ -722,6 +756,15 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                     </>
                 )}
             </div>
+
+            {isCollabDashboardOpen && (
+                <CollabDashboardModal
+                    isOpen={isCollabDashboardOpen}
+                    onClose={() => setIsCollabDashboardOpen(false)}
+                    initialTab={collabDashboardTab}
+                    viewMode="spotlight"
+                />
+            )}
         </aside>
     );
 };

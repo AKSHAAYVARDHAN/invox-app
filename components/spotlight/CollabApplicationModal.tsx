@@ -24,6 +24,7 @@ export const CollabApplicationModal: React.FC<CollabApplicationModalProps> = ({
 }) => {
     const { currentUser, userProfile } = useAuth();
     const [selectedRoleId, setSelectedRoleId] = useState<string>('');
+    const [hoveredRoleId, setHoveredRoleId] = useState<string | null>(null);
     const [message, setMessage] = useState('');
     const [supportingFile, setSupportingFile] = useState<File | null>(null);
     const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
@@ -109,28 +110,15 @@ export const CollabApplicationModal: React.FC<CollabApplicationModalProps> = ({
         });
     }, [roles, existingApps, currentUser?.uid]);
 
-    // Auto-select single available role if only one exists or pick first selectable
+    // Reset state on open so all available roles display in default subtle unselected state
     useEffect(() => {
         if (!isOpen) return;
         setError(null);
         setSuccessMessage(null);
         setMessage('');
-
-        if (rolesWithCapacity.length === 1) {
-            const single = rolesWithCapacity[0];
-            if (!single.isFilled && !single.isApplied) {
-                setSelectedRoleId(single.role.id);
-            } else {
-                setSelectedRoleId('');
-            }
-        } else if (!selectedRoleId || !rolesWithCapacity.some(r => r.role.id === selectedRoleId)) {
-            // Find first available role
-            const firstAvailable = rolesWithCapacity.find(r => !r.isFilled && !r.isApplied);
-            if (firstAvailable) {
-                setSelectedRoleId(firstAvailable.role.id);
-            }
-        }
-    }, [isOpen, rolesWithCapacity]);
+        setSelectedRoleId('');
+        setHoveredRoleId(null);
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
@@ -303,7 +291,7 @@ export const CollabApplicationModal: React.FC<CollabApplicationModalProps> = ({
                 <div className="flex items-center justify-between p-4 border-b border-zinc-800 bg-black">
                     <div>
                         <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">// COLLAB_APPLICATION</span>
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">// COLLAB APPLICATION</span>
                             <span className="text-zinc-700">|</span>
                             <span className="text-[10px] text-zinc-400 uppercase tracking-wider">{collab.domain || collab.category || 'COLLABORATION'}</span>
                         </div>
@@ -340,7 +328,7 @@ export const CollabApplicationModal: React.FC<CollabApplicationModalProps> = ({
                     <div className="p-3.5 bg-black border border-zinc-800 space-y-2">
                         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-850 pb-2">
                             <div>
-                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider block font-bold">// TARGET_COLLAB</span>
+                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider block font-bold">// TARGET COLLAB</span>
                                 <h3 className="text-sm font-bold text-white uppercase tracking-wider">
                                     "{collab.aiSummary || collab.oneLine || 'Collaborative Project'}"
                                 </h3>
@@ -391,7 +379,7 @@ export const CollabApplicationModal: React.FC<CollabApplicationModalProps> = ({
                     {/* 2. Available Roles Selection */}
                     <div className="space-y-2.5">
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold">// AVAILABLE_ROLES</span>
+                            <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold">// AVAILABLE ROLES</span>
                             <span className="text-[10px] text-zinc-500 uppercase">
                                 {rolesWithCapacity.length > 1 ? 'SELECT ONE ROLE TO APPLY' : 'OFFERED ROLE'}
                             </span>
@@ -402,21 +390,39 @@ export const CollabApplicationModal: React.FC<CollabApplicationModalProps> = ({
                                 const isSelected = selectedRoleId === role.id;
                                 const isDisabled = isFilled || isApplied || isCreator;
                                 const roleKey = role.id || `role-${idx}-${role.title}`;
+                                const isHovered = hoveredRoleId === roleKey && !isSelected && !isDisabled;
+
+                                const currentBorderColor = isDisabled
+                                    ? 'rgba(255, 255, 255, 0.10)'
+                                    : isSelected
+                                    ? 'rgba(255, 255, 255, 0.60)'
+                                    : isHovered
+                                    ? 'rgba(255, 255, 255, 0.30)'
+                                    : 'rgba(255, 255, 255, 0.18)';
 
                                 return (
                                     <div
                                         key={roleKey}
+                                        id={`available-role-${role.id || idx}`}
                                         onClick={() => {
                                             if (!isDisabled) {
                                                 setSelectedRoleId(role.id);
+                                                setError(null);
                                             }
                                         }}
-                                        className={`invox-role-card p-3 text-left relative ${
+                                        onMouseEnter={() => !isDisabled && setHoveredRoleId(roleKey)}
+                                        onMouseLeave={() => setHoveredRoleId(null)}
+                                        style={{
+                                            borderColor: currentBorderColor,
+                                            borderWidth: '1px',
+                                            borderStyle: 'solid',
+                                        }}
+                                        className={`invox-role-card p-3 text-left relative transition-colors ${
                                             isDisabled
-                                                ? 'is-disabled bg-zinc-950/60 opacity-60 cursor-not-allowed border-[rgba(255,255,255,0.10)]'
+                                                ? 'is-disabled bg-zinc-950/60 opacity-60 cursor-not-allowed'
                                                 : isSelected
-                                                ? 'is-selected bg-zinc-900/90 border-[rgba(255,255,255,0.60)] cursor-pointer shadow-md'
-                                                : 'bg-[#0c0c0e] border-[rgba(255,255,255,0.18)] hover:border-[rgba(255,255,255,0.30)] cursor-pointer'
+                                                ? 'is-selected bg-zinc-900/90 cursor-pointer shadow-md'
+                                                : 'bg-[#0c0c0e] cursor-pointer'
                                         }`}
                                     >
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -440,7 +446,7 @@ export const CollabApplicationModal: React.FC<CollabApplicationModalProps> = ({
                                             <div className="flex items-center gap-2">
                                                 {isApplied ? (
                                                     <span className="text-[10px] font-bold text-amber-400 bg-amber-950/40 border border-amber-800/80 px-2 py-0.5 uppercase tracking-wider">
-                                                        // {userApp?.status === 'ACCEPTED' ? 'ACCEPTED' : 'ALREADY_APPLIED'}
+                                                        // {userApp?.status === 'ACCEPTED' ? 'ACCEPTED' : 'ALREADY APPLIED'}
                                                     </span>
                                                 ) : isFilled ? (
                                                     <span className="text-[10px] font-bold text-zinc-500 bg-zinc-900 border border-zinc-800 px-2 py-0.5 uppercase tracking-wider">
@@ -484,7 +490,7 @@ export const CollabApplicationModal: React.FC<CollabApplicationModalProps> = ({
                     {/* 3. Applicant Profile Snapshot Preview */}
                     <div className="p-3.5 bg-black border border-zinc-800 space-y-2.5">
                         <div className="flex items-center justify-between border-b border-zinc-850 pb-2">
-                            <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold">// APPLICANT_PROFILE_SNAPSHOT</span>
+                            <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold">// APPLICANT PROFILE SNAPSHOT</span>
                             <span className="text-[9px] text-zinc-500 uppercase">Visible to Collab Creator</span>
                         </div>
 
@@ -523,7 +529,7 @@ export const CollabApplicationModal: React.FC<CollabApplicationModalProps> = ({
                         {/* Skills snapshot */}
                         {userProfile?.skills && userProfile.skills.length > 0 && (
                             <div className="pt-2 border-t border-zinc-850">
-                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// YOUR_VERIFIED_SKILLS</span>
+                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// YOUR VERIFIED SKILLS</span>
                                 <div className="flex flex-wrap gap-1">
                                     {userProfile.skills.map((sk, idx) => (
                                         <span key={`user-skill-${idx}-${sk}`} className="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-300 px-1.5 py-0.5">
@@ -547,11 +553,11 @@ export const CollabApplicationModal: React.FC<CollabApplicationModalProps> = ({
                         </p>
                     </div>
 
-                    {/* 4. Optional Application Message: // WHY_YOU? */}
+                    {/* 4. Optional Application Message: // WHY YOU? */}
                     <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
                             <label htmlFor="why-you-input" className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold">
-                                // WHY_YOU? <span className="text-zinc-500 font-normal">(OPTIONAL)</span>
+                                // WHY YOU? <span className="text-zinc-500 font-normal">(OPTIONAL)</span>
                             </label>
                             <span className="text-[9px] text-zinc-500">{message.length}/500</span>
                         </div>
@@ -570,7 +576,7 @@ export const CollabApplicationModal: React.FC<CollabApplicationModalProps> = ({
                     <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
                             <label className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold">
-                                // SUPPORTING_DOCUMENT <span className="text-zinc-500 font-normal">OPTIONAL</span>
+                                // SUPPORTING DOCUMENT <span className="text-zinc-500 font-normal">OPTIONAL</span>
                             </label>
                             <span className="text-[9px] text-zinc-500 uppercase tracking-wider">MAX 10MB</span>
                         </div>
@@ -633,8 +639,8 @@ export const CollabApplicationModal: React.FC<CollabApplicationModalProps> = ({
                         ) : (
                             <div className="p-3 bg-black border border-zinc-800 space-y-2">
                                 <div className="flex items-center justify-between border-b border-zinc-850 pb-1.5">
-                                    <span className="text-[9px] text-zinc-400 uppercase tracking-widest font-bold">// ATTACHED_DOCUMENT</span>
-                                    <span className="text-[9px] text-emerald-400 font-mono">READY_FOR_TRANSMISSION</span>
+                                    <span className="text-[9px] text-zinc-400 uppercase tracking-widest font-bold">// ATTACHED DOCUMENT</span>
+                                    <span className="text-[9px] text-emerald-400 font-mono">READY FOR TRANSMISSION</span>
                                 </div>
                                 <div className="flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2.5 min-w-0">

@@ -424,6 +424,7 @@ const MainAppRoutes = () => (
             <ReactRouterDOM.Route path="/myspace" element={<SectionRouteGuard sectionId="mySpace"><MySpacePage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/myspace/uploads" element={<SectionRouteGuard sectionId="mySpace"><UploadsPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/profile" element={<ProfilePage />} />
+            <ReactRouterDOM.Route path="/profile/:userId" element={<ProfilePage />} />
             <ReactRouterDOM.Route path="/settings" element={<SettingsPage />} />
             <ReactRouterDOM.Route path="/applications" element={<SectionRouteGuard sectionId="spotlight"><ApplicationStatusPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/saved-applications" element={<SectionRouteGuard sectionId="spotlight"><SavedApplicationsPage /></SectionRouteGuard>} />

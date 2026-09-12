@@ -9,6 +9,7 @@ import {
     withdrawCollabApplication,
     getRoleCapacity,
 } from '../../services/collabApplicationService';
+import { subscribeToUserPosts, deletePost } from '../../services/postService';
 import type { CollabApplication, CollabRole, Post } from '../../types';
 import {
     CheckIcon,
@@ -23,22 +24,43 @@ import {
 import { handleImageError } from '../utils/imageUtils';
 
 interface CollabManagementHubProps {
-    userCollabs: Post[];
-    onEditCollab: (collab: Post) => void;
-    onDeleteCollab: (collabId: string) => void;
-    onCreateCollab: () => void;
-    deletingId: string | null;
+    initialTab?: 'applications' | 'my_applications' | 'active' | 'published';
+    viewMode?: 'spotlight' | 'myspace' | 'all';
+    onClose?: () => void;
+    isModal?: boolean;
+    userCollabs?: Post[];
+    onEditCollab?: (collab: Post) => void;
+    onDeleteCollab?: (collabId: string) => void;
+    onCreateCollab?: () => void;
+    deletingId?: string | null;
 }
 
 export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
-    userCollabs,
+    initialTab = 'applications',
+    viewMode = 'all',
+    onClose,
+    isModal = false,
+    userCollabs: propUserCollabs,
     onEditCollab,
     onDeleteCollab,
     onCreateCollab,
-    deletingId,
+    deletingId: propDeletingId,
 }) => {
     const { currentUser } = useAuth();
-    const [subTab, setSubTab] = useState<'applications' | 'my_applications' | 'active' | 'published'>('applications');
+    const navigate = ReactRouterDOM.useNavigate();
+
+    const effectiveInitialTab = useMemo<'applications' | 'my_applications' | 'active' | 'published'>(() => {
+        if (viewMode === 'spotlight') {
+            return (initialTab === 'active') ? 'active' : 'applications';
+        }
+        if (viewMode === 'myspace') {
+            return (initialTab === 'my_applications') ? 'my_applications' : 'published';
+        }
+        return initialTab;
+    }, [viewMode, initialTab]);
+
+    const [subTab, setSubTab] = useState<'applications' | 'my_applications' | 'active' | 'published'>(effectiveInitialTab);
+    const [internalUserCollabs, setInternalUserCollabs] = useState<Post[]>([]);
     const [creatorApplications, setCreatorApplications] = useState<CollabApplication[]>([]);
     const [myApplications, setMyApplications] = useState<CollabApplication[]>([]);
     const [loadingCreatorApps, setLoadingCreatorApps] = useState(true);
@@ -51,6 +73,66 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
     const [expandedCollabIds, setExpandedCollabIds] = useState<Set<string>>(new Set());
     const [filterCollabId, setFilterCollabId] = useState<string>('all');
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'ACCEPTED' | 'DECLINED'>('ALL');
+    const [internalDeletingId, setInternalDeletingId] = useState<string | null>(null);
+    const [deleteConfirmCollab, setDeleteConfirmCollab] = useState<{ id: string; title: string } | null>(null);
+
+    const effectiveDeletingId = propDeletingId || internalDeletingId;
+
+    const handleDelete = async (postId: string) => {
+        if (onDeleteCollab) {
+            onDeleteCollab(postId);
+            setDeleteConfirmCollab(null);
+            return;
+        }
+        try {
+            setInternalDeletingId(postId);
+            await deletePost(postId);
+            setActionSuccess('Collab signal deleted successfully.');
+            setTimeout(() => setActionSuccess(null), 3000);
+        } catch (err: any) {
+            setActionError(err.message || 'Failed to delete collab.');
+            setTimeout(() => setActionError(null), 3000);
+        } finally {
+            setInternalDeletingId(null);
+            setDeleteConfirmCollab(null);
+        }
+    };
+
+    const handleEditCollab = (item: Post) => {
+        if (onEditCollab) {
+            onEditCollab(item);
+        } else {
+            if (onClose) onClose();
+            navigate(`/myspace/uploads?tab=Spotlight&subTab=Collabs&editPostId=${item.id}`);
+        }
+    };
+
+    const handleViewCollab = (collabId: string) => {
+        if (onClose) onClose();
+        navigate(`/spotlight?tab=Collabs&collabId=${collabId}`);
+    };
+
+    useEffect(() => {
+        setSubTab(effectiveInitialTab);
+    }, [effectiveInitialTab]);
+
+    useEffect(() => {
+        if (propUserCollabs) return;
+        if (!currentUser?.uid) return;
+        const unsub = subscribeToUserPosts(
+            currentUser.uid,
+            (posts) => {
+                const collabs = posts.filter(
+                    (p) => p.category === 'collab' || p.type === 'collab' || Boolean(p.collabDetails)
+                );
+                setInternalUserCollabs(collabs);
+            },
+            (err) => console.error('[USER_COLLABS_SUB_ERROR]', err)
+        );
+        return () => unsub();
+    }, [currentUser?.uid, propUserCollabs]);
+
+    const userCollabs = propUserCollabs || internalUserCollabs;
 
     // Subscribe to applications on user's collabs (Creator Side)
     useEffect(() => {
@@ -210,7 +292,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                 <div className="p-3 bg-emerald-950/40 border border-emerald-800/80 text-emerald-300 text-xs flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <CheckIcon className="w-4 h-4 text-emerald-400" />
-                        <span><span className="font-bold">// STATUS_UPDATE:</span> {actionSuccess}</span>
+                        <span><span className="font-bold">// STATUS UPDATE:</span> {actionSuccess}</span>
                     </div>
                     <button onClick={() => setActionSuccess(null)} className="text-zinc-500 hover:text-white">
                         <CloseIcon className="w-4 h-4" />
@@ -218,82 +300,129 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                 </div>
             )}
 
+            {/* My Space Header (when inside My Space workspace) */}
+            {viewMode === 'myspace' && !isModal && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800">
+                    <div>
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest block font-bold">// MY COLLABS</span>
+                        <h2 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider">COLLAB WORKSPACE</h2>
+                    </div>
+                    {onCreateCollab && (
+                        <button
+                            type="button"
+                            onClick={onCreateCollab}
+                            className="px-3.5 py-1.5 bg-white text-black hover:bg-zinc-200 text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 self-start sm:self-auto"
+                        >
+                            <PlusIcon className="w-3.5 h-3.5" />
+                            <span>// CREATE COLLAB</span>
+                        </button>
+                    )}
+                </div>
+            )}
+
             {/* Sub-Tabs Navigation */}
-            <div className="border border-zinc-800 bg-[#0c0c0e] p-1 flex flex-wrap gap-1">
-                <button
-                    onClick={() => setSubTab('applications')}
-                    className={`px-3 py-1.5 text-xs uppercase tracking-wider flex items-center gap-2 border transition-all ${
-                        subTab === 'applications'
-                            ? 'bg-white text-black border-white font-bold'
-                            : 'bg-black/50 text-zinc-400 border-zinc-850 hover:border-zinc-700 hover:text-white'
-                    }`}
-                >
-                    <span>// COLLAB_APPLICATIONS</span>
-                    {pendingCreatorAppsCount > 0 && (
-                        <span className={`px-1.5 py-0.2 rounded-none text-[10px] font-bold ${
-                            subTab === 'applications' ? 'bg-black text-amber-400' : 'bg-amber-950/80 text-amber-300 border border-amber-800'
-                        }`}>
-                            {pendingCreatorAppsCount}
-                        </span>
-                    )}
-                </button>
+            <div className="border border-zinc-800 bg-[#0c0c0e] p-1 flex flex-wrap items-center justify-between gap-1">
+                <div className="flex flex-wrap gap-1">
+                    {/* Spotlight View Mode shows INCOMING and ACTIVE */}
+                    {(viewMode === 'spotlight' || viewMode === 'all') && (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => setSubTab('applications')}
+                                className={`px-3 py-1.5 text-xs uppercase tracking-wider flex items-center gap-2 border transition-all ${
+                                    subTab === 'applications'
+                                        ? 'bg-white text-black border-white font-bold'
+                                        : 'bg-black/50 text-zinc-400 border-zinc-850 hover:border-zinc-700 hover:text-white'
+                                }`}
+                            >
+                                <span>// INCOMING COLLABS</span>
+                                {pendingCreatorAppsCount > 0 && (
+                                    <span className={`px-1.5 py-0.2 rounded-none text-[10px] font-bold ${
+                                        subTab === 'applications' ? 'bg-black text-amber-400' : 'bg-amber-950/80 text-amber-300 border border-amber-800'
+                                    }`}>
+                                        {pendingCreatorAppsCount}
+                                    </span>
+                                )}
+                            </button>
 
-                <button
-                    onClick={() => setSubTab('my_applications')}
-                    className={`px-3 py-1.5 text-xs uppercase tracking-wider flex items-center gap-2 border transition-all ${
-                        subTab === 'my_applications'
-                            ? 'bg-white text-black border-white font-bold'
-                            : 'bg-black/50 text-zinc-400 border-zinc-850 hover:border-zinc-700 hover:text-white'
-                    }`}
-                >
-                    <span>// MY_APPLICATIONS</span>
-                    {pendingMyAppsCount > 0 && (
-                        <span className={`px-1.5 py-0.2 rounded-none text-[10px] font-bold ${
-                            subTab === 'my_applications' ? 'bg-black text-amber-400' : 'bg-amber-950/80 text-amber-300 border border-amber-800'
-                        }`}>
-                            {pendingMyAppsCount}
-                        </span>
+                            <button
+                                type="button"
+                                onClick={() => setSubTab('active')}
+                                className={`px-3 py-1.5 text-xs uppercase tracking-wider flex items-center gap-2 border transition-all ${
+                                    subTab === 'active'
+                                        ? 'bg-white text-black border-white font-bold'
+                                        : 'bg-black/50 text-zinc-400 border-zinc-850 hover:border-zinc-700 hover:text-white'
+                                }`}
+                            >
+                                <span>// ACTIVE COLLABS</span>
+                                {activeCollaborations.total > 0 && (
+                                    <span className={`px-1.5 py-0.2 rounded-none text-[10px] font-bold ${
+                                        subTab === 'active' ? 'bg-black text-emerald-400' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
+                                    }`}>
+                                        {activeCollaborations.total}
+                                    </span>
+                                )}
+                            </button>
+                        </>
                     )}
-                </button>
 
-                <button
-                    onClick={() => setSubTab('active')}
-                    className={`px-3 py-1.5 text-xs uppercase tracking-wider flex items-center gap-2 border transition-all ${
-                        subTab === 'active'
-                            ? 'bg-white text-black border-white font-bold'
-                            : 'bg-black/50 text-zinc-400 border-zinc-850 hover:border-zinc-700 hover:text-white'
-                    }`}
-                >
-                    <span>// ACTIVE_COLLABORATIONS</span>
-                    {activeCollaborations.total > 0 && (
-                        <span className={`px-1.5 py-0.2 rounded-none text-[10px] font-bold ${
-                            subTab === 'active' ? 'bg-black text-emerald-400' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
-                        }`}>
-                            {activeCollaborations.total}
-                        </span>
+                    {/* My Space View Mode shows PUBLISHED and MY APPLICATIONS */}
+                    {(viewMode === 'myspace' || viewMode === 'all') && (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => setSubTab('published')}
+                                className={`px-3 py-1.5 text-xs uppercase tracking-wider flex items-center gap-2 border transition-all ${
+                                    subTab === 'published'
+                                        ? 'bg-white text-black border-white font-bold'
+                                        : 'bg-black/50 text-zinc-400 border-zinc-850 hover:border-zinc-700 hover:text-white'
+                                }`}
+                            >
+                                <span>// PUBLISHED COLLABS</span>
+                                <span className="text-[10px] text-zinc-500">({userCollabs.length})</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setSubTab('my_applications')}
+                                className={`px-3 py-1.5 text-xs uppercase tracking-wider flex items-center gap-2 border transition-all ${
+                                    subTab === 'my_applications'
+                                        ? 'bg-white text-black border-white font-bold'
+                                        : 'bg-black/50 text-zinc-400 border-zinc-850 hover:border-zinc-700 hover:text-white'
+                                }`}
+                            >
+                                <span>// MY APPLICATIONS</span>
+                                {pendingMyAppsCount > 0 && (
+                                    <span className={`px-1.5 py-0.2 rounded-none text-[10px] font-bold ${
+                                        subTab === 'my_applications' ? 'bg-black text-amber-400' : 'bg-amber-950/80 text-amber-300 border border-amber-800'
+                                    }`}>
+                                        {pendingMyAppsCount}
+                                    </span>
+                                )}
+                            </button>
+                        </>
                     )}
-                </button>
+                </div>
 
-                <button
-                    onClick={() => setSubTab('published')}
-                    className={`px-3 py-1.5 text-xs uppercase tracking-wider flex items-center gap-2 border transition-all ${
-                        subTab === 'published'
-                            ? 'bg-white text-black border-white font-bold'
-                            : 'bg-black/50 text-zinc-400 border-zinc-850 hover:border-zinc-700 hover:text-white'
-                    }`}
-                >
-                    <span>// PUBLISHED_COLLABS</span>
-                    <span className="text-[10px] text-zinc-500">({userCollabs.length})</span>
-                </button>
+                {viewMode === 'myspace' && isModal && onCreateCollab && (
+                    <button
+                        type="button"
+                        onClick={onCreateCollab}
+                        className="px-2.5 py-1 bg-white text-black hover:bg-zinc-200 text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1"
+                    >
+                        <PlusIcon className="w-3.5 h-3.5" />
+                        <span>// CREATE COLLAB</span>
+                    </button>
+                )}
             </div>
 
-            {/* TAB 1: COLLAB_APPLICATIONS (Creator Side) */}
+            {/* TAB 1: INCOMING COLLABS (Creator Side) */}
             {subTab === 'applications' && (
                 <div className="space-y-4">
                     {/* Filter Bar */}
                     <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-[#0c0c0e] border border-zinc-800 text-xs">
                         <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-zinc-500 uppercase text-[10px] tracking-wider">// FILTER_COLLAB:</span>
+                            <span className="text-zinc-500 uppercase text-[10px] tracking-wider">// FILTER COLLAB:</span>
                             <select
                                 value={filterCollabId}
                                 onChange={(e) => setFilterCollabId(e.target.value)}
@@ -337,11 +466,11 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                     {loadingCreatorApps ? (
                         <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e]">
                             <div className="w-6 h-6 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
-                            <p className="text-xs text-zinc-500 uppercase tracking-wider">// SYNCHRONIZING_APPLICATIONS...</p>
+                            <p className="text-xs text-zinc-500 uppercase tracking-wider">// SYNCHRONIZING APPLICATIONS...</p>
                         </div>
                     ) : filteredCreatorApps.length === 0 ? (
                         <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e] space-y-2">
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// COLLAB_APPLICATIONS</span>
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// INCOMING COLLABS</span>
                             <h3 className="text-sm font-bold text-white uppercase tracking-wider">No Applications Found</h3>
                             <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
                                 {userCollabs.length === 0
@@ -377,7 +506,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                         {/* Collab Reference Banner */}
                                         <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-zinc-850">
                                             <div>
-                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// PROJECT_TARGET</span>
+                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// PROJECT TARGET</span>
                                                 <h4 className="text-xs font-bold text-white uppercase tracking-wider">
                                                     "{app.collabTitle}"
                                                 </h4>
@@ -404,7 +533,12 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                                             {/* Left: Applicant details */}
                                             <div className="flex items-start gap-3 flex-1 min-w-0">
-                                                <div className="w-10 h-10 bg-zinc-900 border border-zinc-700 flex items-center justify-center flex-shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => navigate(`/profile/${app.applicantId}`)}
+                                                    className="w-10 h-10 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 flex items-center justify-center flex-shrink-0 cursor-pointer transition-colors"
+                                                    title={`View ${app.applicant?.displayName || 'Applicant'}'s Profile`}
+                                                >
                                                     {app.applicant?.photoURL ? (
                                                         <img
                                                             src={app.applicant.photoURL}
@@ -417,13 +551,17 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                                             {(app.applicant?.displayName || 'A').charAt(0).toUpperCase()}
                                                         </span>
                                                     )}
-                                                </div>
+                                                </button>
 
                                                 <div className="space-y-1 min-w-0 flex-1">
                                                     <div className="flex flex-wrap items-center gap-2">
-                                                        <span className="font-bold text-white text-sm">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => navigate(`/profile/${app.applicantId}`)}
+                                                            className="font-bold text-white text-sm hover:underline text-left cursor-pointer"
+                                                        >
                                                             {app.applicant?.displayName}
-                                                        </span>
+                                                        </button>
                                                         <span className="text-zinc-500 text-xs">
                                                             @{app.applicant?.username}
                                                         </span>
@@ -470,10 +608,20 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                             {/* Right: Actions */}
                                             <div className="flex flex-row md:flex-col items-center md:items-end gap-2 flex-shrink-0 pt-2 md:pt-0">
                                                 <button
-                                                    onClick={() => setSelectedApplicant(app)}
-                                                    className="px-3 py-1.5 bg-black hover:bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white text-xs uppercase tracking-wider transition-colors w-full md:w-auto text-center"
+                                                    type="button"
+                                                    onClick={() => navigate(`/profile/${app.applicantId}`)}
+                                                    className="px-3 py-1.5 bg-black hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white text-xs uppercase tracking-wider transition-colors w-full md:w-auto text-center"
+                                                    title="View canonical INVOX profile"
                                                 >
                                                     // VIEW PROFILE
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedApplicant(app)}
+                                                    className="px-2.5 py-1 text-[11px] text-zinc-500 hover:text-zinc-300 uppercase tracking-wider transition-colors"
+                                                    title="View Application Dossier & Snapshot"
+                                                >
+                                                    // DOSSIER
                                                 </button>
 
                                                 {app.status === 'PENDING' && (
@@ -502,7 +650,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                         {/* Application Message */}
                                         {app.message && (
                                             <div className="p-3 bg-black border border-zinc-850 text-xs text-zinc-300 space-y-1">
-                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// WHY_YOU?</span>
+                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// WHY YOU?</span>
                                                 <p className="leading-relaxed whitespace-pre-wrap">{app.message}</p>
                                             </div>
                                         )}
@@ -510,7 +658,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                         {/* Supporting Document */}
                                         {app.supportingDocument?.url && (
                                             <div className="p-3 bg-black border border-zinc-850 space-y-2">
-                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// SUPPORTING_DOCUMENT</span>
+                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// SUPPORTING DOCUMENT</span>
                                                 <div className="flex items-center justify-between gap-3 flex-wrap">
                                                     <div className="flex items-center gap-2 text-xs font-mono text-zinc-200">
                                                         <svg className="w-4 h-4 text-zinc-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -524,7 +672,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                                         rel="noopener noreferrer"
                                                         className="text-[11px] font-mono text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-2.5 py-1 uppercase tracking-wider transition-colors inline-flex items-center gap-1.5"
                                                     >
-                                                        // VIEW_DOCUMENT
+                                                        // VIEW DOCUMENT
                                                     </a>
                                                 </div>
                                             </div>
@@ -537,17 +685,17 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                 </div>
             )}
 
-            {/* TAB 2: MY_APPLICATIONS (Applicant Side) */}
+            {/* TAB 2: MY APPLICATIONS (Applicant Side) */}
             {subTab === 'my_applications' && (
                 <div className="space-y-4">
                     {loadingMyApps ? (
                         <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e]">
                             <div className="w-6 h-6 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
-                            <p className="text-xs text-zinc-500 uppercase tracking-wider">// SYNCHRONIZING_MY_APPLICATIONS...</p>
+                            <p className="text-xs text-zinc-500 uppercase tracking-wider">// SYNCHRONIZING MY APPLICATIONS...</p>
                         </div>
                     ) : myApplications.length === 0 ? (
                         <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e] space-y-2">
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// MY_APPLICATIONS</span>
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// MY APPLICATIONS</span>
                             <h3 className="text-sm font-bold text-white uppercase tracking-wider">No Active Collab Applications</h3>
                             <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
                                 You haven't applied for any collaboration roles yet. Explore published Collabs in Spotlight to discover teams and apply for roles.
@@ -573,7 +721,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                     >
                                         <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-zinc-850">
                                             <div>
-                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// TARGET_PROJECT</span>
+                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// TARGET PROJECT</span>
                                                 <h4 className="text-sm font-bold text-white uppercase tracking-wider">
                                                     "{app.collabTitle}"
                                                 </h4>
@@ -637,7 +785,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
 
                                         {app.message && (
                                             <div className="p-2.5 bg-black border border-zinc-850 text-xs text-zinc-400">
-                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-0.5">// YOUR_MESSAGE</span>
+                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-0.5">// YOUR MESSAGE</span>
                                                 <p className="leading-relaxed">{app.message}</p>
                                             </div>
                                         )}
@@ -645,7 +793,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                         {/* Attached Document */}
                                         {app.supportingDocument?.url && (
                                             <div className="p-2.5 bg-black border border-zinc-850 text-xs text-zinc-400">
-                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// ATTACHED_DOCUMENT</span>
+                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// ATTACHED DOCUMENT</span>
                                                 <div className="flex items-center justify-between gap-3 flex-wrap">
                                                     <div className="flex items-center gap-2 font-mono text-zinc-200">
                                                         <svg className="w-4 h-4 text-zinc-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -659,7 +807,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                                         rel="noopener noreferrer"
                                                         className="text-[10px] font-mono text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-2 py-0.5 uppercase tracking-wider transition-colors inline-flex items-center gap-1"
                                                     >
-                                                        // VIEW_DOCUMENT
+                                                        // VIEW DOCUMENT
                                                     </a>
                                                 </div>
                                             </div>
@@ -672,17 +820,17 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                 </div>
             )}
 
-            {/* TAB 3: ACTIVE_COLLABORATIONS */}
+            {/* TAB 3: ACTIVE COLLABS */}
             {subTab === 'active' && (
                 <div className="space-y-4">
                     <div className="p-3 bg-[#0c0c0e] border border-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
-                        <span>// ACTIVE_COLLABORATIONS_ROSTER</span>
+                        <span>// ACTIVE COLLABORATIONS ROSTER</span>
                         <span className="text-[11px] text-zinc-500">Confirmed & accepted project partnerships</span>
                     </div>
 
                     {activeCollaborations.total === 0 ? (
                         <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e] space-y-2">
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// ACTIVE_COLLABORATIONS</span>
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// ACTIVE COLLABS</span>
                             <h3 className="text-sm font-bold text-white uppercase tracking-wider">No Active Collaborations Yet</h3>
                             <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
                                 When you accept an applicant for your Collab or a creator accepts your application, the confirmed collaboration will appear here.
@@ -693,24 +841,35 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                             {/* Collaborations on My Projects */}
                             {activeCollaborations.asCreator.length > 0 && (
                                 <div className="space-y-2.5">
-                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// COLLABORATORS_ON_YOUR_PROJECTS</span>
+                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// COLLABORATORS ON YOUR PROJECTS</span>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         {activeCollaborations.asCreator.map(app => (
                                             <div key={app.id} className="p-3.5 bg-[#0c0c0e] border border-emerald-900/60 space-y-2.5">
                                                 <div className="flex items-center justify-between border-b border-zinc-850 pb-2">
-                                                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">// ACTIVE_COLLABORATOR</span>
+                                                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">// ACTIVE COLLABORATOR</span>
                                                     <span className="text-[10px] text-zinc-500">SINCE {new Date(app.updatedAt || app.createdAt).toLocaleDateString()}</span>
                                                 </div>
                                                 <div className="flex items-start gap-3">
-                                                    <div className="w-9 h-9 bg-zinc-900 border border-zinc-700 flex items-center justify-center flex-shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => navigate(`/profile/${app.applicantId}`)}
+                                                        className="w-9 h-9 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 flex items-center justify-center flex-shrink-0 cursor-pointer transition-colors"
+                                                        title={`View ${app.applicant?.displayName || 'collaborator'}'s Profile`}
+                                                    >
                                                         {app.applicant?.photoURL ? (
                                                             <img src={app.applicant.photoURL} alt={app.applicant.displayName} className="w-full h-full object-cover" />
                                                         ) : (
                                                             <span className="font-bold text-white text-xs">{(app.applicant?.displayName || 'C').charAt(0)}</span>
                                                         )}
-                                                    </div>
+                                                    </button>
                                                     <div className="min-w-0 flex-1">
-                                                        <h4 className="font-bold text-white text-xs truncate">{app.applicant?.displayName}</h4>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => navigate(`/profile/${app.applicantId}`)}
+                                                            className="font-bold text-white text-xs truncate hover:underline text-left block"
+                                                        >
+                                                            {app.applicant?.displayName}
+                                                        </button>
                                                         <p className="text-[11px] text-zinc-400">@{app.applicant?.username}</p>
                                                         <span className="inline-block mt-1 bg-zinc-900 border border-zinc-800 text-zinc-200 text-[10px] px-2 py-0.5 font-bold">
                                                             ROLE: {app.roleTitle}
@@ -720,12 +879,20 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                                 <div className="pt-1 text-[11px] text-zinc-400">
                                                     <span className="text-zinc-500 font-bold">PROJECT:</span> "{app.collabTitle}"
                                                 </div>
-                                                <div className="flex justify-end pt-1">
+                                                <div className="flex justify-end pt-1 gap-3">
                                                     <button
-                                                        onClick={() => setSelectedApplicant(app)}
+                                                        type="button"
+                                                        onClick={() => navigate(`/profile/${app.applicantId}`)}
                                                         className="text-[10px] text-zinc-300 hover:text-white underline font-bold uppercase tracking-wider"
                                                     >
-                                                        // VIEW DETAILS
+                                                        // VIEW PROFILE
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedApplicant(app)}
+                                                        className="text-[10px] text-zinc-500 hover:text-zinc-300 uppercase tracking-wider"
+                                                    >
+                                                        // DOSSIER
                                                     </button>
                                                 </div>
                                             </div>
@@ -737,12 +904,12 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                             {/* Projects Where User is Collaborating */}
                             {activeCollaborations.asApplicant.length > 0 && (
                                 <div className="space-y-2.5">
-                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// PROJECTS_YOU_ARE_COLLABORATING_ON</span>
+                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// PROJECTS YOU ARE COLLABORATING ON</span>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         {activeCollaborations.asApplicant.map(app => (
                                             <div key={app.id} className="p-3.5 bg-[#0c0c0e] border border-emerald-900/60 space-y-2.5">
                                                 <div className="flex items-center justify-between border-b border-zinc-850 pb-2">
-                                                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">// CONFIRMED_ROLE</span>
+                                                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">// CONFIRMED ROLE</span>
                                                     <span className="text-[10px] text-zinc-500">SINCE {new Date(app.updatedAt || app.createdAt).toLocaleDateString()}</span>
                                                 </div>
                                                 <div>
@@ -776,12 +943,12 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                 </div>
             )}
 
-            {/* TAB 4: PUBLISHED_COLLABS (Existing creator collabs with EDIT & DELETE) */}
+            {/* TAB 4: PUBLISHED COLLABS (Existing creator collabs with EDIT & DELETE) */}
             {subTab === 'published' && (
                 <div className="space-y-4">
                     {userCollabs.length === 0 ? (
                         <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e] space-y-2">
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// PUBLISHED_COLLABS</span>
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// PUBLISHED COLLABS</span>
                             <h3 className="text-sm font-bold text-white uppercase tracking-wider">No Published Collabs</h3>
                             <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
                                 You haven't published any Collab projects. Publish your project to recruit talent, assemble teams, and build together.
@@ -811,7 +978,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                                 <span className="text-[10px] font-bold text-white uppercase tracking-widest border border-zinc-700 px-1.5 py-0.5 bg-zinc-900/50">
                                                     {item.domain || item.category || 'Technology'}
                                                 </span>
-                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider">// COLLAB_SIGNAL</span>
+                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider">// COLLAB SIGNAL</span>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <span className="text-[10px] text-zinc-500">{new Date(item.createdAt).toLocaleDateString()}</span>
@@ -829,24 +996,36 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                                     {activeMenuCollabId === item.id && (
                                                         <div 
                                                             onClick={(e) => e.stopPropagation()} 
-                                                            className="absolute right-0 mt-1 w-36 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono"
+                                                            className="absolute right-0 mt-1 w-44 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono"
                                                         >
                                                             <button
                                                                 onClick={() => {
                                                                     setActiveMenuCollabId(null);
-                                                                    onEditCollab(item);
+                                                                    handleViewCollab(item.id);
                                                                 }}
                                                                 className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-zinc-900 uppercase tracking-wider flex items-center gap-2"
                                                             >
-                                                                <PencilSquareIcon className="w-3.5 h-3.5 text-zinc-400" />
-                                                                <span>// EDIT</span>
+                                                                <span>// VIEW COLLAB</span>
                                                             </button>
                                                             <button
                                                                 onClick={() => {
                                                                     setActiveMenuCollabId(null);
-                                                                    onDeleteCollab(item.id);
+                                                                    handleEditCollab(item);
                                                                 }}
-                                                                disabled={deletingId === item.id}
+                                                                className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-zinc-900 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-850"
+                                                            >
+                                                                <PencilSquareIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                                <span>// EDIT IN MY SPACE</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setActiveMenuCollabId(null);
+                                                                    setDeleteConfirmCollab({
+                                                                        id: item.id,
+                                                                        title: item.aiSummary || item.oneLine || 'Collab Signal',
+                                                                    });
+                                                                }}
+                                                                disabled={effectiveDeletingId === item.id}
                                                                 className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-red-950/30 hover:text-red-300 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1"
                                                             >
                                                                 <TrashIcon className="w-3.5 h-3.5" />
@@ -873,7 +1052,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                         <div className="p-4 flex-grow space-y-3">
                                             {/* Hook */}
                                             <div>
-                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-0.5">// THE_HOOK</span>
+                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-0.5">// THE HOOK</span>
                                                 <h4 className="text-sm font-bold text-white leading-snug uppercase tracking-wider">
                                                     "{item.aiSummary || item.oneLine}"
                                                 </h4>
@@ -881,7 +1060,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
 
                                             {/* Project Overview */}
                                             <div>
-                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-0.5">// PROJECT_OVERVIEW</span>
+                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-0.5">// PROJECT OVERVIEW</span>
                                                 <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">{item.content}</p>
                                             </div>
 
@@ -890,7 +1069,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                                 <div className="p-3 bg-black/60 border border-zinc-800/80 space-y-2.5 text-xs">
                                                     {item.collabDetails.roles && item.collabDetails.roles.length > 0 && (
                                                         <div>
-                                                            <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// ROLES_OFFERED</span>
+                                                            <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// ROLES OFFERED</span>
                                                             <div className="flex flex-wrap gap-1.5">
                                                                 {item.collabDetails.roles.map((r, rIdx) => {
                                                                     const cap = getRoleCapacity(r, creatorApplications);
@@ -928,7 +1107,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                                     <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-zinc-800/60 text-[11px]">
                                                         {item.collabDetails.projectStatus && (
                                                             <div>
-                                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// PROJECT_STATUS</span>
+                                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// PROJECT STATUS</span>
                                                                 <span className="text-zinc-200 font-bold bg-zinc-900 px-1.5 py-0.5 border border-zinc-800 inline-block">
                                                                     {item.collabDetails.projectStatus}
                                                                 </span>
@@ -976,8 +1155,8 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                                 </div>
                                             )}
 
-                                            {/* Applications Shortcut Button */}
-                                            <div className="pt-2">
+                                            {/* Applications and Action Buttons */}
+                                            <div className="pt-2 space-y-2">
                                                 <button
                                                     onClick={() => {
                                                         setFilterCollabId(item.id);
@@ -985,13 +1164,29 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                                     }}
                                                     className="w-full bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-white text-xs font-bold py-2 px-3 uppercase tracking-wider flex items-center justify-between transition-colors"
                                                 >
-                                                    <span>// VIEW APPLICATIONS</span>
+                                                    <span>// MANAGE APPLICATIONS</span>
                                                     <span className={`text-[10px] px-1.5 py-0.5 ${
                                                         pendingCount > 0 ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-black text-zinc-400'
                                                     }`}>
                                                         {incomingApps.length} TOTAL ({pendingCount} PENDING)
                                                     </span>
                                                 </button>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleViewCollab(item.id)}
+                                                        className="w-full bg-black hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white text-[10px] font-bold py-1.5 px-2 uppercase tracking-wider transition-colors text-center"
+                                                    >
+                                                        // VIEW COLLAB
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleEditCollab(item)}
+                                                        className="w-full bg-black hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white text-[10px] font-bold py-1.5 px-2 uppercase tracking-wider transition-colors text-center"
+                                                    >
+                                                        // EDIT IN MY SPACE
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -1012,25 +1207,49 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                         {/* Modal Header */}
                         <div className="flex items-center justify-between p-4 border-b border-zinc-800 bg-black">
                             <div>
-                                <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block">// APPLICANT_DOSSIER</span>
+                                <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block">// APPLICANT DOSSIER</span>
                                 <h3 className="text-sm font-bold text-white uppercase tracking-wider mt-0.5">
                                     {selectedApplicant.applicant?.displayName}
                                 </h3>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => setSelectedApplicant(null)}
-                                className="text-zinc-500 hover:text-white p-1 transition-colors"
-                            >
-                                <CloseIcon className="w-5 h-5" />
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const targetId = selectedApplicant.applicantId;
+                                        setSelectedApplicant(null);
+                                        navigate(`/profile/${targetId}`);
+                                    }}
+                                    className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5"
+                                    title="Navigate to real INVOX profile"
+                                >
+                                    <ProfileIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                    <span>// VIEW PROFILE</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedApplicant(null)}
+                                    className="text-zinc-500 hover:text-white p-1 transition-colors"
+                                >
+                                    <CloseIcon className="w-5 h-5" />
+                                </button>
+                            </div>
                         </div>
 
                         {/* Modal Body */}
                         <div className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs">
                             {/* Profile Snapshot */}
                             <div className="flex items-start gap-3 p-3 bg-black border border-zinc-850">
-                                <div className="w-12 h-12 bg-zinc-900 border border-zinc-700 flex items-center justify-center flex-shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const targetId = selectedApplicant.applicantId;
+                                        setSelectedApplicant(null);
+                                        navigate(`/profile/${targetId}`);
+                                    }}
+                                    className="w-12 h-12 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 flex items-center justify-center flex-shrink-0 cursor-pointer transition-colors"
+                                    title={`View ${selectedApplicant.applicant?.displayName || 'Applicant'}'s Profile`}
+                                >
                                     {selectedApplicant.applicant?.photoURL ? (
                                         <img
                                             src={selectedApplicant.applicant.photoURL}
@@ -1043,12 +1262,20 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                             {(selectedApplicant.applicant?.displayName || 'U').charAt(0).toUpperCase()}
                                         </span>
                                     )}
-                                </div>
+                                </button>
                                 <div className="min-w-0 flex-1 space-y-1">
                                     <div className="flex items-center gap-2">
-                                        <span className="font-bold text-white text-sm">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const targetId = selectedApplicant.applicantId;
+                                                setSelectedApplicant(null);
+                                                navigate(`/profile/${targetId}`);
+                                            }}
+                                            className="font-bold text-white text-sm hover:underline text-left cursor-pointer"
+                                        >
                                             {selectedApplicant.applicant?.displayName}
-                                        </span>
+                                        </button>
                                         <span className="text-zinc-500 text-xs">
                                             @{selectedApplicant.applicant?.username}
                                         </span>
@@ -1065,7 +1292,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                             {/* Applied Role & Status */}
                             <div className="grid grid-cols-2 gap-2 p-3 bg-zinc-950 border border-zinc-850">
                                 <div>
-                                    <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// APPLIED_ROLE</span>
+                                    <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// APPLIED ROLE</span>
                                     <span className="font-bold text-white text-xs">{selectedApplicant.roleTitle}</span>
                                 </div>
                                 <div>
@@ -1092,10 +1319,10 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                             {/* Skills */}
                             {selectedApplicant.applicant?.skills && selectedApplicant.applicant.skills.length > 0 && (
                                 <div className="space-y-1">
-                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// VERIFIED_SKILLS</span>
+                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// VERIFIED SKILLS</span>
                                     <div className="flex flex-wrap gap-1.5 p-3 bg-black border border-zinc-850">
                                         {selectedApplicant.applicant.skills.map((sk, idx) => (
-                                            <span key={idx} className="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-300 px-2 py-0.5">
+                                             <span key={idx} className="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-300 px-2 py-0.5">
                                                 {sk}
                                             </span>
                                         ))}
@@ -1106,7 +1333,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                             {/* Application Message */}
                             {selectedApplicant.message && (
                                 <div className="space-y-1">
-                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// WHY_YOU?_MESSAGE</span>
+                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// WHY YOU MESSAGE</span>
                                     <p className="p-3 bg-black border border-zinc-850 text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap">
                                         {selectedApplicant.message}
                                     </p>
@@ -1116,7 +1343,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                             {/* Portfolio / Links */}
                             {(selectedApplicant.applicant?.portfolioURL || selectedApplicant.applicant?.website) && (
                                 <div className="p-3 bg-black border border-zinc-850 text-xs space-y-1">
-                                    <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// SHOWCASE_PORTFOLIO</span>
+                                    <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// SHOWCASE PORTFOLIO</span>
                                     <a
                                         href={selectedApplicant.applicant.portfolioURL || selectedApplicant.applicant.website}
                                         target="_blank"
@@ -1131,7 +1358,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                             {/* Supporting Document */}
                             {selectedApplicant.supportingDocument?.url && (
                                 <div className="space-y-1">
-                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// SUPPORTING_DOCUMENT</span>
+                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// SUPPORTING DOCUMENT</span>
                                     <div className="p-3 bg-black border border-zinc-850 flex items-center justify-between gap-3 flex-wrap">
                                         <div className="flex items-center gap-2 text-xs font-mono text-zinc-200">
                                             <svg className="w-4 h-4 text-zinc-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1145,7 +1372,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                             rel="noopener noreferrer"
                                             className="text-[11px] font-mono text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-2.5 py-1 uppercase tracking-wider transition-colors inline-flex items-center gap-1.5"
                                         >
-                                            // VIEW_DOCUMENT
+                                            // VIEW DOCUMENT
                                         </a>
                                     </div>
                                 </div>
@@ -1186,6 +1413,58 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                     </button>
                                 </div>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deleteConfirmCollab && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm">
+                    <div 
+                        className="bg-[#0c0c0e] border border-zinc-800 w-full max-w-md p-5 font-mono text-zinc-300 shadow-2xl space-y-4"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                            <span className="text-xs font-bold text-red-400 uppercase tracking-wider">// CONFIRM DELETION</span>
+                            <button
+                                type="button"
+                                onClick={() => setDeleteConfirmCollab(null)}
+                                className="text-zinc-500 hover:text-white p-1"
+                            >
+                                <CloseIcon className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-2 text-xs">
+                            <p className="text-zinc-300">
+                                Are you sure you want to delete this published Collab signal?
+                            </p>
+                            <p className="p-2.5 bg-black border border-zinc-850 text-white font-bold">
+                                "{deleteConfirmCollab.title}"
+                            </p>
+                            <p className="text-zinc-500 text-[11px]">
+                                This will remove the listing from Spotlight and close open role applications.
+                            </p>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+                            <button
+                                type="button"
+                                onClick={() => setDeleteConfirmCollab(null)}
+                                className="px-3 py-1.5 bg-transparent hover:bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white text-xs uppercase tracking-wider"
+                            >
+                                CANCEL
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleDelete(deleteConfirmCollab.id)}
+                                disabled={effectiveDeletingId === deleteConfirmCollab.id}
+                                className="px-3 py-1.5 bg-red-950/60 hover:bg-red-900 border border-red-800 text-red-300 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"
+                            >
+                                <TrashIcon className="w-3.5 h-3.5" />
+                                <span>{effectiveDeletingId === deleteConfirmCollab.id ? 'DELETING...' : '// DELETE COLLAB'}</span>
+                            </button>
                         </div>
                     </div>
                 </div>

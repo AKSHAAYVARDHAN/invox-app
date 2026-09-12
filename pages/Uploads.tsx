@@ -7,8 +7,8 @@ import CreateChannelModal from '../components/uploads/CreateChannelModal';
 import { CreatePollModal } from '../components/uploads/CreatePollModal';
 import { PollCard } from '../components/feed/PollCard';
 import { EditPostModal } from '../components/feed/EditPostModal';
-import { CollabManagementHub } from '../components/spotlight/CollabManagementHub';
 import { handleImageError } from '../components/utils/imageUtils';
+import { CollabManagementHub } from '../components/spotlight/CollabManagementHub';
 import { useAuth } from '../contexts/AuthContext';
 import { createPost, deletePost, subscribeToUserPosts } from '../services/postService';
 import { subscribeToUserChannels, deleteChannel } from '../services/channelService';
@@ -502,6 +502,7 @@ const UploadsPage = () => {
 
     const isChannelsView = activeTab === 'Explore' && exploreSubTab === 'Channels';
     const isDiscoverView = activeTab === 'Explore' && exploreSubTab === 'Discover';
+    const isCollabView = activeTab === 'Spotlight' && spotlightSubTab === 'Collabs';
 
     return (
         <div className="space-y-4">
@@ -1041,8 +1042,24 @@ const UploadsPage = () => {
                         </div>
                     )}
                 </div>
+            ) : isCollabView ? (
+                /* DEDICATED MY SPACE COLLAB WORKSPACE (PUBLISHED SIGNALS & MY APPLICATIONS) */
+                <CollabManagementHub
+                    viewMode="myspace"
+                    onCreateCollab={() => {
+                        setOverrideContextName('Collab');
+                        setIsModalOpen(true);
+                    }}
+                    onEditCollab={(collab) => setEditingPost(collab)}
+                    onDeleteCollab={(collabId) => {
+                        const target = userPosts.find(p => p.id === collabId);
+                        if (target) {
+                            setPostToDelete({ id: target.id, title: target.title || target.oneLine || 'Collab Signal' });
+                        }
+                    }}
+                />
             ) : (
-                /* OTHER TABS: Explore, Spotlight, Hub */
+                /* OTHER TABS: Explore, Spotlight Showcase, Hub */
                 <div>
                     {/* Channel notice / filter in Explore -> Feeds */}
                     {activeTab === 'Explore' && exploreSubTab === 'Feeds' && (
@@ -1100,18 +1117,7 @@ const UploadsPage = () => {
                         </div>
                     )}
 
-                    {activeTab === 'Spotlight' && spotlightSubTab === 'Collabs' ? (
-                        <CollabManagementHub
-                            userCollabs={filteredItems}
-                            onEditCollab={(collab) => setEditingPost(collab)}
-                            onDeleteCollab={handleDelete}
-                            onCreateCollab={() => {
-                                setOverrideContextName('Collab');
-                                setIsModalOpen(true);
-                            }}
-                            deletingId={deletingId}
-                        />
-                    ) : loading ? (
+                    {loading ? (
                         <div className="py-20 flex justify-center items-center">
                             <div className="w-8 h-8 border-2 border-zinc-500 border-t-white rounded-full animate-spin"></div>
                         </div>

@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ProfileIcon, PencilIcon, GlobeAltIcon, CometIcon } from '../components/ui/Icons';
 import ProfileSkeleton from '../components/profile/ProfileSkeleton';
 import { handleImageError } from '../components/utils/imageUtils';
 import ImageZoomModal from '../components/ui/ImageZoomModal';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { uploadFile } from '../services/storageService';
 import { COLLECTIONS, updateDocument } from '../services/firestoreService';
 import { getFriendlyErrorMessage } from '../utils/errorHandler';
-import { updateUserAuthProfile } from '../services/authService';
+import { updateUserAuthProfile, subscribeUserProfile } from '../services/authService';
 import { computeProfileCompletion } from './Settings';
+import type { InvoxUser } from '../types';
 
 /* ─── helpers ─────────────────────────────────────────────────────────────── */
 
@@ -46,6 +47,13 @@ const Chip: React.FC<ChipProps> = ({ label, color = 'default' }) => (
 const ProfilePage = () => {
     const { currentUser, userProfile, loading } = useAuth();
     const navigate = useNavigate();
+    const { userId } = useParams<{ userId?: string }>();
+    const isOwnProfile = !userId || (Boolean(currentUser) && userId === currentUser?.uid);
+
+    const [targetProfile, setTargetProfile] = useState<InvoxUser | null>(null);
+    const [targetLoading, setTargetLoading] = useState<boolean>(!isOwnProfile);
+    const [targetError, setTargetError] = useState<string | null>(null);
+
     const [activeTab, setActiveTab] = useState('Posts');
     const profileTabs = ['Posts', 'Replies', 'Media', 'Likes'];
     const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
@@ -57,8 +65,43 @@ const ProfilePage = () => {
     const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null);
     const [localCoverUrl, setLocalCoverUrl]   = useState<string | null>(null);
 
+    useEffect(() => {
+        if (isOwnProfile || !userId) {
+            setTargetProfile(null);
+            setTargetLoading(false);
+            setTargetError(null);
+            return;
+        }
+
+        setTargetLoading(true);
+        setTargetError(null);
+
+        const unsubscribe = subscribeUserProfile(
+            userId,
+            (profile) => {
+                if (profile) {
+                    setTargetProfile(profile);
+                    setTargetError(null);
+                } else {
+                    setTargetProfile(null);
+                    setTargetError('The requested INVOX profile does not exist.');
+                }
+                setTargetLoading(false);
+            },
+            (err) => {
+                console.error('[PROFILE_SUBSCRIBE_ERROR] Failed to load user profile:', err);
+                setTargetError('Unable to load user profile.');
+                setTargetLoading(false);
+            }
+        );
+
+        return () => {
+            unsubscribe();
+        };
+    }, [userId, isOwnProfile]);
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'profile' | 'cover') => {
-        if (!e.target.files || !e.target.files[0] || !currentUser) return;
+        if (!e.target.files || !e.target.files[0] || !currentUser || !isOwnProfile) return;
         const file = e.target.files[0];
         setUploadError('');
         setUploadProgress(0);
@@ -123,26 +166,53 @@ const ProfilePage = () => {
         setUploadProgress(0);
     };
 
-    if (loading) return <ProfileSkeleton />;
-    if (!currentUser) return <div className="p-4 font-mono text-xs text-white">User not found.</div>;
+    if (isOwnProfile && loading) return <ProfileSkeleton />;
+    if (!isOwnProfile && targetLoading) return <ProfileSkeleton />;
+    if (isOwnProfile && !currentUser) return <div className="p-4 font-mono text-xs text-white">User not found.</div>;
+    if (!isOwnProfile && (!targetProfile || targetError)) {
+        return (
+            <div className="font-mono text-zinc-300 p-6 bg-[#0c0c0e] border border-zinc-800">
+                <button
+                    onClick={() => navigate(-1)}
+                    className="inline-flex items-center gap-2 mb-4 px-3 py-1.5 bg-black hover:bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white text-xs uppercase tracking-wider transition-colors"
+                >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                    <span>// BACK</span>
+                </button>
+                <div className="p-8 text-center space-y-2">
+                    <p className="text-sm font-bold text-white uppercase tracking-wider">// USER_PROFILE_NOT_FOUND</p>
+                    <p className="text-xs text-zinc-500">The requested INVOX user profile does not exist or has been removed.</p>
+                </div>
+            </div>
+        );
+    }
 
-    // Local previews take precedence; then Firestore data from context
-    const userAvatar    = localAvatarUrl || userProfile?.photoURL || currentUser?.photoURL || null;
-    const coverImageUrl = localCoverUrl  || userProfile?.coverPhotoURL || null;
+    const activeProfile = isOwnProfile ? userProfile : targetProfile;
 
-    const displayName = userProfile?.displayName || currentUser?.displayName || 'Anonymous User';
-    const username    = userProfile?.username    || currentUser?.email?.split('@')[0] || '';
-    const joinDate    = formatJoinDate(userProfile?.createdAt);
+    // Local previews take precedence for owner; then Firestore data
+    const userAvatar = isOwnProfile
+        ? (localAvatarUrl || userProfile?.photoURL || currentUser?.photoURL || null)
+        : (targetProfile?.photoURL || null);
 
-    // Completion — use centralized function
+    const coverImageUrl = isOwnProfile
+        ? (localCoverUrl || userProfile?.coverPhotoURL || null)
+        : (targetProfile?.coverPhotoURL || null);
+
+    const displayName = activeProfile?.displayName || (isOwnProfile ? currentUser?.displayName : '') || 'Invox Member';
+    const username = activeProfile?.username || (isOwnProfile ? currentUser?.email?.split('@')[0] : '') || 'member';
+    const joinDate = formatJoinDate(activeProfile?.createdAt);
+
+    // Completion — use centralized function (only evaluated for owner)
     const completion = computeProfileCompletion({
-        displayName:   userProfile?.displayName,
-        headline:      userProfile?.headline,
-        bio:           userProfile?.bio,
-        skills:        userProfile?.skills,
-        interests:     userProfile?.interests,
-        location:      (userProfile as any)?.location,
-        website:       (userProfile as any)?.website,
+        displayName:   activeProfile?.displayName,
+        headline:      activeProfile?.headline,
+        bio:           activeProfile?.bio,
+        skills:        activeProfile?.skills,
+        interests:     activeProfile?.interests,
+        location:      (activeProfile as any)?.location,
+        website:       (activeProfile as any)?.website,
         photoURL:      userAvatar,
         coverPhotoURL: coverImageUrl,
     });
@@ -157,15 +227,32 @@ const ProfilePage = () => {
         { label: 'Add Profile Photo', key: 'photoURL'   },
         { label: 'Add Cover Photo',   key: 'coverPhotoURL' },
     ].filter(s => {
-        if (s.key === 'skills')        return !(userProfile?.skills?.length);
+        if (s.key === 'skills')        return !(activeProfile?.skills?.length);
         if (s.key === 'photoURL')      return !userAvatar;
         if (s.key === 'coverPhotoURL') return !coverImageUrl;
-        return !(userProfile as any)?.[s.key];
+        return !(activeProfile as any)?.[s.key];
     }).slice(0, 4);
 
     return (
         <div className="font-mono text-zinc-300">
-            {uploadError && (
+            {!isOwnProfile && (
+                <div className="flex items-center justify-between mb-3">
+                    <button
+                        onClick={() => navigate(-1)}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#0c0c0e] hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors"
+                    >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        <span>// BACK</span>
+                    </button>
+                    <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest border border-zinc-800/80 px-2.5 py-1 bg-black">
+                        // INVOX_MEMBER_PROFILE
+                    </span>
+                </div>
+            )}
+
+            {uploadError && isOwnProfile && (
                 <p className="bg-red-950/80 border border-red-800 text-red-200 text-center p-3 mb-3 text-xs uppercase tracking-wider font-mono">
                     {uploadError}
                 </p>
@@ -177,7 +264,7 @@ const ProfilePage = () => {
                 {/* Cover Photo */}
                 <div className="relative group h-48 border-b border-zinc-800">
                     <div
-                        className="h-full w-full bg-zinc-900 bg-cover bg-center cursor-zoom-in transition-opacity"
+                        className={`h-full w-full bg-zinc-900 bg-cover bg-center ${coverImageUrl ? 'cursor-zoom-in' : ''} transition-opacity`}
                         style={coverImageUrl ? { backgroundImage: `url(${coverImageUrl})` } : {}}
                         onClick={() => coverImageUrl && setZoomedImageUrl(coverImageUrl)}
                     >
@@ -190,26 +277,28 @@ const ProfilePage = () => {
                         )}
                     </div>
 
-                    {/* Upload overlay */}
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <label className="cursor-pointer bg-zinc-900 border border-zinc-700 px-4 py-2 text-xs font-mono font-bold uppercase tracking-wider text-white hover:bg-zinc-800 transition-all flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                            {uploadingCover ? `Uploading ${uploadProgress}%` : '// UPDATE_COVER'}
-                            <input
-                                type="file"
-                                className="hidden"
-                                accept="image/jpeg,image/png,image/gif,image/webp"
-                                onChange={e => handleFileUpload(e, 'cover')}
-                                disabled={uploadingCover}
-                            />
-                        </label>
-                    </div>
+                    {/* Upload overlay only for owner */}
+                    {isOwnProfile && (
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <label className="cursor-pointer bg-zinc-900 border border-zinc-700 px-4 py-2 text-xs font-mono font-bold uppercase tracking-wider text-white hover:bg-zinc-800 transition-all flex items-center gap-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                {uploadingCover ? `Uploading ${uploadProgress}%` : '// UPDATE_COVER'}
+                                <input
+                                    type="file"
+                                    className="hidden"
+                                    accept="image/jpeg,image/png,image/gif,image/webp"
+                                    onChange={e => handleFileUpload(e, 'cover')}
+                                    disabled={uploadingCover}
+                                />
+                            </label>
+                        </div>
+                    )}
 
                     {/* Upload progress bar */}
-                    {uploadingCover && (
+                    {isOwnProfile && uploadingCover && (
                         <div className="absolute bottom-0 left-0 right-0 h-1 bg-zinc-800">
                             <div
                                 className="h-full bg-white transition-all"
@@ -226,7 +315,7 @@ const ProfilePage = () => {
                         {/* Avatar */}
                         <div className="relative group">
                             <div
-                                className="w-28 h-28 border-4 border-[#0c0c0e] bg-zinc-900 flex items-center justify-center cursor-zoom-in overflow-hidden"
+                                className={`w-28 h-28 border-4 border-[#0c0c0e] bg-zinc-900 flex items-center justify-center ${userAvatar ? 'cursor-zoom-in' : ''} overflow-hidden`}
                                 onClick={() => { if (userAvatar) setZoomedImageUrl(userAvatar); }}
                             >
                                 {userAvatar ? (
@@ -235,13 +324,13 @@ const ProfilePage = () => {
                                     <ProfileIcon className="w-16 h-16 text-zinc-600" />
                                 )}
                                 {/* Uploading overlay */}
-                                {uploadingAvatar && (
+                                {isOwnProfile && uploadingAvatar && (
                                     <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
                                         <span className="text-white text-xs font-bold">{uploadProgress}%</span>
                                     </div>
                                 )}
                                 {/* Hover change overlay */}
-                                {!uploadingAvatar && (
+                                {isOwnProfile && !uploadingAvatar && (
                                     <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                         <label className="cursor-pointer text-[10px] font-mono uppercase tracking-wider text-center w-full h-full flex items-center justify-center text-white">
                                             // CHANGE
@@ -260,15 +349,21 @@ const ProfilePage = () => {
                             <span className="absolute bottom-1 right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-[#0c0c0e]" />
                         </div>
 
-                        {/* Edit Profile button */}
+                        {/* Action buttons */}
                         <div className="flex items-center gap-2 mt-1">
-                            <button
-                                onClick={() => navigate('/settings')}
-                                className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 hover:border-zinc-500 text-white px-4 py-2 font-mono text-xs uppercase tracking-wider transition-colors font-bold"
-                            >
-                                <PencilIcon className="w-3.5 h-3.5" />
-                                <span>// EDIT_PROFILE</span>
-                            </button>
+                            {isOwnProfile ? (
+                                <button
+                                    onClick={() => navigate('/settings')}
+                                    className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 hover:border-zinc-500 text-white px-4 py-2 font-mono text-xs uppercase tracking-wider transition-colors font-bold"
+                                >
+                                    <PencilIcon className="w-3.5 h-3.5" />
+                                    <span>// EDIT_PROFILE</span>
+                                </button>
+                            ) : (
+                                <span className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 text-zinc-300 font-mono text-xs uppercase tracking-wider">
+                                    // INVOX_PROFILE
+                                </span>
+                            )}
                         </div>
                     </div>
 
@@ -277,39 +372,39 @@ const ProfilePage = () => {
                         <h1 className="text-xl font-bold font-mono text-white tracking-tight">{displayName}</h1>
                         <p className="text-zinc-500 text-xs font-mono mt-0.5">@{username}</p>
 
-                        {userProfile?.headline && (
-                            <p className="text-zinc-300 font-mono text-xs mt-2">{userProfile.headline}</p>
+                        {activeProfile?.headline && (
+                            <p className="text-zinc-300 font-mono text-xs mt-2">{activeProfile.headline}</p>
                         )}
 
                         {/* Meta row */}
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-xs text-zinc-400 font-mono">
-                            {(userProfile as any)?.location && (
+                            {(activeProfile as any)?.location && (
                                 <span className="flex items-center gap-1.5">
                                     <svg className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                     </svg>
-                                    {(userProfile as any).location}
+                                    {(activeProfile as any).location}
                                 </span>
                             )}
-                            {(userProfile as any)?.website && (
+                            {(activeProfile as any)?.website && (
                                 <a
-                                    href={(userProfile as any).website.startsWith('http')
-                                        ? (userProfile as any).website
-                                        : `https://${(userProfile as any).website}`}
+                                    href={(activeProfile as any).website.startsWith('http')
+                                        ? (activeProfile as any).website
+                                        : `https://${(activeProfile as any).website}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-1.5 text-zinc-300 hover:text-white hover:underline"
                                 >
                                     <GlobeAltIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
-                                    {(userProfile as any).website.replace(/^https?:\/\//, '')}
+                                    {(activeProfile as any).website.replace(/^https?:\/\//, '')}
                                 </a>
                             )}
-                            {(userProfile as any)?.portfolioURL && (
+                            {(activeProfile as any)?.portfolioURL && (
                                 <a
-                                    href={(userProfile as any).portfolioURL.startsWith('http')
-                                        ? (userProfile as any).portfolioURL
-                                        : `https://${(userProfile as any).portfolioURL}`}
+                                    href={(activeProfile as any).portfolioURL.startsWith('http')
+                                        ? (activeProfile as any).portfolioURL
+                                        : `https://${(activeProfile as any).portfolioURL}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-1.5 text-zinc-300 hover:text-white hover:underline"
@@ -382,14 +477,16 @@ const ProfilePage = () => {
                 {/* About */}
                 <div className="md:col-span-3 bg-[#0c0c0e] border border-zinc-800/90 p-5 font-mono">
                     <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">// ABOUT</h2>
-                    {userProfile?.bio ? (
-                        <p className="text-zinc-300 leading-relaxed text-xs whitespace-pre-line">{userProfile.bio}</p>
+                    {activeProfile?.bio ? (
+                        <p className="text-zinc-300 leading-relaxed text-xs whitespace-pre-line">{activeProfile.bio}</p>
                     ) : (
                         <p className="text-zinc-600 italic text-xs leading-relaxed">
-                            Tell the community about your expertise, interests, projects, and goals.
+                            {isOwnProfile
+                                ? 'Tell the community about your expertise, interests, projects, and goals.'
+                                : 'No bio provided yet.'}
                         </p>
                     )}
-                    {!userProfile?.bio && (
+                    {isOwnProfile && !activeProfile?.bio && (
                         <button onClick={() => navigate('/settings')} className="mt-3 text-xs text-zinc-400 hover:text-white uppercase tracking-wider transition-colors">
                             + Add bio
                         </button>
@@ -406,21 +503,21 @@ const ProfilePage = () => {
             </div>
 
             {/* ── Skills & Interests ────────────────────────────────────── */}
-            {((userProfile?.skills?.length ?? 0) > 0 || (userProfile?.interests?.length ?? 0) > 0) ? (
+            {((activeProfile?.skills?.length ?? 0) > 0 || (activeProfile?.interests?.length ?? 0) > 0) ? (
                 <div className="bg-[#0c0c0e] border border-zinc-800/90 p-5 mb-4 font-mono">
-                    {(userProfile?.skills?.length ?? 0) > 0 && (
+                    {(activeProfile?.skills?.length ?? 0) > 0 && (
                         <div className="mb-4">
                             <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">// SKILLS</h2>
                             <div className="flex flex-wrap gap-2">
-                                {userProfile!.skills.map((skill, idx) => <Chip key={idx} label={skill} />)}
+                                {activeProfile!.skills.map((skill, idx) => <Chip key={idx} label={skill} />)}
                             </div>
                         </div>
                     )}
-                    {(userProfile?.interests?.length ?? 0) > 0 && (
+                    {(activeProfile?.interests?.length ?? 0) > 0 && (
                         <div>
                             <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">// INTERESTS</h2>
                             <div className="flex flex-wrap gap-2">
-                                {userProfile!.interests.map((interest, idx) => <Chip key={idx} label={interest} color="blue" />)}
+                                {activeProfile!.interests.map((interest, idx) => <Chip key={idx} label={interest} color="blue" />)}
                             </div>
                         </div>
                     )}
@@ -429,9 +526,11 @@ const ProfilePage = () => {
                 <div className="bg-[#0c0c0e] border border-zinc-800/90 p-5 mb-4 font-mono">
                     <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">// SKILLS & INTERESTS</h2>
                     <p className="text-zinc-600 italic text-xs mb-3">No skills or interests added yet.</p>
-                    <button onClick={() => navigate('/settings')} className="text-xs text-zinc-400 hover:text-white uppercase tracking-wider transition-colors">
-                        + Add skills & interests
-                    </button>
+                    {isOwnProfile && (
+                        <button onClick={() => navigate('/settings')} className="text-xs text-zinc-400 hover:text-white uppercase tracking-wider transition-colors">
+                            + Add skills & interests
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -465,10 +564,13 @@ const ProfilePage = () => {
                     </div>
                     <h3 className="text-sm font-mono font-bold text-white uppercase tracking-wider mb-1">// NO_{activeTab.toUpperCase()}_FOUND</h3>
                     <p className="text-zinc-500 text-xs font-mono max-w-sm leading-relaxed">
-                        {activeTab === 'Posts'
-                            ? 'Share knowledge, projects, and ideas with the community. Publish your first contribution and begin building your presence.'
-                            : `When you create ${activeTab.toLowerCase()}, they will appear here in your activity log.`
-                        }
+                        {isOwnProfile ? (
+                            activeTab === 'Posts'
+                                ? 'Share knowledge, projects, and ideas with the community. Publish your first contribution and begin building your presence.'
+                                : `When you create ${activeTab.toLowerCase()}, they will appear here in your activity log.`
+                        ) : (
+                            `No ${activeTab.toLowerCase()} published by this member yet.`
+                        )}
                     </p>
                 </div>
             </div>
