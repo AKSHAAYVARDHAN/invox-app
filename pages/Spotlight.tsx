@@ -65,7 +65,7 @@ import GoForItOpportunityCardSkeleton from '../components/spotlight/GoForItOppor
 import { useAIAssistant } from '../contexts/AIAssistantContext';
 import { useFilters } from '../contexts/AIAssistantContext';
 import { subscribeToCollabPosts, getCollabPosts, postToProject } from '../services/postService';
-import { CollabDashboardModal } from '../components/spotlight/CollabDashboardModal';
+import { CollabManagementHub } from '../components/spotlight/CollabManagementHub';
 import { useCollabDashboardData } from '../components/spotlight/useCollabDashboardData';
 
 
@@ -1315,15 +1315,29 @@ export const SpotlightPage = () => {
     const [viewedOfferIds, setViewedOfferIds] = useState<string[]>([]);
     const [messagingOffer, setMessagingOffer] = useState<Offer | null>(null);
     const [liveCollabProjects, setLiveCollabProjects] = useState<Project[]>([]);
-    const [isCollabDashboardOpen, setIsCollabDashboardOpen] = useState(() => searchParams.get('openCollabDashboard') === 'true');
-    const [collabDashboardTab, setCollabDashboardTab] = useState<'applications' | 'my_applications' | 'active' | 'published'>('applications');
+    const collabViewParam = searchParams.get('collabView');
+    const openCollabDashboardParam = searchParams.get('openCollabDashboard');
+    const isCollabManagement = (activeTab === 'Collabs' || !searchParams.get('tab') || searchParams.get('tab') === 'Collabs') && (collabViewParam === 'incoming' || collabViewParam === 'active' || openCollabDashboardParam === 'true');
+    const collabManagementTab: 'applications' | 'active' = (collabViewParam === 'active') ? 'active' : 'applications';
+
+    const handleBackToCollabs = () => {
+        setSearchParams(prev => {
+            const next = new URLSearchParams(prev);
+            next.set('tab', 'Collabs');
+            next.delete('collabView');
+            next.delete('openCollabDashboard');
+            return next;
+        });
+    };
+
     const collabData = useCollabDashboardData();
     const mainTabs = ['Showcase', 'Collabs', 'Leap'];
     const sectionKey = `spotlight-${activeTab.toLowerCase()}`;
 
     useEffect(() => {
-        if (searchParams.get('openCollabDashboard') === 'true') {
-            setIsCollabDashboardOpen(true);
+        const collabView = searchParams.get('collabView');
+        if (collabView === 'incoming' || collabView === 'active' || searchParams.get('openCollabDashboard') === 'true') {
+            setActiveTab('Collabs');
         }
         const urlTab = searchParams.get('tab');
         if (urlTab && (urlTab === 'Showcase' || urlTab === 'Collabs' || urlTab === 'Leap')) {
@@ -1561,6 +1575,10 @@ export const SpotlightPage = () => {
                 newSearchParams.set('subTab', activeLeapTab);
             } else {
                 newSearchParams.delete('subTab');
+            }
+            if (activeTab !== 'Collabs') {
+                newSearchParams.delete('collabView');
+                newSearchParams.delete('openCollabDashboard');
             }
             setSearchParams(newSearchParams, { replace: true });
         }
@@ -3093,6 +3111,25 @@ export const SpotlightPage = () => {
         }
     
         if (activeTab === 'Collabs') {
+            if (isCollabManagement) {
+                return (
+                    <CollabManagementHub
+                        initialTab={collabManagementTab}
+                        viewMode="spotlight"
+                        onClose={handleBackToCollabs}
+                        onTabChange={(tab) => {
+                            setSearchParams(prev => {
+                                const next = new URLSearchParams(prev);
+                                next.set('tab', 'Collabs');
+                                next.set('collabView', tab === 'active' ? 'active' : 'incoming');
+                                next.delete('openCollabDashboard');
+                                return next;
+                            });
+                        }}
+                        isModal={false}
+                    />
+                );
+            }
             return <Collabs />;
         }
     
@@ -3103,7 +3140,7 @@ export const SpotlightPage = () => {
     return (
         <div className="space-y-4">
             {/* Top Navigation Bar: Exact Segmented Slide-Bar UI System from My Space / Explore */}
-            {!selectedOfferType && !showPinnedHighlights && !spotlightBrowseState && (
+            {!selectedOfferType && !showPinnedHighlights && !spotlightBrowseState && !isCollabManagement && (
                 <SegmentedSlideBar
                     tabs={mainTabs}
                     activeTab={activeTab}
@@ -3112,7 +3149,7 @@ export const SpotlightPage = () => {
             )}
 
             {/* Conditional Category & Domain Filters for Showcase / Collabs */}
-            {!selectedOfferType && !showPinnedHighlights && activeTab !== 'Leap' && !spotlightBrowseState && (
+            {!selectedOfferType && !showPinnedHighlights && activeTab !== 'Leap' && !spotlightBrowseState && !isCollabManagement && (
                 <>
                     <div className="flex items-center gap-1.5 overflow-x-auto pb-3 mb-3 no-scrollbar">
                         {categoryFilters.map(category => (
@@ -3179,15 +3216,6 @@ export const SpotlightPage = () => {
                         setInitialOfferStatus(messagingOffer.status as 'New' | 'Active' | 'Expired');
                     }}
                     showViewButton={messagingOffer.type !== 'Invites' && messagingOffer.type !== 'Others'}
-                />
-            )}
-
-            {isCollabDashboardOpen && (
-                <CollabDashboardModal
-                    isOpen={isCollabDashboardOpen}
-                    onClose={() => setIsCollabDashboardOpen(false)}
-                    initialTab={collabDashboardTab}
-                    viewMode="spotlight"
                 />
             )}
         </div>

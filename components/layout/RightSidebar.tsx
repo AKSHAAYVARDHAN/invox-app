@@ -45,7 +45,6 @@ import {
 import { handleImageError } from '../utils/imageUtils';
 import MyCommunityCardSkeleton from '../communities/MyCommunityCardSkeleton';
 import DomainFilter from '../ui/DomainFilter';
-import { CollabDashboardModal } from '../spotlight/CollabDashboardModal';
 import { useCollabDashboardData } from '../spotlight/useCollabDashboardData';
 
 const trendingTopics = [
@@ -219,6 +218,8 @@ interface RightSidebarProps {
     setUploadTriggerTarget?: (target: string | null) => void;
     discoverSearchTerm?: string;
     setDiscoverSearchTerm?: (term: string) => void;
+    collabManagementView?: 'incoming' | 'active' | null;
+    setCollabManagementView?: (view: 'incoming' | 'active' | null) => void;
 }
 
 const DiscoverSidebar: React.FC<Pick<RightSidebarProps, 'activityFilter' | 'setActivityFilter' | 'discoverSearchTerm' | 'setDiscoverSearchTerm'>> = ({ 
@@ -496,13 +497,26 @@ const TrendzSidebar: React.FC<Pick<RightSidebarProps, 'followedDomainsFilter' | 
     );
 };
 
-const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' | 'setSpotlightBrowseState' | 'showPinnedHighlights' | 'setShowPinnedHighlights' | 'variant'>> = ({ spotlightBrowseState, setSpotlightBrowseState, showPinnedHighlights, setShowPinnedHighlights, variant }) => {
+const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' | 'setSpotlightBrowseState' | 'showPinnedHighlights' | 'setShowPinnedHighlights' | 'variant' | 'collabManagementView' | 'setCollabManagementView'>> = ({ 
+    spotlightBrowseState, 
+    setSpotlightBrowseState, 
+    showPinnedHighlights, 
+    setShowPinnedHighlights, 
+    variant,
+    collabManagementView,
+    setCollabManagementView
+}) => {
+    const [searchParams, setSearchParams] = ReactRouterDOM.useSearchParams();
     const [isBrowsingView, setIsBrowsingView] = useState(false);
     const [isPinnedView, setIsPinnedView] = useState(false);
     const [pinnedViewMode, setPinnedViewMode] = useState<'options' | 'profiles'>('options');
-    const [isCollabDashboardOpen, setIsCollabDashboardOpen] = useState(false);
-    const [collabDashboardTab, setCollabDashboardTab] = useState<'applications' | 'my_applications' | 'active' | 'published'>('applications');
     const collabData = useCollabDashboardData();
+
+    const activeCollabView = collabManagementView !== undefined && collabManagementView !== null 
+        ? collabManagementView 
+        : (searchParams.get('collabView') === 'incoming' || searchParams.get('collabView') === 'active' 
+            ? (searchParams.get('collabView') as 'incoming' | 'active') 
+            : (searchParams.get('openCollabDashboard') === 'true' ? 'incoming' : null));
 
     useEffect(() => {
         setIsBrowsingView(false);
@@ -637,30 +651,51 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                     </>
                 ) : (
                     <>
-                        <div className="px-4 flex flex-col gap-2.5">
-                            <button
-                                onClick={() => { setIsBrowsingView(true); setShowPinnedHighlights(false); }}
-                                className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800/90 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <MagnifyingGlassIcon className="w-4 h-4 text-zinc-500" />
-                                    <span>// BROWSE</span>
-                                </div>
-                                <span className="text-zinc-600">&gt;&gt;</span>
-                            </button>
-                            {variant !== 'spotlight-collabs' && (
+                        {variant === 'spotlight-collabs' && activeCollabView ? (
+                            <div className="px-4">
                                 <button
-                                    onClick={() => { setIsPinnedView(true); setShowPinnedHighlights(false); }}
+                                    type="button"
+                                    onClick={() => {
+                                        setCollabManagementView?.(null);
+                                        setSearchParams(prev => {
+                                            const next = new URLSearchParams(prev);
+                                            next.delete('collabView');
+                                            next.delete('openCollabDashboard');
+                                            return next;
+                                        });
+                                    }}
+                                    className="w-full flex items-center gap-2 bg-[#0c0c0e] border border-zinc-800 hover:border-zinc-700 p-2.5 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors cursor-pointer"
+                                >
+                                    <ArrowLeftIcon className="w-4 h-4" />
+                                    <span>// BACK TO COLLABS</span>
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="px-4 flex flex-col gap-2.5">
+                                <button
+                                    onClick={() => { setIsBrowsingView(true); setShowPinnedHighlights(false); }}
                                     className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800/90 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors"
                                 >
                                     <div className="flex items-center gap-2">
-                                        <BookmarkIcon className="w-4 h-4 text-zinc-500" />
-                                        <span>// PINNED</span>
+                                        <MagnifyingGlassIcon className="w-4 h-4 text-zinc-500" />
+                                        <span>// BROWSE</span>
                                     </div>
                                     <span className="text-zinc-600">&gt;&gt;</span>
                                 </button>
-                            )}
-                        </div>
+                                {variant !== 'spotlight-collabs' && (
+                                    <button
+                                        onClick={() => { setIsPinnedView(true); setShowPinnedHighlights(false); }}
+                                        className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800/90 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <BookmarkIcon className="w-4 h-4 text-zinc-500" />
+                                            <span>// PINNED</span>
+                                        </div>
+                                        <span className="text-zinc-600">&gt;&gt;</span>
+                                    </button>
+                                )}
+                            </div>
+                        )}
 
                         {variant === 'spotlight-collabs' && (
                             <div className="bg-[#0c0c0e] border border-zinc-800 mx-4 flex flex-col">
@@ -673,15 +708,25 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            setCollabDashboardTab('applications');
-                                            setIsCollabDashboardOpen(true);
+                                            setCollabManagementView?.('incoming');
+                                            setSearchParams(prev => {
+                                                const next = new URLSearchParams(prev);
+                                                next.set('tab', 'Collabs');
+                                                next.set('collabView', 'incoming');
+                                                next.delete('openCollabDashboard');
+                                                return next;
+                                            });
                                         }}
-                                        className="w-full flex items-center justify-between p-2.5 bg-black/60 border border-zinc-800/90 hover:border-zinc-700 transition-colors text-left group"
+                                        className={`w-full flex items-center justify-between p-2.5 border transition-colors text-left group ${
+                                            activeCollabView === 'incoming'
+                                                ? 'bg-zinc-900 text-white border-zinc-600 font-bold'
+                                                : 'bg-black/60 text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
+                                        }`}
                                         title="View Incoming Collabs"
                                     >
                                         <div className="flex items-center gap-2">
-                                            <span className="text-zinc-500 font-bold">//</span>
-                                            <span className="text-zinc-400 group-hover:text-white transition-colors">INCOMING COLLABS</span>
+                                            <span className={activeCollabView === 'incoming' ? 'text-white font-bold' : 'text-zinc-500 font-bold'}>//</span>
+                                            <span className={activeCollabView === 'incoming' ? 'text-white font-bold' : 'text-zinc-400 group-hover:text-white transition-colors'}>INCOMING COLLABS</span>
                                         </div>
                                         <span className={`font-bold px-2 py-0.5 border text-[11px] ${
                                             collabData.pendingIncomingCount > 0
@@ -695,15 +740,25 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            setCollabDashboardTab('active');
-                                            setIsCollabDashboardOpen(true);
+                                            setCollabManagementView?.('active');
+                                            setSearchParams(prev => {
+                                                const next = new URLSearchParams(prev);
+                                                next.set('tab', 'Collabs');
+                                                next.set('collabView', 'active');
+                                                next.delete('openCollabDashboard');
+                                                return next;
+                                            });
                                         }}
-                                        className="w-full flex items-center justify-between p-2.5 bg-black/60 border border-zinc-800/90 hover:border-zinc-700 transition-colors text-left group"
+                                        className={`w-full flex items-center justify-between p-2.5 border transition-colors text-left group ${
+                                            activeCollabView === 'active'
+                                                ? 'bg-zinc-900 text-white border-zinc-600 font-bold'
+                                                : 'bg-black/60 text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
+                                        }`}
                                         title="View Active Collaborations"
                                     >
                                         <div className="flex items-center gap-2">
-                                            <span className="text-zinc-500 font-bold">//</span>
-                                            <span className="text-zinc-400 group-hover:text-white transition-colors">ACTIVE COLLABS</span>
+                                            <span className={activeCollabView === 'active' ? 'text-white font-bold' : 'text-zinc-500 font-bold'}>//</span>
+                                            <span className={activeCollabView === 'active' ? 'text-white font-bold' : 'text-zinc-400 group-hover:text-white transition-colors'}>ACTIVE COLLABS</span>
                                         </div>
                                         <span className={`font-bold px-2 py-0.5 border text-[11px] ${
                                             collabData.activeCollabsCount > 0
@@ -756,15 +811,6 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                     </>
                 )}
             </div>
-
-            {isCollabDashboardOpen && (
-                <CollabDashboardModal
-                    isOpen={isCollabDashboardOpen}
-                    onClose={() => setIsCollabDashboardOpen(false)}
-                    initialTab={collabDashboardTab}
-                    viewMode="spotlight"
-                />
-            )}
         </aside>
     );
 };
@@ -1497,6 +1543,8 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ variant, ...props }) => {
                     setSpotlightBrowseState={props.setSpotlightBrowseState} 
                     showPinnedHighlights={props.showPinnedHighlights} 
                     setShowPinnedHighlights={props.setShowPinnedHighlights} 
+                    collabManagementView={props.collabManagementView}
+                    setCollabManagementView={props.setCollabManagementView}
                  />;
             case 'goforit':
                 return <GoForItSidebar filters={props.goforitFilters} setFilters={props.setGoforitFilters} setIsFilterModalOpen={props.setIsFilterModalOpen}/>
