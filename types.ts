@@ -120,7 +120,7 @@ export interface CollabRole {
   title: string;
   count: number | string;
   skills: string[];
-  responsibilities: string;
+  responsibilities?: string;
 }
 
 export interface CollabDetails {

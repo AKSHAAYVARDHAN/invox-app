@@ -9,7 +9,7 @@ import {
     withdrawCollabApplication,
     getRoleCapacity,
 } from '../../services/collabApplicationService';
-import { subscribeToUserPosts, deletePost } from '../../services/postService';
+import { subscribeToUserPosts, deletePost, getPostById } from '../../services/postService';
 import type { CollabApplication, CollabRole, Post } from '../../types';
 import {
     CheckIcon,
@@ -21,8 +21,11 @@ import {
     BriefcaseIcon,
     EllipsisVerticalIcon,
     MagnifyingGlassIcon,
+    CheckBadgeIcon,
 } from '../ui/Icons';
 import { handleImageError } from '../utils/imageUtils';
+import { MyApplicationCard } from '../collab/MyApplicationCard';
+import { IncomingApplicationCard } from '../collab/IncomingApplicationCard';
 
 interface CollabManagementHubProps {
     initialTab?: 'applications' | 'my_applications' | 'active' | 'published';
@@ -54,7 +57,9 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
 
     const effectiveInitialTab = useMemo<'applications' | 'my_applications' | 'active' | 'published'>(() => {
         if (viewMode === 'spotlight') {
-            return (initialTab === 'active') ? 'active' : 'applications';
+            if (initialTab === 'my_applications') return 'my_applications';
+            if (initialTab === 'active') return 'active';
+            return 'applications';
         }
         if (viewMode === 'myspace') {
             return (initialTab === 'my_applications') ? 'my_applications' : 'published';
@@ -63,6 +68,10 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
     }, [viewMode, initialTab]);
 
     const [subTab, setSubTab] = useState<'applications' | 'my_applications' | 'active' | 'published'>(effectiveInitialTab);
+
+    useEffect(() => {
+        setSubTab(effectiveInitialTab);
+    }, [effectiveInitialTab]);
     const [internalUserCollabs, setInternalUserCollabs] = useState<Post[]>([]);
     const [creatorApplications, setCreatorApplications] = useState<CollabApplication[]>([]);
     const [myApplications, setMyApplications] = useState<CollabApplication[]>([]);
@@ -78,6 +87,18 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'ACCEPTED' | 'DECLINED'>('ALL');
     const [internalDeletingId, setInternalDeletingId] = useState<string | null>(null);
     const [deleteConfirmCollab, setDeleteConfirmCollab] = useState<{ id: string; title: string } | null>(null);
+    const [resolvedCollabsMap, setResolvedCollabsMap] = useState<Record<string, Post>>({});
+    const [overviewModalData, setOverviewModalData] = useState<{
+        isOpen: boolean;
+        collab: Post | null;
+        application: CollabApplication | null;
+        isLoading: boolean;
+    }>({
+        isOpen: false,
+        collab: null,
+        application: null,
+        isLoading: false,
+    });
 
     const effectiveDeletingId = propDeletingId || internalDeletingId;
 
@@ -114,6 +135,81 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
         if (onClose) onClose();
         navigate(`/spotlight?tab=Collabs&collabId=${collabId}`);
     };
+
+    const handleOpenCollabOverview = async (app: CollabApplication, resolvedCollab?: Post | null) => {
+        if (resolvedCollab) {
+            setOverviewModalData({
+                isOpen: true,
+                collab: resolvedCollab,
+                application: app,
+                isLoading: false,
+            });
+            return;
+        }
+
+        // Search in resolvedCollabsMap, creatorPublishedCollabs, or userCollabs
+        const existing = resolvedCollabsMap[app.collabId] ||
+            creatorPublishedCollabs.find(c => c.id === app.collabId) ||
+            userCollabs.find(c => c.id === app.collabId);
+
+        if (existing) {
+            setOverviewModalData({
+                isOpen: true,
+                collab: existing,
+                application: app,
+                isLoading: false,
+            });
+            return;
+        }
+
+        // Fetch dynamically from Firestore
+        setOverviewModalData({
+            isOpen: true,
+            collab: null,
+            application: app,
+            isLoading: true,
+        });
+
+        try {
+            const fetched = await getPostById(app.collabId);
+            setOverviewModalData({
+                isOpen: true,
+                collab: fetched,
+                application: app,
+                isLoading: false,
+            });
+        } catch (err) {
+            console.warn('[COLLAB_OVERVIEW_FETCH_ERROR]', err);
+            setOverviewModalData(prev => ({
+                ...prev,
+                isLoading: false,
+            }));
+        }
+    };
+
+    const handleCloseCollabOverview = () => {
+        setOverviewModalData({
+            isOpen: false,
+            collab: null,
+            application: null,
+            isLoading: false,
+        });
+    };
+
+    // Keyboard dismissal with Escape key
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                if (overviewModalData.isOpen) {
+                    handleCloseCollabOverview();
+                } else if (deleteConfirmCollab) {
+                    setDeleteConfirmCollab(null);
+                }
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [overviewModalData.isOpen, deleteConfirmCollab]);
 
     useEffect(() => {
         setSubTab(effectiveInitialTab);
@@ -180,6 +276,48 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
 
         return () => unsubscribe();
     }, [currentUser?.uid]);
+
+    // Resolve Canonical Collab posts for applications submitted by user
+    useEffect(() => {
+        if (myApplications.length === 0) return;
+
+        const neededCollabIds = Array.from(
+            new Set(myApplications.map(a => a.collabId).filter(Boolean))
+        ).filter(id => !resolvedCollabsMap[id]);
+
+        if (neededCollabIds.length === 0) return;
+
+        let isMounted = true;
+        const fetchTargetCollabs = async () => {
+            const newlyFetched: Record<string, Post> = {};
+            await Promise.all(
+                neededCollabIds.map(async (id) => {
+                    const fromPropCollabs = userCollabs.find(c => c.id === id);
+                    if (fromPropCollabs) {
+                        newlyFetched[id] = fromPropCollabs;
+                        return;
+                    }
+                    try {
+                        const post = await getPostById(id);
+                        if (post) {
+                            newlyFetched[id] = post;
+                        }
+                    } catch (e) {
+                        console.warn(`[RESOLVE_TARGET_COLLAB_ERROR] ${id}:`, e);
+                    }
+                })
+            );
+            if (isMounted && Object.keys(newlyFetched).length > 0) {
+                setResolvedCollabsMap(prev => ({ ...prev, ...newlyFetched }));
+            }
+        };
+
+        fetchTargetCollabs();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [myApplications, userCollabs, resolvedCollabsMap]);
 
     // Counts
     const pendingCreatorAppsCount = useMemo(() => {
@@ -299,53 +437,11 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
         return Array.from(map.values());
     }, [userCollabs, creatorApplications, currentUser]);
 
-    // Matching published Collabs based on search query and project filter
-    const matchingCollabs = useMemo(() => {
-        const q = searchQuery.toLowerCase().trim();
-        return creatorPublishedCollabs.filter(collab => {
-            if (filterCollabId !== 'all' && collab.id !== filterCollabId) return false;
-            if (!q) return true;
-            const title = (collab.aiSummary || collab.oneLine || '').toLowerCase();
-            const hook = (collab.oneLine || collab.content || '').toLowerCase();
-            const domain = (collab.domain || collab.category || '').toLowerCase();
-            return title.includes(q) || hook.includes(q) || domain.includes(q);
-        });
-    }, [creatorPublishedCollabs, filterCollabId, searchQuery]);
-
-    // Helper to get applications for a specific collab matching status filter
-    const getCollabApplications = (collabId: string) => {
-        return creatorApplications.filter(app => {
-            if (app.collabId !== collabId) return false;
-            if (statusFilter !== 'ALL' && app.status !== statusFilter) return false;
-            return true;
-        });
-    };
-
-    // Filtered applications count across all matching collabs
-    const totalFilteredAppsCount = useMemo(() => {
-        return matchingCollabs.reduce((acc, collab) => {
-            return acc + getCollabApplications(collab.id).length;
-        }, 0);
-    }, [matchingCollabs, creatorApplications, statusFilter]);
-
-    // Grouping of collabs with their applications for display
-    const displayGroups = useMemo(() => {
-        return matchingCollabs
-            .map(collab => ({
-                collab,
-                apps: getCollabApplications(collab.id),
-            }))
-            .filter(group => {
-                if (filterCollabId !== 'all') return true;
-                return group.apps.length > 0;
-            });
-    }, [matchingCollabs, filterCollabId, statusFilter, creatorApplications]);
-
     const formatDate = (date: any) => {
         if (!date) return 'RECENT';
         try {
             const d = date?.toDate ? date.toDate() : new Date(date);
-            return isNaN(d.getTime()) ? 'RECENT' : d.toLocaleDateString();
+            return isNaN(d.getTime()) ? 'RECENT' : d.toLocaleDateString('en-GB');
         } catch {
             return 'RECENT';
         }
@@ -353,21 +449,32 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
 
     const formatCollabDetails = (collab: Partial<Post>) => {
         const types = (collab.collabDetails?.collabTypes && collab.collabDetails.collabTypes.length > 0)
-            ? collab.collabDetails.collabTypes.join(' / ').toUpperCase()
+            ? collab.collabDetails.collabTypes.join(' · ').toUpperCase()
             : 'OPEN COLLABORATION';
-        const avail = collab.collabDetails?.availability?.toUpperCase() || 'FLEXIBLE / TO BE DISCUSSED';
+        const avail = collab.collabDetails?.availability?.toUpperCase() || 'FLEXIBLE';
         const loc = (collab.collabDetails?.location || 'REMOTE').toUpperCase();
-        return `${types} • ${avail} • ${loc}`;
+        return `${types} · ${avail} · ${loc}`;
     };
 
-    // Filtered incoming applications for creator
+    // Filtered incoming applications for creator with search and status support
     const filteredCreatorApps = useMemo(() => {
+        const q = searchQuery.toLowerCase().trim();
         return creatorApplications.filter(app => {
             if (filterCollabId !== 'all' && app.collabId !== filterCollabId) return false;
             if (statusFilter !== 'ALL' && app.status !== statusFilter) return false;
+            if (q) {
+                const targetCollab = creatorPublishedCollabs.find(c => c.id === app.collabId) || userCollabs.find(c => c.id === app.collabId);
+                const titleMatch = (app.collabTitle || targetCollab?.aiSummary || targetCollab?.oneLine || '').toLowerCase().includes(q);
+                const roleMatch = (app.roleTitle || '').toLowerCase().includes(q);
+                const applicantName = (app.applicant?.displayName || '').toLowerCase().includes(q);
+                const applicantUser = (app.applicant?.username || '').toLowerCase().includes(q);
+                const domainMatch = (targetCollab?.domain || targetCollab?.category || app.collabDomain || '').toLowerCase().includes(q);
+                const messageMatch = (app.message || '').toLowerCase().includes(q);
+                return titleMatch || roleMatch || applicantName || applicantUser || domainMatch || messageMatch;
+            }
             return true;
         });
-    }, [creatorApplications, filterCollabId, statusFilter]);
+    }, [creatorApplications, filterCollabId, statusFilter, searchQuery, creatorPublishedCollabs, userCollabs]);
 
     return (
         <div className="space-y-4 font-mono text-zinc-300">
@@ -533,7 +640,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                     {/* Header */}
                     <div className="pb-4 border-b border-zinc-800 space-y-1 font-mono">
                         <h1 className="text-base sm:text-lg font-bold text-white uppercase tracking-wider">
-                            // INCOMING COLLABS
+                            // INCOMING APPLICATIONS
                         </h1>
                         <p className="text-xs text-zinc-400">
                             Review applications received for your published collaborations.
@@ -609,7 +716,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                         </div>
 
                         <div className="text-[11px] text-zinc-400 self-end sm:self-auto">
-                            Showing <span className="text-white font-bold">{totalFilteredAppsCount}</span> applications
+                            Showing <span className="text-white font-bold">{filteredCreatorApps.length}</span> applications
                         </div>
                     </div>
 
@@ -626,248 +733,35 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                 No applications are waiting for your review.
                             </p>
                         </div>
-                    ) : matchingCollabs.length === 0 ? (
+                    ) : filteredCreatorApps.length === 0 ? (
                         <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e] space-y-2 font-mono">
-                            <h3 className="text-sm font-bold text-white uppercase tracking-wider">// NO COLLABS FOUND</h3>
+                            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                                {searchQuery.trim() ? '// NO COLLABS FOUND' : '// NO APPLICATIONS MATCHING FILTER'}
+                            </h3>
                             <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
-                                No published collabs match "{searchQuery}".
-                            </p>
-                        </div>
-                    ) : displayGroups.length === 0 || totalFilteredAppsCount === 0 ? (
-                        <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e] space-y-2 font-mono">
-                            <h3 className="text-sm font-bold text-white uppercase tracking-wider">// NO APPLICATIONS MATCHING FILTER</h3>
-                            <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
-                                No applications match the active status filter ({statusFilter}).
+                                {searchQuery.trim()
+                                    ? `No applications match "${searchQuery}".`
+                                    : `No applications match the active status filter (${statusFilter}).`}
                             </p>
                         </div>
                     ) : (
-                        <div className="space-y-6">
-                            {displayGroups.map(group => (
-                                <div key={group.collab.id} className="space-y-3 font-mono">
-                                    {/* Project Header */}
-                                    <div className="p-4 bg-[#0c0c0e] border border-zinc-800 space-y-2.5">
-                                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-zinc-850">
-                                            <div>
-                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// PROJECT</span>
-                                                <h3 className="text-sm font-bold text-white uppercase tracking-wider mt-0.5">
-                                                    "{group.collab.aiSummary || group.collab.oneLine || 'Untitled Collab'}"
-                                                </h3>
-                                            </div>
-                                            <span className="text-[11px] font-mono text-zinc-400 bg-zinc-900 border border-zinc-800 px-2.5 py-1">
-                                                {group.apps.length} {group.apps.length === 1 ? 'application' : 'applications'}
-                                            </span>
-                                        </div>
+                        <div className="space-y-4">
+                            {filteredCreatorApps.map(app => {
+                                const targetCollab = resolvedCollabsMap[app.collabId] || creatorPublishedCollabs.find(c => c.id === app.collabId) || userCollabs.find(c => c.id === app.collabId);
 
-                                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-zinc-400">
-                                            <div>
-                                                <span className="text-zinc-500">DOMAIN: </span>
-                                                <span className="text-zinc-200 uppercase font-bold">
-                                                    {(group.collab.domain || group.collab.category || 'DESIGN').toUpperCase()}
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <span className="text-zinc-500">STATUS: </span>
-                                                <span className="text-zinc-200 uppercase font-bold">
-                                                    {(group.collab.collabDetails?.projectStatus || 'EARLY CONCEPT').toUpperCase()}
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <span className="text-zinc-500">COLLABORATION: </span>
-                                                <span className="text-zinc-200 uppercase">
-                                                    {formatCollabDetails(group.collab)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Applicant Cards */}
-                                    {group.apps.length === 0 ? (
-                                        <div className="p-4 bg-[#0a0a0c] border border-zinc-850 text-center text-xs text-zinc-500">
-                                            // NO {statusFilter} APPLICATIONS FOR THIS PROJECT
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-3">
-                                            {group.apps.map(app => {
-                                                const rawRoles = group.collab?.collabDetails?.roles || [];
-                                                const role = rawRoles.find(r => r.id === app.roleId);
-                                                const roleCapacity = role ? getRoleCapacity(role, creatorApplications) : null;
-                                                const isFilled = Boolean(roleCapacity?.isFilled);
-                                                const isActionLoading = actionLoadingId === app.id;
-
-                                                return (
-                                                    <div
-                                                        key={app.id}
-                                                        className="p-4 bg-[#0a0a0c] border border-zinc-800 hover:border-zinc-700 transition-all space-y-3"
-                                                    >
-                                                        {/* APPLICANT */}
-                                                        <div>
-                                                            <div className="flex items-center justify-between pb-2 border-b border-zinc-850">
-                                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold">
-                                                                    APPLICANT
-                                                                </span>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => navigate(`/profile/${app.applicantId || app.applicant?.uid}`)}
-                                                                    className="px-2.5 py-1 bg-black hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white text-xs uppercase tracking-wider transition-colors cursor-pointer"
-                                                                    title={`View ${app.applicant?.displayName || 'Applicant'}'s INVOX profile`}
-                                                                >
-                                                                    // VIEW PROFILE
-                                                                </button>
-                                                            </div>
-
-                                                            <div className="pt-3 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                                                                <div className="flex items-start gap-3 flex-1 min-w-0">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => navigate(`/profile/${app.applicantId || app.applicant?.uid}`)}
-                                                                        className="w-11 h-11 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 flex items-center justify-center flex-shrink-0 cursor-pointer transition-colors"
-                                                                    >
-                                                                        {app.applicant?.photoURL ? (
-                                                                            <img
-                                                                                src={app.applicant.photoURL}
-                                                                                alt={app.applicant.displayName}
-                                                                                className="w-full h-full object-cover"
-                                                                                onError={handleImageError}
-                                                                            />
-                                                                        ) : (
-                                                                            <span className="font-bold text-white text-sm">
-                                                                                {(app.applicant?.displayName || 'A').charAt(0).toUpperCase()}
-                                                                            </span>
-                                                                        )}
-                                                                    </button>
-
-                                                                    <div className="space-y-1 min-w-0 flex-1">
-                                                                        <div className="flex flex-wrap items-baseline gap-2">
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => navigate(`/profile/${app.applicantId || app.applicant?.uid}`)}
-                                                                                className="font-bold text-white text-sm hover:underline text-left cursor-pointer"
-                                                                            >
-                                                                                {app.applicant?.displayName || 'Applicant'}
-                                                                            </button>
-                                                                            <span className="text-zinc-500 text-xs">
-                                                                                @{app.applicant?.username || 'user'}
-                                                                            </span>
-                                                                        </div>
-
-                                                                        {(app.applicant?.headline || app.applicant?.bio) && (
-                                                                            <p className="text-xs text-zinc-400 line-clamp-1">
-                                                                                {app.applicant.headline || app.applicant.bio}
-                                                                            </p>
-                                                                        )}
-
-                                                                        {/* ROLE & AVAILABILITY */}
-                                                                        <div className="pt-1 flex flex-wrap items-center gap-2">
-                                                                            <span className="bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-xs text-white font-bold">
-                                                                                ROLE: {app.roleTitle}
-                                                                            </span>
-                                                                            {roleCapacity ? (
-                                                                                <span className={`text-[10px] px-1.5 py-0.5 border ${
-                                                                                    isFilled
-                                                                                        ? 'bg-zinc-900 text-zinc-500 border-zinc-800'
-                                                                                        : 'bg-emerald-950/30 text-emerald-400 border-emerald-800/80'
-                                                                                }`}>
-                                                                                    {isFilled ? '// FILLED' : `// ${roleCapacity.remaining} OF ${roleCapacity.total} OPEN`}
-                                                                                </span>
-                                                                            ) : (
-                                                                                <span className="text-[10px] px-1.5 py-0.5 border bg-zinc-900 text-zinc-400 border-zinc-800">
-                                                                                    // 1 POSITION
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-
-                                                                        {/* Skills */}
-                                                                        {app.applicant?.skills && app.applicant.skills.length > 0 && (
-                                                                            <div className="pt-1.5 flex flex-wrap gap-1">
-                                                                                {app.applicant.skills.map((sk, idx) => (
-                                                                                    <span key={idx} className="text-[10px] bg-black border border-zinc-800 text-zinc-300 px-1.5 py-0.5">
-                                                                                        {sk}
-                                                                                    </span>
-                                                                                ))}
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* WHY YOU? (Application Message) */}
-                                                        <div className="p-3 bg-black border border-zinc-850 text-xs space-y-1">
-                                                            <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">
-                                                                // WHY YOU?
-                                                            </span>
-                                                            {app.message?.trim() ? (
-                                                                <p className="text-zinc-300 leading-relaxed whitespace-pre-wrap">{app.message}</p>
-                                                            ) : (
-                                                                <p className="text-zinc-600 italic">// NO MESSAGE PROVIDED</p>
-                                                            )}
-
-                                                            {app.supportingDocument?.url && (
-                                                                <div className="pt-2 border-t border-zinc-900 flex items-center justify-between gap-2 flex-wrap">
-                                                                    <span className="text-[10px] text-zinc-400 truncate max-w-xs">
-                                                                        DOCUMENT: {app.supportingDocument.name}
-                                                                    </span>
-                                                                    <a
-                                                                        href={app.supportingDocument.url}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="text-[10px] text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 hover:border-zinc-700 px-2 py-0.5 uppercase tracking-wider transition-colors"
-                                                                    >
-                                                                        // VIEW DOCUMENT
-                                                                    </a>
-                                                                </div>
-                                                            )}
-                                                        </div>
-
-                                                        {/* APPLIED DATE + STATUS & ACTIONS */}
-                                                        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-zinc-850">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-[10px] text-zinc-500">
-                                                                    APPLIED: {formatDate(app.createdAt)}
-                                                                </span>
-                                                                <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${
-                                                                    app.status === 'ACCEPTED'
-                                                                        ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800'
-                                                                        : app.status === 'PENDING'
-                                                                        ? 'bg-amber-950/40 text-amber-400 border-amber-800'
-                                                                        : app.status === 'DECLINED'
-                                                                        ? 'bg-zinc-900 text-zinc-500 border-zinc-800'
-                                                                        : 'bg-zinc-950 text-zinc-600 border-zinc-850'
-                                                                }`}>
-                                                                    // {app.status}
-                                                                </span>
-                                                            </div>
-
-                                                            {app.status === 'PENDING' && (
-                                                                <div className="flex items-center gap-2">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleAccept(app)}
-                                                                        disabled={isActionLoading || isFilled}
-                                                                        className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-emerald-800 hover:border-emerald-600 text-emerald-400 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                                                                        title={isFilled ? 'Role is already filled' : 'Accept Applicant'}
-                                                                    >
-                                                                        {isActionLoading ? '...' : '// ACCEPT'}
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleDecline(app)}
-                                                                        disabled={isActionLoading}
-                                                                        className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white text-xs uppercase tracking-wider transition-colors disabled:opacity-40 cursor-pointer"
-                                                                        title="Decline Applicant"
-                                                                    >
-                                                                        {isActionLoading ? '...' : '// DECLINE'}
-                                                                    </button>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                                return (
+                                    <IncomingApplicationCard
+                                        key={app.id}
+                                        application={app}
+                                        targetCollab={targetCollab}
+                                        allApplications={creatorApplications}
+                                        onOpenOverview={handleOpenCollabOverview}
+                                        onAccept={handleAccept}
+                                        onDecline={handleDecline}
+                                        isActionLoading={actionLoadingId === app.id}
+                                    />
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -876,131 +770,54 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
             {/* TAB 2: MY APPLICATIONS (Applicant Side) */}
             {subTab === 'my_applications' && (
                 <div className="space-y-4">
+                    {/* Header */}
+                    <div className="pb-4 border-b border-zinc-800 space-y-1 font-mono">
+                        <h1 className="text-base sm:text-lg font-bold text-white uppercase tracking-wider">
+                            // MY APPLICATIONS
+                        </h1>
+                        <p className="text-xs text-zinc-400">
+                            Track the status of collaboration roles and projects you applied to.
+                        </p>
+                    </div>
+
                     {loadingMyApps ? (
                         <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e]">
                             <div className="w-6 h-6 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
                             <p className="text-xs text-zinc-500 uppercase tracking-wider">// SYNCHRONIZING MY APPLICATIONS...</p>
                         </div>
                     ) : myApplications.length === 0 ? (
-                        <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e] space-y-2">
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// MY APPLICATIONS</span>
-                            <h3 className="text-sm font-bold text-white uppercase tracking-wider">No Active Collab Applications</h3>
+                        <div className="p-10 sm:p-12 text-center border border-zinc-800 bg-[#0c0c0e] space-y-3 font-mono">
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">
+                                // NO APPLICATIONS YET
+                            </span>
+                            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                                You haven't applied to any collaboration projects yet.
+                            </h3>
                             <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
-                                You haven't applied for any collaboration roles yet. Explore published Collabs in Spotlight to discover teams and apply for roles.
+                                Explore published Collabs in Spotlight to discover teams, evaluate roles, and apply directly.
                             </p>
-                            <div className="pt-3">
+                            <div className="pt-2">
                                 <ReactRouterDOM.Link
                                     to="/spotlight?tab=Collabs"
-                                    className="inline-block bg-white text-black hover:bg-zinc-200 px-4 py-2 font-bold text-xs uppercase tracking-wider transition-all"
+                                    className="inline-block bg-white text-black hover:bg-zinc-200 px-4 py-2 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
                                 >
                                     // EXPLORE COLLABS
                                 </ReactRouterDOM.Link>
                             </div>
                         </div>
                     ) : (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             {myApplications.map((app) => {
-                                const isActionLoading = actionLoadingId === app.id;
-
+                                const targetCollab = resolvedCollabsMap[app.collabId] || userCollabs.find(c => c.id === app.collabId);
                                 return (
-                                    <div
+                                    <MyApplicationCard
                                         key={app.id}
-                                        className="p-4 bg-[#0c0c0e] border border-zinc-800 hover:border-zinc-700 transition-all space-y-3"
-                                    >
-                                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-zinc-850">
-                                            <div>
-                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block">// TARGET PROJECT</span>
-                                                <h4 className="text-sm font-bold text-white uppercase tracking-wider">
-                                                    "{app.collabTitle}"
-                                                </h4>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[10px] text-zinc-500">
-                                                    SUBMITTED: {new Date(app.createdAt).toLocaleDateString()}
-                                                </span>
-                                                <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${
-                                                    app.status === 'ACCEPTED'
-                                                        ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800'
-                                                        : app.status === 'PENDING'
-                                                        ? 'bg-amber-950/40 text-amber-400 border-amber-800'
-                                                        : app.status === 'DECLINED'
-                                                        ? 'bg-zinc-900 text-zinc-500 border-zinc-800'
-                                                        : 'bg-zinc-950 text-zinc-600 border-zinc-850'
-                                                }`}>
-                                                    // {app.status}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                                            <div className="space-y-1">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-zinc-500 text-xs">APPLIED ROLE:</span>
-                                                    <span className="text-white font-bold bg-zinc-900 border border-zinc-800 px-2 py-0.5">
-                                                        {app.roleTitle}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-1.5 text-zinc-400 text-[11px]">
-                                                    <span className="text-zinc-500">CREATOR:</span>
-                                                    <span>{app.collabCreatorName || 'Collab Creator'}</span>
-                                                    {app.collabDomain && (
-                                                        <>
-                                                            <span className="text-zinc-600">•</span>
-                                                            <span className="text-zinc-500">{app.collabDomain}</span>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            <div className="flex items-center gap-2">
-                                                {app.status === 'PENDING' && (
-                                                    <button
-                                                        onClick={() => handleWithdraw(app)}
-                                                        disabled={isActionLoading}
-                                                        className="px-3 py-1.5 bg-black hover:bg-red-950/30 border border-zinc-800 hover:border-red-800/80 text-zinc-400 hover:text-red-400 text-xs uppercase tracking-wider transition-colors disabled:opacity-50"
-                                                    >
-                                                        {isActionLoading ? '...' : '// WITHDRAW'}
-                                                    </button>
-                                                )}
-                                                <ReactRouterDOM.Link
-                                                    to="/spotlight?tab=Collabs"
-                                                    className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-white text-xs uppercase tracking-wider transition-colors inline-block text-center"
-                                                >
-                                                    // VIEW IN SPOTLIGHT
-                                                </ReactRouterDOM.Link>
-                                            </div>
-                                        </div>
-
-                                        {app.message && (
-                                            <div className="p-2.5 bg-black border border-zinc-850 text-xs text-zinc-400">
-                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-0.5">// YOUR MESSAGE</span>
-                                                <p className="leading-relaxed">{app.message}</p>
-                                            </div>
-                                        )}
-
-                                        {/* Attached Document */}
-                                        {app.supportingDocument?.url && (
-                                            <div className="p-2.5 bg-black border border-zinc-850 text-xs text-zinc-400">
-                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// ATTACHED DOCUMENT</span>
-                                                <div className="flex items-center justify-between gap-3 flex-wrap">
-                                                    <div className="flex items-center gap-2 font-mono text-zinc-200">
-                                                        <svg className="w-4 h-4 text-zinc-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                        </svg>
-                                                        <span className="truncate max-w-xs">{app.supportingDocument.name}</span>
-                                                    </div>
-                                                    <a
-                                                        href={app.supportingDocument.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-[10px] font-mono text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-2 py-0.5 uppercase tracking-wider transition-colors inline-flex items-center gap-1"
-                                                    >
-                                                        // VIEW DOCUMENT
-                                                    </a>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
+                                        application={app}
+                                        targetCollab={targetCollab}
+                                        onViewDetails={handleOpenCollabOverview}
+                                        onWithdraw={handleWithdraw}
+                                        isActionLoading={actionLoadingId === app.id}
+                                    />
                                 );
                             })}
                         </div>
@@ -1011,7 +828,17 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
             {/* TAB 3: ACTIVE COLLABS */}
             {subTab === 'active' && (
                 <div className="space-y-4">
-                    <div className="p-3 bg-[#0c0c0e] border border-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
+                    {/* Header */}
+                    <div className="pb-4 border-b border-zinc-800 space-y-1 font-mono">
+                        <h1 className="text-base sm:text-lg font-bold text-white uppercase tracking-wider">
+                            // ACTIVE COLLABS
+                        </h1>
+                        <p className="text-xs text-zinc-400">
+                            Confirmed collaborations and partnerships you are currently participating in.
+                        </p>
+                    </div>
+
+                    <div className="p-3 bg-[#0c0c0e] border border-zinc-800 text-xs text-zinc-400 flex items-center justify-between font-mono">
                         <span>// ACTIVE COLLABORATIONS ROSTER</span>
                         <span className="text-[11px] text-zinc-500">Confirmed & accepted project partnerships</span>
                     </div>
@@ -1114,12 +941,13 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                                     </div>
                                                 </div>
                                                 <div className="flex justify-end pt-1">
-                                                    <ReactRouterDOM.Link
-                                                        to="/spotlight?tab=Collabs"
-                                                        className="text-[10px] text-zinc-300 hover:text-white underline font-bold uppercase tracking-wider"
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleOpenCollabOverview(app.collabId, app)}
+                                                        className="text-[10px] text-zinc-300 hover:text-white underline font-bold uppercase tracking-wider font-mono cursor-pointer"
                                                     >
-                                                        // VIEW COLLAB IN SPOTLIGHT
-                                                    </ReactRouterDOM.Link>
+                                                        // VIEW POST
+                                                    </button>
                                                 </div>
                                             </div>
                                         ))}
@@ -1431,6 +1259,353 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                             >
                                 <TrashIcon className="w-3.5 h-3.5" />
                                 <span>{effectiveDeletingId === deleteConfirmCollab.id ? 'DELETING...' : '// DELETE COLLAB'}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Collab Overview Modal */}
+            {overviewModalData.isOpen && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-sm animate-fadeIn"
+                    onClick={handleCloseCollabOverview}
+                >
+                    <div
+                        className="bg-[#0c0c0e] border border-zinc-800 w-full max-w-2xl max-h-[90vh] flex flex-col font-mono text-zinc-300 shadow-2xl overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-800 bg-[#0c0c0e] flex-shrink-0">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">// COLLAB OVERVIEW</span>
+                                {overviewModalData.collab?.id && (
+                                    <span className="text-[10px] text-zinc-500 font-mono">
+                                        [{overviewModalData.collab.id.slice(0, 8)}]
+                                    </span>
+                                )}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleCloseCollabOverview}
+                                className="text-zinc-500 hover:text-white p-1 transition-colors cursor-pointer"
+                                title="Close overview"
+                            >
+                                <CloseIcon className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Modal Scrollable Body */}
+                        <div className="p-5 overflow-y-auto space-y-5 text-xs">
+                            {overviewModalData.isLoading ? (
+                                <div className="py-16 text-center space-y-3">
+                                    <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent animate-spin mx-auto" />
+                                    <p className="text-xs text-zinc-500 uppercase tracking-wider">// LOADING COLLAB POST DATA...</p>
+                                </div>
+                            ) : (() => {
+                                const c = overviewModalData.collab;
+                                const a = overviewModalData.application;
+                                const creatorName = c?.author?.name || a?.collabCreatorName || currentUser?.displayName || 'Project Lead';
+                                const creatorAvatar = c?.author?.avatarUrl || a?.collabCreatorAvatar || currentUser?.photoURL || `https://picsum.photos/seed/${c?.id || a?.collabId}/200`;
+                                const creatorUsername = c?.author?.username || (c?.authorId === currentUser?.uid ? (currentUser as any)?.username : undefined);
+                                const isVerified = Boolean(c?.author?.isVerified);
+
+                                const title = c?.aiSummary || c?.oneLine || a?.collabTitle || 'Untitled Collab Post';
+                                const overview = c?.content || c?.oneLine || a?.collabOverview || 'No description provided for this collaboration signal.';
+                                const domain = (c?.domain || c?.category || a?.collabDomain || 'TECHNOLOGY').toUpperCase();
+                                const projectStatus = (c?.collabDetails?.projectStatus || 'MVP').toUpperCase();
+
+                                const rawRoles: CollabRole[] = c?.collabDetails?.roles || [];
+                                const allSkills = Array.from(new Set([
+                                    ...rawRoles.flatMap((r: any) => Array.isArray(r?.skills) ? r.skills : (typeof r?.skills === 'string' ? [r.skills] : [])),
+                                    ...(c?.tags || [])
+                                ])).filter(Boolean);
+
+                                const collabTypes = c?.collabDetails?.collabTypes && c.collabDetails.collabTypes.length > 0
+                                    ? c.collabDetails.collabTypes.join(' · ').toUpperCase()
+                                    : 'OPEN COLLABORATION';
+
+                                const commitment = c?.collabDetails?.availability?.toUpperCase() || 'FLEXIBLE';
+
+                                const locationInfo = c?.collabDetails?.location === 'Specific Location' && c?.collabDetails?.specificLocation
+                                    ? `SPECIFIC LOCATION (${c.collabDetails.specificLocation.toUpperCase()})`
+                                    : (c?.collabDetails?.location || 'REMOTE').toUpperCase();
+
+                                return (
+                                    <div className="space-y-4">
+                                        {/* // CREATOR & DOMAIN */}
+                                        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-zinc-850">
+                                            <div className="space-y-1">
+                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// CREATOR</span>
+                                                <div className="flex items-center gap-3">
+                                                    <img
+                                                        src={creatorAvatar}
+                                                        onError={handleImageError}
+                                                        alt={creatorName}
+                                                        className="w-10 h-10 border border-zinc-700 object-cover bg-zinc-900 flex-shrink-0"
+                                                    />
+                                                    <div>
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <span className="font-bold text-white text-sm">
+                                                                {creatorName}
+                                                            </span>
+                                                            {isVerified && <CheckBadgeIcon className="w-4 h-4 text-zinc-400" />}
+                                                        </div>
+                                                        {creatorUsername && (
+                                                            <span className="text-[11px] text-zinc-500 block">
+                                                                @{creatorUsername}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Domain Pill */}
+                                            <div className="text-right">
+                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// DOMAIN</span>
+                                                <span className="text-[11px] uppercase font-mono px-2.5 py-1 bg-zinc-900 border border-zinc-800 text-zinc-200 inline-block">
+                                                    {domain}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* // TITLE */}
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// TITLE</span>
+                                            <h3 className="text-base sm:text-lg font-bold text-white leading-snug">
+                                                "{title}"
+                                            </h3>
+                                        </div>
+
+                                        {/* // OVERVIEW */}
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// OVERVIEW</span>
+                                            <div className="p-3.5 bg-black/60 border border-zinc-850 text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap">
+                                                {overview}
+                                            </div>
+                                        </div>
+
+                                        {/* KEY SPECIFICATIONS GRID: PROJECT STATUS, COLLABORATION, COMMITMENT, LOCATION */}
+                                        <div className="p-3.5 bg-black/60 border border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
+                                            {/* PROJECT STATUS */}
+                                            <div>
+                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// PROJECT STATUS</span>
+                                                <span className="text-xs text-white font-bold bg-zinc-900 border border-zinc-700 px-2 py-0.5 inline-block">
+                                                    {projectStatus}
+                                                </span>
+                                            </div>
+
+                                            {/* COLLABORATION */}
+                                            <div>
+                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// COLLABORATION</span>
+                                                <span className="text-xs text-zinc-200">
+                                                    {collabTypes}
+                                                </span>
+                                            </div>
+
+                                            {/* COMMITMENT */}
+                                            <div>
+                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// COMMITMENT</span>
+                                                <span className="text-xs text-zinc-200">
+                                                    {commitment}
+                                                </span>
+                                            </div>
+
+                                            {/* LOCATION */}
+                                            <div>
+                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block mb-1">// LOCATION</span>
+                                                <span className="text-xs text-zinc-200">
+                                                    {locationInfo}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* // LOOKING FOR (ROLES & REMAINING POSITIONS) */}
+                                        <div className="space-y-1.5">
+                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// LOOKING FOR</span>
+                                            {rawRoles.length > 0 ? (
+                                                <div className="space-y-2">
+                                                    {rawRoles.map((r, idx) => {
+                                                        const cap = getRoleCapacity(r, creatorApplications);
+                                                        const isThisRole = a?.roleId === r.id;
+                                                        return (
+                                                            <div
+                                                                key={r.id || idx}
+                                                                className={`p-3 border transition-colors ${
+                                                                    isThisRole
+                                                                        ? 'bg-zinc-900/90 border-emerald-800/80'
+                                                                        : 'bg-black/60 border-zinc-800/80'
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="font-bold text-white text-xs">{r.title}</span>
+                                                                        <span className="text-[10px] text-zinc-400 font-bold">×{r.count || 1}</span>
+                                                                        {isThisRole && (
+                                                                            <span className="text-[9px] uppercase px-1.5 py-0.2 bg-emerald-950/60 text-emerald-400 border border-emerald-800">
+                                                                                // APPLIED ROLE
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div>
+                                                                        {cap.isFilled ? (
+                                                                            <span className="text-[10px] text-zinc-500 font-bold">// FILLED</span>
+                                                                        ) : (
+                                                                            <span className="text-[10px] text-emerald-400 font-bold">
+                                                                                // {cap.remaining} OF {r.count} OPEN
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Responsibilities if provided */}
+                                                                {r.responsibilities && (
+                                                                    <p className="text-zinc-400 text-[11px] leading-relaxed mt-2 pt-2 border-t border-zinc-850">
+                                                                        <span className="text-zinc-500 font-bold mr-1">// SCOPE:</span>
+                                                                        {r.responsibilities}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <div className="p-3 bg-black/60 border border-zinc-800 text-zinc-300">
+                                                    {a?.roleTitle ? (
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="font-bold text-white">{a.roleTitle}</span>
+                                                            <span className="text-[10px] text-zinc-500">// ROLE APPLIED</span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-zinc-500 italic">No role details specified</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* // REQUIRED SKILLS */}
+                                        <div className="space-y-1.5">
+                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// REQUIRED SKILLS</span>
+                                            {allSkills.length > 0 ? (
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {allSkills.map((s, idx) => (
+                                                        <span
+                                                            key={idx}
+                                                            className="text-[10px] bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-zinc-300"
+                                                        >
+                                                            {s}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <span className="text-[11px] text-zinc-500 italic">
+                                                    No specific skills listed
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* EXTENDED DETAILS (Experience, Background if available) */}
+                                        {(c?.collabDetails?.experience || c?.collabDetails?.background) && (
+                                            <div className="space-y-1.5 pt-2 border-t border-zinc-850">
+                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// COLLABORATOR PREFERENCES</span>
+                                                <div className="p-3 bg-black/60 border border-zinc-850 space-y-2 text-[11px]">
+                                                    {c?.collabDetails?.experience && (
+                                                        <div>
+                                                            <span className="text-zinc-500 font-bold mr-1.5">EXPERIENCE:</span>
+                                                            <span className="text-zinc-300">{c.collabDetails.experience}</span>
+                                                        </div>
+                                                    )}
+                                                    {c?.collabDetails?.background && (
+                                                        <div>
+                                                            <span className="text-zinc-500 font-bold mr-1.5">BACKGROUND:</span>
+                                                            <span className="text-zinc-300">{c.collabDetails.background}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* // YOUR SUBMITTED APPLICATION DETAILS (when viewing from application context) */}
+                                        {a && (
+                                            <div className="space-y-2 pt-2.5 border-t border-zinc-850">
+                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">
+                                                    // YOUR SUBMITTED APPLICATION
+                                                </span>
+                                                <div className="p-3 bg-black/70 border border-zinc-850 space-y-2.5 text-xs">
+                                                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-zinc-900 text-[11px]">
+                                                        <div>
+                                                            <span className="text-zinc-500 font-bold mr-1">// APPLIED FOR:</span>
+                                                            <span className="text-white font-bold">{a.roleTitle}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-zinc-400">
+                                                                <span className="text-zinc-500 font-bold mr-1">// APPLIED:</span>
+                                                                {a.createdAt
+                                                                    ? (typeof a.createdAt?.toDate === 'function'
+                                                                        ? a.createdAt.toDate().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                                                                        : new Date(a.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))
+                                                                    : 'Recently'}
+                                                            </span>
+                                                            <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${
+                                                                a.status === 'ACCEPTED'
+                                                                    ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800'
+                                                                    : a.status === 'PENDING'
+                                                                    ? 'bg-amber-950/40 text-amber-400 border-amber-800'
+                                                                    : 'bg-zinc-900 text-zinc-400 border-zinc-750'
+                                                            }`}>
+                                                                // {a.status}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-1">
+                                                        <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">
+                                                            // YOUR MESSAGE
+                                                        </span>
+                                                        {a.message?.trim() ? (
+                                                            <p className="text-xs text-zinc-300 leading-relaxed bg-zinc-950 p-2.5 border border-zinc-900 whitespace-pre-wrap">
+                                                                {a.message}
+                                                            </p>
+                                                        ) : (
+                                                            <p className="text-xs text-zinc-500 italic bg-zinc-950 p-2 border border-zinc-900">
+                                                                No custom message attached.
+                                                            </p>
+                                                        )}
+                                                    </div>
+
+                                                    {a.supportingDocument?.url && (
+                                                        <div className="pt-2 border-t border-zinc-900 flex items-center justify-between gap-3 text-xs">
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <svg className="w-4 h-4 text-zinc-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                </svg>
+                                                                <span className="truncate text-zinc-200">{a.supportingDocument.name}</span>
+                                                            </div>
+                                                            <a
+                                                                href={a.supportingDocument.url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[10px] text-white uppercase tracking-wider transition-colors inline-flex items-center gap-1 flex-shrink-0"
+                                                            >
+                                                                // VIEW DOCUMENT
+                                                            </a>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="flex items-center justify-end px-5 py-3 border-t border-zinc-800 bg-[#0c0c0e] flex-shrink-0">
+                            <button
+                                type="button"
+                                onClick={handleCloseCollabOverview}
+                                className="px-4 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-750 text-white text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                            >
+                                // CLOSE
                             </button>
                         </div>
                     </div>

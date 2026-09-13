@@ -8,6 +8,7 @@ import {
     SparklesIcon
 } from '../ui/Icons';
 import { TargetDomainSelector } from '../ui/TargetDomainSelector';
+import { CollabFormFields, CollabFormFieldsRef } from '../collab/CollabFormFields';
 import { updatePost } from '../../services/postService';
 import { getUserChannels } from '../../services/channelService';
 import { useAuth } from '../../contexts/AuthContext';
@@ -31,6 +32,7 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
     onUpdated,
 }) => {
     const { currentUser } = useAuth();
+    const collabFieldsRef = useRef<CollabFormFieldsRef>(null);
 
     // Determine post kind
     const postType = post?.type || PostType.Feed;
@@ -108,7 +110,7 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
                 setAvailability(post.collabDetails.availability || '');
                 setLocation(post.collabDetails.location || 'Remote');
                 setSpecificLocation(post.collabDetails.specificLocation || '');
-                setCollabTypes(Array.isArray(post.collabDetails.collabTypes) ? [...post.collabDetails.collabTypes] : ['Side-project']);
+                setCollabTypes(Array.isArray(post.collabDetails.collabTypes) ? [...post.collabDetails.collabTypes] : ['Open Collaboration']);
                 setProjectStatus(post.collabDetails.projectStatus || 'MVP');
             } else {
                 setRoles([{ id: 'role-1', title: 'Developer', count: 1, skills: [], responsibilities: '' }]);
@@ -117,7 +119,7 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
                 setAvailability('');
                 setLocation('Remote');
                 setSpecificLocation('');
-                setCollabTypes(['Side-project']);
+                setCollabTypes(['Open Collaboration']);
                 setProjectStatus('MVP');
             }
 
@@ -233,28 +235,6 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
         }
     };
 
-    // Collab Roles handlers
-    const handleAddRole = () => {
-        setRoles(prev => [
-            ...prev,
-            { id: `role-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`, title: '', count: 1, skills: [], responsibilities: '' }
-        ]);
-    };
-
-    const handleRemoveRole = (idx: number) => {
-        if (roles.length <= 1) return;
-        setRoles(prev => prev.filter((_, i) => i !== idx));
-    };
-
-    const handleRoleChange = (idx: number, field: keyof CollabRole, val: any) => {
-        setRoles(prev => prev.map((r, i) => i === idx ? { ...r, [field]: val } : r));
-    };
-
-    const handleRoleSkillsChange = (idx: number, skillsStr: string) => {
-        const parsed = skillsStr.split(',').map(s => s.trim()).filter(Boolean);
-        handleRoleChange(idx, 'skills', parsed);
-    };
-
     const toggleCollabType = (t: string) => {
         setCollabTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
     };
@@ -280,8 +260,14 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
             return;
         }
 
+        let effectiveRoles = roles;
         if (isCollab) {
-            const hasInvalidRole = roles.some(r => !r.title.trim());
+            effectiveRoles = collabFieldsRef.current?.getEffectiveRoles() || roles;
+            if (effectiveRoles.length === 0) {
+                setErrorMessage('At least one collaboration role is required.');
+                return;
+            }
+            const hasInvalidRole = effectiveRoles.some(r => !r.title.trim());
             if (hasInvalidRole) {
                 setErrorMessage('Every required role must have a specified title.');
                 return;
@@ -320,7 +306,7 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
             // Collab Details
             if (isCollab) {
                 const cleanedCollab: CollabDetails = {
-                    roles: roles.map(r => ({
+                    roles: effectiveRoles.map(r => ({
                         id: r.id,
                         title: r.title.trim(),
                         count: Number(r.count) || 1,
@@ -415,311 +401,195 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 
                 {/* Scrollable Form Body */}
                 <form id="edit-post-form" onSubmit={handleSave} className="overflow-y-auto p-4 sm:p-6 space-y-5 flex-1 custom-scrollbar">
-                    {/* Header / Hook */}
-                    <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                            <label className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider">
-                                {isQuery ? '// QUERY HOOK · QUESTION' : '// TRANSMISSION HOOK · ONE-LINER'} <span className="text-red-400">*</span>
-                            </label>
-                            <span className="text-[10px] text-zinc-500">{oneLine.length}/140</span>
-                        </div>
-                        <input
-                            type="text"
-                            maxLength={140}
-                            value={oneLine}
-                            onChange={e => setOneLine(e.target.value)}
-                            placeholder={isQuery ? "Ask an architectural or technical question..." : "Enter punchy transmission title / hook..."}
-                            className="w-full bg-zinc-900/60 border border-zinc-800 text-white p-2.5 text-xs focus:border-white focus:outline-none transition-colors"
-                            required
-                        />
-                    </div>
-
-                    {/* Detailed Content */}
-                    <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                            <label className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider">
-                                {isCollab ? '// PROJECT OVERVIEW' : isQuery ? '// DETAILED EXPLANATION' : '// TRANSMISSION CONTENT'} <span className="text-red-400">*</span>
-                            </label>
-                            <span className="text-[10px] text-zinc-500">{content.length} chars</span>
-                        </div>
-                        <textarea
-                            rows={isCollab ? 4 : 5}
-                            value={content}
-                            onChange={e => setContent(e.target.value)}
-                            placeholder="Write complete transmission details..."
-                            className="w-full bg-zinc-900/60 border border-zinc-800 text-white p-2.5 text-xs focus:border-white focus:outline-none transition-colors resize-y"
-                            required
-                        />
-                    </div>
-
-                    {/* Channel Selection (Feeds only) */}
-                    {isFeed && (
-                        <div>
-                            <label className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider block mb-1.5">
-                                // BROADCAST CHANNEL
-                            </label>
-                            {userChannels.length === 0 ? (
-                                <p className="text-[11px] text-zinc-500 italic p-2 bg-zinc-950 border border-zinc-900">
-                                    No user channels found. Maintaining current transmission channel affiliations.
-                                </p>
-                            ) : (
-                                <select
-                                    value={selectedChannelId}
-                                    onChange={e => setSelectedChannelId(e.target.value)}
-                                    className="w-full bg-zinc-900/60 border border-zinc-800 text-white p-2.5 text-xs focus:border-white focus:outline-none"
-                                >
-                                    {userChannels.map(ch => (
-                                        <option key={ch.id} value={ch.id}>
-                                            {ch.name} ({ch.handle || ch.domain || 'Channel'})
-                                        </option>
-                                    ))}
-                                </select>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Target Domain */}
-                    <div>
-                        <TargetDomainSelector
-                            value={domain}
-                            onChange={(val, valid) => {
+                    {isCollab ? (
+                        <CollabFormFields
+                            ref={collabFieldsRef}
+                            domain={domain}
+                            onDomainChange={(val, valid) => {
                                 setDomain(val);
                                 setIsDomainValid(valid);
                             }}
-                            label="// TARGET DOMAIN"
-                            subLabel="Classify the transmission domain"
+                            hook={oneLine}
+                            onHookChange={setOneLine}
+                            projectOverview={content}
+                            onProjectOverviewChange={setContent}
+                            roles={roles}
+                            onRolesChange={setRoles}
+                            experience={experience}
+                            onExperienceChange={setExperience}
+                            background={background}
+                            onBackgroundChange={setBackground}
+                            availability={availability}
+                            onAvailabilityChange={setAvailability}
+                            locationType={location}
+                            onLocationTypeChange={setLocation}
+                            specificLocation={specificLocation}
+                            onSpecificLocationChange={setSpecificLocation}
+                            collabTypes={collabTypes}
+                            onToggleCollabType={toggleCollabType}
+                            projectStatus={projectStatus}
+                            onProjectStatusChange={setProjectStatus}
+                            mediaFile={mediaFile}
+                            previewUrl={mediaPreviewUrl}
+                            existingMediaUrl={existingMediaUrl}
+                            existingMediaType={existingMediaType}
+                            isMediaRemoved={isMediaRemoved}
+                            onFileSelect={(file) => {
+                                if (file.size > 50 * 1024 * 1024) {
+                                    setErrorMessage('Attachment must be smaller than 50MB');
+                                    return;
+                                }
+                                if (mediaPreviewUrl && mediaPreviewUrl.startsWith('blob:')) {
+                                    URL.revokeObjectURL(mediaPreviewUrl);
+                                }
+                                const url = URL.createObjectURL(file);
+                                setMediaFile(file);
+                                setMediaPreviewUrl(url);
+                                setMediaType(file.type.startsWith('video') ? 'video' : 'image');
+                                setIsMediaRemoved(false);
+                                setErrorMessage(null);
+                            }}
+                            onRemoveMedia={handleRemoveMedia}
+                            errorMessage={errorMessage}
                         />
-                    </div>
+                    ) : (
+                        <>
+                            {/* Header / Hook */}
+                            <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <label className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider">
+                                        {isQuery ? '// QUERY HOOK · QUESTION' : '// TRANSMISSION HOOK · ONE-LINER'} <span className="text-red-400">*</span>
+                                    </label>
+                                    <span className="text-[10px] text-zinc-500">{oneLine.length}/140</span>
+                                </div>
+                                <input
+                                    type="text"
+                                    maxLength={140}
+                                    value={oneLine}
+                                    onChange={e => setOneLine(e.target.value)}
+                                    placeholder={isQuery ? "Ask an architectural or technical question..." : "Enter punchy transmission title / hook..."}
+                                    className="w-full bg-zinc-900/60 border border-zinc-800 text-white p-2.5 text-xs focus:border-white focus:outline-none transition-colors"
+                                    required
+                                />
+                            </div>
 
-                    {/* Media Attachments (Replace or Keep) */}
-                    <div>
-                        <label className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider block mb-1.5">
-                            // ATTACHED MEDIA
-                        </label>
-                        {currentDisplayMedia ? (
-                            <div className="relative border border-zinc-800 bg-black p-2 flex flex-col sm:flex-row items-center justify-between gap-3">
-                                <div className="flex items-center gap-3 overflow-hidden w-full sm:w-auto">
-                                    {currentDisplayMediaType === 'video' ? (
-                                        <video src={currentDisplayMedia} className="w-16 h-16 object-cover border border-zinc-800 flex-shrink-0" />
+                            {/* Detailed Content */}
+                            <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <label className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider">
+                                        {isQuery ? '// DETAILED EXPLANATION' : '// TRANSMISSION CONTENT'} <span className="text-red-400">*</span>
+                                    </label>
+                                    <span className="text-[10px] text-zinc-500">{content.length} chars</span>
+                                </div>
+                                <textarea
+                                    rows={5}
+                                    value={content}
+                                    onChange={e => setContent(e.target.value)}
+                                    placeholder="Write complete transmission details..."
+                                    className="w-full bg-zinc-900/60 border border-zinc-800 text-white p-2.5 text-xs focus:border-white focus:outline-none transition-colors resize-y"
+                                    required
+                                />
+                            </div>
+
+                            {/* Channel Selection (Feeds only) */}
+                            {isFeed && (
+                                <div>
+                                    <label className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider block mb-1.5">
+                                        // BROADCAST CHANNEL
+                                    </label>
+                                    {userChannels.length === 0 ? (
+                                        <p className="text-[11px] text-zinc-500 italic p-2 bg-zinc-950 border border-zinc-900">
+                                            No user channels found. Maintaining current transmission channel affiliations.
+                                        </p>
                                     ) : (
-                                        <img src={currentDisplayMedia} alt="Media" className="w-16 h-16 object-cover border border-zinc-800 flex-shrink-0" />
+                                        <select
+                                            value={selectedChannelId}
+                                            onChange={e => setSelectedChannelId(e.target.value)}
+                                            className="w-full bg-zinc-900/60 border border-zinc-800 text-white p-2.5 text-xs focus:border-white focus:outline-none"
+                                        >
+                                            {userChannels.map(ch => (
+                                                <option key={ch.id} value={ch.id}>
+                                                    {ch.name} ({ch.handle || ch.domain || 'Channel'})
+                                                </option>
+                                            ))}
+                                        </select>
                                     )}
-                                    <div className="truncate">
-                                        <span className="text-zinc-200 font-bold block truncate">
-                                            {mediaFile ? mediaFile.name : 'Current Transmission Media'}
-                                        </span>
-                                        <span className="text-[10px] text-zinc-500 uppercase">
-                                            {mediaFile ? `${(mediaFile.size / 1024 / 1024).toFixed(2)} MB` : 'Stored in Cloud'}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                                    <button
-                                        type="button"
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className="px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white text-[11px] uppercase tracking-wider transition-colors"
-                                    >
-                                        Replace
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleRemoveMedia}
-                                        className="px-2.5 py-1.5 bg-red-950/40 hover:bg-red-950 border border-red-800 text-red-400 hover:text-red-300 text-[11px] uppercase tracking-wider transition-colors flex items-center gap-1"
-                                    >
-                                        <TrashIcon className="w-3.5 h-3.5" />
-                                        <span>Remove</span>
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                            <div 
-                                onClick={() => fileInputRef.current?.click()}
-                                className="border border-dashed border-zinc-800 hover:border-zinc-600 bg-zinc-950/40 p-4 text-center cursor-pointer transition-colors"
-                            >
-                                <ArrowUpTrayIcon className="w-5 h-5 mx-auto mb-1 text-zinc-500" />
-                                <span className="text-zinc-300 block font-bold">// ATTACH IMAGE OR VIDEO</span>
-                                <span className="text-zinc-500 text-[10px]">JPG, PNG, WebP, MP4 up to 50MB</span>
-                            </div>
-                        )}
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*,video/*"
-                            onChange={handleFileChange}
-                            className="hidden"
-                        />
-                    </div>
-
-                    {/* Collab-Specific Form Sections */}
-                    {isCollab && (
-                        <div className="pt-4 border-t border-zinc-800 space-y-4">
-                            <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-bold text-white uppercase tracking-wider">// COLLABORATION ROLES</span>
-                                <button
-                                    type="button"
-                                    onClick={handleAddRole}
-                                    className="flex items-center gap-1 text-[11px] text-zinc-300 hover:text-white border border-zinc-800 hover:border-zinc-600 px-2 py-1 bg-zinc-900/60"
-                                >
-                                    <PlusIcon className="w-3.5 h-3.5" />
-                                    <span>Add Role</span>
-                                </button>
-                            </div>
-
-                            {roles.map((role, idx) => (
-                                <div key={role.id || idx} className="p-3 bg-black/60 border border-zinc-800/80 space-y-2.5">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-[10px] text-zinc-500 uppercase font-bold">// ROLE #{idx + 1}</span>
-                                        {roles.length > 1 && (
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRemoveRole(idx)}
-                                                className="text-zinc-500 hover:text-red-400"
-                                            >
-                                                <TrashIcon className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                        <div className="sm:col-span-2">
-                                            <input
-                                                type="text"
-                                                placeholder="Role Title (e.g. Frontend Architect)"
-                                                value={role.title}
-                                                onChange={e => handleRoleChange(idx, 'title', e.target.value)}
-                                                className="w-full bg-zinc-900 border border-zinc-800 p-1.5 text-xs text-white focus:outline-none"
-                                                required
-                                            />
-                                        </div>
-                                        <div>
-                                            <input
-                                                type="number"
-                                                min={1}
-                                                max={20}
-                                                placeholder="Count"
-                                                value={role.count}
-                                                onChange={e => handleRoleChange(idx, 'count', e.target.value)}
-                                                className="w-full bg-zinc-900 border border-zinc-800 p-1.5 text-xs text-white focus:outline-none"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <input
-                                            type="text"
-                                            placeholder="Required Skills (comma separated: React, TypeScript, GraphQL)"
-                                            value={role.skills?.join(', ') || ''}
-                                            onChange={e => handleRoleSkillsChange(idx, e.target.value)}
-                                            className="w-full bg-zinc-900 border border-zinc-800 p-1.5 text-xs text-white focus:outline-none"
-                                        />
-                                    </div>
-                                    <div>
-                                        <input
-                                            type="text"
-                                            placeholder="Role Responsibilities (brief summary)"
-                                            value={role.responsibilities || ''}
-                                            onChange={e => handleRoleChange(idx, 'responsibilities', e.target.value)}
-                                            className="w-full bg-zinc-900 border border-zinc-800 p-1.5 text-xs text-white focus:outline-none"
-                                        />
-                                    </div>
-                                </div>
-                            ))}
-
-                            {/* Project Status & Location */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                                <div>
-                                    <label className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">// PROJECT STATUS</label>
-                                    <select
-                                        value={projectStatus}
-                                        onChange={e => setProjectStatus(e.target.value)}
-                                        className="w-full bg-zinc-900 border border-zinc-800 text-white p-2 text-xs focus:outline-none"
-                                    >
-                                        {PROJECT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">// LOCATION</label>
-                                    <select
-                                        value={location}
-                                        onChange={e => setLocation(e.target.value)}
-                                        className="w-full bg-zinc-900 border border-zinc-800 text-white p-2 text-xs focus:outline-none"
-                                    >
-                                        {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-
-                            {location === 'Specific Location' && (
-                                <div>
-                                    <label className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">// CITY / REGION</label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. San Francisco, CA"
-                                        value={specificLocation}
-                                        onChange={e => setSpecificLocation(e.target.value)}
-                                        className="w-full bg-zinc-900 border border-zinc-800 text-white p-2 text-xs focus:outline-none"
-                                    />
                                 </div>
                             )}
 
-                            {/* Collaboration Types */}
+                            {/* Target Domain */}
                             <div>
-                                <label className="text-[10px] text-zinc-400 uppercase font-bold block mb-1.5">// COLLABORATION FORMAT</label>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {COLLAB_TYPES.map(t => {
-                                        const isSelected = collabTypes.includes(t);
-                                        return (
-                                            <button
-                                                key={t}
-                                                type="button"
-                                                onClick={() => toggleCollabType(t)}
-                                                className={`px-2.5 py-1 text-[11px] uppercase border transition-all ${
-                                                    isSelected
-                                                        ? 'bg-white text-black border-white font-bold'
-                                                        : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:border-zinc-600 hover:text-white'
-                                                }`}
-                                            >
-                                                {t}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
+                                <TargetDomainSelector
+                                    value={domain}
+                                    onChange={(val, valid) => {
+                                        setDomain(val);
+                                        setIsDomainValid(valid);
+                                    }}
+                                    label="// TARGET DOMAIN"
+                                    subLabel="Classify the transmission domain"
+                                />
                             </div>
 
-                            {/* Additional background / requirements */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                <div>
-                                    <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">// EXPERIENCE</label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. 2+ yrs"
-                                        value={experience}
-                                        onChange={e => setExperience(e.target.value)}
-                                        className="w-full bg-zinc-900 border border-zinc-800 p-2 text-xs text-white focus:outline-none"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">// BACKGROUND</label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. CS / Design"
-                                        value={background}
-                                        onChange={e => setBackground(e.target.value)}
-                                        className="w-full bg-zinc-900 border border-zinc-800 p-2 text-xs text-white focus:outline-none"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">// AVAILABILITY</label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. 10 hrs/wk"
-                                        value={availability}
-                                        onChange={e => setAvailability(e.target.value)}
-                                        className="w-full bg-zinc-900 border border-zinc-800 p-2 text-xs text-white focus:outline-none"
-                                    />
-                                </div>
+                            {/* Media Attachments (Replace or Keep) */}
+                            <div>
+                                <label className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider block mb-1.5">
+                                    // ATTACHED MEDIA
+                                </label>
+                                {currentDisplayMedia ? (
+                                    <div className="relative border border-zinc-800 bg-black p-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3 overflow-hidden w-full sm:w-auto">
+                                            {currentDisplayMediaType === 'video' ? (
+                                                <video src={currentDisplayMedia} className="w-16 h-16 object-cover border border-zinc-800 flex-shrink-0" />
+                                            ) : (
+                                                <img src={currentDisplayMedia} alt="Media" className="w-16 h-16 object-cover border border-zinc-800 flex-shrink-0" />
+                                            )}
+                                            <div className="truncate">
+                                                <span className="text-zinc-200 font-bold block truncate">
+                                                    {mediaFile ? mediaFile.name : 'Current Transmission Media'}
+                                                </span>
+                                                <span className="text-[10px] text-zinc-500 uppercase">
+                                                    {mediaFile ? `${(mediaFile.size / 1024 / 1024).toFixed(2)} MB` : 'Stored in Cloud'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className="px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white text-[11px] uppercase tracking-wider transition-colors"
+                                            >
+                                                Replace
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleRemoveMedia}
+                                                className="px-2.5 py-1.5 bg-red-950/40 hover:bg-red-950 border border-red-800 text-red-400 hover:text-red-300 text-[11px] uppercase tracking-wider transition-colors flex items-center gap-1"
+                                            >
+                                                <TrashIcon className="w-3.5 h-3.5" />
+                                                <span>Remove</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div 
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="border border-dashed border-zinc-800 hover:border-zinc-600 bg-zinc-950/40 p-4 text-center cursor-pointer transition-colors"
+                                    >
+                                        <ArrowUpTrayIcon className="w-5 h-5 mx-auto mb-1 text-zinc-500" />
+                                        <span className="text-zinc-300 block font-bold">// ATTACH IMAGE OR VIDEO</span>
+                                        <span className="text-zinc-500 text-[10px]">JPG, PNG, WebP, MP4 up to 50MB</span>
+                                    </div>
+                                )}
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*,video/*"
+                                    onChange={handleFileChange}
+                                    className="hidden"
+                                />
                             </div>
-                        </div>
+                        </>
                     )}
                 </form>
 

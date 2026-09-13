@@ -628,6 +628,21 @@ export const subscribeToUserPosts = (
 };
 
 /**
+ * Fetches a single post by ID.
+ */
+export const getPostById = async (postId: string): Promise<Post | null> => {
+    try {
+        const postRef = doc(db, COLLECTIONS.posts, postId);
+        const postSnap = await getDoc(postRef);
+        if (!postSnap.exists()) return null;
+        return normalizeFirestorePost(postSnap.id, postSnap.data());
+    } catch (err) {
+        console.warn(`[GET_POST_BY_ID_ERROR] Could not fetch post ${postId}:`, err);
+        return null;
+    }
+};
+
+/**
  * Fetches posts created by a specific user.
  */
 export const getUserPosts = async (userId: string): Promise<Post[]> => {

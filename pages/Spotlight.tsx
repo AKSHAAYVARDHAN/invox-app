@@ -1317,8 +1317,8 @@ export const SpotlightPage = () => {
     const [liveCollabProjects, setLiveCollabProjects] = useState<Project[]>([]);
     const collabViewParam = searchParams.get('collabView');
     const openCollabDashboardParam = searchParams.get('openCollabDashboard');
-    const isCollabManagement = (activeTab === 'Collabs' || !searchParams.get('tab') || searchParams.get('tab') === 'Collabs') && (collabViewParam === 'incoming' || collabViewParam === 'active' || openCollabDashboardParam === 'true');
-    const collabManagementTab: 'applications' | 'active' = (collabViewParam === 'active') ? 'active' : 'applications';
+    const isCollabManagement = (activeTab === 'Collabs' || !searchParams.get('tab') || searchParams.get('tab') === 'Collabs') && (collabViewParam === 'incoming' || collabViewParam === 'active' || collabViewParam === 'my_applications' || openCollabDashboardParam === 'true');
+    const collabManagementTab: 'applications' | 'active' | 'my_applications' = (collabViewParam === 'active') ? 'active' : (collabViewParam === 'my_applications' ? 'my_applications' : 'applications');
 
     const handleBackToCollabs = () => {
         setSearchParams(prev => {
@@ -1336,7 +1336,7 @@ export const SpotlightPage = () => {
 
     useEffect(() => {
         const collabView = searchParams.get('collabView');
-        if (collabView === 'incoming' || collabView === 'active' || searchParams.get('openCollabDashboard') === 'true') {
+        if (collabView === 'incoming' || collabView === 'active' || collabView === 'my_applications' || searchParams.get('openCollabDashboard') === 'true') {
             setActiveTab('Collabs');
         }
         const urlTab = searchParams.get('tab');
@@ -3121,7 +3121,7 @@ export const SpotlightPage = () => {
                             setSearchParams(prev => {
                                 const next = new URLSearchParams(prev);
                                 next.set('tab', 'Collabs');
-                                next.set('collabView', tab === 'active' ? 'active' : 'incoming');
+                                next.set('collabView', tab === 'active' ? 'active' : (tab === 'my_applications' ? 'my_applications' : 'incoming'));
                                 next.delete('openCollabDashboard');
                                 return next;
                             });
