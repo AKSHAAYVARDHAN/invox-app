@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
     subscribeToUserConversations,
@@ -23,7 +23,6 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
 }) => {
     const { currentUser, userProfile } = useAuth();
     const [searchParams, setSearchParams] = useSearchParams();
-    const navigate = useNavigate();
 
     const [conversations, setConversations] = useState<CollabConversation[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
@@ -133,9 +132,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
         setIsSending(true);
 
         try {
-            // Determine other participant
             const otherParticipantId = selectedConversation.participants.find(p => p !== currentUser.uid);
-
             const senderName = userProfile?.displayName || currentUser.displayName || 'You';
             const senderAvatar = userProfile?.photoURL || currentUser.photoURL || null;
 
@@ -149,7 +146,6 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
             });
         } catch (err) {
             console.error('[SEND_COLLAB_MESSAGE_ERROR]', err);
-            // Restore text if sending failed
             setInputText(textToSend);
         } finally {
             setIsSending(false);
@@ -164,7 +160,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
         }
     };
 
-    // Helper to format timestamps
+    // Helper to format timestamps compactly
     const formatTimestamp = (val: any) => {
         if (!val) return '';
         try {
@@ -195,7 +191,6 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                 displayName: convo.applicantDetails?.displayName || 'Applicant',
                 username: convo.applicantDetails?.username || '',
                 photoURL: convo.applicantDetails?.photoURL || null,
-                headline: convo.applicantDetails?.headline || '',
                 isApplicant: true,
             };
         }
@@ -203,7 +198,6 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
             displayName: convo.ownerDetails?.displayName || 'Project Owner',
             username: convo.ownerDetails?.username || '',
             photoURL: convo.ownerDetails?.photoURL || null,
-            headline: '',
             isApplicant: false,
         };
     };
@@ -214,7 +208,6 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
         setSearchParams(prev => {
             const next = new URLSearchParams(prev);
             next.set('tab', 'Collabs');
-            // If owner, return to incoming applications; if applicant, return to my_applications
             if (currentUser?.uid === selectedConversation.ownerId) {
                 next.set('collabView', 'incoming');
             } else {
@@ -240,7 +233,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                     <button
                         type="button"
                         onClick={onBack}
-                        className="px-2.5 py-1 bg-transparent hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer"
+                        className="px-2.5 py-1 bg-transparent hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer font-mono"
                         title="Back to Collabs"
                     >
                         <span>←</span>
@@ -252,28 +245,25 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
             {/* Content Display */}
             {loading ? (
                 <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e]">
-                    <div className="w-6 h-6 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
+                    <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
                     <p className="text-xs text-zinc-500 uppercase tracking-wider font-mono">// SYNCHRONIZING...</p>
                 </div>
             ) : !hasData ? (
-                /* Empty State Display (Exact specification) */
+                /* Empty State Display */
                 <div className="border border-zinc-800 bg-[#0c0c0e] p-12 sm:p-16 text-center font-mono my-4">
-                    <div className="max-w-md mx-auto space-y-2">
-                        <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest block">
-                            {view === 'inbox' ? '// INBOX EMPTY' : '// NO TEAM CONVERSATIONS'}
+                    <div className="max-w-md mx-auto space-y-1.5">
+                        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
+                            {view === 'inbox' ? '// NO CONVERSATIONS' : '// NO TEAM CONVERSATIONS'}
                         </span>
-                        <h3 className="text-base sm:text-lg font-bold text-white uppercase tracking-wider">
-                            {view === 'inbox' ? 'INBOX IS EMPTY' : 'NO TEAM CONVERSATIONS YET'}
-                        </h3>
-                        <p className="text-xs text-zinc-400 leading-relaxed pt-1">
+                        <p className="text-xs text-zinc-400 leading-relaxed">
                             {view === 'inbox'
-                                ? "You don't have any messages or conversations yet."
-                                : "You don't have any team conversations yet."}
+                                ? 'No conversations yet.'
+                                : 'You don\'t have any team conversations yet.'}
                         </p>
                     </div>
                 </div>
             ) : view === 'teams' ? (
-                /* Teams View Display (Reserved for future teams handling) */
+                /* Teams View Display */
                 <div className="space-y-3 font-mono text-xs">
                     {teamConversations.map((convo) => (
                         <div
@@ -292,26 +282,28 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                     ))}
                 </div>
             ) : (
-                /* Two-Panel Messaging Layout for INBOX */
-                <div className="border border-zinc-800 bg-[#0c0c0e] font-mono grid grid-cols-1 md:grid-cols-12 min-h-[620px] max-h-[760px] shadow-sm">
-                    {/* LEFT PANEL: Conversation List / Inbox */}
+                /* Two-Column Messaging Workspace for INBOX */
+                <div className="border border-zinc-800 bg-[#0c0c0e] font-mono grid grid-cols-1 md:grid-cols-[30%_70%] h-[600px] sm:h-[640px] overflow-hidden">
+                    {/* LEFT: Conversation List (~28-32%) */}
                     <aside
-                        className={`md:col-span-4 lg:col-span-4 border-r border-zinc-800 flex flex-col h-[620px] md:h-auto ${
-                            selectedConvId && 'hidden md:flex'
+                        className={`border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col h-full overflow-hidden ${
+                            selectedConvId ? 'hidden md:flex' : 'flex'
                         }`}
                     >
-                        {/* Conversations Header */}
-                        <div className="p-3.5 border-b border-zinc-800 flex items-center justify-between bg-black/40 flex-shrink-0">
-                            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                        {/* Section Label Header */}
+                        <div className="px-3.5 py-3 border-b border-zinc-800 flex items-center justify-between bg-black/40 flex-shrink-0">
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
                                 // CONVERSATIONS
                             </span>
-                            <span className="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 px-1.5 py-0.5 font-bold">
-                                {inboxConversations.length}
-                            </span>
+                            {inboxConversations.length > 0 && (
+                                <span className="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 px-1.5 py-0.2 font-mono">
+                                    {inboxConversations.length}
+                                </span>
+                            )}
                         </div>
 
-                        {/* Conversation Items List */}
-                        <div className="flex-1 overflow-y-auto divide-y divide-zinc-850">
+                        {/* Clean Compact Messaging Rows */}
+                        <div className="flex-1 overflow-y-auto divide-y divide-zinc-850/60">
                             {inboxConversations.map((convo) => {
                                 const other = getOtherParticipant(convo);
                                 const isSelected = convo.id === selectedConvId;
@@ -331,14 +323,14 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                 return next;
                                             });
                                         }}
-                                        className={`w-full p-3.5 text-left transition-colors flex items-start gap-3 cursor-pointer ${
+                                        className={`w-full px-3 py-2.5 text-left transition-colors flex items-start gap-2.5 border-l-2 cursor-pointer ${
                                             isSelected
-                                                ? 'bg-zinc-900/90 text-white border-l-2 border-l-emerald-400'
-                                                : 'bg-transparent text-zinc-300 hover:bg-zinc-900/40'
+                                                ? 'bg-zinc-900 border-emerald-400 text-white'
+                                                : 'bg-transparent border-transparent text-zinc-400 hover:bg-zinc-900/40 hover:text-zinc-200'
                                         }`}
                                     >
-                                        {/* Avatar */}
-                                        <div className="w-9 h-9 bg-zinc-900 border border-zinc-700 flex items-center justify-center flex-shrink-0 text-xs font-bold text-white overflow-hidden">
+                                        {/* Avatar (Sharp rectangular) */}
+                                        <div className="w-8 h-8 bg-zinc-900 border border-zinc-750 flex items-center justify-center flex-shrink-0 text-xs font-bold text-white overflow-hidden mt-0.5">
                                             {other.photoURL ? (
                                                 <img
                                                     src={other.photoURL}
@@ -351,29 +343,29 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                             )}
                                         </div>
 
-                                        {/* Details */}
+                                        {/* Row Content */}
                                         <div className="min-w-0 flex-1 space-y-0.5">
-                                            <div className="flex items-baseline justify-between gap-1">
+                                            <div className="flex items-center justify-between gap-1">
                                                 <span className={`text-xs font-bold truncate ${isSelected ? 'text-white' : 'text-zinc-200'}`}>
                                                     {other.displayName}
                                                 </span>
                                                 {timestampStr && (
-                                                    <span className="text-[10px] text-zinc-500 flex-shrink-0">
+                                                    <span className="text-[10px] text-zinc-500 flex-shrink-0 font-mono">
                                                         {timestampStr}
                                                     </span>
                                                 )}
                                             </div>
 
-                                            {/* Project Hook Title */}
-                                            <p className="text-[11px] text-zinc-400 truncate italic">
-                                                "{convo.collabHook || convo.collabTitle}"
+                                            {/* Project name */}
+                                            <p className="text-[11px] text-zinc-500 truncate">
+                                                {convo.collabHook || convo.collabTitle}
                                             </p>
 
-                                            {/* Latest Message Preview */}
-                                            <p className={`text-[11px] truncate pt-0.5 ${
-                                                convo.lastMessage ? 'text-zinc-400' : 'text-zinc-600 italic'
+                                            {/* Short latest-message preview */}
+                                            <p className={`text-[11px] truncate ${
+                                                convo.lastMessage ? (isSelected ? 'text-zinc-300' : 'text-zinc-400') : 'text-zinc-600 italic'
                                             }`}>
-                                                {convo.lastMessage || 'Conversation started'}
+                                                {convo.lastMessage || 'No messages yet'}
                                             </p>
                                         </div>
                                     </button>
@@ -382,118 +374,107 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                         </div>
                     </aside>
 
-                    {/* RIGHT PANEL: Selected Conversation View */}
+                    {/* RIGHT: Active Conversation (~68-72%) */}
                     <main
-                        className={`md:col-span-8 lg:col-span-8 flex flex-col h-[620px] md:h-auto bg-[#0a0a0c] ${
-                            !selectedConvId && 'hidden md:flex'
+                        className={`flex flex-col h-full overflow-hidden bg-[#0a0a0c] ${
+                            !selectedConvId ? 'hidden md:flex' : 'flex'
                         }`}
                     >
                         {selectedConversation ? (
                             <>
-                                {/* Conversation Header */}
+                                {/* Active Conversation Header */}
                                 {(() => {
                                     const other = getOtherParticipant(selectedConversation);
                                     return (
-                                        <div className="p-4 border-b border-zinc-800 bg-[#0c0c0e] flex flex-col gap-3 flex-shrink-0">
-                                            {/* Mobile Back to List Button */}
-                                            <div className="flex md:hidden items-center justify-between pb-2 border-b border-zinc-850">
+                                        <div className="px-4 py-3 border-b border-zinc-800 bg-[#0c0c0e] flex items-center justify-between gap-3 flex-shrink-0">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                {/* Mobile back button to conversation list */}
                                                 <button
                                                     type="button"
                                                     onClick={() => setSelectedConvId(null)}
-                                                    className="text-xs text-zinc-400 hover:text-white flex items-center gap-1.5 cursor-pointer uppercase tracking-wider"
+                                                    className="md:hidden text-xs text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer pr-1 flex-shrink-0 font-mono"
+                                                    title="Back to conversations"
                                                 >
                                                     <span>←</span>
-                                                    <span>// ALL CONVERSATIONS</span>
                                                 </button>
-                                            </div>
 
-                                            <div className="flex items-start justify-between gap-4 flex-wrap">
-                                                {/* Left: Applicant / Owner Identity */}
-                                                <div className="flex items-start gap-3 min-w-0">
-                                                    <div className="w-10 h-10 bg-zinc-900 border border-zinc-700 flex items-center justify-center flex-shrink-0 text-sm font-bold text-white overflow-hidden">
-                                                        {other.photoURL ? (
-                                                            <img
-                                                                src={other.photoURL}
-                                                                alt={other.displayName}
-                                                                className="w-full h-full object-cover"
-                                                                onError={handleImageError}
-                                                            />
-                                                        ) : (
-                                                            <span>{other.displayName.charAt(0).toUpperCase()}</span>
+                                                {/* Avatar */}
+                                                <div className="w-9 h-9 bg-zinc-900 border border-zinc-750 flex items-center justify-center flex-shrink-0 text-xs font-bold text-white overflow-hidden">
+                                                    {other.photoURL ? (
+                                                        <img
+                                                            src={other.photoURL}
+                                                            alt={other.displayName}
+                                                            className="w-full h-full object-cover"
+                                                            onError={handleImageError}
+                                                        />
+                                                    ) : (
+                                                        <span>{other.displayName.charAt(0).toUpperCase()}</span>
+                                                    )}
+                                                </div>
+
+                                                {/* Names + Compact Project/Role Metadata */}
+                                                <div className="min-w-0 space-y-0.5">
+                                                    <div className="flex items-baseline gap-2 truncate">
+                                                        <span className="text-xs sm:text-sm font-bold text-white truncate">
+                                                            {other.displayName}
+                                                        </span>
+                                                        {other.username && (
+                                                            <span className="text-[11px] text-zinc-500 truncate">
+                                                                @{other.username}
+                                                            </span>
                                                         )}
                                                     </div>
 
-                                                    <div className="space-y-0.5 min-w-0">
-                                                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block">
-                                                            // CONVERSATION
+                                                    {/* Compact single-line metadata */}
+                                                    <div className="flex items-center gap-2 text-[11px] text-zinc-400 truncate">
+                                                        <span className="truncate max-w-[200px] sm:max-w-[320px]">
+                                                            <span className="text-zinc-500 font-bold uppercase text-[10px] mr-1">PROJECT:</span>
+                                                            <span className="text-zinc-300">"{selectedConversation.collabHook || selectedConversation.collabTitle}"</span>
                                                         </span>
-                                                        <div className="flex items-baseline gap-2 flex-wrap">
-                                                            <h3 className="text-sm font-bold text-white truncate">
-                                                                {other.displayName}
-                                                            </h3>
-                                                            {other.username && (
-                                                                <span className="text-xs text-zinc-500">
-                                                                    @{other.username}
-                                                                </span>
-                                                            )}
-                                                        </div>
+                                                        <span className="text-zinc-700">|</span>
+                                                        <span className="flex items-center gap-1 flex-shrink-0">
+                                                            <span className="text-zinc-500 font-bold uppercase text-[10px]">ROLE:</span>
+                                                            <span className="text-zinc-300 font-bold">[{selectedConversation.roleTitle}]</span>
+                                                        </span>
                                                     </div>
                                                 </div>
-
-                                                {/* Right: Return to Application Action */}
-                                                {selectedConversation.applicationId && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={handleReturnToApplication}
-                                                        className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-750 hover:border-zinc-500 text-zinc-300 hover:text-white text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer"
-                                                        title="Return to the application to accept or decline"
-                                                    >
-                                                        <span>// VIEW APPLICATION</span>
-                                                        <span>↗</span>
-                                                    </button>
-                                                )}
                                             </div>
 
-                                            {/* Context Row: PROJECT & ROLE */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-zinc-850 text-xs">
-                                                <div>
-                                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">
-                                                        PROJECT
-                                                    </span>
-                                                    <p className="text-zinc-200 font-bold truncate">
-                                                        "{selectedConversation.collabHook || selectedConversation.collabTitle}"
-                                                    </p>
-                                                </div>
-                                                <div>
-                                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">
-                                                        ROLE
-                                                    </span>
-                                                    <span className="inline-block bg-zinc-900 border border-zinc-750 px-2 py-0.5 text-zinc-200 font-bold mt-0.5">
-                                                        {selectedConversation.roleTitle}
-                                                    </span>
-                                                </div>
-                                            </div>
+                                            {/* Action on the right */}
+                                            {selectedConversation.applicationId && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleReturnToApplication}
+                                                    className="px-2.5 py-1.5 bg-transparent hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white text-[11px] uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer flex-shrink-0 font-mono"
+                                                    title="View original application"
+                                                >
+                                                    <span>// VIEW APPLICATION</span>
+                                                    <span>↗</span>
+                                                </button>
+                                            )}
                                         </div>
                                     );
                                 })()}
 
-                                {/* Chronological Messages Stream */}
-                                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                {/* Message Thread (Occupies majority of vertical space) */}
+                                <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
                                     {messagesLoading ? (
                                         <div className="py-12 text-center">
                                             <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
-                                            <p className="text-[11px] text-zinc-500 uppercase tracking-wider font-mono">
+                                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono">
                                                 // LOADING MESSAGES...
                                             </p>
                                         </div>
                                     ) : messages.length === 0 ? (
-                                        <div className="py-12 text-center text-zinc-500 space-y-1">
-                                            <p className="text-xs uppercase tracking-wider font-bold">
-                                                // CONVERSATION OPENED
-                                            </p>
-                                            <p className="text-xs text-zinc-600">
-                                                Send a message below to begin communicating regarding this collaboration.
-                                            </p>
+                                        <div className="h-full flex items-center justify-center p-8 text-center">
+                                            <div className="space-y-1">
+                                                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">
+                                                    // NO MESSAGES YET
+                                                </span>
+                                                <p className="text-xs text-zinc-400">
+                                                    Start the conversation below.
+                                                </p>
+                                            </div>
                                         </div>
                                     ) : (
                                         messages.map((msg) => {
@@ -506,28 +487,22 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                     className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                                                 >
                                                     <div
-                                                        className={`p-3 text-xs max-w-[85%] sm:max-w-[75%] border transition-all ${
+                                                        className={`max-w-[85%] sm:max-w-[70%] px-3 py-2 text-xs border ${
                                                             isMe
                                                                 ? 'bg-zinc-900 border-zinc-750 text-zinc-100'
-                                                                : 'bg-[#121214] border-zinc-800 text-zinc-200'
+                                                                : 'bg-[#131316] border-zinc-800 text-zinc-200'
                                                         }`}
                                                     >
-                                                        {/* Message Header */}
-                                                        <div className="flex items-center gap-2 mb-1 text-[10px]">
-                                                            <span className={isMe ? 'text-zinc-400 font-bold' : 'text-zinc-500 font-bold'}>
-                                                                {isMe ? 'YOU' : (msg.senderName || 'USER')}
-                                                            </span>
-                                                            {timeStr && (
-                                                                <span className="text-zinc-600 font-normal">
-                                                                    · {timeStr}
-                                                                </span>
-                                                            )}
-                                                        </div>
-
-                                                        {/* Message Body */}
-                                                        <div className="whitespace-pre-wrap break-words leading-relaxed">
+                                                        <p className="whitespace-pre-wrap break-words leading-relaxed">
                                                             {msg.text}
-                                                        </div>
+                                                        </p>
+                                                        {timeStr && (
+                                                            <div className={`mt-1 text-[10px] ${
+                                                                isMe ? 'text-zinc-500 text-right' : 'text-zinc-600 text-left'
+                                                            }`}>
+                                                                {timeStr}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             );
@@ -536,30 +511,30 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                     <div ref={messagesEndRef} />
                                 </div>
 
-                                {/* Fixed Message Composer */}
-                                <div className="p-3.5 border-t border-zinc-800 bg-[#0c0c0e] flex-shrink-0">
+                                {/* Message Composer (Permanently anchored to bottom) */}
+                                <div className="p-3 border-t border-zinc-800 bg-[#0c0c0e] flex-shrink-0">
                                     <form
                                         onSubmit={(e) => {
                                             e.preventDefault();
                                             handleSendMessage();
                                         }}
-                                        className="flex items-end gap-2"
+                                        className="flex items-center gap-2"
                                     >
                                         <textarea
                                             ref={textareaRef}
-                                            rows={2}
+                                            rows={1}
                                             value={inputText}
                                             onChange={(e) => setInputText(e.target.value)}
                                             onKeyDown={handleKeyDown}
-                                            placeholder="Type a message... (Press Enter to send)"
+                                            placeholder="Type a message..."
                                             disabled={isSending}
-                                            className="flex-1 bg-black/60 border border-zinc-800 focus:border-zinc-500 text-xs text-white p-2.5 resize-none focus:outline-none placeholder:text-zinc-600 leading-relaxed font-mono disabled:opacity-50"
+                                            className="flex-1 bg-black/70 border border-zinc-800 focus:border-zinc-600 text-xs text-white px-3 py-2 resize-none focus:outline-none placeholder:text-zinc-600 leading-relaxed font-mono disabled:opacity-50 h-[38px]"
                                         />
 
                                         <button
                                             type="submit"
                                             disabled={!inputText.trim() || isSending}
-                                            className="px-4 py-2.5 bg-white text-black hover:bg-zinc-200 border border-white text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex-shrink-0 h-[46px]"
+                                            className="px-4 h-[38px] bg-white text-black hover:bg-zinc-200 border border-white text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex-shrink-0 flex items-center justify-center font-mono"
                                             title="Send message"
                                         >
                                             {isSending ? '// SENDING...' : '// SEND'}
@@ -568,14 +543,14 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                 </div>
                             </>
                         ) : (
-                            /* No conversation selected state */
+                            /* When a conversation is not selected */
                             <div className="h-full flex items-center justify-center p-8 text-center">
-                                <div className="space-y-1.5 max-w-sm">
-                                    <span className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest block">
+                                <div className="space-y-1">
+                                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">
                                         // SELECT A CONVERSATION
                                     </span>
                                     <p className="text-xs text-zinc-400">
-                                        Choose a conversation from the left panel to begin messaging.
+                                        Select a conversation to start messaging.
                                     </p>
                                 </div>
                             </div>
