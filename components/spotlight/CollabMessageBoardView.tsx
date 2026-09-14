@@ -5,6 +5,8 @@ import {
     subscribeToUserConversations,
     subscribeToConversationMessages,
     sendCollabMessage,
+    markConversationAsRead,
+    getConversationUnreadCount,
     type CollabConversation,
     type CollabChatMessage,
 } from '../../services/collabMessageService';
@@ -87,6 +89,19 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
     // Find the currently selected conversation object
     const selectedConversation = inboxConversations.find(c => c.id === selectedConvId) || null;
 
+    // Automatically mark the currently viewed conversation as read
+    useEffect(() => {
+        if (!selectedConvId || !currentUser?.uid || view !== 'inbox') return;
+
+        const currentConv = inboxConversations.find(c => c.id === selectedConvId);
+        if (currentConv) {
+            const unread = getConversationUnreadCount(currentConv, currentUser.uid);
+            if (unread > 0) {
+                markConversationAsRead(selectedConvId, currentUser.uid);
+            }
+        }
+    }, [selectedConvId, inboxConversations, currentUser?.uid, view]);
+
     // Subscribe to messages in the active conversation
     useEffect(() => {
         if (!selectedConvId || view !== 'inbox') {
@@ -167,6 +182,10 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
             const d = typeof val?.toDate === 'function' ? val.toDate() : new Date(val);
             if (isNaN(d.getTime())) return '';
             const now = new Date();
+            const diffMs = now.getTime() - d.getTime();
+            if (diffMs >= 0 && diffMs < 60000) {
+                return 'just now';
+            }
             const isToday = d.toDateString() === now.toDateString();
             const yesterday = new Date(now);
             yesterday.setDate(yesterday.getDate() - 1);
@@ -307,6 +326,8 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                             {inboxConversations.map((convo) => {
                                 const other = getOtherParticipant(convo);
                                 const isSelected = convo.id === selectedConvId;
+                                const unreadCount = isSelected ? 0 : getConversationUnreadCount(convo, currentUser?.uid);
+                                const hasUnread = unreadCount > 0;
                                 const timestampStr = formatTimestamp(convo.lastMessageTimestamp || convo.updatedAt || convo.createdAt);
 
                                 return (
@@ -315,6 +336,9 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                         type="button"
                                         onClick={() => {
                                             setSelectedConvId(convo.id);
+                                            if (currentUser?.uid && hasUnread) {
+                                                markConversationAsRead(convo.id, currentUser.uid);
+                                            }
                                             setSearchParams(prev => {
                                                 const next = new URLSearchParams(prev);
                                                 next.set('tab', 'Collabs');
@@ -326,11 +350,15 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                         className={`w-full px-3 py-2.5 text-left transition-colors flex items-start gap-2.5 border-l-2 cursor-pointer ${
                                             isSelected
                                                 ? 'bg-zinc-900 border-emerald-400 text-white'
+                                                : hasUnread
+                                                ? 'bg-zinc-900/40 border-emerald-500/80 text-zinc-200 hover:bg-zinc-900/60'
                                                 : 'bg-transparent border-transparent text-zinc-400 hover:bg-zinc-900/40 hover:text-zinc-200'
                                         }`}
                                     >
                                         {/* Avatar (Sharp rectangular) */}
-                                        <div className="w-8 h-8 bg-zinc-900 border border-zinc-750 flex items-center justify-center flex-shrink-0 text-xs font-bold text-white overflow-hidden mt-0.5">
+                                        <div className={`w-8 h-8 bg-zinc-900 border flex items-center justify-center flex-shrink-0 text-xs font-bold text-white overflow-hidden mt-0.5 ${
+                                            hasUnread && !isSelected ? 'border-emerald-700/60' : 'border-zinc-750'
+                                        }`}>
                                             {other.photoURL ? (
                                                 <img
                                                     src={other.photoURL}
@@ -346,24 +374,41 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                         {/* Row Content */}
                                         <div className="min-w-0 flex-1 space-y-0.5">
                                             <div className="flex items-center justify-between gap-1">
-                                                <span className={`text-xs font-bold truncate ${isSelected ? 'text-white' : 'text-zinc-200'}`}>
+                                                <span className={`text-xs truncate ${
+                                                    isSelected || hasUnread ? 'font-bold text-white' : 'font-semibold text-zinc-300'
+                                                }`}>
                                                     {other.displayName}
                                                 </span>
-                                                {timestampStr && (
-                                                    <span className="text-[10px] text-zinc-500 flex-shrink-0 font-mono">
-                                                        {timestampStr}
-                                                    </span>
-                                                )}
+                                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                    {timestampStr && (
+                                                        <span className={`text-[10px] font-mono ${
+                                                            hasUnread ? 'text-emerald-400 font-semibold' : 'text-zinc-500'
+                                                        }`}>
+                                                            {timestampStr}
+                                                        </span>
+                                                    )}
+                                                    {hasUnread && (
+                                                        <span className="font-mono font-bold px-1.5 py-0.2 bg-emerald-950/80 text-emerald-400 border border-emerald-700 text-[10px] leading-tight">
+                                                            [{unreadCount}]
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
 
                                             {/* Project name */}
-                                            <p className="text-[11px] text-zinc-500 truncate">
+                                            <p className={`text-[11px] truncate ${
+                                                hasUnread ? 'text-zinc-200 font-medium' : 'text-zinc-500'
+                                            }`}>
                                                 {convo.collabHook || convo.collabTitle}
                                             </p>
 
                                             {/* Short latest-message preview */}
                                             <p className={`text-[11px] truncate ${
-                                                convo.lastMessage ? (isSelected ? 'text-zinc-300' : 'text-zinc-400') : 'text-zinc-600 italic'
+                                                hasUnread
+                                                    ? 'text-zinc-200 font-medium'
+                                                    : convo.lastMessage
+                                                    ? (isSelected ? 'text-zinc-300' : 'text-zinc-400')
+                                                    : 'text-zinc-600 italic'
                                             }`}>
                                                 {convo.lastMessage || 'No messages yet'}
                                             </p>

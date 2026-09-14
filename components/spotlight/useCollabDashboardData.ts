@@ -5,6 +5,11 @@ import {
     subscribeToUserCollabApplications,
 } from '../../services/collabApplicationService';
 import { subscribeToUserPosts } from '../../services/postService';
+import {
+    subscribeToUserConversations,
+    calculateTotalInboxUnread,
+    CollabConversation,
+} from '../../services/collabMessageService';
 import type { CollabApplication, Post } from '../../types';
 
 export interface CollabDashboardData {
@@ -12,6 +17,8 @@ export interface CollabDashboardData {
     creatorApplications: CollabApplication[];
     myApplications: CollabApplication[];
     userCollabs: Post[];
+    conversations: CollabConversation[];
+    inboxUnreadCount: number;
     incomingCount: number;
     pendingIncomingCount: number;
     myAppsCount: number;
@@ -22,11 +29,12 @@ export interface CollabDashboardData {
     acceptedMyApps: CollabApplication[];
 }
 
-export function useCollabDashboardData(): CollabDashboardData {
+export function useCollabDashboardData(activeConversationId?: string | null): CollabDashboardData {
     const { currentUser } = useAuth();
     const [creatorApplications, setCreatorApplications] = useState<CollabApplication[]>([]);
     const [myApplications, setMyApplications] = useState<CollabApplication[]>([]);
     const [userCollabs, setUserCollabs] = useState<Post[]>([]);
+    const [conversations, setConversations] = useState<CollabConversation[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
 
     useEffect(() => {
@@ -34,6 +42,7 @@ export function useCollabDashboardData(): CollabDashboardData {
             setCreatorApplications([]);
             setMyApplications([]);
             setUserCollabs([]);
+            setConversations([]);
             setLoading(false);
             return;
         }
@@ -79,10 +88,23 @@ export function useCollabDashboardData(): CollabDashboardData {
             }
         );
 
+        const unsubConversations = subscribeToUserConversations(
+            currentUser.uid,
+            (convList) => {
+                setConversations(convList);
+                setLoading(false);
+            },
+            (err) => {
+                console.error('[COLLAB_DASHBOARD_CONVERSATIONS_ERROR]', err);
+                setLoading(false);
+            }
+        );
+
         return () => {
             unsubCreator();
             unsubMyApps();
             unsubPosts();
+            unsubConversations();
         };
     }, [currentUser?.uid]);
 
@@ -97,11 +119,19 @@ export function useCollabDashboardData(): CollabDashboardData {
 
     const publishedCount = userCollabs.length;
 
+    const inboxUnreadCount = calculateTotalInboxUnread(
+        conversations,
+        currentUser?.uid,
+        activeConversationId
+    );
+
     return {
         loading,
         creatorApplications,
         myApplications,
         userCollabs,
+        conversations,
+        inboxUnreadCount,
         incomingCount,
         pendingIncomingCount,
         myAppsCount,

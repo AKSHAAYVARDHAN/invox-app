@@ -510,13 +510,14 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
     const [isBrowsingView, setIsBrowsingView] = useState(false);
     const [isPinnedView, setIsPinnedView] = useState(false);
     const [pinnedViewMode, setPinnedViewMode] = useState<'options' | 'profiles'>('options');
-    const collabData = useCollabDashboardData();
-
     const activeCollabView = collabManagementView !== undefined && collabManagementView !== null 
         ? collabManagementView 
         : (searchParams.get('collabView') === 'incoming' || searchParams.get('collabView') === 'active' || searchParams.get('collabView') === 'my_applications' || searchParams.get('collabView') === 'inbox' || searchParams.get('collabView') === 'teams'
             ? (searchParams.get('collabView') as 'incoming' | 'active' | 'my_applications' | 'inbox' | 'teams') 
             : (searchParams.get('openCollabDashboard') === 'true' ? 'incoming' : null));
+
+    const activeConvId = activeCollabView === 'inbox' ? searchParams.get('conversationId') : null;
+    const collabData = useCollabDashboardData(activeConvId);
 
     useEffect(() => {
         setIsBrowsingView(false);
@@ -862,6 +863,15 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                                     INBOX
                                                 </span>
                                             </div>
+                                            {collabData.inboxUnreadCount > 0 && (
+                                                <span className={`font-mono font-bold px-2 py-0.5 border text-[11px] flex-shrink-0 ml-2 ${
+                                                    activeCollabView === 'inbox'
+                                                        ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
+                                                        : 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
+                                                }`}>
+                                                    {collabData.inboxUnreadCount}
+                                                </span>
+                                            )}
                                         </button>
 
                                         {/* // TEAMS */}
