@@ -8,6 +8,7 @@ import { subscribeToUserPosts } from '../../services/postService';
 import {
     subscribeToUserConversations,
     calculateTotalInboxUnread,
+    calculateTotalTeamsUnread,
     CollabConversation,
 } from '../../services/collabMessageService';
 import type { CollabApplication, Post } from '../../types';
@@ -19,6 +20,7 @@ export interface CollabDashboardData {
     userCollabs: Post[];
     conversations: CollabConversation[];
     inboxUnreadCount: number;
+    teamsUnreadCount: number;
     incomingCount: number;
     pendingIncomingCount: number;
     myAppsCount: number;
@@ -29,7 +31,10 @@ export interface CollabDashboardData {
     acceptedMyApps: CollabApplication[];
 }
 
-export function useCollabDashboardData(activeConversationId?: string | null): CollabDashboardData {
+export function useCollabDashboardData(
+    activeConversationId?: string | null,
+    activeTeamConversationId?: string | null
+): CollabDashboardData {
     const { currentUser } = useAuth();
     const [creatorApplications, setCreatorApplications] = useState<CollabApplication[]>([]);
     const [myApplications, setMyApplications] = useState<CollabApplication[]>([]);
@@ -125,6 +130,12 @@ export function useCollabDashboardData(activeConversationId?: string | null): Co
         activeConversationId
     );
 
+    const teamsUnreadCount = calculateTotalTeamsUnread(
+        conversations,
+        currentUser?.uid,
+        activeTeamConversationId
+    );
+
     return {
         loading,
         creatorApplications,
@@ -132,6 +143,7 @@ export function useCollabDashboardData(activeConversationId?: string | null): Co
         userCollabs,
         conversations,
         inboxUnreadCount,
+        teamsUnreadCount,
         incomingCount,
         pendingIncomingCount,
         myAppsCount,

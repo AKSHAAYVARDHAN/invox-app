@@ -517,7 +517,8 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
             : (searchParams.get('openCollabDashboard') === 'true' ? 'incoming' : null));
 
     const activeConvId = activeCollabView === 'inbox' ? searchParams.get('conversationId') : null;
-    const collabData = useCollabDashboardData(activeConvId);
+    const activeTeamConvId = activeCollabView === 'teams' ? searchParams.get('conversationId') : null;
+    const collabData = useCollabDashboardData(activeConvId, activeTeamConvId);
 
     useEffect(() => {
         setIsBrowsingView(false);
@@ -869,7 +870,7 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                                         ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
                                                         : 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
                                                 }`}>
-                                                    {collabData.inboxUnreadCount}
+                                                    [{collabData.inboxUnreadCount}]
                                                 </span>
                                             )}
                                         </button>
@@ -900,6 +901,15 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                                     TEAMS
                                                 </span>
                                             </div>
+                                            {collabData.teamsUnreadCount > 0 && (
+                                                <span className={`font-mono font-bold px-2 py-0.5 border text-[11px] flex-shrink-0 ml-2 ${
+                                                    activeCollabView === 'teams'
+                                                        ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
+                                                        : 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
+                                                }`}>
+                                                    [{collabData.teamsUnreadCount}]
+                                                </span>
+                                            )}
                                         </button>
                                     </div>
                                 </div>

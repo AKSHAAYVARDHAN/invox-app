@@ -76,35 +76,41 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
 
     // Synchronize selected conversation with URL parameter or default
     useEffect(() => {
-        if (urlConvId) {
+        if (urlConvId && activeList.some(c => c.id === urlConvId)) {
             setSelectedConvId(urlConvId);
-        } else if (view === 'inbox' && inboxConversations.length > 0 && !selectedConvId) {
-            // Auto-select first conversation on desktop if none specified
-            if (window.innerWidth >= 768) {
-                setSelectedConvId(inboxConversations[0].id);
+        } else if (activeList.length > 0) {
+            if (!selectedConvId || !activeList.some(c => c.id === selectedConvId)) {
+                // Auto-select first conversation on desktop if none specified
+                if (window.innerWidth >= 768) {
+                    setSelectedConvId(activeList[0].id);
+                } else {
+                    setSelectedConvId(null);
+                }
             }
+        } else {
+            setSelectedConvId(null);
         }
-    }, [urlConvId, inboxConversations, view, selectedConvId]);
+    }, [urlConvId, activeList, view]);
 
     // Find the currently selected conversation object
-    const selectedConversation = inboxConversations.find(c => c.id === selectedConvId) || null;
+    const selectedConversation = activeList.find(c => c.id === selectedConvId) || null;
 
     // Automatically mark the currently viewed conversation as read
     useEffect(() => {
-        if (!selectedConvId || !currentUser?.uid || view !== 'inbox') return;
+        if (!selectedConvId || !currentUser?.uid) return;
 
-        const currentConv = inboxConversations.find(c => c.id === selectedConvId);
+        const currentConv = activeList.find(c => c.id === selectedConvId);
         if (currentConv) {
             const unread = getConversationUnreadCount(currentConv, currentUser.uid);
             if (unread > 0) {
                 markConversationAsRead(selectedConvId, currentUser.uid);
             }
         }
-    }, [selectedConvId, inboxConversations, currentUser?.uid, view]);
+    }, [selectedConvId, activeList, currentUser?.uid]);
 
     // Subscribe to messages in the active conversation
     useEffect(() => {
-        if (!selectedConvId || view !== 'inbox') {
+        if (!selectedConvId) {
             setMessages([]);
             setMessagesLoading(false);
             return;
@@ -127,7 +133,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
         return () => {
             unsubMessages();
         };
-    }, [selectedConvId, view]);
+    }, [selectedConvId]);
 
     // Auto-scroll to bottom of message thread
     useEffect(() => {
@@ -205,12 +211,22 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
 
     // Helper to determine the other party's profile info
     const getOtherParticipant = (convo: CollabConversation) => {
+        if (convo.isTeam || convo.type === 'team') {
+            return {
+                displayName: convo.collabTitle || 'Team Conversation',
+                username: '',
+                photoURL: null,
+                isApplicant: false,
+                isTeam: true,
+            };
+        }
         if (currentUser?.uid && convo.ownerId === currentUser.uid) {
             return {
                 displayName: convo.applicantDetails?.displayName || 'Applicant',
                 username: convo.applicantDetails?.username || '',
                 photoURL: convo.applicantDetails?.photoURL || null,
                 isApplicant: true,
+                isTeam: false,
             };
         }
         return {
@@ -218,6 +234,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
             username: convo.ownerDetails?.username || '',
             photoURL: convo.ownerDetails?.photoURL || null,
             isApplicant: false,
+            isTeam: false,
         };
     };
 
@@ -281,27 +298,8 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                         </p>
                     </div>
                 </div>
-            ) : view === 'teams' ? (
-                /* Teams View Display */
-                <div className="space-y-3 font-mono text-xs">
-                    {teamConversations.map((convo) => (
-                        <div
-                            key={convo.id}
-                            className="p-4 bg-[#0c0c0e] border border-zinc-800 flex items-center justify-between"
-                        >
-                            <div className="space-y-1">
-                                <p className="font-bold text-white uppercase">
-                                    {convo.collabTitle || 'Team Conversation'}
-                                </p>
-                                <p className="text-zinc-400 text-[11px]">
-                                    {convo.lastMessage || 'No messages yet'}
-                                </p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
             ) : (
-                /* Two-Column Messaging Workspace for INBOX */
+                /* Two-Column Messaging Workspace for INBOX & TEAMS */
                 <div className="border border-zinc-800 bg-[#0c0c0e] font-mono grid grid-cols-1 md:grid-cols-[30%_70%] h-[600px] sm:h-[640px] overflow-hidden">
                     {/* LEFT: Conversation List (~28-32%) */}
                     <aside
@@ -312,18 +310,18 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                         {/* Section Label Header */}
                         <div className="px-3.5 py-3 border-b border-zinc-800 flex items-center justify-between bg-black/40 flex-shrink-0">
                             <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                                // CONVERSATIONS
+                                {view === 'inbox' ? '// CONVERSATIONS' : '// TEAM_CHANNELS'}
                             </span>
-                            {inboxConversations.length > 0 && (
+                            {activeList.length > 0 && (
                                 <span className="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 px-1.5 py-0.2 font-mono">
-                                    {inboxConversations.length}
+                                    {activeList.length}
                                 </span>
                             )}
                         </div>
 
                         {/* Clean Compact Messaging Rows */}
                         <div className="flex-1 overflow-y-auto divide-y divide-zinc-850/60">
-                            {inboxConversations.map((convo) => {
+                            {activeList.map((convo) => {
                                 const other = getOtherParticipant(convo);
                                 const isSelected = convo.id === selectedConvId;
                                 const unreadCount = isSelected ? 0 : getConversationUnreadCount(convo, currentUser?.uid);
@@ -342,7 +340,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                             setSearchParams(prev => {
                                                 const next = new URLSearchParams(prev);
                                                 next.set('tab', 'Collabs');
-                                                next.set('collabView', 'inbox');
+                                                next.set('collabView', view);
                                                 next.set('conversationId', convo.id);
                                                 return next;
                                             });
@@ -366,6 +364,8 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                     className="w-full h-full object-cover"
                                                     onError={handleImageError}
                                                 />
+                                            ) : other.isTeam ? (
+                                                <span className="text-emerald-400 font-bold">//</span>
                                             ) : (
                                                 <span>{other.displayName.charAt(0).toUpperCase()}</span>
                                             )}
@@ -395,11 +395,13 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                 </div>
                                             </div>
 
-                                            {/* Project name */}
+                                            {/* Project name / Team info */}
                                             <p className={`text-[11px] truncate ${
                                                 hasUnread ? 'text-zinc-200 font-medium' : 'text-zinc-500'
                                             }`}>
-                                                {convo.collabHook || convo.collabTitle}
+                                                {other.isTeam
+                                                    ? (convo.collabHook || `${convo.participants?.length || 0} members`)
+                                                    : (convo.collabHook || convo.collabTitle)}
                                             </p>
 
                                             {/* Short latest-message preview */}
@@ -452,6 +454,8 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                             className="w-full h-full object-cover"
                                                             onError={handleImageError}
                                                         />
+                                                    ) : other.isTeam ? (
+                                                        <span className="text-emerald-400 font-bold">//</span>
                                                     ) : (
                                                         <span>{other.displayName.charAt(0).toUpperCase()}</span>
                                                     )}
@@ -468,19 +472,40 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                                 @{other.username}
                                                             </span>
                                                         )}
+                                                        {other.isTeam && (
+                                                            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-1.5 py-0.2">
+                                                                TEAM
+                                                            </span>
+                                                        )}
                                                     </div>
 
-                                                    {/* Compact single-line metadata */}
+                                                    {/* Compact metadata */}
                                                     <div className="flex items-center gap-2 text-[11px] text-zinc-400 truncate">
-                                                        <span className="truncate max-w-[200px] sm:max-w-[320px]">
-                                                            <span className="text-zinc-500 font-bold uppercase text-[10px] mr-1">PROJECT:</span>
-                                                            <span className="text-zinc-300">"{selectedConversation.collabHook || selectedConversation.collabTitle}"</span>
-                                                        </span>
-                                                        <span className="text-zinc-700">|</span>
-                                                        <span className="flex items-center gap-1 flex-shrink-0">
-                                                            <span className="text-zinc-500 font-bold uppercase text-[10px]">ROLE:</span>
-                                                            <span className="text-zinc-300 font-bold">[{selectedConversation.roleTitle}]</span>
-                                                        </span>
+                                                        {other.isTeam ? (
+                                                            <span className="truncate">
+                                                                <span className="text-zinc-500 font-bold uppercase text-[10px] mr-1">MEMBERS:</span>
+                                                                <span className="text-zinc-300 font-mono">[{selectedConversation.participants?.length || 0}]</span>
+                                                                {selectedConversation.collabHook && (
+                                                                    <span className="text-zinc-400 ml-2">"{selectedConversation.collabHook}"</span>
+                                                                )}
+                                                            </span>
+                                                        ) : (
+                                                            <>
+                                                                <span className="truncate max-w-[200px] sm:max-w-[320px]">
+                                                                    <span className="text-zinc-500 font-bold uppercase text-[10px] mr-1">PROJECT:</span>
+                                                                    <span className="text-zinc-300">"{selectedConversation.collabHook || selectedConversation.collabTitle}"</span>
+                                                                </span>
+                                                                {selectedConversation.roleTitle && (
+                                                                    <>
+                                                                        <span className="text-zinc-700">|</span>
+                                                                        <span className="flex items-center gap-1 flex-shrink-0">
+                                                                            <span className="text-zinc-500 font-bold uppercase text-[10px]">ROLE:</span>
+                                                                            <span className="text-zinc-300 font-bold">[{selectedConversation.roleTitle}]</span>
+                                                                        </span>
+                                                                    </>
+                                                                )}
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -531,6 +556,11 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                     key={msg.id}
                                                     className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                                                 >
+                                                    {!isMe && msg.senderName && (
+                                                        <span className="text-[10px] text-zinc-400 mb-0.5 px-1 font-semibold font-mono">
+                                                            {msg.senderName}
+                                                        </span>
+                                                    )}
                                                     <div
                                                         className={`max-w-[85%] sm:max-w-[70%] px-3 py-2 text-xs border ${
                                                             isMe

@@ -278,21 +278,23 @@ export const sendCollabMessage = async ({
         createdAt: serverTimestamp(),
     }));
 
-    // Resolve recipientId if missing
-    let targetRecipientId = recipientId;
     const convRef = doc(db, COLLECTIONS.messages, conversationId);
-    if (!targetRecipientId) {
-        try {
-            const cSnap = await getDoc(convRef);
-            if (cSnap.exists()) {
-                const cData = cSnap.data();
-                const parts: string[] = cData.participants || [];
-                targetRecipientId = parts.find(p => p !== senderId);
-            }
-        } catch {
-            // fallback
+    let participants: string[] = [];
+    try {
+        const cSnap = await getDoc(convRef);
+        if (cSnap.exists()) {
+            const cData = cSnap.data();
+            participants = cData.participants || [];
         }
+    } catch {
+        // fallback
     }
+
+    if (recipientId && !participants.includes(recipientId)) {
+        participants.push(recipientId);
+    }
+
+    const recipientsToNotify = participants.filter(p => p !== senderId);
 
     // Update parent conversation summary and unread counts
     try {
@@ -304,9 +306,11 @@ export const sendCollabMessage = async ({
             [`unreadCounts.${senderId}`]: 0,
         };
 
-        if (targetRecipientId) {
-            updatePayload[`unreadCounts.${targetRecipientId}`] = increment(1);
-            updatePayload.unreadBy = arrayUnion(targetRecipientId);
+        if (recipientsToNotify.length > 0) {
+            for (const rId of recipientsToNotify) {
+                updatePayload[`unreadCounts.${rId}`] = increment(1);
+            }
+            updatePayload.unreadBy = arrayUnion(...recipientsToNotify);
             updatePayload.unreadCount = increment(1);
         }
 
@@ -320,12 +324,13 @@ export const sendCollabMessage = async ({
                 lastMessageTimestamp: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             };
-            if (targetRecipientId) {
-                fallbackPayload.unreadCounts = {
-                    [targetRecipientId]: 1,
-                    [senderId]: 0,
-                };
-                fallbackPayload.unreadBy = [targetRecipientId];
+            if (recipientsToNotify.length > 0) {
+                const unreadCounts: Record<string, number> = { [senderId]: 0 };
+                for (const rId of recipientsToNotify) {
+                    unreadCounts[rId] = 1;
+                }
+                fallbackPayload.unreadCounts = unreadCounts;
+                fallbackPayload.unreadBy = recipientsToNotify;
                 fallbackPayload.unreadCount = 1;
             }
             await setDoc(convRef, fallbackPayload, { merge: true });
@@ -334,11 +339,11 @@ export const sendCollabMessage = async ({
         }
     }
 
-    // Optional notification for recipient
-    if (targetRecipientId && targetRecipientId !== senderId) {
+    // Optional notification for recipients
+    for (const rId of recipientsToNotify) {
         try {
             await addDoc(collection(db, COLLECTIONS.notifications), sanitizeForFirestore({
-                recipientId: targetRecipientId,
+                recipientId: rId,
                 senderId,
                 type: 'collab_message',
                 title: 'New Message',
@@ -441,6 +446,31 @@ export const calculateTotalInboxUnread = (
     for (const c of conversations) {
         // Exclude team conversations from inbox count
         if (c.isTeam || c.type === 'team') continue;
+
+        // If the user is currently viewing this conversation, exclude it
+        if (activeConversationId && c.id === activeConversationId) continue;
+
+        total += getConversationUnreadCount(c, userId);
+    }
+
+    return total;
+};
+
+/**
+ * Calculates the total unread message count across all team conversations for a user.
+ * Optionally excludes an active conversation (e.g. one currently open on screen).
+ */
+export const calculateTotalTeamsUnread = (
+    conversations: CollabConversation[],
+    userId?: string | null,
+    activeConversationId?: string | null
+): number => {
+    if (!userId || !conversations || conversations.length === 0) return 0;
+
+    let total = 0;
+    for (const c of conversations) {
+        // Only include team conversations
+        if (!c.isTeam && c.type !== 'team') continue;
 
         // If the user is currently viewing this conversation, exclude it
         if (activeConversationId && c.id === activeConversationId) continue;
