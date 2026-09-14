@@ -9,6 +9,7 @@ import {
     withdrawCollabApplication,
     getRoleCapacity,
 } from '../../services/collabApplicationService';
+import { getOrCreateCollabConversation } from '../../services/collabMessageService';
 import { subscribeToUserPosts, deletePost, getPostById } from '../../services/postService';
 import type { CollabApplication, CollabRole, Post } from '../../types';
 import {
@@ -26,6 +27,7 @@ import {
 import { handleImageError } from '../utils/imageUtils';
 import { MyApplicationCard } from '../collab/MyApplicationCard';
 import { IncomingApplicationCard } from '../collab/IncomingApplicationCard';
+import { ActiveCollabCard } from '../collab/ActiveCollabCard';
 
 interface CollabManagementHubProps {
     initialTab?: 'applications' | 'my_applications' | 'active' | 'published';
@@ -52,7 +54,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
     onCreateCollab,
     deletingId: propDeletingId,
 }) => {
-    const { currentUser } = useAuth();
+    const { currentUser, userProfile } = useAuth();
     const navigate = ReactRouterDOM.useNavigate();
 
     const effectiveInitialTab = useMemo<'applications' | 'my_applications' | 'active' | 'published'>(() => {
@@ -81,6 +83,12 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
     const [actionError, setActionError] = useState<string | null>(null);
     const [actionSuccess, setActionSuccess] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [myAppsSearchQuery, setMyAppsSearchQuery] = useState('');
+    const [myAppsProjectFilter, setMyAppsProjectFilter] = useState<string>('all');
+    const [myAppsStatusFilter, setMyAppsStatusFilter] = useState<'ALL' | 'PENDING' | 'ACCEPTED' | 'DECLINED'>('ALL');
+    const [activeTabSearchQuery, setActiveTabSearchQuery] = useState('');
+    const [activeTabRoleFilter, setActiveTabRoleFilter] = useState<'ALL' | 'MY_COLLABORATIONS' | 'MY_OFFERINGS'>('ALL');
+    const [activeTabProjectFilter, setActiveTabProjectFilter] = useState<string>('all');
     const [activeMenuCollabId, setActiveMenuCollabId] = useState<string | null>(null);
     const [expandedCollabIds, setExpandedCollabIds] = useState<Set<string>>(new Set());
     const [filterCollabId, setFilterCollabId] = useState<string>('all');
@@ -100,6 +108,471 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
         isLoading: false,
     });
 
+    // Synchronize subTab with initialTab
+    useEffect(() => {
+        setSubTab(effectiveInitialTab);
+    }, [effectiveInitialTab]);
+
+    // 1. Data Subscriptions & Loading
+    useEffect(() => {
+        if (propUserCollabs) return;
+        if (!currentUser?.uid) return;
+        const unsub = subscribeToUserPosts(
+            currentUser.uid,
+            (posts) => {
+                const collabs = posts.filter(
+                    (p) => p.category === 'collab' || p.type === 'collab' || Boolean(p.collabDetails)
+                );
+                setInternalUserCollabs(collabs);
+            },
+            (err) => console.error('[USER_COLLABS_SUB_ERROR]', err)
+        );
+        return () => unsub();
+    }, [currentUser?.uid, propUserCollabs]);
+
+    const userCollabs = propUserCollabs || internalUserCollabs;
+
+    // Subscribe to applications on user's collabs (Creator Side)
+    useEffect(() => {
+        if (!currentUser?.uid) {
+            setLoadingCreatorApps(false);
+            return;
+        }
+
+        const unsubscribe = subscribeToCreatorCollabApplications(
+            currentUser.uid,
+            (apps) => {
+                setCreatorApplications(apps);
+                setLoadingCreatorApps(false);
+            },
+            (err) => {
+                console.error('[CREATOR_APPS_SUB_ERROR]', err);
+                setLoadingCreatorApps(false);
+            }
+        );
+
+        return () => unsubscribe();
+    }, [currentUser?.uid]);
+
+    // Subscribe to applications submitted by user (Applicant Side)
+    useEffect(() => {
+        if (!currentUser?.uid) {
+            setLoadingMyApps(false);
+            return;
+        }
+
+        const unsubscribe = subscribeToUserCollabApplications(
+            currentUser.uid,
+            (apps) => {
+                setMyApplications(apps);
+                setLoadingMyApps(false);
+            },
+            (err) => {
+                console.error('[USER_APPS_SUB_ERROR]', err);
+                setLoadingMyApps(false);
+            }
+        );
+
+        return () => unsubscribe();
+    }, [currentUser?.uid]);
+
+    // Resolve Canonical Collab posts for applications (both applicant & creator sides)
+    useEffect(() => {
+        const allApplications = [...myApplications, ...creatorApplications];
+        if (allApplications.length === 0) return;
+
+        const neededCollabIds = Array.from(
+            new Set(allApplications.map(a => a.collabId).filter(Boolean))
+        ).filter(id => !resolvedCollabsMap[id]);
+
+        if (neededCollabIds.length === 0) return;
+
+        let isMounted = true;
+        const fetchTargetCollabs = async () => {
+            const newlyFetched: Record<string, Post> = {};
+            await Promise.all(
+                neededCollabIds.map(async (id) => {
+                    const fromPropCollabs = userCollabs.find(c => c.id === id);
+                    if (fromPropCollabs) {
+                        newlyFetched[id] = fromPropCollabs;
+                        return;
+                    }
+                    try {
+                        const post = await getPostById(id);
+                        if (post) {
+                            newlyFetched[id] = post;
+                        }
+                    } catch (e) {
+                        console.warn(`[RESOLVE_TARGET_COLLAB_ERROR] ${id}:`, e);
+                    }
+                })
+            );
+            if (isMounted && Object.keys(newlyFetched).length > 0) {
+                setResolvedCollabsMap(prev => ({ ...prev, ...newlyFetched }));
+            }
+        };
+
+        fetchTargetCollabs();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [myApplications, creatorApplications, userCollabs, resolvedCollabsMap]);
+
+    // 2. Unique list of creator's published Collabs (merging userCollabs and any collabs referenced in creatorApplications)
+    const creatorPublishedCollabs = useMemo(() => {
+        const map = new Map<string, Post>();
+        userCollabs.forEach(collab => {
+            if (collab.id) map.set(collab.id, collab);
+        });
+        creatorApplications.forEach(app => {
+            if (app.collabId && !map.has(app.collabId)) {
+                map.set(app.collabId, {
+                    id: app.collabId,
+                    aiSummary: app.collabTitle || 'Collab Project',
+                    oneLine: app.collabOverview || app.collabTitle || 'Collab Project',
+                    content: app.collabOverview || '',
+                    domain: app.collabDomain || 'Collab',
+                    category: 'collab',
+                    type: 'Collab' as any,
+                    author: {
+                        name: app.collabCreatorName || currentUser?.displayName || 'Creator',
+                        avatarUrl: app.collabCreatorAvatar || currentUser?.photoURL || '',
+                    },
+                    stats: { likes: 0, views: 0, comments: 0 },
+                    createdAt: new Date(),
+                } as Post);
+            }
+        });
+        return Array.from(map.values());
+    }, [userCollabs, creatorApplications, currentUser]);
+
+    // 3. Counts & Active Collaborations
+    const pendingCreatorAppsCount = useMemo(() => {
+        return creatorApplications.filter(a => a.status === 'PENDING').length;
+    }, [creatorApplications]);
+
+    const pendingMyAppsCount = useMemo(() => {
+        return myApplications.filter(a => a.status === 'PENDING').length;
+    }, [myApplications]);
+
+    const activeCollaborations = useMemo(() => {
+        // Combinations: user accepted as applicant + applicants accepted on user's collabs (deduplicated by ID)
+        const seenApplicantIds = new Set<string>();
+        const asApplicant: CollabApplication[] = [];
+        myApplications.forEach(a => {
+            const status = (a.status || '').toUpperCase();
+            if (status === 'ACCEPTED' && a.id && !seenApplicantIds.has(a.id)) {
+                seenApplicantIds.add(a.id);
+                asApplicant.push(a);
+            }
+        });
+
+        const seenCreatorIds = new Set<string>();
+        const asCreator: CollabApplication[] = [];
+        creatorApplications.forEach(a => {
+            const status = (a.status || '').toUpperCase();
+            if (status === 'ACCEPTED' && a.id && !seenCreatorIds.has(a.id)) {
+                seenCreatorIds.add(a.id);
+                asCreator.push(a);
+            }
+        });
+
+        return { asApplicant, asCreator, total: asApplicant.length + asCreator.length };
+    }, [myApplications, creatorApplications]);
+
+    // 4. Filtered and Searched Active Collaborations
+    const activeSearchAndRoleFiltered = useMemo(() => {
+        type UnifiedActiveItem = {
+            application: CollabApplication;
+            variant: 'my_collaborations' | 'my_offerings';
+            targetCollab: Post | null;
+            otherAccepted: CollabApplication[];
+        };
+
+        const list: UnifiedActiveItem[] = [];
+        const seenAppIds = new Set<string>();
+
+        // Add user accepted as applicant (MY_COLLABORATIONS)
+        if (activeTabRoleFilter === 'ALL' || activeTabRoleFilter === 'MY_COLLABORATIONS') {
+            activeCollaborations.asApplicant.forEach(app => {
+                if (seenAppIds.has(app.id)) return;
+                seenAppIds.add(app.id);
+
+                const targetCollab = resolvedCollabsMap[app.collabId] || userCollabs.find(c => c.id === app.collabId) || null;
+                // Peers in this collab
+                const otherAccepted = activeCollaborations.asApplicant.filter(other => other.collabId === app.collabId);
+                list.push({
+                    application: app,
+                    variant: 'my_collaborations',
+                    targetCollab,
+                    otherAccepted,
+                });
+            });
+        }
+
+        // Add applicants accepted on user's collabs (MY_OFFERINGS)
+        if (activeTabRoleFilter === 'ALL' || activeTabRoleFilter === 'MY_OFFERINGS') {
+            activeCollaborations.asCreator.forEach(app => {
+                if (seenAppIds.has(app.id)) return;
+                seenAppIds.add(app.id);
+
+                const targetCollab = resolvedCollabsMap[app.collabId] || creatorPublishedCollabs.find(c => c.id === app.collabId) || userCollabs.find(c => c.id === app.collabId) || null;
+                // Other accepted applicants on this same collab post
+                const otherAccepted = activeCollaborations.asCreator.filter(other => other.collabId === app.collabId);
+                list.push({
+                    application: app,
+                    variant: 'my_offerings',
+                    targetCollab,
+                    otherAccepted,
+                });
+            });
+        }
+
+        const q = activeTabSearchQuery.toLowerCase().trim();
+        if (!q) return list;
+
+        return list.filter(({ application: app, targetCollab, variant }) => {
+            const hook = (targetCollab?.aiSummary || targetCollab?.oneLine || app.collabTitle || '').toLowerCase();
+            const overview = (targetCollab?.content || targetCollab?.description || app.collabOverview || '').toLowerCase();
+            const domain = (targetCollab?.domain || targetCollab?.category || app.collabDomain || '').toLowerCase();
+            const role = (app.roleTitle || '').toLowerCase();
+            const creatorName = (targetCollab?.author?.name || app.collabCreatorName || (variant === 'my_offerings' ? currentUser?.displayName || '' : '')).toLowerCase();
+            const creatorUsername = (targetCollab?.author?.username || '').toLowerCase();
+            const collaboratorName = (app.applicant?.displayName || '').toLowerCase();
+            const collaboratorUser = (app.applicant?.username || '').toLowerCase();
+            const skills = Array.isArray(app.applicant?.skills) ? app.applicant.skills.join(' ').toLowerCase() : '';
+            const message = (app.message || app.userNote || '').toLowerCase();
+            const location = (targetCollab?.collabDetails?.location || '').toLowerCase();
+
+            return (
+                hook.includes(q) ||
+                overview.includes(q) ||
+                domain.includes(q) ||
+                role.includes(q) ||
+                creatorName.includes(q) ||
+                creatorUsername.includes(q) ||
+                collaboratorName.includes(q) ||
+                collaboratorUser.includes(q) ||
+                skills.includes(q) ||
+                message.includes(q) ||
+                location.includes(q)
+            );
+        });
+    }, [
+        activeCollaborations,
+        activeTabRoleFilter,
+        activeTabSearchQuery,
+        resolvedCollabsMap,
+        creatorPublishedCollabs,
+        userCollabs,
+        currentUser,
+    ]);
+
+    // Dynamic unique projects with ongoing collaborations under current role & search filters
+    const activeProjects = useMemo(() => {
+        const map = new Map<string, { id: string; title: string; count: number }>();
+        activeSearchAndRoleFiltered.forEach(({ application: app, targetCollab }) => {
+            const collabId = app.collabId || targetCollab?.id;
+            if (!collabId) return;
+
+            const existing = map.get(collabId);
+            if (existing) {
+                existing.count += 1;
+            } else {
+                const resolvedCollab = targetCollab || resolvedCollabsMap[collabId] || creatorPublishedCollabs.find(c => c.id === collabId) || userCollabs.find(c => c.id === collabId);
+                const title = resolvedCollab?.aiSummary || resolvedCollab?.oneLine || app.collabTitle || 'Collab Project';
+                map.set(collabId, {
+                    id: collabId,
+                    title,
+                    count: 1,
+                });
+            }
+        });
+        return Array.from(map.values());
+    }, [activeSearchAndRoleFiltered, resolvedCollabsMap, creatorPublishedCollabs, userCollabs]);
+
+    // Effective Project Filter & Auto-Reset
+    const effectiveActiveProjectFilter = activeProjects.some(p => p.id === activeTabProjectFilter)
+        ? activeTabProjectFilter
+        : 'all';
+
+    useEffect(() => {
+        if (activeTabProjectFilter !== 'all' && !activeProjects.some(p => p.id === activeTabProjectFilter)) {
+            setActiveTabProjectFilter('all');
+        }
+    }, [activeProjects, activeTabProjectFilter]);
+
+    // Final filtered active collaborations (applying Project filter)
+    const filteredActiveCollaborations = useMemo(() => {
+        if (effectiveActiveProjectFilter === 'all') {
+            return activeSearchAndRoleFiltered;
+        }
+        return activeSearchAndRoleFiltered.filter(({ application: app, targetCollab }) => {
+            const collabId = app.collabId || targetCollab?.id;
+            return collabId === effectiveActiveProjectFilter;
+        });
+    }, [activeSearchAndRoleFiltered, effectiveActiveProjectFilter]);
+
+    // 5. Formatters
+    const formatDate = (date: any) => {
+        if (!date) return 'RECENT';
+        try {
+            const d = date?.toDate ? date.toDate() : new Date(date);
+            return isNaN(d.getTime()) ? 'RECENT' : d.toLocaleDateString('en-GB');
+        } catch {
+            return 'RECENT';
+        }
+    };
+
+    const formatCollabDetails = (collab: Partial<Post>) => {
+        const types = (collab.collabDetails?.collabTypes && collab.collabDetails.collabTypes.length > 0)
+            ? collab.collabDetails.collabTypes.join(' · ').toUpperCase()
+            : 'OPEN COLLABORATION';
+        const avail = collab.collabDetails?.availability?.toUpperCase() || 'FLEXIBLE';
+        const loc = (collab.collabDetails?.location || 'REMOTE').toUpperCase();
+        return `${types} · ${avail} · ${loc}`;
+    };
+
+    // 6. Filtered incoming applications for creator with search, project, and status support
+    // Step 1-3: Start with incoming applications for published collabs, apply search filtering, apply selected STATUS filter
+    const incomingSearchAndStatusFiltered = useMemo(() => {
+        const q = searchQuery.toLowerCase().trim();
+        return creatorApplications.filter(app => {
+            if (statusFilter !== 'ALL') {
+                const currentStatus = (app.status || '').toUpperCase();
+                if (currentStatus !== statusFilter) return false;
+            }
+            if (q) {
+                const targetCollab = resolvedCollabsMap[app.collabId] || creatorPublishedCollabs.find(c => c.id === app.collabId) || userCollabs.find(c => c.id === app.collabId);
+                const titleMatch = (app.collabTitle || targetCollab?.aiSummary || targetCollab?.oneLine || '').toLowerCase().includes(q);
+                const roleMatch = (app.roleTitle || '').toLowerCase().includes(q);
+                const applicantName = (app.applicant?.displayName || '').toLowerCase().includes(q);
+                const applicantUser = (app.applicant?.username || '').toLowerCase().includes(q);
+                const domainMatch = (targetCollab?.domain || targetCollab?.category || app.collabDomain || '').toLowerCase().includes(q);
+                const messageMatch = (app.message || '').toLowerCase().includes(q);
+                return titleMatch || roleMatch || applicantName || applicantUser || domainMatch || messageMatch;
+            }
+            return true;
+        });
+    }, [creatorApplications, searchQuery, statusFilter, resolvedCollabsMap, creatorPublishedCollabs, userCollabs]);
+
+    // Step 4: Build the PROJECT dropdown options dynamically from this status-and-search filtered dataset
+    const incomingProjects = useMemo(() => {
+        const map = new Map<string, { id: string; title: string; count: number }>();
+        incomingSearchAndStatusFiltered.forEach(app => {
+            if (!app.collabId) return;
+            const existing = map.get(app.collabId);
+            if (existing) {
+                existing.count += 1;
+            } else {
+                const targetCollab = resolvedCollabsMap[app.collabId] || creatorPublishedCollabs.find(c => c.id === app.collabId) || userCollabs.find(c => c.id === app.collabId);
+                const title = targetCollab?.aiSummary || targetCollab?.oneLine || app.collabTitle || 'Collab Project';
+                map.set(app.collabId, {
+                    id: app.collabId,
+                    title,
+                    count: 1,
+                });
+            }
+        });
+        return Array.from(map.values());
+    }, [incomingSearchAndStatusFiltered, resolvedCollabsMap, creatorPublishedCollabs, userCollabs]);
+
+    // Auto-reset project filter if selected project is no longer present under current filter
+    const effectiveIncomingProjectFilter = incomingProjects.some(p => p.id === filterCollabId)
+        ? filterCollabId
+        : 'all';
+
+    useEffect(() => {
+        if (filterCollabId !== 'all' && !incomingProjects.some(p => p.id === filterCollabId)) {
+            setFilterCollabId('all');
+        }
+    }, [incomingProjects, filterCollabId]);
+
+    // Step 5: Apply the selected PROJECT filter to produce the final displayed incoming applications
+    const filteredCreatorApps = useMemo(() => {
+        if (effectiveIncomingProjectFilter === 'all') {
+            return incomingSearchAndStatusFiltered;
+        }
+        return incomingSearchAndStatusFiltered.filter(app => app.collabId === effectiveIncomingProjectFilter);
+    }, [incomingSearchAndStatusFiltered, effectiveIncomingProjectFilter]);
+
+    // 6b. Filtered applications submitted by user (Applicant Side) with search, project, and status support
+    // Step 1-3: Start with user's applications, apply search filtering, apply selected STATUS filter
+    const myAppsSearchAndStatusFiltered = useMemo(() => {
+        const q = myAppsSearchQuery.toLowerCase().trim();
+        return myApplications.filter(app => {
+            if (myAppsStatusFilter !== 'ALL') {
+                const currentStatus = (app.status || '').toUpperCase();
+                if (currentStatus !== myAppsStatusFilter) {
+                    return false;
+                }
+            }
+            if (q) {
+                const targetCollab = resolvedCollabsMap[app.collabId] || userCollabs.find(c => c.id === app.collabId);
+                const hookTitle = (targetCollab?.aiSummary || targetCollab?.oneLine || app.collabTitle || '').toLowerCase();
+                const overview = (targetCollab?.content || targetCollab?.description || app.collabOverview || '').toLowerCase();
+                const creatorName = (targetCollab?.author?.name || app.collabCreatorName || '').toLowerCase();
+                const creatorUsername = (targetCollab?.author?.username || '').toLowerCase();
+                const appliedRole = (app.roleTitle || '').toLowerCase();
+                const domain = (targetCollab?.domain || targetCollab?.category || app.collabDomain || '').toLowerCase();
+                const note = (app.userNote || app.message || '').toLowerCase();
+
+                return (
+                    hookTitle.includes(q) ||
+                    overview.includes(q) ||
+                    creatorName.includes(q) ||
+                    creatorUsername.includes(q) ||
+                    appliedRole.includes(q) ||
+                    domain.includes(q) ||
+                    note.includes(q)
+                );
+            }
+            return true;
+        });
+    }, [myApplications, myAppsSearchQuery, myAppsStatusFilter, resolvedCollabsMap, userCollabs]);
+
+    // Step 4: Build the PROJECT dropdown options dynamically from this status-filtered result
+    const myAppsProjects = useMemo(() => {
+        const map = new Map<string, { id: string; title: string; count: number }>();
+        myAppsSearchAndStatusFiltered.forEach(app => {
+            if (!app.collabId) return;
+            const existing = map.get(app.collabId);
+            if (existing) {
+                existing.count += 1;
+            } else {
+                const targetCollab = resolvedCollabsMap[app.collabId] || userCollabs.find(c => c.id === app.collabId);
+                const title = targetCollab?.aiSummary || targetCollab?.oneLine || app.collabTitle || 'Collab Project';
+                map.set(app.collabId, {
+                    id: app.collabId,
+                    title,
+                    count: 1,
+                });
+            }
+        });
+        return Array.from(map.values());
+    }, [myAppsSearchAndStatusFiltered, resolvedCollabsMap, userCollabs]);
+
+    // Auto-reset project filter if selected project is no longer present in filtered projects
+    const effectiveProjectFilter = myAppsProjects.some(p => p.id === myAppsProjectFilter)
+        ? myAppsProjectFilter
+        : 'all';
+
+    useEffect(() => {
+        if (myAppsProjectFilter !== 'all' && !myAppsProjects.some(p => p.id === myAppsProjectFilter)) {
+            setMyAppsProjectFilter('all');
+        }
+    }, [myAppsProjects, myAppsProjectFilter]);
+
+    // Step 5: Apply the selected PROJECT filter to produce the final displayed applications
+    const filteredMyApps = useMemo(() => {
+        if (effectiveProjectFilter === 'all') {
+            return myAppsSearchAndStatusFiltered;
+        }
+        return myAppsSearchAndStatusFiltered.filter(app => app.collabId === effectiveProjectFilter);
+    }, [myAppsSearchAndStatusFiltered, effectiveProjectFilter]);
+
+    // 7. Actions & Handlers
     const effectiveDeletingId = propDeletingId || internalDeletingId;
 
     const handleDelete = async (postId: string) => {
@@ -211,130 +684,6 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [overviewModalData.isOpen, deleteConfirmCollab]);
 
-    useEffect(() => {
-        setSubTab(effectiveInitialTab);
-    }, [effectiveInitialTab]);
-
-    useEffect(() => {
-        if (propUserCollabs) return;
-        if (!currentUser?.uid) return;
-        const unsub = subscribeToUserPosts(
-            currentUser.uid,
-            (posts) => {
-                const collabs = posts.filter(
-                    (p) => p.category === 'collab' || p.type === 'collab' || Boolean(p.collabDetails)
-                );
-                setInternalUserCollabs(collabs);
-            },
-            (err) => console.error('[USER_COLLABS_SUB_ERROR]', err)
-        );
-        return () => unsub();
-    }, [currentUser?.uid, propUserCollabs]);
-
-    const userCollabs = propUserCollabs || internalUserCollabs;
-
-    // Subscribe to applications on user's collabs (Creator Side)
-    useEffect(() => {
-        if (!currentUser?.uid) {
-            setLoadingCreatorApps(false);
-            return;
-        }
-
-        const unsubscribe = subscribeToCreatorCollabApplications(
-            currentUser.uid,
-            (apps) => {
-                setCreatorApplications(apps);
-                setLoadingCreatorApps(false);
-            },
-            (err) => {
-                console.error('[CREATOR_APPS_SUB_ERROR]', err);
-                setLoadingCreatorApps(false);
-            }
-        );
-
-        return () => unsubscribe();
-    }, [currentUser?.uid]);
-
-    // Subscribe to applications submitted by user (Applicant Side)
-    useEffect(() => {
-        if (!currentUser?.uid) {
-            setLoadingMyApps(false);
-            return;
-        }
-
-        const unsubscribe = subscribeToUserCollabApplications(
-            currentUser.uid,
-            (apps) => {
-                setMyApplications(apps);
-                setLoadingMyApps(false);
-            },
-            (err) => {
-                console.error('[USER_APPS_SUB_ERROR]', err);
-                setLoadingMyApps(false);
-            }
-        );
-
-        return () => unsubscribe();
-    }, [currentUser?.uid]);
-
-    // Resolve Canonical Collab posts for applications submitted by user
-    useEffect(() => {
-        if (myApplications.length === 0) return;
-
-        const neededCollabIds = Array.from(
-            new Set(myApplications.map(a => a.collabId).filter(Boolean))
-        ).filter(id => !resolvedCollabsMap[id]);
-
-        if (neededCollabIds.length === 0) return;
-
-        let isMounted = true;
-        const fetchTargetCollabs = async () => {
-            const newlyFetched: Record<string, Post> = {};
-            await Promise.all(
-                neededCollabIds.map(async (id) => {
-                    const fromPropCollabs = userCollabs.find(c => c.id === id);
-                    if (fromPropCollabs) {
-                        newlyFetched[id] = fromPropCollabs;
-                        return;
-                    }
-                    try {
-                        const post = await getPostById(id);
-                        if (post) {
-                            newlyFetched[id] = post;
-                        }
-                    } catch (e) {
-                        console.warn(`[RESOLVE_TARGET_COLLAB_ERROR] ${id}:`, e);
-                    }
-                })
-            );
-            if (isMounted && Object.keys(newlyFetched).length > 0) {
-                setResolvedCollabsMap(prev => ({ ...prev, ...newlyFetched }));
-            }
-        };
-
-        fetchTargetCollabs();
-
-        return () => {
-            isMounted = false;
-        };
-    }, [myApplications, userCollabs, resolvedCollabsMap]);
-
-    // Counts
-    const pendingCreatorAppsCount = useMemo(() => {
-        return creatorApplications.filter(a => a.status === 'PENDING').length;
-    }, [creatorApplications]);
-
-    const pendingMyAppsCount = useMemo(() => {
-        return myApplications.filter(a => a.status === 'PENDING').length;
-    }, [myApplications]);
-
-    const activeCollaborations = useMemo(() => {
-        // Combinations: user accepted as applicant + applicants accepted on user's collabs
-        const asApplicant = myApplications.filter(a => a.status === 'ACCEPTED');
-        const asCreator = creatorApplications.filter(a => a.status === 'ACCEPTED');
-        return { asApplicant, asCreator, total: asApplicant.length + asCreator.length };
-    }, [myApplications, creatorApplications]);
-
     const toggleCollabDetails = (id: string) => {
         setExpandedCollabIds(prev => {
             const next = new Set(prev);
@@ -409,72 +758,29 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
         }
     };
 
-    // Unique list of creator's published Collabs (merging userCollabs and any collabs referenced in creatorApplications)
-    const creatorPublishedCollabs = useMemo(() => {
-        const map = new Map<string, Post>();
-        userCollabs.forEach(collab => {
-            if (collab.id) map.set(collab.id, collab);
-        });
-        creatorApplications.forEach(app => {
-            if (app.collabId && !map.has(app.collabId)) {
-                map.set(app.collabId, {
-                    id: app.collabId,
-                    aiSummary: app.collabTitle || 'Collab Project',
-                    oneLine: app.collabOverview || app.collabTitle || 'Collab Project',
-                    content: app.collabOverview || '',
-                    domain: app.collabDomain || 'Collab',
-                    category: 'collab',
-                    type: 'Collab' as any,
-                    author: {
-                        name: app.collabCreatorName || currentUser?.displayName || 'Creator',
-                        avatarUrl: app.collabCreatorAvatar || currentUser?.photoURL || '',
-                    },
-                    stats: { likes: 0, views: 0, comments: 0 },
-                    createdAt: new Date(),
-                } as Post);
-            }
-        });
-        return Array.from(map.values());
-    }, [userCollabs, creatorApplications, currentUser]);
+    // Handle Message Applicant (Opens/creates conversation and navigates to MESSAGE BOARD → INBOX)
+    const handleMessageApplicant = async (app: CollabApplication, collab?: Post | null) => {
+        if (!currentUser?.uid) return;
+        setActionError(null);
+        setActionLoadingId(app.id);
 
-    const formatDate = (date: any) => {
-        if (!date) return 'RECENT';
         try {
-            const d = date?.toDate ? date.toDate() : new Date(date);
-            return isNaN(d.getTime()) ? 'RECENT' : d.toLocaleDateString('en-GB');
-        } catch {
-            return 'RECENT';
+            const convId = await getOrCreateCollabConversation({
+                application: app,
+                targetCollab: collab,
+                currentUser,
+                userProfile,
+            });
+
+            // Navigate cleanly to MESSAGE BOARD → INBOX with the active conversation selected
+            navigate(`?tab=Collabs&collabView=inbox&conversationId=${convId}`);
+        } catch (err: any) {
+            console.error('[MESSAGE_APPLICANT_ERROR]', err);
+            setActionError(err.message || 'Failed to open conversation with applicant.');
+        } finally {
+            setActionLoadingId(null);
         }
     };
-
-    const formatCollabDetails = (collab: Partial<Post>) => {
-        const types = (collab.collabDetails?.collabTypes && collab.collabDetails.collabTypes.length > 0)
-            ? collab.collabDetails.collabTypes.join(' · ').toUpperCase()
-            : 'OPEN COLLABORATION';
-        const avail = collab.collabDetails?.availability?.toUpperCase() || 'FLEXIBLE';
-        const loc = (collab.collabDetails?.location || 'REMOTE').toUpperCase();
-        return `${types} · ${avail} · ${loc}`;
-    };
-
-    // Filtered incoming applications for creator with search and status support
-    const filteredCreatorApps = useMemo(() => {
-        const q = searchQuery.toLowerCase().trim();
-        return creatorApplications.filter(app => {
-            if (filterCollabId !== 'all' && app.collabId !== filterCollabId) return false;
-            if (statusFilter !== 'ALL' && app.status !== statusFilter) return false;
-            if (q) {
-                const targetCollab = creatorPublishedCollabs.find(c => c.id === app.collabId) || userCollabs.find(c => c.id === app.collabId);
-                const titleMatch = (app.collabTitle || targetCollab?.aiSummary || targetCollab?.oneLine || '').toLowerCase().includes(q);
-                const roleMatch = (app.roleTitle || '').toLowerCase().includes(q);
-                const applicantName = (app.applicant?.displayName || '').toLowerCase().includes(q);
-                const applicantUser = (app.applicant?.username || '').toLowerCase().includes(q);
-                const domainMatch = (targetCollab?.domain || targetCollab?.category || app.collabDomain || '').toLowerCase().includes(q);
-                const messageMatch = (app.message || '').toLowerCase().includes(q);
-                return titleMatch || roleMatch || applicantName || applicantUser || domainMatch || messageMatch;
-            }
-            return true;
-        });
-    }, [creatorApplications, filterCollabId, statusFilter, searchQuery, creatorPublishedCollabs, userCollabs]);
 
     return (
         <div className="space-y-4 font-mono text-zinc-300">
@@ -677,19 +983,16 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                             <div className="flex items-center gap-2">
                                 <span className="text-zinc-500 uppercase text-[10px] tracking-wider font-bold">// PROJECT:</span>
                                 <select
-                                    value={filterCollabId}
+                                    value={effectiveIncomingProjectFilter}
                                     onChange={(e) => setFilterCollabId(e.target.value)}
                                     className="bg-black border border-zinc-750 text-xs text-white px-2.5 py-1 focus:outline-none focus:border-zinc-500 cursor-pointer max-w-[200px] truncate"
                                 >
-                                    <option value="all">ALL PROJECTS ({creatorApplications.length})</option>
-                                    {creatorPublishedCollabs.map(collab => {
-                                        const count = creatorApplications.filter(a => a.collabId === collab.id).length;
-                                        return (
-                                            <option key={collab.id} value={collab.id}>
-                                                {collab.aiSummary || collab.oneLine || 'Collab'} ({count})
-                                            </option>
-                                        );
-                                    })}
+                                    <option value="all">ALL PROJECTS ({incomingSearchAndStatusFiltered.length})</option>
+                                    {incomingProjects.map(project => (
+                                        <option key={project.id} value={project.id}>
+                                            {project.title} ({project.count})
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
 
@@ -758,6 +1061,7 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                         onOpenOverview={handleOpenCollabOverview}
                                         onAccept={handleAccept}
                                         onDecline={handleDecline}
+                                        onMessage={handleMessageApplicant}
                                         isActionLoading={actionLoadingId === app.id}
                                     />
                                 );
@@ -778,6 +1082,77 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                         <p className="text-xs text-zinc-400">
                             Track the status of collaboration roles and projects you applied to.
                         </p>
+                    </div>
+
+                    {/* Search Bar */}
+                    <div className="relative font-mono">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
+                            <MagnifyingGlassIcon className="w-4 h-4" />
+                        </div>
+                        <input
+                            type="text"
+                            value={myAppsSearchQuery}
+                            onChange={(e) => setMyAppsSearchQuery(e.target.value)}
+                            placeholder="// SEARCH APPLICATIONS..."
+                            className="w-full bg-[#0c0c0e] border border-zinc-800 hover:border-zinc-700 focus:border-zinc-500 pl-9 pr-8 py-2 text-xs font-mono text-white placeholder-zinc-500 focus:outline-none transition-colors"
+                        />
+                        {myAppsSearchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setMyAppsSearchQuery('')}
+                                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-zinc-500 hover:text-white cursor-pointer"
+                                title="Clear search"
+                            >
+                                <CloseIcon className="w-3.5 h-3.5" />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Project & Status Filters */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-[#0c0c0e] border border-zinc-800 font-mono text-xs">
+                        <div className="flex flex-wrap items-center gap-3">
+                            {/* Project Dropdown */}
+                            <div className="flex items-center gap-2">
+                                <span className="text-zinc-500 uppercase text-[10px] tracking-wider font-bold">// PROJECT:</span>
+                                <select
+                                    value={effectiveProjectFilter}
+                                    onChange={(e) => setMyAppsProjectFilter(e.target.value)}
+                                    className="bg-black border border-zinc-750 text-xs text-white px-2.5 py-1 focus:outline-none focus:border-zinc-500 cursor-pointer max-w-[200px] truncate"
+                                >
+                                    <option value="all">ALL PROJECTS ({myAppsSearchAndStatusFiltered.length})</option>
+                                    {myAppsProjects.map(project => (
+                                        <option key={project.id} value={project.id}>
+                                            {project.title} ({project.count})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Status Filter */}
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-zinc-500 uppercase text-[10px] tracking-wider font-bold">// STATUS:</span>
+                                <div className="flex items-center gap-1">
+                                    {(['ALL', 'PENDING', 'ACCEPTED', 'DECLINED'] as const).map(st => (
+                                        <button
+                                            key={st}
+                                            type="button"
+                                            onClick={() => setMyAppsStatusFilter(st)}
+                                            className={`px-2 py-0.5 text-[10px] uppercase border transition-all cursor-pointer ${
+                                                myAppsStatusFilter === st
+                                                    ? 'bg-white text-black border-white font-bold'
+                                                    : 'bg-black text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-200'
+                                            }`}
+                                        >
+                                            {st}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="text-[11px] text-zinc-400 self-end sm:self-auto">
+                            Showing <span className="text-white font-bold">{filteredMyApps.length}</span> {filteredMyApps.length === 1 ? 'application' : 'applications'}
+                        </div>
                     </div>
 
                     {loadingMyApps ? (
@@ -805,9 +1180,32 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                                 </ReactRouterDOM.Link>
                             </div>
                         </div>
+                    ) : filteredMyApps.length === 0 ? (
+                        <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e] space-y-2 font-mono">
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">
+                                // NO APPLICATIONS FOUND
+                            </span>
+                            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                                No applications match your current search or filter.
+                            </h3>
+                            <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
+                                Try adjusting your search terms or status filter to find what you're looking for.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setMyAppsProjectFilter('all');
+                                    setMyAppsStatusFilter('ALL');
+                                    setMyAppsSearchQuery('');
+                                }}
+                                className="mt-3 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-750 text-xs text-zinc-300 hover:text-white uppercase tracking-wider transition-colors inline-block cursor-pointer font-mono"
+                            >
+                                // RESET FILTERS
+                            </button>
+                        </div>
                     ) : (
                         <div className="space-y-4">
-                            {myApplications.map((app) => {
+                            {filteredMyApps.map((app) => {
                                 const targetCollab = resolvedCollabsMap[app.collabId] || userCollabs.find(c => c.id === app.collabId);
                                 return (
                                     <MyApplicationCard
@@ -838,122 +1236,149 @@ export const CollabManagementHub: React.FC<CollabManagementHubProps> = ({
                         </p>
                     </div>
 
-                    <div className="p-3 bg-[#0c0c0e] border border-zinc-800 text-xs text-zinc-400 flex items-center justify-between font-mono">
-                        <span>// ACTIVE COLLABORATIONS ROSTER</span>
-                        <span className="text-[11px] text-zinc-500">Confirmed & accepted project partnerships</span>
+                    {/* Search Bar */}
+                    <div className="relative font-mono">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
+                            <MagnifyingGlassIcon className="w-4 h-4" />
+                        </div>
+                        <input
+                            type="text"
+                            value={activeTabSearchQuery}
+                            onChange={(e) => setActiveTabSearchQuery(e.target.value)}
+                            placeholder="// SEARCH COLLABS..."
+                            className="w-full bg-[#0c0c0e] border border-zinc-800 hover:border-zinc-700 focus:border-zinc-500 pl-9 pr-8 py-2 text-xs font-mono text-white placeholder-zinc-500 focus:outline-none transition-colors"
+                        />
+                        {activeTabSearchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setActiveTabSearchQuery('')}
+                                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-zinc-500 hover:text-white cursor-pointer"
+                            >
+                                <CloseIcon className="w-3.5 h-3.5" />
+                            </button>
+                        )}
                     </div>
 
-                    {activeCollaborations.total === 0 ? (
-                        <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e] space-y-2">
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// ACTIVE COLLABS</span>
-                            <h3 className="text-sm font-bold text-white uppercase tracking-wider">No Active Collaborations Yet</h3>
+                    {/* Filter Bar */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-[#0c0c0e] border border-zinc-800 font-mono text-xs">
+                        <div className="flex flex-wrap items-center gap-3">
+                            {/* Project Dropdown */}
+                            <div className="flex items-center gap-2">
+                                <span className="text-zinc-500 uppercase text-[10px] tracking-wider font-bold">// PROJECT:</span>
+                                <select
+                                    value={effectiveActiveProjectFilter}
+                                    onChange={(e) => setActiveTabProjectFilter(e.target.value)}
+                                    className="bg-black border border-zinc-750 text-xs text-white px-2.5 py-1 focus:outline-none focus:border-zinc-500 cursor-pointer max-w-[200px] truncate"
+                                >
+                                    <option value="all">ALL PROJECTS ({activeSearchAndRoleFiltered.length})</option>
+                                    {activeProjects.map(project => (
+                                        <option key={project.id} value={project.id}>
+                                            {project.title} ({project.count})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Role / Collaboration Filter */}
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-zinc-500 uppercase text-[10px] tracking-wider font-bold">// FILTER:</span>
+                                <div className="flex items-center gap-1">
+                                    {([
+                                        { id: 'ALL', label: 'ALL' },
+                                        { id: 'MY_COLLABORATIONS', label: 'MY COLLABORATIONS' },
+                                        { id: 'MY_OFFERINGS', label: 'MY OFFERINGS' },
+                                    ] as const).map(tab => (
+                                        <button
+                                            key={tab.id}
+                                            type="button"
+                                            onClick={() => setActiveTabRoleFilter(tab.id)}
+                                            className={`px-2 py-0.5 text-[10px] uppercase border transition-all cursor-pointer ${
+                                                activeTabRoleFilter === tab.id
+                                                    ? 'bg-white text-black border-white font-bold'
+                                                    : 'bg-black text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-200'
+                                            }`}
+                                        >
+                                            {tab.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="text-[11px] text-zinc-400 self-end sm:self-auto">
+                            Showing <span className="text-white font-bold">{filteredActiveCollaborations.length}</span> active collaborations
+                        </div>
+                    </div>
+
+                    {/* Active Collaborations Content */}
+                    {loadingMyApps || loadingCreatorApps ? (
+                        <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e]">
+                            <div className="w-6 h-6 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
+                            <p className="text-xs text-zinc-500 uppercase tracking-wider">// SYNCHRONIZING COLLABORATIONS...</p>
+                        </div>
+                    ) : activeCollaborations.total === 0 ? (
+                        <div className="p-10 sm:p-12 text-center border border-zinc-800 bg-[#0c0c0e] space-y-3 font-mono">
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">
+                                // NO ACTIVE COLLABS
+                            </span>
+                            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                                No active collaborations confirmed yet.
+                            </h3>
                             <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
-                                When you accept an applicant for your Collab or a creator accepts your application, the confirmed collaboration will appear here.
+                                When a creator accepts your role application, or when you accept an applicant for your published Collab, your confirmed partnership and project workspace will appear here.
                             </p>
+                            <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+                                <ReactRouterDOM.Link
+                                    to="/spotlight?tab=Collabs"
+                                    className="inline-block bg-white text-black hover:bg-zinc-200 px-4 py-2 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+                                >
+                                    // EXPLORE COLLABS
+                                </ReactRouterDOM.Link>
+                                {onCreateCollab && (
+                                    <button
+                                        type="button"
+                                        onClick={onCreateCollab}
+                                        className="inline-block bg-zinc-900 border border-zinc-700 text-white hover:border-zinc-500 px-4 py-2 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+                                    >
+                                        + CREATE COLLAB
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    ) : filteredActiveCollaborations.length === 0 ? (
+                        <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e] space-y-2 font-mono">
+                            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                                {activeTabSearchQuery.trim() ? '// NO ACTIVE COLLABS FOUND' : '// NO COLLABORATIONS MATCHING FILTER'}
+                            </h3>
+                            <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
+                                {activeTabSearchQuery.trim()
+                                    ? `No active collaborations match "${activeTabSearchQuery}".`
+                                    : `No collaborations found under the current filter selection.`}
+                            </p>
+                            {activeTabSearchQuery.trim() && (
+                                <div className="pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTabSearchQuery('')}
+                                        className="text-xs text-emerald-400 hover:underline uppercase tracking-wider font-bold cursor-pointer"
+                                    >
+                                        // CLEAR SEARCH
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {/* Collaborations on My Projects */}
-                            {activeCollaborations.asCreator.length > 0 && (
-                                <div className="space-y-2.5">
-                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// COLLABORATORS ON YOUR PROJECTS</span>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        {activeCollaborations.asCreator.map(app => (
-                                            <div key={app.id} className="p-3.5 bg-[#0c0c0e] border border-emerald-900/60 space-y-2.5">
-                                                <div className="flex items-center justify-between border-b border-zinc-850 pb-2">
-                                                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">// ACTIVE COLLABORATOR</span>
-                                                    <span className="text-[10px] text-zinc-500">SINCE {new Date(app.updatedAt || app.createdAt).toLocaleDateString()}</span>
-                                                </div>
-                                                <div className="flex items-start gap-3">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => navigate(`/profile/${app.applicantId}`)}
-                                                        className="w-9 h-9 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 flex items-center justify-center flex-shrink-0 cursor-pointer transition-colors"
-                                                        title={`View ${app.applicant?.displayName || 'collaborator'}'s Profile`}
-                                                    >
-                                                        {app.applicant?.photoURL ? (
-                                                            <img src={app.applicant.photoURL} alt={app.applicant.displayName} className="w-full h-full object-cover" />
-                                                        ) : (
-                                                            <span className="font-bold text-white text-xs">{(app.applicant?.displayName || 'C').charAt(0)}</span>
-                                                        )}
-                                                    </button>
-                                                    <div className="min-w-0 flex-1">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => navigate(`/profile/${app.applicantId}`)}
-                                                            className="font-bold text-white text-xs truncate hover:underline text-left block"
-                                                        >
-                                                            {app.applicant?.displayName}
-                                                        </button>
-                                                        <p className="text-[11px] text-zinc-400">@{app.applicant?.username}</p>
-                                                        <span className="inline-block mt-1 bg-zinc-900 border border-zinc-800 text-zinc-200 text-[10px] px-2 py-0.5 font-bold">
-                                                            ROLE: {app.roleTitle}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div className="pt-1 text-[11px] text-zinc-400">
-                                                    <span className="text-zinc-500 font-bold">PROJECT:</span> "{app.collabTitle}"
-                                                </div>
-                                                <div className="flex justify-end pt-1 gap-3">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => navigate(`/profile/${app.applicantId}`)}
-                                                        className="text-[10px] text-zinc-300 hover:text-white underline font-bold uppercase tracking-wider"
-                                                    >
-                                                        // VIEW PROFILE
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setSelectedApplicant(app)}
-                                                        className="text-[10px] text-zinc-500 hover:text-zinc-300 uppercase tracking-wider"
-                                                    >
-                                                        // DOSSIER
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Projects Where User is Collaborating */}
-                            {activeCollaborations.asApplicant.length > 0 && (
-                                <div className="space-y-2.5">
-                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">// PROJECTS YOU ARE COLLABORATING ON</span>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        {activeCollaborations.asApplicant.map(app => (
-                                            <div key={app.id} className="p-3.5 bg-[#0c0c0e] border border-emerald-900/60 space-y-2.5">
-                                                <div className="flex items-center justify-between border-b border-zinc-850 pb-2">
-                                                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">// CONFIRMED ROLE</span>
-                                                    <span className="text-[10px] text-zinc-500">SINCE {new Date(app.updatedAt || app.createdAt).toLocaleDateString()}</span>
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-bold text-white text-sm uppercase tracking-wider truncate">
-                                                        "{app.collabTitle}"
-                                                    </h4>
-                                                    <p className="text-[11px] text-zinc-400 mt-0.5">
-                                                        CREATOR: {app.collabCreatorName || 'Project Lead'} • {app.collabDomain || 'Tech'}
-                                                    </p>
-                                                    <div className="mt-2">
-                                                        <span className="bg-zinc-900 border border-zinc-800 text-emerald-400 text-xs px-2 py-0.5 font-bold">
-                                                            YOUR ROLE: {app.roleTitle}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex justify-end pt-1">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleOpenCollabOverview(app.collabId, app)}
-                                                        className="text-[10px] text-zinc-300 hover:text-white underline font-bold uppercase tracking-wider font-mono cursor-pointer"
-                                                    >
-                                                        // VIEW POST
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                            {filteredActiveCollaborations.map(({ application, variant, targetCollab, otherAccepted }) => (
+                                <ActiveCollabCard
+                                    key={`${variant}-${application.id}`}
+                                    application={application}
+                                    targetCollab={targetCollab}
+                                    variant={variant}
+                                    otherAcceptedApplications={otherAccepted}
+                                    onViewDetails={(app, collab) => handleOpenCollabOverview(app, collab)}
+                                />
+                            ))}
                         </div>
                     )}
                 </div>

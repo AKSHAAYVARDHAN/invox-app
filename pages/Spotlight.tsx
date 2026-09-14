@@ -66,6 +66,7 @@ import { useAIAssistant } from '../contexts/AIAssistantContext';
 import { useFilters } from '../contexts/AIAssistantContext';
 import { subscribeToCollabPosts, getCollabPosts, postToProject } from '../services/postService';
 import { CollabManagementHub } from '../components/spotlight/CollabManagementHub';
+import { CollabMessageBoardView } from '../components/spotlight/CollabMessageBoardView';
 import { useCollabDashboardData } from '../components/spotlight/useCollabDashboardData';
 
 
@@ -1317,7 +1318,7 @@ export const SpotlightPage = () => {
     const [liveCollabProjects, setLiveCollabProjects] = useState<Project[]>([]);
     const collabViewParam = searchParams.get('collabView');
     const openCollabDashboardParam = searchParams.get('openCollabDashboard');
-    const isCollabManagement = (activeTab === 'Collabs' || !searchParams.get('tab') || searchParams.get('tab') === 'Collabs') && (collabViewParam === 'incoming' || collabViewParam === 'active' || collabViewParam === 'my_applications' || openCollabDashboardParam === 'true');
+    const isCollabManagement = (activeTab === 'Collabs' || !searchParams.get('tab') || searchParams.get('tab') === 'Collabs') && (collabViewParam === 'incoming' || collabViewParam === 'active' || collabViewParam === 'my_applications' || collabViewParam === 'inbox' || collabViewParam === 'teams' || openCollabDashboardParam === 'true');
     const collabManagementTab: 'applications' | 'active' | 'my_applications' = (collabViewParam === 'active') ? 'active' : (collabViewParam === 'my_applications' ? 'my_applications' : 'applications');
 
     const handleBackToCollabs = () => {
@@ -1336,7 +1337,7 @@ export const SpotlightPage = () => {
 
     useEffect(() => {
         const collabView = searchParams.get('collabView');
-        if (collabView === 'incoming' || collabView === 'active' || collabView === 'my_applications' || searchParams.get('openCollabDashboard') === 'true') {
+        if (collabView === 'incoming' || collabView === 'active' || collabView === 'my_applications' || collabView === 'inbox' || collabView === 'teams' || searchParams.get('openCollabDashboard') === 'true') {
             setActiveTab('Collabs');
         }
         const urlTab = searchParams.get('tab');
@@ -3112,6 +3113,15 @@ export const SpotlightPage = () => {
     
         if (activeTab === 'Collabs') {
             if (isCollabManagement) {
+                if (collabViewParam === 'inbox' || collabViewParam === 'teams') {
+                    return (
+                        <CollabMessageBoardView
+                            view={collabViewParam}
+                            onBack={handleBackToCollabs}
+                            initialConversationId={searchParams.get('conversationId')}
+                        />
+                    );
+                }
                 return (
                     <CollabManagementHub
                         initialTab={collabManagementTab}

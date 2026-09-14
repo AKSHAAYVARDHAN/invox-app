@@ -218,8 +218,8 @@ interface RightSidebarProps {
     setUploadTriggerTarget?: (target: string | null) => void;
     discoverSearchTerm?: string;
     setDiscoverSearchTerm?: (term: string) => void;
-    collabManagementView?: 'incoming' | 'active' | 'my_applications' | null;
-    setCollabManagementView?: (view: 'incoming' | 'active' | 'my_applications' | null) => void;
+    collabManagementView?: 'incoming' | 'active' | 'my_applications' | 'inbox' | 'teams' | null;
+    setCollabManagementView?: (view: 'incoming' | 'active' | 'my_applications' | 'inbox' | 'teams' | null) => void;
 }
 
 const DiscoverSidebar: React.FC<Pick<RightSidebarProps, 'activityFilter' | 'setActivityFilter' | 'discoverSearchTerm' | 'setDiscoverSearchTerm'>> = ({ 
@@ -514,8 +514,8 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
 
     const activeCollabView = collabManagementView !== undefined && collabManagementView !== null 
         ? collabManagementView 
-        : (searchParams.get('collabView') === 'incoming' || searchParams.get('collabView') === 'active' || searchParams.get('collabView') === 'my_applications'
-            ? (searchParams.get('collabView') as 'incoming' | 'active' | 'my_applications') 
+        : (searchParams.get('collabView') === 'incoming' || searchParams.get('collabView') === 'active' || searchParams.get('collabView') === 'my_applications' || searchParams.get('collabView') === 'inbox' || searchParams.get('collabView') === 'teams'
+            ? (searchParams.get('collabView') as 'incoming' | 'active' | 'my_applications' | 'inbox' | 'teams') 
             : (searchParams.get('openCollabDashboard') === 'true' ? 'incoming' : null));
 
     useEffect(() => {
@@ -699,15 +699,17 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
 
                         {variant === 'spotlight-collabs' && (
                             <div className="space-y-4">
-                                {/* SECTION 1: // MY COLLABS */}
-                                <div className="bg-[#0c0c0e] border border-zinc-800 mx-4 flex flex-col">
+                                {/* Umbrella Card 1: // COLLABORATION */}
+                                <div className="bg-[#0c0c0e] border border-zinc-800 mx-4 flex flex-col font-mono text-xs">
+                                    {/* Umbrella Header */}
                                     <div className="p-3.5 border-b border-zinc-800 bg-[#09090b]">
                                         <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">
-                                            // MY COLLABS
+                                            // COLLABORATION
                                         </h3>
                                     </div>
 
-                                    <div className="p-3 space-y-2 font-mono text-xs">
+                                    {/* Navigation Rows */}
+                                    <div className="flex flex-col divide-y divide-zinc-800/80">
                                         {/* // MY APPLICATIONS */}
                                         <button
                                             type="button"
@@ -721,10 +723,10 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                                     return next;
                                                 });
                                             }}
-                                            className={`w-full flex items-center justify-between p-2.5 border transition-all text-left group ${
+                                            className={`w-full flex items-center justify-between p-3 transition-colors text-left group cursor-pointer ${
                                                 activeCollabView === 'my_applications'
-                                                    ? 'bg-zinc-900 text-white border-zinc-500 font-bold shadow-sm'
-                                                    : 'bg-black/60 text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
+                                                    ? 'bg-zinc-900 text-white font-bold'
+                                                    : 'bg-transparent text-zinc-400 hover:bg-zinc-900/50 hover:text-white'
                                             }`}
                                             title="View My Applications"
                                         >
@@ -745,54 +747,6 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                             </span>
                                         </button>
 
-                                        {/* // ACTIVE COLLABS */}
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setCollabManagementView?.('active');
-                                                setSearchParams(prev => {
-                                                    const next = new URLSearchParams(prev);
-                                                    next.set('tab', 'Collabs');
-                                                    next.set('collabView', 'active');
-                                                    next.delete('openCollabDashboard');
-                                                    return next;
-                                                });
-                                            }}
-                                            className={`w-full flex items-center justify-between p-2.5 border transition-all text-left group ${
-                                                activeCollabView === 'active'
-                                                    ? 'bg-zinc-900 text-white border-zinc-500 font-bold shadow-sm'
-                                                    : 'bg-black/60 text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
-                                            }`}
-                                            title="View Active Collaborations"
-                                        >
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <span className={activeCollabView === 'active' ? 'text-emerald-400 font-bold' : 'text-zinc-500 font-bold'}>//</span>
-                                                <span className={`truncate ${activeCollabView === 'active' ? 'text-white font-bold' : 'text-zinc-400 group-hover:text-white transition-colors'}`}>
-                                                    ACTIVE COLLABS
-                                                </span>
-                                            </div>
-                                            <span className={`font-bold px-2 py-0.5 border text-[11px] flex-shrink-0 ml-2 ${
-                                                activeCollabView === 'active'
-                                                    ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
-                                                    : collabData.activeCollabsCount > 0
-                                                    ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
-                                                    : 'bg-zinc-800 text-white border-zinc-700'
-                                            }`}>
-                                                {collabData.activeCollabsCount}
-                                            </span>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* SECTION 2: // INCOMING COLLABS */}
-                                <div className="bg-[#0c0c0e] border border-zinc-800 mx-4 flex flex-col">
-                                    <div className="p-3.5 border-b border-zinc-800 bg-[#09090b]">
-                                        <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">
-                                            // INCOMING COLLABS
-                                        </h3>
-                                    </div>
-
-                                    <div className="p-3 space-y-2 font-mono text-xs">
                                         {/* // INCOMING APPLICATIONS */}
                                         <button
                                             type="button"
@@ -806,10 +760,10 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                                     return next;
                                                 });
                                             }}
-                                            className={`w-full flex items-center justify-between p-2.5 border transition-all text-left group ${
+                                            className={`w-full flex items-center justify-between p-3 transition-colors text-left group cursor-pointer ${
                                                 activeCollabView === 'incoming'
-                                                    ? 'bg-zinc-900 text-white border-zinc-500 font-bold shadow-sm'
-                                                    : 'bg-black/60 text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
+                                                    ? 'bg-zinc-900 text-white font-bold'
+                                                    : 'bg-transparent text-zinc-400 hover:bg-zinc-900/50 hover:text-white'
                                             }`}
                                             title="View Incoming Applications"
                                         >
@@ -830,6 +784,112 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                             }`}>
                                                 {collabData.incomingCount}
                                             </span>
+                                        </button>
+
+                                        {/* // ONGOING COLLABORATIONS */}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setCollabManagementView?.('active');
+                                                setSearchParams(prev => {
+                                                    const next = new URLSearchParams(prev);
+                                                    next.set('tab', 'Collabs');
+                                                    next.set('collabView', 'active');
+                                                    next.delete('openCollabDashboard');
+                                                    return next;
+                                                });
+                                            }}
+                                            className={`w-full flex items-center justify-between p-3 transition-colors text-left group cursor-pointer ${
+                                                activeCollabView === 'active'
+                                                    ? 'bg-zinc-900 text-white font-bold'
+                                                    : 'bg-transparent text-zinc-400 hover:bg-zinc-900/50 hover:text-white'
+                                            }`}
+                                            title="View Ongoing Collaborations"
+                                        >
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className={activeCollabView === 'active' ? 'text-emerald-400 font-bold' : 'text-zinc-500 font-bold'}>//</span>
+                                                <span className={`truncate ${activeCollabView === 'active' ? 'text-white font-bold' : 'text-zinc-400 group-hover:text-white transition-colors'}`}>
+                                                    ONGOING COLLABORATIONS
+                                                </span>
+                                            </div>
+                                            <span className={`font-bold px-2 py-0.5 border text-[11px] flex-shrink-0 ml-2 ${
+                                                activeCollabView === 'active'
+                                                    ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
+                                                    : collabData.activeCollabsCount > 0
+                                                    ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
+                                                    : 'bg-zinc-800 text-white border-zinc-700'
+                                            }`}>
+                                                {collabData.activeCollabsCount}
+                                            </span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Umbrella Card 2: // MESSAGE BOARD */}
+                                <div className="bg-[#0c0c0e] border border-zinc-800 mx-4 flex flex-col font-mono text-xs">
+                                    {/* Umbrella Header */}
+                                    <div className="p-3.5 border-b border-zinc-800 bg-[#09090b]">
+                                        <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">
+                                            // MESSAGE BOARD
+                                        </h3>
+                                    </div>
+
+                                    {/* Navigation Rows */}
+                                    <div className="flex flex-col divide-y divide-zinc-800/80">
+                                        {/* // INBOX */}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setCollabManagementView?.('inbox');
+                                                setSearchParams(prev => {
+                                                    const next = new URLSearchParams(prev);
+                                                    next.set('tab', 'Collabs');
+                                                    next.set('collabView', 'inbox');
+                                                    next.delete('openCollabDashboard');
+                                                    return next;
+                                                });
+                                            }}
+                                            className={`w-full flex items-center justify-between p-3 transition-colors text-left group cursor-pointer ${
+                                                activeCollabView === 'inbox'
+                                                    ? 'bg-zinc-900 text-white font-bold'
+                                                    : 'bg-transparent text-zinc-400 hover:bg-zinc-900/50 hover:text-white'
+                                            }`}
+                                            title="Inbox"
+                                        >
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className={activeCollabView === 'inbox' ? 'text-emerald-400 font-bold' : 'text-zinc-500 font-bold group-hover:text-zinc-400'}>//</span>
+                                                <span className={`truncate ${activeCollabView === 'inbox' ? 'text-white font-bold' : 'text-zinc-400 group-hover:text-white transition-colors'}`}>
+                                                    INBOX
+                                                </span>
+                                            </div>
+                                        </button>
+
+                                        {/* // TEAMS */}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setCollabManagementView?.('teams');
+                                                setSearchParams(prev => {
+                                                    const next = new URLSearchParams(prev);
+                                                    next.set('tab', 'Collabs');
+                                                    next.set('collabView', 'teams');
+                                                    next.delete('openCollabDashboard');
+                                                    return next;
+                                                });
+                                            }}
+                                            className={`w-full flex items-center justify-between p-3 transition-colors text-left group cursor-pointer ${
+                                                activeCollabView === 'teams'
+                                                    ? 'bg-zinc-900 text-white font-bold'
+                                                    : 'bg-transparent text-zinc-400 hover:bg-zinc-900/50 hover:text-white'
+                                            }`}
+                                            title="Teams"
+                                        >
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className={activeCollabView === 'teams' ? 'text-emerald-400 font-bold' : 'text-zinc-500 font-bold group-hover:text-zinc-400'}>//</span>
+                                                <span className={`truncate ${activeCollabView === 'teams' ? 'text-white font-bold' : 'text-zinc-400 group-hover:text-white transition-colors'}`}>
+                                                    TEAMS
+                                                </span>
+                                            </div>
                                         </button>
                                     </div>
                                 </div>

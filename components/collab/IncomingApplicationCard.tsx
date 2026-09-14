@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { CollabApplication, Post } from '../../types';
 import { getRoleCapacity } from '../../services/collabApplicationService';
-import { CheckIcon, CloseIcon, CheckBadgeIcon } from '../ui/Icons';
+import { CheckIcon, CloseIcon, CheckBadgeIcon, ChatBubbleIcon } from '../ui/Icons';
 import { handleImageError } from '../utils/imageUtils';
 import { CollapsibleText } from './CollapsibleText';
 
@@ -13,6 +13,7 @@ export interface IncomingApplicationCardProps {
     onOpenOverview?: (app: CollabApplication, collab?: Post | null) => void;
     onAccept?: (app: CollabApplication) => void;
     onDecline?: (app: CollabApplication) => void;
+    onMessage?: (app: CollabApplication, collab?: Post | null) => void;
     isActionLoading?: boolean;
 }
 
@@ -23,6 +24,7 @@ export const IncomingApplicationCard: React.FC<IncomingApplicationCardProps> = (
     onOpenOverview,
     onAccept,
     onDecline,
+    onMessage,
     isActionLoading = false,
 }) => {
     const navigate = useNavigate();
@@ -304,6 +306,23 @@ export const IncomingApplicationCard: React.FC<IncomingApplicationCardProps> = (
                                 </div>
                             </div>
                         )}
+                    </div>
+
+                    {/* Bottom of applicant area: Message Applicant action */}
+                    <div className="pt-2.5 border-t border-zinc-800/80 flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">
+                            // APPLICANT COMMUNICATION
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => onMessage?.(application, targetCollab)}
+                            disabled={isActionLoading}
+                            className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-750 hover:border-zinc-500 text-zinc-200 hover:text-white text-xs uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1.5 font-bold disabled:opacity-50"
+                            title="Message applicant"
+                        >
+                            <ChatBubbleIcon className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>// MESSAGE</span>
+                        </button>
                     </div>
                 </div>
 
