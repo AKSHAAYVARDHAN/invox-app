@@ -7,6 +7,7 @@ import {
 import { subscribeToUserPosts } from '../../services/postService';
 import {
     subscribeToUserConversations,
+    subscribeToUserUnreadMessages,
     calculateTotalInboxUnread,
     calculateTotalTeamsUnread,
     CollabConversation,
@@ -21,6 +22,7 @@ export interface CollabDashboardData {
     conversations: CollabConversation[];
     inboxUnreadCount: number;
     teamsUnreadCount: number;
+    conversationUnreadMap: Record<string, number>;
     incomingCount: number;
     pendingIncomingCount: number;
     myAppsCount: number;
@@ -40,7 +42,37 @@ export function useCollabDashboardData(
     const [myApplications, setMyApplications] = useState<CollabApplication[]>([]);
     const [userCollabs, setUserCollabs] = useState<Post[]>([]);
     const [conversations, setConversations] = useState<CollabConversation[]>([]);
+    const [realtimeInboxUnread, setRealtimeInboxUnread] = useState<number>(0);
+    const [realtimeTeamsUnread, setRealtimeTeamsUnread] = useState<number>(0);
+    const [convUnreadMap, setConvUnreadMap] = useState<Record<string, number>>({});
+    const [realtimeUnreadLoaded, setRealtimeUnreadLoaded] = useState<boolean>(false);
     const [loading, setLoading] = useState<boolean>(true);
+
+    // Subscribe to real-time message unread counts (listens to actual messages)
+    useEffect(() => {
+        if (!currentUser?.uid) {
+            setRealtimeInboxUnread(0);
+            setRealtimeTeamsUnread(0);
+            setConvUnreadMap({});
+            setRealtimeUnreadLoaded(false);
+            return;
+        }
+
+        const unsubUnread = subscribeToUserUnreadMessages(
+            currentUser.uid,
+            (result) => {
+                setRealtimeInboxUnread(result.totalInboxUnread);
+                setRealtimeTeamsUnread(result.totalTeamsUnread);
+                setConvUnreadMap(result.convUnreadMap);
+                setRealtimeUnreadLoaded(true);
+            },
+            activeConversationId
+        );
+
+        return () => {
+            unsubUnread();
+        };
+    }, [currentUser?.uid, activeConversationId]);
 
     useEffect(() => {
         if (!currentUser?.uid) {
@@ -124,17 +156,20 @@ export function useCollabDashboardData(
 
     const publishedCount = userCollabs.length;
 
-    const inboxUnreadCount = calculateTotalInboxUnread(
+    // Real-time unread counts calculated directly from actual messages
+    const fallbackInboxCount = calculateTotalInboxUnread(
         conversations,
         currentUser?.uid,
         activeConversationId
     );
+    const inboxUnreadCount = realtimeUnreadLoaded ? realtimeInboxUnread : fallbackInboxCount;
 
-    const teamsUnreadCount = calculateTotalTeamsUnread(
+    const fallbackTeamsCount = calculateTotalTeamsUnread(
         conversations,
         currentUser?.uid,
         activeTeamConversationId
     );
+    const teamsUnreadCount = realtimeUnreadLoaded ? realtimeTeamsUnread : fallbackTeamsCount;
 
     return {
         loading,
@@ -144,6 +179,7 @@ export function useCollabDashboardData(
         conversations,
         inboxUnreadCount,
         teamsUnreadCount,
+        conversationUnreadMap: convUnreadMap,
         incomingCount,
         pendingIncomingCount,
         myAppsCount,

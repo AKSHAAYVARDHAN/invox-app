@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import {
     subscribeToUserConversations,
     subscribeToConversationMessages,
+    subscribeToUserUnreadMessages,
     sendCollabMessage,
     markConversationAsRead,
     getConversationUnreadCount,
@@ -27,6 +28,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
     const [searchParams, setSearchParams] = useSearchParams();
 
     const [conversations, setConversations] = useState<CollabConversation[]>([]);
+    const [convUnreadMap, setConvUnreadMap] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState<boolean>(true);
 
     const urlConvId = searchParams.get('conversationId') || initialConversationId || null;
@@ -40,6 +42,26 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    // Subscribe to real-time message unread counts per conversation
+    useEffect(() => {
+        if (!currentUser?.uid) {
+            setConvUnreadMap({});
+            return;
+        }
+
+        const unsubUnread = subscribeToUserUnreadMessages(
+            currentUser.uid,
+            (result) => {
+                setConvUnreadMap(result.convUnreadMap);
+            },
+            selectedConvId
+        );
+
+        return () => {
+            unsubUnread();
+        };
+    }, [currentUser?.uid, selectedConvId]);
 
     // Subscribe to all conversations the user is a participant of
     useEffect(() => {
@@ -93,15 +115,8 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
     // Automatically mark the currently viewed conversation as read
     useEffect(() => {
         if (!selectedConvId || !currentUser?.uid) return;
-
-        const currentConv = activeList.find(c => c.id === selectedConvId);
-        if (currentConv) {
-            const unread = getConversationUnreadCount(currentConv, currentUser.uid);
-            if (unread > 0) {
-                markConversationAsRead(selectedConvId, currentUser.uid);
-            }
-        }
-    }, [selectedConvId, activeList, currentUser?.uid]);
+        markConversationAsRead(selectedConvId, currentUser.uid);
+    }, [selectedConvId, currentUser?.uid]);
 
     // Subscribe to messages in the active conversation
     useEffect(() => {
@@ -117,10 +132,12 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
             (newMessages) => {
                 setMessages(newMessages);
                 setMessagesLoading(false);
-                // If user is actively viewing this conversation and new message arrived from other user, mark as read
+                // If user is actively viewing this conversation and unread incoming messages exist, mark as read
                 if (currentUser?.uid && newMessages.length > 0) {
-                    const lastMsg = newMessages[newMessages.length - 1];
-                    if (lastMsg.senderId !== currentUser.uid && !lastMsg.read) {
+                    const hasUnreadIncoming = newMessages.some(
+                        (m) => m.senderId !== currentUser.uid && (!m.read || (Array.isArray(m.readBy) && !m.readBy.includes(currentUser.uid)))
+                    );
+                    if (hasUnreadIncoming) {
                         markConversationAsRead(selectedConvId, currentUser.uid);
                     }
                 }
@@ -156,10 +173,11 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
 
         try {
             const otherParticipantId =
-                (selectedConversation.ownerId === currentUser.uid ? selectedConversation.applicantId : selectedConversation.ownerId)
-                || selectedConversation.applicantDetails?.uid
-                || selectedConversation.ownerDetails?.uid
-                || selectedConversation.participants.find(p => p !== currentUser.uid);
+                (selectedConversation.participants || []).find(p => p && p !== currentUser.uid)
+                || (selectedConversation.ownerId && selectedConversation.ownerId !== currentUser.uid ? selectedConversation.ownerId : null)
+                || (selectedConversation.applicantId && selectedConversation.applicantId !== currentUser.uid ? selectedConversation.applicantId : null)
+                || (selectedConversation.ownerDetails?.uid && selectedConversation.ownerDetails.uid !== currentUser.uid ? selectedConversation.ownerDetails.uid : null)
+                || (selectedConversation.applicantDetails?.uid && selectedConversation.applicantDetails.uid !== currentUser.uid ? selectedConversation.applicantDetails.uid : null);
             const senderName = userProfile?.displayName || currentUser.displayName || 'You';
             const senderAvatar = userProfile?.photoURL || currentUser.photoURL || null;
 
@@ -169,7 +187,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                 senderName,
                 senderAvatar,
                 text: textToSend,
-                recipientId: otherParticipantId,
+                recipientId: otherParticipantId || undefined,
             });
         } catch (err) {
             console.error('[SEND_COLLAB_MESSAGE_ERROR]', err);
@@ -331,7 +349,11 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                             {activeList.map((convo) => {
                                 const other = getOtherParticipant(convo);
                                 const isSelected = convo.id === selectedConvId;
-                                const unreadCount = isSelected ? 0 : getConversationUnreadCount(convo, currentUser?.uid);
+                                const unreadCount = isSelected
+                                    ? 0
+                                    : (convUnreadMap[convo.id] !== undefined
+                                        ? convUnreadMap[convo.id]
+                                        : getConversationUnreadCount(convo, currentUser?.uid));
                                 const hasUnread = unreadCount > 0;
                                 const timestampStr = formatTimestamp(convo.lastMessageTimestamp || convo.updatedAt || convo.createdAt);
 

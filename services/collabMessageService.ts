@@ -287,17 +287,17 @@ export const sendCollabMessage = async ({
 
     // Determine target recipient(s)
     let targetRecipientId = recipientId;
-    if (!targetRecipientId && convData) {
-        if (convData.ownerId === senderId && convData.applicantId) {
-            targetRecipientId = convData.applicantId;
-        } else if (convData.applicantId === senderId && convData.ownerId) {
-            targetRecipientId = convData.ownerId;
-        } else if (convData.applicantDetails?.uid && convData.applicantDetails.uid !== senderId) {
-            targetRecipientId = convData.applicantDetails.uid;
-        } else if (convData.ownerDetails?.uid && convData.ownerDetails.uid !== senderId) {
-            targetRecipientId = convData.ownerDetails.uid;
+    if (!targetRecipientId || targetRecipientId === senderId) {
+        if (convData) {
+            const otherP =
+                (convData.participants || []).find((p: string) => p && p !== senderId)
+                || (convData.ownerId && convData.ownerId !== senderId ? convData.ownerId : null)
+                || (convData.applicantId && convData.applicantId !== senderId ? convData.applicantId : null)
+                || (convData.applicantDetails?.uid && convData.applicantDetails.uid !== senderId ? convData.applicantDetails.uid : null)
+                || (convData.ownerDetails?.uid && convData.ownerDetails.uid !== senderId ? convData.ownerDetails.uid : null);
+            targetRecipientId = otherP || null;
         } else {
-            targetRecipientId = participants.find(p => p !== senderId);
+            targetRecipientId = (participants || []).find(p => p && p !== senderId) || null;
         }
     }
 
@@ -537,4 +537,122 @@ export const calculateTotalTeamsUnread = (
     }
 
     return total;
+};
+
+export interface UserUnreadCountsResult {
+    totalInboxUnread: number;
+    totalTeamsUnread: number;
+    convUnreadMap: Record<string, number>;
+}
+
+/**
+ * Real-time subscription to unread message counts across all conversations for a user.
+ * Directly listens to individual messages in the user's active conversations,
+ * guaranteeing instant, reactive updates without page reloads or stale document caches.
+ */
+export const subscribeToUserUnreadMessages = (
+    userId: string,
+    onUpdate: (data: UserUnreadCountsResult) => void,
+    activeConversationId?: string | null
+): (() => void) => {
+    if (!userId) {
+        onUpdate({ totalInboxUnread: 0, totalTeamsUnread: 0, convUnreadMap: {} });
+        return () => {};
+    }
+
+    const messageListeners = new Map<string, () => void>();
+    const convUnreadMap: Record<string, number> = {};
+    const convTypeMap: Record<string, boolean> = {};
+
+    const recalculateAndNotify = () => {
+        let totalInbox = 0;
+        let totalTeams = 0;
+
+        for (const [cId, count] of Object.entries(convUnreadMap)) {
+            if (activeConversationId && cId === activeConversationId) {
+                continue; // User is actively viewing this conversation
+            }
+            if (convTypeMap[cId]) {
+                totalTeams += count;
+            } else {
+                totalInbox += count;
+            }
+        }
+
+        onUpdate({
+            totalInboxUnread: totalInbox,
+            totalTeamsUnread: totalTeams,
+            convUnreadMap: { ...convUnreadMap },
+        });
+    };
+
+    const convsQuery = query(
+        collection(db, COLLECTIONS.messages),
+        where('participants', 'array-contains', userId)
+    );
+
+    const unsubConvs = onSnapshot(
+        convsQuery,
+        (convsSnap) => {
+            const currentConvIds = new Set<string>();
+
+            convsSnap.docs.forEach((docSnap) => {
+                const convId = docSnap.id;
+                const data = docSnap.data();
+                currentConvIds.add(convId);
+                convTypeMap[convId] = Boolean(data.isTeam || data.type === 'team');
+
+                if (!messageListeners.has(convId)) {
+                    const msgsRef = collection(db, COLLECTIONS.messages, convId, 'messages');
+                    const unsubMsgs = onSnapshot(
+                        msgsRef,
+                        (msgsSnap) => {
+                            let unreadInThisConv = 0;
+                            msgsSnap.docs.forEach((msgDoc) => {
+                                const m = msgDoc.data();
+                                // Only count incoming messages (never messages sent by current user)
+                                if (m.senderId !== userId) {
+                                    const isRead = m.read === true || (Array.isArray(m.readBy) && m.readBy.includes(userId));
+                                    if (!isRead) {
+                                        unreadInThisConv += 1;
+                                    }
+                                }
+                            });
+
+                            convUnreadMap[convId] = unreadInThisConv;
+                            recalculateAndNotify();
+                        },
+                        (msgErr) => {
+                            console.warn(`[UNREAD_MSGS_LISTENER_WARN] ${convId}:`, msgErr);
+                        }
+                    );
+
+                    messageListeners.set(convId, unsubMsgs);
+                }
+            });
+
+            // Clean up removed conversations
+            for (const [convId, unsub] of messageListeners.entries()) {
+                if (!currentConvIds.has(convId)) {
+                    unsub();
+                    messageListeners.delete(convId);
+                    delete convUnreadMap[convId];
+                    delete convTypeMap[convId];
+                }
+            }
+
+            recalculateAndNotify();
+        },
+        (convErr) => {
+            console.error('[UNREAD_CONVS_SUBSCRIPTION_ERROR]', convErr);
+        }
+    );
+
+    return () => {
+        unsubConvs();
+        for (const unsub of messageListeners.values()) {
+            unsub();
+        }
+        messageListeners.clear();
+    };
 };
