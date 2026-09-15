@@ -181,8 +181,9 @@ service cloud.firestore {
     }
 
     match /messages/{conversationId} {
-      allow read, update, delete: if signedIn() && (uid() in resource.data.participants || isModerator());
+      allow read, delete: if signedIn() && (uid() in resource.data.participants || isModerator());
       allow create: if signedIn() && uid() in request.resource.data.participants;
+      allow update: if signedIn() && (uid() in resource.data.participants || uid() in request.resource.data.participants || isModerator());
 
       match /messages/{messageId} {
         allow read: if signedIn()
@@ -190,7 +191,12 @@ service cloud.firestore {
         allow create: if signedIn()
           && request.resource.data.senderId == uid()
           && uid() in get(/databases/$(database)/documents/messages/$(conversationId)).data.participants;
-        allow update, delete: if signedIn()
+        allow update: if signedIn()
+          && (resource.data.senderId == uid()
+              || resource.data.recipientId == uid()
+              || uid() in get(/databases/$(database)/documents/messages/$(conversationId)).data.participants
+              || isModerator());
+        allow delete: if signedIn()
           && (resource.data.senderId == uid() || isModerator());
       }
     }

@@ -74,20 +74,15 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
     const activeList = view === 'inbox' ? inboxConversations : teamConversations;
     const hasData = activeList.length > 0;
 
-    // Synchronize selected conversation with URL parameter or default
+    // Synchronize selected conversation with URL parameter
     useEffect(() => {
         if (urlConvId && activeList.some(c => c.id === urlConvId)) {
             setSelectedConvId(urlConvId);
-        } else if (activeList.length > 0) {
-            if (!selectedConvId || !activeList.some(c => c.id === selectedConvId)) {
-                // Auto-select first conversation on desktop if none specified
-                if (window.innerWidth >= 768) {
-                    setSelectedConvId(activeList[0].id);
-                } else {
-                    setSelectedConvId(null);
-                }
-            }
-        } else {
+        } else if (!urlConvId) {
+            // Keep selectedConvId null until user explicitly clicks a conversation,
+            // preventing auto-marking incoming unread messages as read
+            setSelectedConvId(null);
+        } else if (selectedConvId && !activeList.some(c => c.id === selectedConvId)) {
             setSelectedConvId(null);
         }
     }, [urlConvId, activeList, view]);
@@ -122,6 +117,13 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
             (newMessages) => {
                 setMessages(newMessages);
                 setMessagesLoading(false);
+                // If user is actively viewing this conversation and new message arrived from other user, mark as read
+                if (currentUser?.uid && newMessages.length > 0) {
+                    const lastMsg = newMessages[newMessages.length - 1];
+                    if (lastMsg.senderId !== currentUser.uid && !lastMsg.read) {
+                        markConversationAsRead(selectedConvId, currentUser.uid);
+                    }
+                }
             },
             (err) => {
                 console.error('[SUBSCRIBE_CONV_MESSAGES_ERROR]', err);
@@ -133,7 +135,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
         return () => {
             unsubMessages();
         };
-    }, [selectedConvId]);
+    }, [selectedConvId, currentUser?.uid]);
 
     // Auto-scroll to bottom of message thread
     useEffect(() => {
@@ -153,7 +155,11 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
         setIsSending(true);
 
         try {
-            const otherParticipantId = selectedConversation.participants.find(p => p !== currentUser.uid);
+            const otherParticipantId =
+                (selectedConversation.ownerId === currentUser.uid ? selectedConversation.applicantId : selectedConversation.ownerId)
+                || selectedConversation.applicantDetails?.uid
+                || selectedConversation.ownerDetails?.uid
+                || selectedConversation.participants.find(p => p !== currentUser.uid);
             const senderName = userProfile?.displayName || currentUser.displayName || 'You';
             const senderAvatar = userProfile?.photoURL || currentUser.photoURL || null;
 
@@ -220,7 +226,8 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                 isTeam: true,
             };
         }
-        if (currentUser?.uid && convo.ownerId === currentUser.uid) {
+        const isOwner = currentUser?.uid && (convo.ownerId === currentUser.uid || convo.ownerDetails?.uid === currentUser.uid);
+        if (isOwner) {
             return {
                 displayName: convo.applicantDetails?.displayName || 'Applicant',
                 username: convo.applicantDetails?.username || '',

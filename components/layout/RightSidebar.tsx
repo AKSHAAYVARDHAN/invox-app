@@ -699,9 +699,9 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                             </div>
                         )}
 
-                        {variant === 'spotlight-collabs' && (
-                            <div className="space-y-4">
-                                {/* Umbrella Card 1: // COLLABORATION */}
+                        <div className="space-y-4">
+                            {variant === 'spotlight-collabs' && (
+                                /* Umbrella Card 1: // COLLABORATION */
                                 <div className="bg-[#0c0c0e] border border-zinc-800 mx-4 flex flex-col font-mono text-xs">
                                     {/* Umbrella Header */}
                                     <div className="p-3.5 border-b border-zinc-800 bg-[#09090b]">
@@ -826,95 +826,95 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                         </button>
                                     </div>
                                 </div>
+                            )}
 
-                                {/* Umbrella Card 2: // MESSAGE BOARD */}
-                                <div className="bg-[#0c0c0e] border border-zinc-800 mx-4 flex flex-col font-mono text-xs">
-                                    {/* Umbrella Header */}
-                                    <div className="p-3.5 border-b border-zinc-800 bg-[#09090b]">
-                                        <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">
-                                            // MESSAGE BOARD
-                                        </h3>
-                                    </div>
+                            {/* Umbrella Card 2: // MESSAGE BOARD */}
+                            <div className="bg-[#0c0c0e] border border-zinc-800 mx-4 flex flex-col font-mono text-xs">
+                                {/* Umbrella Header */}
+                                <div className="p-3.5 border-b border-zinc-800 bg-[#09090b]">
+                                    <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">
+                                        // MESSAGE BOARD
+                                    </h3>
+                                </div>
 
-                                    {/* Navigation Rows */}
-                                    <div className="flex flex-col divide-y divide-zinc-800/80">
-                                        {/* // INBOX */}
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setCollabManagementView?.('inbox');
-                                                setSearchParams(prev => {
-                                                    const next = new URLSearchParams(prev);
-                                                    next.set('tab', 'Collabs');
-                                                    next.set('collabView', 'inbox');
-                                                    next.delete('openCollabDashboard');
-                                                    return next;
-                                                });
-                                            }}
-                                            className={`w-full flex items-center justify-between p-3 transition-colors text-left group cursor-pointer ${
+                                {/* Navigation Rows */}
+                                <div className="flex flex-col divide-y divide-zinc-800/80">
+                                    {/* // INBOX */}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setCollabManagementView?.('inbox');
+                                            setSearchParams(prev => {
+                                                const next = new URLSearchParams(prev);
+                                                next.set('tab', 'Collabs');
+                                                next.set('collabView', 'inbox');
+                                                next.delete('openCollabDashboard');
+                                                return next;
+                                            });
+                                        }}
+                                        className={`w-full flex items-center justify-between p-3 transition-colors text-left group cursor-pointer ${
+                                            activeCollabView === 'inbox'
+                                                ? 'bg-zinc-900 text-white font-bold'
+                                                : 'bg-transparent text-zinc-400 hover:bg-zinc-900/50 hover:text-white'
+                                        }`}
+                                        title="Inbox"
+                                    >
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <span className={activeCollabView === 'inbox' ? 'text-emerald-400 font-bold' : 'text-zinc-500 font-bold group-hover:text-zinc-400'}>//</span>
+                                            <span className={`truncate ${activeCollabView === 'inbox' ? 'text-white font-bold' : 'text-zinc-400 group-hover:text-white transition-colors'}`}>
+                                                INBOX
+                                            </span>
+                                        </div>
+                                        {collabData.inboxUnreadCount > 0 && (
+                                            <span className={`font-bold px-2 py-0.5 border text-[11px] flex-shrink-0 ml-2 ${
                                                 activeCollabView === 'inbox'
-                                                    ? 'bg-zinc-900 text-white font-bold'
-                                                    : 'bg-transparent text-zinc-400 hover:bg-zinc-900/50 hover:text-white'
-                                            }`}
-                                            title="Inbox"
-                                        >
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <span className={activeCollabView === 'inbox' ? 'text-emerald-400 font-bold' : 'text-zinc-500 font-bold group-hover:text-zinc-400'}>//</span>
-                                                <span className={`truncate ${activeCollabView === 'inbox' ? 'text-white font-bold' : 'text-zinc-400 group-hover:text-white transition-colors'}`}>
-                                                    INBOX
-                                                </span>
-                                            </div>
-                                            {collabData.inboxUnreadCount > 0 && (
-                                                <span className={`font-mono font-bold px-2 py-0.5 border text-[11px] flex-shrink-0 ml-2 ${
-                                                    activeCollabView === 'inbox'
-                                                        ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
-                                                        : 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
-                                                }`}>
-                                                    [{collabData.inboxUnreadCount}]
-                                                </span>
-                                            )}
-                                        </button>
+                                                    ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
+                                                    : 'bg-zinc-800 text-white border-zinc-700'
+                                            }`}>
+                                                {collabData.inboxUnreadCount}
+                                            </span>
+                                        )}
+                                    </button>
 
-                                        {/* // TEAMS */}
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setCollabManagementView?.('teams');
-                                                setSearchParams(prev => {
-                                                    const next = new URLSearchParams(prev);
-                                                    next.set('tab', 'Collabs');
-                                                    next.set('collabView', 'teams');
-                                                    next.delete('openCollabDashboard');
-                                                    return next;
-                                                });
-                                            }}
-                                            className={`w-full flex items-center justify-between p-3 transition-colors text-left group cursor-pointer ${
+                                    {/* // TEAMS */}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setCollabManagementView?.('teams');
+                                            setSearchParams(prev => {
+                                                const next = new URLSearchParams(prev);
+                                                next.set('tab', 'Collabs');
+                                                next.set('collabView', 'teams');
+                                                next.delete('openCollabDashboard');
+                                                return next;
+                                            });
+                                        }}
+                                        className={`w-full flex items-center justify-between p-3 transition-colors text-left group cursor-pointer ${
+                                            activeCollabView === 'teams'
+                                                ? 'bg-zinc-900 text-white font-bold'
+                                                : 'bg-transparent text-zinc-400 hover:bg-zinc-900/50 hover:text-white'
+                                        }`}
+                                        title="Teams"
+                                    >
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <span className={activeCollabView === 'teams' ? 'text-emerald-400 font-bold' : 'text-zinc-500 font-bold group-hover:text-zinc-400'}>//</span>
+                                            <span className={`truncate ${activeCollabView === 'teams' ? 'text-white font-bold' : 'text-zinc-400 group-hover:text-white transition-colors'}`}>
+                                                TEAMS
+                                            </span>
+                                        </div>
+                                        {collabData.teamsUnreadCount > 0 && (
+                                            <span className={`font-bold px-2 py-0.5 border text-[11px] flex-shrink-0 ml-2 ${
                                                 activeCollabView === 'teams'
-                                                    ? 'bg-zinc-900 text-white font-bold'
-                                                    : 'bg-transparent text-zinc-400 hover:bg-zinc-900/50 hover:text-white'
-                                            }`}
-                                            title="Teams"
-                                        >
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <span className={activeCollabView === 'teams' ? 'text-emerald-400 font-bold' : 'text-zinc-500 font-bold group-hover:text-zinc-400'}>//</span>
-                                                <span className={`truncate ${activeCollabView === 'teams' ? 'text-white font-bold' : 'text-zinc-400 group-hover:text-white transition-colors'}`}>
-                                                    TEAMS
-                                                </span>
-                                            </div>
-                                            {collabData.teamsUnreadCount > 0 && (
-                                                <span className={`font-mono font-bold px-2 py-0.5 border text-[11px] flex-shrink-0 ml-2 ${
-                                                    activeCollabView === 'teams'
-                                                        ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
-                                                        : 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
-                                                }`}>
-                                                    [{collabData.teamsUnreadCount}]
-                                                </span>
-                                            )}
-                                        </button>
-                                    </div>
+                                                    ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
+                                                    : 'bg-zinc-800 text-white border-zinc-700'
+                                            }`}>
+                                                {collabData.teamsUnreadCount}
+                                            </span>
+                                        )}
+                                    </button>
                                 </div>
                             </div>
-                        )}
+                        </div>
 
                         {variant !== 'spotlight-collabs' && (
                             <div>

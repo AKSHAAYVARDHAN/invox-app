@@ -59,6 +59,10 @@ export interface CollabChatMessage {
     senderName: string;
     senderAvatar?: string | null;
     text: string;
+    recipientId?: string | null;
+    read?: boolean;
+    readAt?: any;
+    readBy?: string[];
     createdAt: any;
 }
 
@@ -268,6 +272,47 @@ export const sendCollabMessage = async ({
     const cleanText = text.trim();
     if (!cleanText) return;
 
+    const convRef = doc(db, COLLECTIONS.messages, conversationId);
+    let participants: string[] = [];
+    let convData: any = null;
+    try {
+        const cSnap = await getDoc(convRef);
+        if (cSnap.exists()) {
+            convData = cSnap.data();
+            participants = Array.isArray(convData.participants) ? [...convData.participants] : [];
+        }
+    } catch (e) {
+        console.warn('[GET_CONVERSATION_DOC_ERROR]', e);
+    }
+
+    // Determine target recipient(s)
+    let targetRecipientId = recipientId;
+    if (!targetRecipientId && convData) {
+        if (convData.ownerId === senderId && convData.applicantId) {
+            targetRecipientId = convData.applicantId;
+        } else if (convData.applicantId === senderId && convData.ownerId) {
+            targetRecipientId = convData.ownerId;
+        } else if (convData.applicantDetails?.uid && convData.applicantDetails.uid !== senderId) {
+            targetRecipientId = convData.applicantDetails.uid;
+        } else if (convData.ownerDetails?.uid && convData.ownerDetails.uid !== senderId) {
+            targetRecipientId = convData.ownerDetails.uid;
+        } else {
+            targetRecipientId = participants.find(p => p !== senderId);
+        }
+    }
+
+    if (targetRecipientId && !participants.includes(targetRecipientId)) {
+        participants.push(targetRecipientId);
+    }
+    if (!participants.includes(senderId)) {
+        participants.push(senderId);
+    }
+
+    const recipientsToNotify = targetRecipientId
+        ? [targetRecipientId]
+        : participants.filter(p => p !== senderId);
+
+    // 1. Add individual message with read: false and recipientId
     const msgsRef = collection(db, COLLECTIONS.messages, conversationId, 'messages');
     await addDoc(msgsRef, sanitizeForFirestore({
         conversationId,
@@ -275,34 +320,20 @@ export const sendCollabMessage = async ({
         senderName,
         senderAvatar: senderAvatar || null,
         text: cleanText,
+        recipientId: targetRecipientId || (recipientsToNotify[0] || null),
+        read: false,
+        readBy: [senderId],
         createdAt: serverTimestamp(),
     }));
 
-    const convRef = doc(db, COLLECTIONS.messages, conversationId);
-    let participants: string[] = [];
-    try {
-        const cSnap = await getDoc(convRef);
-        if (cSnap.exists()) {
-            const cData = cSnap.data();
-            participants = cData.participants || [];
-        }
-    } catch {
-        // fallback
-    }
-
-    if (recipientId && !participants.includes(recipientId)) {
-        participants.push(recipientId);
-    }
-
-    const recipientsToNotify = participants.filter(p => p !== senderId);
-
-    // Update parent conversation summary and unread counts
+    // 2. Update parent conversation summary and recipient unread counts
     try {
         const updatePayload: Record<string, any> = {
             lastMessage: cleanText,
             lastSenderId: senderId,
             lastMessageTimestamp: serverTimestamp(),
             updatedAt: serverTimestamp(),
+            participants: Array.from(new Set(participants)),
             [`unreadCounts.${senderId}`]: 0,
         };
 
@@ -323,15 +354,19 @@ export const sendCollabMessage = async ({
                 lastSenderId: senderId,
                 lastMessageTimestamp: serverTimestamp(),
                 updatedAt: serverTimestamp(),
+                participants: Array.from(new Set(participants)),
+            };
+            const unreadCounts: Record<string, number> = {
+                ...(convData?.unreadCounts || {}),
+                [senderId]: 0,
             };
             if (recipientsToNotify.length > 0) {
-                const unreadCounts: Record<string, number> = { [senderId]: 0 };
                 for (const rId of recipientsToNotify) {
-                    unreadCounts[rId] = 1;
+                    unreadCounts[rId] = (unreadCounts[rId] || 0) + 1;
                 }
                 fallbackPayload.unreadCounts = unreadCounts;
-                fallbackPayload.unreadBy = recipientsToNotify;
-                fallbackPayload.unreadCount = 1;
+                fallbackPayload.unreadBy = Array.from(new Set([...(convData?.unreadBy || []), ...recipientsToNotify]));
+                fallbackPayload.unreadCount = (convData?.unreadCount || 0) + 1;
             }
             await setDoc(convRef, fallbackPayload, { merge: true });
         } catch (setErr) {
@@ -339,7 +374,7 @@ export const sendCollabMessage = async ({
         }
     }
 
-    // Optional notification for recipients
+    // Notification for recipients
     for (const rId of recipientsToNotify) {
         try {
             await addDoc(collection(db, COLLECTIONS.notifications), sanitizeForFirestore({
@@ -360,7 +395,7 @@ export const sendCollabMessage = async ({
 
 /**
  * Marks a conversation as read for a specific user.
- * Resets the user's unread counter and removes them from unreadBy.
+ * Resets the user's unread counter, removes them from unreadBy, and marks messages as read.
  */
 export const markConversationAsRead = async (
     conversationId: string,
@@ -385,6 +420,24 @@ export const markConversationAsRead = async (
         } catch (e) {
             console.warn('[MARK_AS_READ_ERROR]', e);
         }
+    }
+
+    // Mark individual messages in this conversation as read
+    try {
+        const msgsRef = collection(db, COLLECTIONS.messages, conversationId, 'messages');
+        const msgsSnap = await getDocs(msgsRef);
+        for (const msgDoc of msgsSnap.docs) {
+            const data = msgDoc.data();
+            if (data.senderId !== userId && (data.read === false || !data.readBy?.includes(userId))) {
+                updateDoc(msgDoc.ref, {
+                    read: true,
+                    readAt: serverTimestamp(),
+                    readBy: arrayUnion(userId),
+                }).catch(() => {});
+            }
+        }
+    } catch (e) {
+        console.warn('[MARK_MESSAGES_READ_ERROR]', e);
     }
 
     // Also mark any unread notifications for this conversation as read
@@ -418,12 +471,17 @@ export const getConversationUnreadCount = (
         return Math.max(0, convo.unreadCounts[userId]);
     }
 
-    // 2. Fallback: check unreadBy array
+    // 2. If the user was the last sender and has no explicit unread count, they have 0 unread
+    if (convo.lastSenderId === userId) {
+        return 0;
+    }
+
+    // 3. Fallback: check unreadBy array
     if (Array.isArray(convo.unreadBy) && convo.unreadBy.includes(userId)) {
         return convo.unreadCount && convo.unreadCount > 0 ? convo.unreadCount : 1;
     }
 
-    // 3. Fallback: if last sender is someone else and unreadCount > 0
+    // 4. Fallback: if last sender is someone else and unreadCount > 0
     if (convo.lastSenderId && convo.lastSenderId !== userId && (convo.unreadCount || 0) > 0) {
         return convo.unreadCount || 1;
     }
