@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -91,9 +91,9 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
     }, [currentUser?.uid]);
 
     // Data partitioning: Inbox (direct collab applications) vs Teams
-    const inboxConversations = conversations.filter(c => !c.isTeam && c.type !== 'team');
-    const teamConversations = conversations.filter(c => c.isTeam || c.type === 'team');
-    const activeList = view === 'inbox' ? inboxConversations : teamConversations;
+    const inboxConversations = useMemo(() => conversations.filter(c => !c.isTeam && c.type !== 'team'), [conversations]);
+    const teamConversations = useMemo(() => conversations.filter(c => c.isTeam || c.type === 'team'), [conversations]);
+    const activeList = useMemo(() => view === 'inbox' ? inboxConversations : teamConversations, [view, inboxConversations, teamConversations]);
     const hasData = activeList.length > 0;
 
     // Synchronize selected conversation with URL parameter
@@ -103,11 +103,11 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
         } else if (!urlConvId) {
             // Keep selectedConvId null until user explicitly clicks a conversation,
             // preventing auto-marking incoming unread messages as read
-            setSelectedConvId(null);
+            setSelectedConvId(prev => prev === null ? prev : null);
         } else if (selectedConvId && !activeList.some(c => c.id === selectedConvId)) {
             setSelectedConvId(null);
         }
-    }, [urlConvId, activeList, view]);
+    }, [urlConvId, activeList, selectedConvId]);
 
     // Find the currently selected conversation object
     const selectedConversation = activeList.find(c => c.id === selectedConvId) || null;

@@ -67,7 +67,6 @@ import { useFilters } from '../contexts/AIAssistantContext';
 import { subscribeToCollabPosts, getCollabPosts, postToProject } from '../services/postService';
 import { CollabManagementHub } from '../components/spotlight/CollabManagementHub';
 import { CollabMessageBoardView } from '../components/spotlight/CollabMessageBoardView';
-import { useCollabDashboardData } from '../components/spotlight/useCollabDashboardData';
 
 
 const formatNumber = (num: number) => {
@@ -1305,8 +1304,49 @@ export const SpotlightPage = () => {
     const { setRightSidebarVariant, spotlightBrowseState, setSpotlightBrowseState, showPinnedHighlights, goforitFilters, refreshKey, savedOfferIds = [], toggleSaveOffer } = outletContext || {};
     const { domainSelections, setDomainSelection } = useFilters();
 
-    const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'Showcase');
-    const [activeLeapTab, setActiveLeapTab] = useState(() => searchParams.get('subTab') || 'GoForIt');
+    const collabViewParam = searchParams.get('collabView');
+    const openCollabDashboardParam = searchParams.get('openCollabDashboard');
+    const isCollabManagementView = Boolean(
+        collabViewParam === 'incoming' || 
+        collabViewParam === 'active' || 
+        collabViewParam === 'my_applications' || 
+        collabViewParam === 'inbox' || 
+        collabViewParam === 'teams' || 
+        openCollabDashboardParam === 'true'
+    );
+
+    const urlTab = searchParams.get('tab');
+    const activeTab: 'Showcase' | 'Collabs' | 'Leap' = isCollabManagementView
+        ? 'Collabs'
+        : (urlTab === 'Collabs' || urlTab === 'Leap' ? urlTab : 'Showcase');
+
+    const urlSubTab = searchParams.get('subTab');
+    const activeLeapTab: 'GoForIt' | 'Pings' = urlSubTab === 'Pings' ? 'Pings' : 'GoForIt';
+
+    const handleTabChange = (newTab: 'Showcase' | 'Collabs' | 'Leap') => {
+        setSearchParams(prev => {
+            const next = new URLSearchParams(prev);
+            next.set('tab', newTab);
+            if (newTab !== 'Collabs') {
+                next.delete('collabView');
+                next.delete('openCollabDashboard');
+            }
+            if (newTab !== 'Leap') {
+                next.delete('subTab');
+            }
+            return next;
+        });
+    };
+
+    const handleLeapTabChange = (newSubTab: 'GoForIt' | 'Pings') => {
+        setSearchParams(prev => {
+            const next = new URLSearchParams(prev);
+            next.set('tab', 'Leap');
+            next.set('subTab', newSubTab);
+            return next;
+        });
+    };
+
     const [activeCategory, setActiveCategory] = useState('All');
     const [loading, setLoading] = useState(true);
     const [offers, setOffers] = useState(mockOffers);
@@ -1316,9 +1356,7 @@ export const SpotlightPage = () => {
     const [viewedOfferIds, setViewedOfferIds] = useState<string[]>([]);
     const [messagingOffer, setMessagingOffer] = useState<Offer | null>(null);
     const [liveCollabProjects, setLiveCollabProjects] = useState<Project[]>([]);
-    const collabViewParam = searchParams.get('collabView');
-    const openCollabDashboardParam = searchParams.get('openCollabDashboard');
-    const isCollabManagement = (activeTab === 'Collabs' || !searchParams.get('tab') || searchParams.get('tab') === 'Collabs') && (collabViewParam === 'incoming' || collabViewParam === 'active' || collabViewParam === 'my_applications' || collabViewParam === 'inbox' || collabViewParam === 'teams' || openCollabDashboardParam === 'true');
+    const isCollabManagement = activeTab === 'Collabs' && isCollabManagementView;
     const collabManagementTab: 'applications' | 'active' | 'my_applications' = (collabViewParam === 'active') ? 'active' : (collabViewParam === 'my_applications' ? 'my_applications' : 'applications');
 
     const handleBackToCollabs = () => {
@@ -1331,20 +1369,8 @@ export const SpotlightPage = () => {
         });
     };
 
-    const collabData = useCollabDashboardData();
     const mainTabs = ['Showcase', 'Collabs', 'Leap'];
     const sectionKey = `spotlight-${activeTab.toLowerCase()}`;
-
-    useEffect(() => {
-        const collabView = searchParams.get('collabView');
-        if (collabView === 'incoming' || collabView === 'active' || collabView === 'my_applications' || collabView === 'inbox' || collabView === 'teams' || searchParams.get('openCollabDashboard') === 'true') {
-            setActiveTab('Collabs');
-        }
-        const urlTab = searchParams.get('tab');
-        if (urlTab && (urlTab === 'Showcase' || urlTab === 'Collabs' || urlTab === 'Leap')) {
-            setActiveTab(urlTab);
-        }
-    }, [searchParams]);
 
     useEffect(() => {
         let isMounted = true;
@@ -1564,26 +1590,9 @@ export const SpotlightPage = () => {
                 setRightSidebarVariant('spotlight');
             }
         }
+    }, [activeTab, activeLeapTab, setRightSidebarVariant]);
 
-        // Sync state to URL safely if changed
-        const currentTab = searchParams.get('tab');
-        const currentSubTab = searchParams.get('subTab');
-        const needsUpdate = currentTab !== activeTab || (activeTab === 'Leap' ? currentSubTab !== activeLeapTab : Boolean(currentSubTab));
-        if (needsUpdate) {
-            const newSearchParams = new URLSearchParams(searchParams);
-            newSearchParams.set('tab', activeTab);
-            if (activeTab === 'Leap') {
-                newSearchParams.set('subTab', activeLeapTab);
-            } else {
-                newSearchParams.delete('subTab');
-            }
-            if (activeTab !== 'Collabs') {
-                newSearchParams.delete('collabView');
-                newSearchParams.delete('openCollabDashboard');
-            }
-            setSearchParams(newSearchParams, { replace: true });
-        }
-
+    useEffect(() => {
         return () => {
             if (setRightSidebarVariant) {
                 setRightSidebarVariant('default');
@@ -1592,7 +1601,7 @@ export const SpotlightPage = () => {
                 setSpotlightBrowseState(null);
             }
         };
-    }, [activeTab, activeLeapTab, setRightSidebarVariant, setSpotlightBrowseState, setSearchParams, searchParams]);
+    }, [setRightSidebarVariant, setSpotlightBrowseState]);
 
     useEffect(() => {
         setLoading(true);
@@ -3154,7 +3163,7 @@ export const SpotlightPage = () => {
                 <SegmentedSlideBar
                     tabs={mainTabs}
                     activeTab={activeTab}
-                    onChange={(tab) => setActiveTab(tab as 'Showcase' | 'Collabs' | 'Leap')}
+                    onChange={(tab) => handleTabChange(tab as 'Showcase' | 'Collabs' | 'Leap')}
                 />
             )}
 
@@ -3189,7 +3198,7 @@ export const SpotlightPage = () => {
             {activeTab === 'Leap' && !selectedOfferType && !showPinnedHighlights && (
                 <div className="flex border-b border-zinc-800 mb-5">
                     <button
-                        onClick={() => setActiveLeapTab('GoForIt')}
+                        onClick={() => handleLeapTabChange('GoForIt')}
                         className={`w-1/2 text-center py-2.5 text-xs font-mono uppercase tracking-widest transition-all duration-150 flex items-center justify-center gap-2 ${
                             activeLeapTab === 'GoForIt' 
                                 ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/40' 
@@ -3200,7 +3209,7 @@ export const SpotlightPage = () => {
                         <span>// Opportunities (GoForIt)</span>
                     </button>
                     <button
-                        onClick={() => setActiveLeapTab('Pings')}
+                        onClick={() => handleLeapTabChange('Pings')}
                         className={`w-1/2 text-center py-2.5 text-xs font-mono uppercase tracking-widest transition-all duration-150 flex items-center justify-center gap-2 ${
                             activeLeapTab === 'Pings' 
                                 ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/40' 

@@ -661,6 +661,7 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                         setCollabManagementView?.(null);
                                         setSearchParams(prev => {
                                             const next = new URLSearchParams(prev);
+                                            next.set('tab', 'Collabs');
                                             next.delete('collabView');
                                             next.delete('openCollabDashboard');
                                             return next;
@@ -718,6 +719,9 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                             onClick={() => {
                                                 setCollabManagementView?.('my_applications');
                                                 setSearchParams(prev => {
+                                                    if (prev.get('tab') === 'Collabs' && prev.get('collabView') === 'my_applications' && !prev.get('openCollabDashboard')) {
+                                                        return prev;
+                                                    }
                                                     const next = new URLSearchParams(prev);
                                                     next.set('tab', 'Collabs');
                                                     next.set('collabView', 'my_applications');
@@ -755,6 +759,9 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                             onClick={() => {
                                                 setCollabManagementView?.('incoming');
                                                 setSearchParams(prev => {
+                                                    if (prev.get('tab') === 'Collabs' && prev.get('collabView') === 'incoming' && !prev.get('openCollabDashboard')) {
+                                                        return prev;
+                                                    }
                                                     const next = new URLSearchParams(prev);
                                                     next.set('tab', 'Collabs');
                                                     next.set('collabView', 'incoming');
@@ -794,6 +801,9 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                             onClick={() => {
                                                 setCollabManagementView?.('active');
                                                 setSearchParams(prev => {
+                                                    if (prev.get('tab') === 'Collabs' && prev.get('collabView') === 'active' && !prev.get('openCollabDashboard')) {
+                                                        return prev;
+                                                    }
                                                     const next = new URLSearchParams(prev);
                                                     next.set('tab', 'Collabs');
                                                     next.set('collabView', 'active');
@@ -845,6 +855,9 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                         onClick={() => {
                                             setCollabManagementView?.('inbox');
                                             setSearchParams(prev => {
+                                                if (prev.get('tab') === 'Collabs' && prev.get('collabView') === 'inbox' && !prev.get('openCollabDashboard')) {
+                                                    return prev;
+                                                }
                                                 const next = new URLSearchParams(prev);
                                                 next.set('tab', 'Collabs');
                                                 next.set('collabView', 'inbox');
@@ -882,6 +895,9 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                         onClick={() => {
                                             setCollabManagementView?.('teams');
                                             setSearchParams(prev => {
+                                                if (prev.get('tab') === 'Collabs' && prev.get('collabView') === 'teams' && !prev.get('openCollabDashboard')) {
+                                                    return prev;
+                                                }
                                                 const next = new URLSearchParams(prev);
                                                 next.set('tab', 'Collabs');
                                                 next.set('collabView', 'teams');
