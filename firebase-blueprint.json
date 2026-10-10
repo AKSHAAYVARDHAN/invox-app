@@ -94,6 +94,84 @@
         "updatedBy": { "type": "string" }
       },
       "required": ["sections"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "Project team spaces for multi-user collaboration and group chat.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "description": "Team name" },
+        "description": { "type": "string", "description": "Team description" },
+        "projectId": { "type": "string", "description": "Associated project ID" },
+        "projectTitle": { "type": "string", "description": "Associated project title" },
+        "ownerId": { "type": "string", "description": "Team owner UID" },
+        "ownerName": { "type": "string", "description": "Team owner name" },
+        "ownerAvatar": { "type": "string" },
+        "memberCount": { "type": "number", "description": "Count of members" },
+        "memberIds": { "type": "array", "description": "List of user UIDs" },
+        "lastMessage": { "type": "string" },
+        "lastMessageSenderId": { "type": "string" },
+        "lastMessageSenderName": { "type": "string" },
+        "lastMessageTimestamp": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "projectId", "ownerId", "memberIds", "createdAt"]
+    },
+    "TeamMember": {
+      "title": "TeamMember",
+      "description": "Members belonging to a project team.",
+      "type": "object",
+      "properties": {
+        "teamId": { "type": "string" },
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "username": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["owner", "member"] },
+        "projectRole": { "type": "string" },
+        "joinedAt": { "type": "string", "format": "date-time" },
+        "lastReadAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["teamId", "userId", "role", "joinedAt"]
+    },
+    "TeamMessage": {
+      "title": "TeamMessage",
+      "description": "Group chat messages sent within a team.",
+      "type": "object",
+      "properties": {
+        "teamId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderAvatar": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "readBy": { "type": "array" }
+      },
+      "required": ["teamId", "senderId", "text", "createdAt"]
+    },
+    "TeamInvitation": {
+      "title": "TeamInvitation",
+      "description": "Secure invitation tokens for joining project teams.",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string" },
+        "teamId": { "type": "string" },
+        "teamName": { "type": "string" },
+        "projectId": { "type": "string" },
+        "projectTitle": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["active", "revoked"] },
+        "maxUses": { "type": "number" },
+        "usedCount": { "type": "number" },
+        "usedBy": { "type": "array" }
+      },
+      "required": ["token", "teamId", "createdBy", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -116,6 +194,22 @@
     "/platformConfig/{configId}": {
       "schema": "PlatformSections",
       "description": "Platform configuration documents including module sections management."
+    },
+    "/teams/{teamId}": {
+      "schema": "Team",
+      "description": "Project team spaces for multi-user collaboration and group chat."
+    },
+    "/teams/{teamId}/members/{memberId}": {
+      "schema": "TeamMember",
+      "description": "Members belonging to a project team."
+    },
+    "/teams/{teamId}/messages/{messageId}": {
+      "schema": "TeamMessage",
+      "description": "Group chat messages sent within a team."
+    },
+    "/teamInvitations/{token}": {
+      "schema": "TeamInvitation",
+      "description": "Secure invitation tokens for joining project teams."
     }
   }
 }

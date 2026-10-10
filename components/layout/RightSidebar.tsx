@@ -517,7 +517,7 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
             : (searchParams.get('openCollabDashboard') === 'true' ? 'incoming' : null));
 
     const activeConvId = activeCollabView === 'inbox' ? searchParams.get('conversationId') : null;
-    const activeTeamConvId = activeCollabView === 'teams' ? searchParams.get('conversationId') : null;
+    const activeTeamConvId = activeCollabView === 'teams' ? (searchParams.get('teamId') || searchParams.get('conversationId')) : null;
     const collabData = useCollabDashboardData(activeConvId, activeTeamConvId);
 
     useEffect(() => {

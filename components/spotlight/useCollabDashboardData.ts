@@ -12,6 +12,7 @@ import {
     calculateTotalTeamsUnread,
     CollabConversation,
 } from '../../services/collabMessageService';
+import { subscribeToUserTeamUnreadCounts } from '../../services/teamService';
 import type { CollabApplication, Post } from '../../types';
 
 export interface CollabDashboardData {
@@ -46,7 +47,28 @@ export function useCollabDashboardData(
     const [realtimeTeamsUnread, setRealtimeTeamsUnread] = useState<number>(0);
     const [convUnreadMap, setConvUnreadMap] = useState<Record<string, number>>({});
     const [realtimeUnreadLoaded, setRealtimeUnreadLoaded] = useState<boolean>(false);
+    const [teamServiceUnread, setTeamServiceUnread] = useState<number>(0);
     const [loading, setLoading] = useState<boolean>(true);
+
+    // Subscribe to real-time team unread counts from teamService
+    useEffect(() => {
+        if (!currentUser?.uid) {
+            setTeamServiceUnread(0);
+            return;
+        }
+
+        const unsubTeamService = subscribeToUserTeamUnreadCounts(
+            currentUser.uid,
+            (res) => {
+                setTeamServiceUnread(res.totalTeamsUnread);
+            },
+            activeTeamConversationId
+        );
+
+        return () => {
+            unsubTeamService();
+        };
+    }, [currentUser?.uid, activeTeamConversationId]);
 
     // Subscribe to real-time message unread counts (listens to actual messages)
     useEffect(() => {
@@ -169,7 +191,10 @@ export function useCollabDashboardData(
         currentUser?.uid,
         activeTeamConversationId
     );
-    const teamsUnreadCount = realtimeUnreadLoaded ? realtimeTeamsUnread : fallbackTeamsCount;
+    const teamsUnreadCount = Math.max(
+        teamServiceUnread,
+        realtimeUnreadLoaded ? realtimeTeamsUnread : fallbackTeamsCount
+    );
 
     return {
         loading,

@@ -67,6 +67,7 @@ import { useFilters } from '../contexts/AIAssistantContext';
 import { subscribeToCollabPosts, getCollabPosts, postToProject } from '../services/postService';
 import { CollabManagementHub } from '../components/spotlight/CollabManagementHub';
 import { CollabMessageBoardView } from '../components/spotlight/CollabMessageBoardView';
+import { CollabTeamsView } from '../components/spotlight/CollabTeamsView';
 
 
 const formatNumber = (num: number) => {
@@ -3122,12 +3123,20 @@ export const SpotlightPage = () => {
     
         if (activeTab === 'Collabs') {
             if (isCollabManagement) {
-                if (collabViewParam === 'inbox' || collabViewParam === 'teams') {
+                if (collabViewParam === 'inbox') {
                     return (
                         <CollabMessageBoardView
-                            view={collabViewParam}
+                            view="inbox"
                             onBack={handleBackToCollabs}
                             initialConversationId={searchParams.get('conversationId')}
+                        />
+                    );
+                }
+                if (collabViewParam === 'teams') {
+                    return (
+                        <CollabTeamsView
+                            onBack={handleBackToCollabs}
+                            initialTeamId={searchParams.get('teamId')}
                         />
                     );
                 }

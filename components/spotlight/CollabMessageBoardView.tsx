@@ -98,16 +98,14 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
 
     // Synchronize selected conversation with URL parameter
     useEffect(() => {
-        if (urlConvId && activeList.some(c => c.id === urlConvId)) {
-            setSelectedConvId(urlConvId);
-        } else if (!urlConvId) {
-            // Keep selectedConvId null until user explicitly clicks a conversation,
-            // preventing auto-marking incoming unread messages as read
-            setSelectedConvId(prev => prev === null ? prev : null);
-        } else if (selectedConvId && !activeList.some(c => c.id === selectedConvId)) {
+        if (urlConvId) {
+            if (activeList.some(c => c.id === urlConvId)) {
+                setSelectedConvId(urlConvId);
+            }
+        } else {
             setSelectedConvId(null);
         }
-    }, [urlConvId, activeList, selectedConvId]);
+    }, [urlConvId, activeList]);
 
     // Find the currently selected conversation object
     const selectedConversation = activeList.find(c => c.id === selectedConvId) || null;

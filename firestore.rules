@@ -205,5 +205,73 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if isAdmin();
     }
+
+    match /teams/{teamId} {
+      allow get: if signedIn();
+      allow list: if signedIn() && (
+        ('memberIds' in resource.data && uid() in resource.data.memberIds)
+        || resource.data.ownerId == uid()
+        || isModerator()
+      );
+      allow create: if signedIn() && request.resource.data.ownerId == uid() && uid() in request.resource.data.memberIds;
+      allow update: if signedIn() && (
+        resource.data.ownerId == uid()
+        || (('memberIds' in resource.data && uid() in resource.data.memberIds)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageSenderId', 'lastMessageSenderName', 'lastMessageTimestamp', 'updatedAt']))
+        || (!('memberIds' in resource.data) || !(uid() in resource.data.memberIds))
+        || isModerator()
+      );
+      allow delete: if signedIn() && (resource.data.ownerId == uid() || isModerator());
+
+      match /members/{memberId} {
+        allow read: if signedIn() && (
+          uid() in get(/databases/$(database)/documents/teams/$(teamId)).data.memberIds
+          || get(/databases/$(database)/documents/teams/$(teamId)).data.ownerId == uid()
+          || isModerator()
+        );
+        allow create: if signedIn() && (
+          memberId == uid()
+          || get(/databases/$(database)/documents/teams/$(teamId)).data.ownerId == uid()
+          || isModerator()
+        );
+        allow update: if signedIn() && (
+          memberId == uid()
+          || get(/databases/$(database)/documents/teams/$(teamId)).data.ownerId == uid()
+          || isModerator()
+        );
+        allow delete: if signedIn() && (
+          memberId == uid()
+          || get(/databases/$(database)/documents/teams/$(teamId)).data.ownerId == uid()
+          || isModerator()
+        );
+      }
+
+      match /messages/{messageId} {
+        allow read: if signedIn() && (
+          uid() in get(/databases/$(database)/documents/teams/$(teamId)).data.memberIds
+          || isModerator()
+        );
+        allow create: if signedIn()
+          && request.resource.data.senderId == uid()
+          && uid() in get(/databases/$(database)/documents/teams/$(teamId)).data.memberIds;
+        allow update: if signedIn() && (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
+          || resource.data.senderId == uid()
+          || isModerator()
+        );
+        allow delete: if signedIn() && (resource.data.senderId == uid() || isModerator());
+      }
+    }
+
+    match /teamInvitations/{token} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.createdBy == uid();
+      allow update: if signedIn() && (
+        resource.data.createdBy == uid()
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount', 'usedBy', 'updatedAt'])
+        || isModerator()
+      );
+      allow delete: if signedIn() && (resource.data.createdBy == uid() || isModerator());
+    }
   }
 }
