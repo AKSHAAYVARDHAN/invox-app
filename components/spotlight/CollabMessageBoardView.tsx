@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
     subscribeToUserConversations,
@@ -12,6 +12,7 @@ import {
     type CollabChatMessage,
 } from '../../services/collabMessageService';
 import { handleImageError } from '../utils/imageUtils';
+import { EllipsisVerticalIcon } from '../ui/Icons';
 
 interface CollabMessageBoardViewProps {
     view: 'inbox' | 'teams';
@@ -26,6 +27,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
 }) => {
     const { currentUser, userProfile } = useAuth();
     const [searchParams, setSearchParams] = useSearchParams();
+    const navigate = useNavigate();
 
     const [conversations, setConversations] = useState<CollabConversation[]>([]);
     const [convUnreadMap, setConvUnreadMap] = useState<Record<string, number>>({});
@@ -40,8 +42,48 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
     const [inputText, setInputText] = useState<string>('');
     const [isSending, setIsSending] = useState<boolean>(false);
 
+    // Three-dot dropdown menu state
+    const [showMenu, setShowMenu] = useState<boolean>(false);
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+    const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+    // Close three-dot menu on outside click or Escape key
+    useEffect(() => {
+        if (!showMenu) return;
+
+        const handleClickOutside = (event: MouseEvent) => {
+            if (
+                menuRef.current &&
+                !menuRef.current.contains(event.target as Node) &&
+                menuButtonRef.current &&
+                !menuButtonRef.current.contains(event.target as Node)
+            ) {
+                setShowMenu(false);
+            }
+        };
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setShowMenu(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [showMenu]);
+
+    // Reset menu when switching conversations
+    useEffect(() => {
+        setShowMenu(false);
+    }, [selectedConvId]);
 
     // Subscribe to real-time message unread counts per conversation
     useEffect(() => {
@@ -240,6 +282,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                 photoURL: null,
                 isApplicant: false,
                 isTeam: true,
+                userId: null,
             };
         }
         const isOwner = currentUser?.uid && (convo.ownerId === currentUser.uid || convo.ownerDetails?.uid === currentUser.uid);
@@ -250,6 +293,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                 photoURL: convo.applicantDetails?.photoURL || null,
                 isApplicant: true,
                 isTeam: false,
+                userId: convo.applicantId || convo.applicantDetails?.uid || null,
             };
         }
         return {
@@ -258,6 +302,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
             photoURL: convo.ownerDetails?.photoURL || null,
             isApplicant: false,
             isTeam: false,
+            userId: convo.ownerId || convo.ownerDetails?.uid || null,
         };
     };
 
@@ -460,8 +505,9 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                 {(() => {
                                     const other = getOtherParticipant(selectedConversation);
                                     return (
-                                        <div className="px-4 py-3 border-b border-zinc-800 bg-[#0c0c0e] flex items-center justify-between gap-3 flex-shrink-0">
-                                            <div className="flex items-center gap-3 min-w-0">
+                                        <div className="px-4 py-3 border-b border-zinc-800 bg-[#0c0c0e] flex items-center justify-between gap-3 flex-shrink-0 relative z-20">
+                                            {/* Left side: Avatar, Display Name, Username */}
+                                            <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
                                                 {/* Mobile back button to conversation list */}
                                                 <button
                                                     type="button"
@@ -473,7 +519,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                 </button>
 
                                                 {/* Avatar */}
-                                                <div className="w-9 h-9 bg-zinc-900 border border-zinc-750 flex items-center justify-center flex-shrink-0 text-xs font-bold text-white overflow-hidden">
+                                                <div className="w-8 h-8 sm:w-9 sm:h-9 bg-zinc-900 border border-zinc-750 flex items-center justify-center flex-shrink-0 text-xs font-bold text-white overflow-hidden">
                                                     {other.photoURL ? (
                                                         <img
                                                             src={other.photoURL}
@@ -488,67 +534,99 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                     )}
                                                 </div>
 
-                                                {/* Names + Compact Project/Role Metadata */}
-                                                <div className="min-w-0 space-y-0.5">
-                                                    <div className="flex items-baseline gap-2 truncate">
-                                                        <span className="text-xs sm:text-sm font-bold text-white truncate">
-                                                            {other.displayName}
+                                                {/* Display Name */}
+                                                <div className="min-w-0 flex items-center gap-2">
+                                                    <span className="text-xs sm:text-sm font-bold text-white truncate">
+                                                        {other.displayName}
+                                                    </span>
+                                                    {other.isTeam && (
+                                                        <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-1.5 py-0.2 flex-shrink-0">
+                                                            TEAM
                                                         </span>
-                                                        {other.username && (
-                                                            <span className="text-[11px] text-zinc-500 truncate">
-                                                                @{other.username}
-                                                            </span>
-                                                        )}
-                                                        {other.isTeam && (
-                                                            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-1.5 py-0.2">
-                                                                TEAM
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Compact metadata */}
-                                                    <div className="flex items-center gap-2 text-[11px] text-zinc-400 truncate">
-                                                        {other.isTeam ? (
-                                                            <span className="truncate">
-                                                                <span className="text-zinc-500 font-bold uppercase text-[10px] mr-1">MEMBERS:</span>
-                                                                <span className="text-zinc-300 font-mono">[{selectedConversation.participants?.length || 0}]</span>
-                                                                {selectedConversation.collabHook && (
-                                                                    <span className="text-zinc-400 ml-2">"{selectedConversation.collabHook}"</span>
-                                                                )}
-                                                            </span>
-                                                        ) : (
-                                                            <>
-                                                                <span className="truncate max-w-[200px] sm:max-w-[320px]">
-                                                                    <span className="text-zinc-500 font-bold uppercase text-[10px] mr-1">PROJECT:</span>
-                                                                    <span className="text-zinc-300">"{selectedConversation.collabHook || selectedConversation.collabTitle}"</span>
-                                                                </span>
-                                                                {selectedConversation.roleTitle && (
-                                                                    <>
-                                                                        <span className="text-zinc-700">|</span>
-                                                                        <span className="flex items-center gap-1 flex-shrink-0">
-                                                                            <span className="text-zinc-500 font-bold uppercase text-[10px]">ROLE:</span>
-                                                                            <span className="text-zinc-300 font-bold">[{selectedConversation.roleTitle}]</span>
-                                                                        </span>
-                                                                    </>
-                                                                )}
-                                                            </>
-                                                        )}
-                                                    </div>
+                                                    )}
                                                 </div>
                                             </div>
 
-                                            {/* Action on the right */}
-                                            {selectedConversation.applicationId && (
+                                            {/* Right side: Three-dot overflow menu */}
+                                            <div className="relative flex-shrink-0">
                                                 <button
+                                                    ref={menuButtonRef}
                                                     type="button"
-                                                    onClick={handleReturnToApplication}
-                                                    className="px-2.5 py-1.5 bg-transparent hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white text-[11px] uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer flex-shrink-0 font-mono"
-                                                    title="View original application"
+                                                    onClick={() => setShowMenu((prev) => !prev)}
+                                                    aria-label="Conversation options"
+                                                    aria-expanded={showMenu}
+                                                    aria-haspopup="true"
+                                                    className={`p-2 border transition-colors cursor-pointer flex items-center justify-center text-xs ${
+                                                        showMenu
+                                                            ? 'bg-zinc-800 border-zinc-600 text-white'
+                                                            : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white'
+                                                    }`}
                                                 >
-                                                    <span>// VIEW APPLICATION</span>
-                                                    <span>↗</span>
+                                                    <EllipsisVerticalIcon className="w-4 h-4" />
                                                 </button>
-                                            )}
+
+                                                {/* Overflow Dropdown Menu */}
+                                                {showMenu && (
+                                                    <div
+                                                        ref={menuRef}
+                                                        role="menu"
+                                                        aria-orientation="vertical"
+                                                        className="absolute right-0 top-full mt-1.5 w-56 bg-[#0c0c0e] border border-zinc-800 shadow-2xl z-30 font-mono text-xs divide-y divide-zinc-850/80"
+                                                    >
+                                                        {/* Conversation Context Details (Project and Role) */}
+                                                        {(selectedConversation.collabTitle || selectedConversation.collabHook || selectedConversation.roleTitle) && (
+                                                            <div className="px-3.5 py-2.5 text-[10px] text-zinc-400 bg-zinc-950/60 space-y-1">
+                                                                <div className="truncate">
+                                                                    <span className="text-zinc-500 font-bold uppercase mr-1">PROJECT:</span>
+                                                                    <span className="text-zinc-300">
+                                                                        "{selectedConversation.collabHook || selectedConversation.collabTitle}"
+                                                                    </span>
+                                                                </div>
+                                                                {selectedConversation.roleTitle && (
+                                                                    <div className="truncate">
+                                                                        <span className="text-zinc-500 font-bold uppercase mr-1">ROLE:</span>
+                                                                        <span className="text-zinc-300 font-bold">
+                                                                            [{selectedConversation.roleTitle}]
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Action 1: View Application */}
+                                                        {selectedConversation.applicationId && (
+                                                            <button
+                                                                type="button"
+                                                                role="menuitem"
+                                                                onClick={() => {
+                                                                    setShowMenu(false);
+                                                                    handleReturnToApplication();
+                                                                }}
+                                                                className="w-full text-left px-3.5 py-2.5 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
+                                                            >
+                                                                <span>// VIEW APPLICATION</span>
+                                                                <span className="text-[10px] text-zinc-600">↗</span>
+                                                            </button>
+                                                        )}
+
+                                                        {/* Action 2: View Profile (if user id available) */}
+                                                        {other.userId && (
+                                                            <button
+                                                                type="button"
+                                                                role="menuitem"
+                                                                onClick={() => {
+                                                                    setShowMenu(false);
+                                                                    navigate(`/profile/${other.userId}`);
+                                                                }}
+                                                                className="w-full text-left px-3.5 py-2.5 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
+                                                            >
+                                                                <span>// VIEW PROFILE</span>
+                                                                <span className="text-[10px] text-zinc-600">↗</span>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })()}

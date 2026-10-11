@@ -23,6 +23,7 @@ import {
 } from '../../services/teamService';
 import { subscribeToUserPosts } from '../../services/postService';
 import { handleImageError } from '../utils/imageUtils';
+import { EllipsisVerticalIcon } from '../ui/Icons';
 import type { Post, CollabApplication } from '../../types';
 
 interface CollabTeamsViewProps {
@@ -62,6 +63,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
     const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
     const [showInviteModal, setShowInviteModal] = useState<boolean>(false);
     const [showProjectModal, setShowProjectModal] = useState<boolean>(false);
+    const [showMenu, setShowMenu] = useState<boolean>(false);
 
     // Create Team form state
     const [createName, setCreateName] = useState<string>('');
@@ -86,6 +88,43 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+    const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+    // Close three-dot menu on outside click or Escape key
+    useEffect(() => {
+        if (!showMenu) return;
+
+        const handleClickOutside = (event: MouseEvent) => {
+            if (
+                menuRef.current &&
+                !menuRef.current.contains(event.target as Node) &&
+                menuButtonRef.current &&
+                !menuButtonRef.current.contains(event.target as Node)
+            ) {
+                setShowMenu(false);
+            }
+        };
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setShowMenu(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [showMenu]);
+
+    // Reset menu when switching teams
+    useEffect(() => {
+        setShowMenu(false);
+    }, [selectedTeamId]);
 
     // 1. Sync URL teamId with local state
     useEffect(() => {
@@ -113,6 +152,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
             },
             (err) => {
                 console.error('[TEAMS_LOAD_ERROR]', err);
+                setTeams([]);
                 setLoadingTeams(false);
             }
         );
@@ -316,36 +356,27 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         const q = searchQuery.toLowerCase().trim();
         return teams.filter(
             (t) =>
-                t.name.toLowerCase().includes(q) ||
-                t.projectTitle.toLowerCase().includes(q) ||
-                t.ownerName.toLowerCase().includes(q)
+                t.name?.toLowerCase().includes(q) ||
+                t.projectTitle?.toLowerCase().includes(q) ||
+                t.ownerName?.toLowerCase().includes(q)
         );
     }, [teams, searchQuery]);
 
     // Helper: Select a team
     const handleSelectTeam = (teamId: string) => {
-        setSelectedTeamId(teamId);
+        setSelectedTeamId(teamId || null);
+        if (currentUser?.uid && teamId) {
+            markTeamAsRead(teamId, currentUser.uid);
+        }
         setSearchParams((prev) => {
             const next = new URLSearchParams(prev);
             next.set('tab', 'Collabs');
             next.set('collabView', 'teams');
-            next.set('teamId', teamId);
-            next.delete('invite');
-            return next;
-        });
-    };
-
-    // Helper: Back to teams list
-    const handleBackToList = () => {
-        setSelectedTeamId(null);
-        setActiveTeam(null);
-        setShowMembersDrawer(false);
-        setShowInviteModal(false);
-        setSearchParams((prev) => {
-            const next = new URLSearchParams(prev);
-            next.set('tab', 'Collabs');
-            next.set('collabView', 'teams');
-            next.delete('teamId');
+            if (teamId) {
+                next.set('teamId', teamId);
+            } else {
+                next.delete('teamId');
+            }
             next.delete('invite');
             return next;
         });
@@ -372,7 +403,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         setCreateError(null);
 
         try {
-            const { team, invitationToken } = await createTeam({
+            const { team } = await createTeam({
                 name: cleanName,
                 description: createDesc,
                 project,
@@ -504,7 +535,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         }
     };
 
-    // Helper: Timestamp formatter
+    // Helper: Timestamp formatter matching Inbox compact format
     const formatTimestamp = (val: any) => {
         if (!val) return '';
         try {
@@ -546,7 +577,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                     </div>
                     <button
                         type="button"
-                        onClick={handleBackToList}
+                        onClick={() => handleSelectTeam('')}
                         className="px-2.5 py-1 bg-transparent hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer font-mono"
                     >
                         <span>←</span>
@@ -567,7 +598,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                         <p className="text-xs text-zinc-300 mb-6">{inviteError}</p>
                         <button
                             type="button"
-                            onClick={handleBackToList}
+                            onClick={() => handleSelectTeam('')}
                             className="px-4 py-2 bg-zinc-900 border border-zinc-750 text-white text-xs uppercase tracking-wider hover:border-zinc-500 transition-colors cursor-pointer"
                         >
                             // GO TO TEAMS
@@ -616,7 +647,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => navigate('/login')}
-                                    className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+                                    className="w-full py-2.5 bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
                                 >
                                     // SIGN IN TO JOIN
                                 </button>
@@ -626,7 +657,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                 type="button"
                                 disabled={isJoining}
                                 onClick={handleJoinTeam}
-                                className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                                className="w-full py-2.5 bg-white hover:bg-zinc-200 disabled:opacity-50 text-black font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer"
                             >
                                 {isJoining ? (
                                     <>
@@ -644,460 +675,30 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         );
     }
 
-    // -------------------------------------------------------------
-    // RENDER: SINGLE TEAM CHAT VIEW (when selectedTeamId is active)
-    // -------------------------------------------------------------
-    if (selectedTeamId && activeTeam) {
-        const activeInvite = invitations.find((i) => i.status === 'active') || invitations[0];
-        const activeInviteUrl = activeInvite ? getInviteUrl(activeInvite.token) : '';
-
-        return (
-            <div className="space-y-3 font-mono">
-                {/* 1. TEAM HEADER */}
-                <div className="border border-zinc-800 bg-[#0c0c0e] p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                        <button
-                            type="button"
-                            onClick={handleBackToList}
-                            className="p-1.5 border border-zinc-800 bg-zinc-900/60 hover:border-zinc-700 text-zinc-400 hover:text-white text-xs uppercase tracking-wider transition-colors cursor-pointer flex-shrink-0"
-                            title="Back to All Teams"
-                        >
-                            <span>←</span>
-                        </button>
-                        <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <h2 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider truncate">
-                                    {activeTeam.name}
-                                </h2>
-                                <span className="text-[10px] bg-zinc-900 text-zinc-400 border border-zinc-800 px-1.5 py-0.5">
-                                    {activeTeam.memberCount || members.length || 1} MEMBERS
-                                </span>
-                            </div>
-                            <p className="text-[11px] text-zinc-400 truncate mt-0.5">
-                                // Project: <span className="text-zinc-200">{activeTeam.projectTitle}</span>
-                                <span className="text-zinc-600 mx-1.5">|</span>
-                                Lead: <span className="text-zinc-300">{activeTeam.ownerName}</span>
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Actions Header */}
-                    <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
-                        <button
-                            type="button"
-                            onClick={() => setShowProjectModal(true)}
-                            className="px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white text-[11px] uppercase tracking-wider transition-colors cursor-pointer"
-                        >
-                            // VIEW PROJECT
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setShowMembersDrawer((prev) => !prev)}
-                            className={`px-2.5 py-1.5 border text-[11px] uppercase tracking-wider transition-colors cursor-pointer ${
-                                showMembersDrawer
-                                    ? 'bg-zinc-800 border-zinc-600 text-white font-bold'
-                                    : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white'
-                            }`}
-                        >
-                            // TEAM MEMBERS ({members.length})
-                        </button>
-                        {isOwner && (
-                            <button
-                                type="button"
-                                onClick={() => setShowInviteModal(true)}
-                                className="px-2.5 py-1.5 bg-emerald-950/70 border border-emerald-700/80 hover:border-emerald-500 text-emerald-300 hover:text-white text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
-                            >
-                                // INVITE MEMBERS
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                {/* 2. CHAT WORKSPACE & MEMBERS DRAWER */}
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-                    {/* Conversation Area (3 or 4 cols) */}
-                    <div className={`border border-zinc-800 bg-[#0c0c0e] flex flex-col h-[600px] overflow-hidden ${showMembersDrawer ? 'lg:col-span-3' : 'lg:col-span-4'}`}>
-                        {/* Messages Thread */}
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                            {messagesLoading ? (
-                                <div className="h-full flex flex-col items-center justify-center text-center">
-                                    <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mb-2" />
-                                    <span className="text-xs text-zinc-500 uppercase tracking-wider">// LOADING TEAM CHAT...</span>
-                                </div>
-                            ) : messages.length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center text-center p-8">
-                                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest block mb-1">
-                                        // TEAM CHAT EMPTY
-                                    </span>
-                                    <p className="text-xs text-zinc-500 max-w-sm">
-                                        Start the conversation with your team. Share project updates, assign tasks, and build together.
-                                    </p>
-                                </div>
-                            ) : (
-                                messages.map((msg) => {
-                                    const isMe = msg.senderId === currentUser?.uid;
-                                    const timeStr = formatTimestamp(msg.createdAt);
-
-                                    return (
-                                        <div
-                                            key={msg.id}
-                                            className={`flex items-start gap-2.5 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
-                                        >
-                                            {/* Avatar */}
-                                            <div className="w-7 h-7 bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0 text-xs font-bold text-zinc-300 overflow-hidden">
-                                                {msg.senderAvatar ? (
-                                                    <img
-                                                        src={msg.senderAvatar}
-                                                        alt={msg.senderName}
-                                                        className="w-full h-full object-cover"
-                                                        onError={handleImageError}
-                                                    />
-                                                ) : (
-                                                    <span>{msg.senderName.charAt(0).toUpperCase()}</span>
-                                                )}
-                                            </div>
-
-                                            {/* Message Content Bubble */}
-                                            <div className={`max-w-[78%] sm:max-w-[70%] space-y-1 ${isMe ? 'items-end' : 'items-start'}`}>
-                                                <div className={`flex items-center gap-2 text-[10px] text-zinc-500 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                                                    <span className={`font-bold ${isMe ? 'text-emerald-400' : 'text-zinc-300'}`}>
-                                                        {isMe ? 'You' : msg.senderName}
-                                                    </span>
-                                                    <span>{timeStr}</span>
-                                                </div>
-                                                <div
-                                                    className={`p-3 text-xs leading-relaxed whitespace-pre-wrap break-words border ${
-                                                        isMe
-                                                            ? 'bg-zinc-900/90 border-emerald-800/60 text-white'
-                                                            : 'bg-zinc-950/70 border-zinc-800 text-zinc-200'
-                                                    }`}
-                                                >
-                                                    {msg.text}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            )}
-                            <div ref={messagesEndRef} />
-                        </div>
-
-                        {/* Message Composer */}
-                        <div className="p-3 border-t border-zinc-800 bg-[#09090b] flex items-end gap-2">
-                            <textarea
-                                ref={textareaRef}
-                                value={inputText}
-                                onChange={(e) => setInputText(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                rows={2}
-                                placeholder="Write a message to team members... (Enter to send, Shift+Enter for new line)"
-                                className="flex-1 bg-zinc-900/60 border border-zinc-800 focus:border-zinc-600 focus:outline-none p-2.5 text-xs text-white placeholder-zinc-500 resize-none font-mono"
-                            />
-                            <button
-                                type="button"
-                                disabled={!inputText.trim() || isSending}
-                                onClick={handleSendMessage}
-                                className="px-4 py-3 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-black font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer flex-shrink-0 flex items-center gap-1.5"
-                            >
-                                {isSending ? (
-                                    <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                                ) : (
-                                    <span>// SEND</span>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Members Drawer Panel */}
-                    {showMembersDrawer && (
-                        <div className="lg:col-span-1 border border-zinc-800 bg-[#0c0c0e] p-3 flex flex-col h-[600px] overflow-hidden">
-                            <div className="pb-2.5 border-b border-zinc-800 flex items-center justify-between">
-                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">
-                                    // TEAM MEMBERS ({members.length})
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowMembersDrawer(false)}
-                                    className="text-zinc-500 hover:text-white text-xs cursor-pointer"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-
-                            <div className="flex-1 overflow-y-auto divide-y divide-zinc-850/60 mt-2">
-                                {members.map((m) => (
-                                    <div key={m.userId} className="py-2.5 flex items-center justify-between gap-2">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <div className="w-7 h-7 bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0 text-xs font-bold text-zinc-300 overflow-hidden">
-                                                {m.photoURL ? (
-                                                    <img
-                                                        src={m.photoURL}
-                                                        alt={m.displayName}
-                                                        className="w-full h-full object-cover"
-                                                        onError={handleImageError}
-                                                    />
-                                                ) : (
-                                                    <span>{m.displayName.charAt(0).toUpperCase()}</span>
-                                                )}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="text-xs text-white font-bold truncate">
-                                                    {m.displayName}
-                                                    {m.userId === currentUser?.uid && <span className="text-zinc-500 text-[10px] font-normal ml-1">(you)</span>}
-                                                </p>
-                                                <p className="text-[10px] text-zinc-500 truncate">
-                                                    {m.projectRole || (m.role === 'owner' ? 'Project Lead' : 'Collaborator')}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 border flex-shrink-0 ${
-                                            m.role === 'owner'
-                                                ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
-                                                : 'bg-zinc-900 border-zinc-800 text-zinc-400'
-                                        }`}>
-                                            {m.role === 'owner' ? 'OWNER' : 'MEMBER'}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {isOwner && (
-                                <button
-                                    type="button"
-                                    onClick={() => setShowInviteModal(true)}
-                                    className="mt-3 w-full py-2 bg-zinc-900 border border-zinc-750 hover:border-zinc-500 text-white text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
-                                >
-                                    + // INVITE MORE MEMBERS
-                                </button>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                {/* 3. INVITE MEMBERS MODAL */}
-                {showInviteModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 font-mono">
-                        <div className="border border-zinc-800 bg-[#0c0c0e] max-w-lg w-full p-5 sm:p-6 space-y-5">
-                            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                                <div>
-                                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest block font-bold">// INVITATIONS</span>
-                                    <h3 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider">
-                                        INVITE TEAM MEMBERS
-                                    </h3>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowInviteModal(false)}
-                                    className="text-zinc-500 hover:text-white text-sm cursor-pointer"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-
-                            {/* Active Link Box */}
-                            <div className="space-y-2">
-                                <label className="text-[11px] text-zinc-400 block font-bold">
-                                    // SHAREABLE INVITATION LINK
-                                </label>
-                                {activeInvite ? (
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="text"
-                                            readOnly
-                                            value={activeInviteUrl}
-                                            className="flex-1 bg-zinc-900 border border-zinc-800 p-2 text-xs text-zinc-300 select-all font-mono"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => handleCopyToken(activeInvite.token)}
-                                            className="px-3 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer flex-shrink-0"
-                                        >
-                                            {copiedToken === activeInvite.token ? '// COPIED!' : '// COPY LINK'}
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        disabled={isGeneratingInvite}
-                                        onClick={handleGenerateNewInvite}
-                                        className="w-full py-2 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-white text-xs uppercase tracking-wider transition-colors cursor-pointer"
-                                    >
-                                        // GENERATE INVITE LINK
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Accepted Collaborators Quick-Invite */}
-                            {acceptedCollabs.length > 0 && (
-                                <div className="space-y-2 border-t border-zinc-800/80 pt-3">
-                                    <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest block">
-                                        // ACCEPTED COLLABORATORS READY TO INVITE ({acceptedCollabs.length})
-                                    </span>
-                                    <div className="max-h-36 overflow-y-auto divide-y divide-zinc-850/60 border border-zinc-800 bg-zinc-900/30 p-2">
-                                        {acceptedCollabs.map((app) => (
-                                            <div key={app.id} className="py-1.5 flex items-center justify-between text-xs">
-                                                <div>
-                                                    <span className="text-white font-bold">{app.applicantName}</span>
-                                                    <span className="text-zinc-500 text-[10px] ml-1.5">({app.roleNeededTitle || 'Role'})</span>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => activeInvite && handleCopyToken(activeInvite.token)}
-                                                    className="px-2 py-0.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-600 text-zinc-300 hover:text-white text-[10px] uppercase transition-colors cursor-pointer"
-                                                >
-                                                    // COPY LINK
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Active Invitations List */}
-                            {invitations.length > 0 && (
-                                <div className="space-y-2 border-t border-zinc-800/80 pt-3">
-                                    <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest block">
-                                        // MANAGE INVITATION LINKS
-                                    </span>
-                                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                                        {invitations.map((inv) => (
-                                            <div
-                                                key={inv.token}
-                                                className="p-2 border border-zinc-800 bg-zinc-900/40 flex items-center justify-between text-xs"
-                                            >
-                                                <div className="truncate mr-2">
-                                                    <span className="text-zinc-400 font-mono text-[11px] truncate">...{inv.token.slice(-8)}</span>
-                                                    <span className="text-zinc-500 text-[10px] ml-2">used: {inv.usedCount || 0}</span>
-                                                </div>
-                                                <div className="flex items-center gap-2 flex-shrink-0">
-                                                    {inv.status === 'active' ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRevokeInvite(inv.token)}
-                                                            className="text-red-400 hover:text-red-300 text-[10px] uppercase font-bold cursor-pointer"
-                                                        >
-                                                            // REVOKE
-                                                        </button>
-                                                    ) : (
-                                                        <span className="text-zinc-600 text-[10px] uppercase">// REVOKED</span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="pt-2 flex justify-end">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowInviteModal(false)}
-                                    className="px-4 py-2 bg-zinc-900 border border-zinc-750 text-white text-xs uppercase tracking-wider hover:border-zinc-500 cursor-pointer"
-                                >
-                                    // CLOSE
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* 4. VIEW PROJECT MODAL */}
-                {showProjectModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 font-mono">
-                        <div className="border border-zinc-800 bg-[#0c0c0e] max-w-lg w-full p-5 sm:p-6 space-y-4">
-                            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                                <div>
-                                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest block font-bold">// ASSOCIATED PROJECT</span>
-                                    <h3 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider">
-                                        {activeTeam.projectTitle}
-                                    </h3>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowProjectModal(false)}
-                                    className="text-zinc-500 hover:text-white text-sm cursor-pointer"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-
-                            <div className="space-y-3 text-xs">
-                                <div className="border border-zinc-800 bg-zinc-900/30 p-3 space-y-1.5">
-                                    <div className="flex justify-between text-zinc-400">
-                                        <span>DOMAIN:</span>
-                                        <span className="text-white font-bold">{activeTeam.projectDomain || 'General'}</span>
-                                    </div>
-                                    <div className="flex justify-between text-zinc-400">
-                                        <span>PROJECT LEAD:</span>
-                                        <span className="text-white font-bold">{activeTeam.ownerName}</span>
-                                    </div>
-                                    <div className="flex justify-between text-zinc-400">
-                                        <span>TEAM MEMBERS:</span>
-                                        <span className="text-emerald-400 font-bold">{activeTeam.memberCount || members.length}</span>
-                                    </div>
-                                </div>
-
-                                {activeTeam.description && (
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">
-                                            // TEAM MISSION & DESCRIPTION
-                                        </span>
-                                        <p className="text-zinc-300 leading-relaxed bg-zinc-900/40 p-3 border border-zinc-800">
-                                            {activeTeam.description}
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="pt-2 flex justify-between">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowProjectModal(false);
-                                        navigate(`/spotlight?tab=Collabs`);
-                                    }}
-                                    className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white text-xs uppercase tracking-wider cursor-pointer"
-                                >
-                                    // BROWSE IN COLLABS
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowProjectModal(false)}
-                                    className="px-4 py-1.5 bg-zinc-900 border border-zinc-750 text-white text-xs uppercase tracking-wider hover:border-zinc-500 cursor-pointer"
-                                >
-                                    // CLOSE
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-        );
-    }
+    const activeInvite = invitations.find((i) => i.status === 'active') || invitations[0];
+    const activeInviteUrl = activeInvite ? getInviteUrl(activeInvite.token) : '';
 
     // -------------------------------------------------------------
-    // RENDER: TEAMS LANDING PAGE (List of Teams + Create Action)
+    // RENDER: UNIFIED TWO-PANEL TEAMS MESSAGING INTERFACE
     // -------------------------------------------------------------
     return (
         <div className="space-y-4 font-mono">
-            {/* 1. Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-zinc-800 gap-3">
+            {/* 1. View Header: Matches existing INVOX layout */}
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
                 <div>
                     <span className="text-[10px] text-zinc-500 uppercase tracking-widest block font-bold">// MESSAGE BOARD</span>
                     <h2 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider">
                         TEAMS
                     </h2>
-                    <p className="text-xs text-zinc-400 mt-0.5">
-                        Project teams and shared communication spaces.
-                    </p>
                 </div>
 
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
                     {onBack && (
                         <button
                             type="button"
                             onClick={onBack}
-                            className="px-2.5 py-1.5 bg-transparent hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer font-mono"
+                            className="px-2.5 py-1 bg-transparent hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer font-mono"
+                            title="Back to Collabs"
                         >
                             <span>←</span>
                             <span>// BACK TO COLLABS</span>
@@ -1109,140 +710,747 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                             setCreateError(null);
                             setShowCreateModal(true);
                         }}
-                        className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+                        className="px-3 py-1 bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer font-mono"
                     >
                         // CREATE TEAM
                     </button>
                 </div>
             </div>
 
-            {/* 2. Search Bar */}
-            {teams.length > 0 && (
-                <div className="flex items-center gap-2 border border-zinc-800 bg-[#0c0c0e] px-3 py-2">
-                    <span className="text-zinc-500 text-xs font-bold">//</span>
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search teams by name or project title..."
-                        className="bg-transparent text-xs text-white placeholder-zinc-500 focus:outline-none w-full font-mono"
-                    />
-                    {searchQuery && (
-                        <button
-                            type="button"
-                            onClick={() => setSearchQuery('')}
-                            className="text-zinc-500 hover:text-white text-xs cursor-pointer"
-                        >
-                            ✕
-                        </button>
-                    )}
-                </div>
-            )}
-
-            {/* 3. Teams List Content */}
-            {loadingTeams ? (
-                <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e]">
-                    <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
-                    <p className="text-xs text-zinc-500 uppercase tracking-wider">// SYNCHRONIZING TEAMS...</p>
-                </div>
-            ) : teams.length === 0 ? (
-                /* Empty state */
-                <div className="border border-zinc-800 bg-[#0c0c0e] p-12 sm:p-16 text-center font-mono my-4 space-y-3">
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-                        // NO TEAMS YET
-                    </span>
-                    <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
-                        You haven't joined any project teams yet.
-                        Join a team through an invitation link or create one for your project.
-                    </p>
-                    <div className="pt-2">
-                        <button
-                            type="button"
-                            onClick={() => setShowCreateModal(true)}
-                            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
-                        >
-                            // CREATE TEAM
-                        </button>
+            {/* 2. Two-Panel Messaging Workspace (Proportions: ~32% Left, ~68% Right) */}
+            <div className="border border-zinc-800 bg-[#0c0c0e] font-mono grid grid-cols-1 md:grid-cols-[32%_68%] h-[600px] sm:h-[640px] overflow-hidden">
+                {/* ─────────────────────────────────────────────────────────── */}
+                {/* LEFT PANEL: YOUR TEAMS LIST (~32%)                          */}
+                {/* ─────────────────────────────────────────────────────────── */}
+                <aside
+                    className={`border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col h-full overflow-hidden ${
+                        selectedTeamId ? 'hidden md:flex' : 'flex'
+                    }`}
+                >
+                    {/* Header: // YOUR TEAMS */}
+                    <div className="px-3.5 py-3 border-b border-zinc-800 flex items-center justify-between bg-black/40 flex-shrink-0">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                                // YOUR TEAMS
+                            </span>
+                            {teams.length > 0 && (
+                                <span className="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 px-1.5 py-0.2 font-mono">
+                                    {teams.length}
+                                </span>
+                            )}
+                        </div>
                     </div>
-                </div>
-            ) : filteredTeams.length === 0 ? (
-                <div className="border border-zinc-800 bg-[#0c0c0e] p-12 text-center text-xs text-zinc-500">
-                    No teams matched "{searchQuery}".
-                </div>
-            ) : (
-                /* Grid of Teams */
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                    {filteredTeams.map((team) => {
-                        const unreadCount = teamUnreadMap[team.id] || 0;
-                        const hasUnread = unreadCount > 0;
-                        const timeStr = formatTimestamp(team.lastMessageTimestamp || team.updatedAt || team.createdAt);
 
-                        return (
-                            <div
-                                key={team.id}
-                                onClick={() => handleSelectTeam(team.id)}
-                                className={`border p-4 bg-[#0c0c0e] hover:border-zinc-700 transition-all cursor-pointer flex flex-col justify-between gap-4 group ${
-                                    hasUnread ? 'border-emerald-600/70 bg-zinc-950/80' : 'border-zinc-800'
-                                }`}
+                    {/* Compact Search Field: // SEARCH TEAMS... */}
+                    <div className="px-3 py-2 border-b border-zinc-800 bg-[#09090b] flex items-center gap-2 flex-shrink-0">
+                        <span className="text-zinc-600 text-xs font-bold font-mono">//</span>
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="SEARCH TEAMS..."
+                            className="w-full bg-transparent text-xs text-white placeholder-zinc-600 focus:outline-none font-mono"
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery('')}
+                                className="text-zinc-500 hover:text-white text-xs cursor-pointer font-mono"
                             >
-                                <div className="space-y-2">
-                                    <div className="flex items-start justify-between gap-2">
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <h3 className="text-sm font-bold text-white uppercase tracking-wider group-hover:text-emerald-400 transition-colors truncate">
+                                ✕
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Team List Scroll Area */}
+                    <div className="flex-1 overflow-y-auto divide-y divide-zinc-850/60">
+                        {loadingTeams ? (
+                            <div className="py-12 text-center">
+                                <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
+                                <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono">
+                                    // SYNCHRONIZING TEAMS...
+                                </p>
+                            </div>
+                        ) : teams.length === 0 ? (
+                            /* No Teams Joined Empty State */
+                            <div className="p-6 text-center space-y-2">
+                                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
+                                    // NO TEAMS YET
+                                </span>
+                                <p className="text-xs text-zinc-400 leading-relaxed">
+                                    You haven't joined any project teams yet.
+                                </p>
+                                <div className="pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setCreateError(null);
+                                            setShowCreateModal(true);
+                                        }}
+                                        className="px-3 py-1.5 bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+                                    >
+                                        // CREATE TEAM
+                                    </button>
+                                </div>
+                            </div>
+                        ) : filteredTeams.length === 0 ? (
+                            <div className="p-6 text-center text-xs text-zinc-500">
+                                No teams matching "{searchQuery}"
+                            </div>
+                        ) : (
+                            filteredTeams.map((team) => {
+                                const isSelected = team.id === selectedTeamId;
+                                const unreadCount = isSelected ? 0 : (teamUnreadMap[team.id] || 0);
+                                const hasUnread = unreadCount > 0;
+                                const timestampStr = formatTimestamp(
+                                    team.lastMessageTimestamp || team.updatedAt || team.createdAt
+                                );
+
+                                return (
+                                    <button
+                                        key={team.id}
+                                        type="button"
+                                        onClick={() => handleSelectTeam(team.id)}
+                                        className={`w-full px-3 py-2.5 text-left transition-colors flex items-start gap-2.5 border-l-2 cursor-pointer ${
+                                            isSelected
+                                                ? 'bg-zinc-900 border-emerald-400 text-white'
+                                                : hasUnread
+                                                ? 'bg-zinc-900/40 border-emerald-500/80 text-zinc-200 hover:bg-zinc-900/60'
+                                                : 'bg-transparent border-transparent text-zinc-400 hover:bg-zinc-900/40 hover:text-zinc-200'
+                                        }`}
+                                    >
+                                        {/* Avatar (Sharp rectangular box) */}
+                                        <div
+                                            className={`w-8 h-8 bg-zinc-900 border flex items-center justify-center flex-shrink-0 text-xs font-bold text-white overflow-hidden mt-0.5 ${
+                                                hasUnread && !isSelected ? 'border-emerald-700/60' : 'border-zinc-750'
+                                            }`}
+                                        >
+                                            {team.ownerAvatar ? (
+                                                <img
+                                                    src={team.ownerAvatar}
+                                                    alt={team.name}
+                                                    className="w-full h-full object-cover"
+                                                    onError={handleImageError}
+                                                />
+                                            ) : (
+                                                <span className="text-emerald-400 font-bold">//</span>
+                                            )}
+                                        </div>
+
+                                        {/* Compact Row Content */}
+                                        <div className="min-w-0 flex-1 space-y-0.5">
+                                            <div className="flex items-center justify-between gap-1">
+                                                <span
+                                                    className={`text-xs truncate ${
+                                                        isSelected || hasUnread
+                                                            ? 'font-bold text-white'
+                                                            : 'font-semibold text-zinc-300'
+                                                    }`}
+                                                >
                                                     {team.name}
-                                                </h3>
-                                                {hasUnread && (
-                                                    <span className="bg-emerald-950 border border-emerald-700 text-emerald-300 text-[10px] font-bold px-1.5 py-0.2">
-                                                        {unreadCount} NEW
+                                                </span>
+                                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                    {timestampStr && (
+                                                        <span
+                                                            className={`text-[10px] font-mono ${
+                                                                hasUnread ? 'text-emerald-400 font-semibold' : 'text-zinc-500'
+                                                            }`}
+                                                        >
+                                                            {timestampStr}
+                                                        </span>
+                                                    )}
+                                                    {hasUnread && (
+                                                        <span className="font-mono font-bold px-1.5 py-0.2 bg-emerald-950/80 text-emerald-400 border border-emerald-700 text-[10px] leading-tight">
+                                                            [{unreadCount}]
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Project Title & Member Count */}
+                                            <div className="flex items-center justify-between gap-1 text-[11px] truncate">
+                                                <span
+                                                    className={`truncate ${
+                                                        hasUnread ? 'text-zinc-200 font-medium' : 'text-zinc-500'
+                                                    }`}
+                                                >
+                                                    // {team.projectTitle}
+                                                </span>
+                                                <span className="text-[10px] text-zinc-500 font-mono flex-shrink-0">
+                                                    [{team.memberCount || 1} members]
+                                                </span>
+                                            </div>
+
+                                            {/* Short latest-message preview */}
+                                            <p
+                                                className={`text-[11px] truncate ${
+                                                    hasUnread
+                                                        ? 'text-zinc-200 font-medium'
+                                                        : team.lastMessage
+                                                        ? isSelected
+                                                            ? 'text-zinc-300'
+                                                            : 'text-zinc-400'
+                                                        : 'text-zinc-600 italic'
+                                                }`}
+                                            >
+                                                {team.lastMessageSenderName ? `${team.lastMessageSenderName}: ` : ''}
+                                                {team.lastMessage || 'Team initialized.'}
+                                            </p>
+                                        </div>
+                                    </button>
+                                );
+                            })
+                        )}
+                    </div>
+                </aside>
+
+                {/* ─────────────────────────────────────────────────────────── */}
+                {/* RIGHT PANEL: SELECTED TEAM GROUP CHAT (~68%)                */}
+                {/* ─────────────────────────────────────────────────────────── */}
+                <main
+                    className={`flex flex-col h-full overflow-hidden bg-[#0a0a0c] relative ${
+                        !selectedTeamId ? 'hidden md:flex' : 'flex'
+                    }`}
+                >
+                    {activeTeam ? (
+                        <>
+                            {/* Chat Header */}
+                            <div className="px-4 py-3 border-b border-zinc-800 bg-[#0c0c0e] flex items-center justify-between gap-3 flex-shrink-0 relative z-20">
+                                <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
+                                    {/* Mobile back button to teams list */}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSelectTeam('')}
+                                        className="md:hidden text-xs text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer pr-1 flex-shrink-0 font-mono"
+                                        title="Back to teams list"
+                                    >
+                                        <span>←</span>
+                                    </button>
+
+                                    {/* Avatar */}
+                                    <div className="w-8 h-8 sm:w-9 sm:h-9 bg-zinc-900 border border-zinc-750 flex items-center justify-center flex-shrink-0 text-xs font-bold text-white overflow-hidden">
+                                        {activeTeam.ownerAvatar ? (
+                                            <img
+                                                src={activeTeam.ownerAvatar}
+                                                alt={activeTeam.name}
+                                                className="w-full h-full object-cover"
+                                                onError={handleImageError}
+                                            />
+                                        ) : (
+                                            <span className="text-emerald-400 font-bold">//</span>
+                                        )}
+                                    </div>
+
+                                    {/* Team name + TEAM indicator */}
+                                    <div className="min-w-0 flex items-center gap-2">
+                                        <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider truncate">
+                                            {activeTeam.name}
+                                        </h3>
+                                        <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-1.5 py-0.2 flex-shrink-0">
+                                            TEAM
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Right Side: Three-Dot Overflow Menu */}
+                                <div className="relative flex-shrink-0">
+                                    <button
+                                        ref={menuButtonRef}
+                                        type="button"
+                                        onClick={() => setShowMenu((prev) => !prev)}
+                                        aria-label="Team options"
+                                        aria-expanded={showMenu}
+                                        aria-haspopup="true"
+                                        className={`p-2 border transition-colors cursor-pointer flex items-center justify-center text-xs ${
+                                            showMenu
+                                                ? 'bg-zinc-800 border-zinc-600 text-white'
+                                                : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white'
+                                        }`}
+                                    >
+                                        <EllipsisVerticalIcon className="w-4 h-4" />
+                                    </button>
+
+                                    {/* Overflow Dropdown Menu */}
+                                    {showMenu && (
+                                        <div
+                                            ref={menuRef}
+                                            role="menu"
+                                            aria-orientation="vertical"
+                                            className="absolute right-0 top-full mt-1.5 w-48 bg-[#0c0c0e] border border-zinc-800 shadow-2xl z-30 font-mono text-xs divide-y divide-zinc-850/80"
+                                        >
+                                            <button
+                                                type="button"
+                                                role="menuitem"
+                                                onClick={() => {
+                                                    setShowMenu(false);
+                                                    setShowProjectModal(true);
+                                                }}
+                                                className="w-full text-left px-3.5 py-2.5 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
+                                            >
+                                                <span>// PROJECT</span>
+                                                <span className="text-[10px] text-zinc-600">↗</span>
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                role="menuitem"
+                                                onClick={() => {
+                                                    setShowMenu(false);
+                                                    setShowMembersDrawer(true);
+                                                }}
+                                                className="w-full text-left px-3.5 py-2.5 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
+                                            >
+                                                <span>// TEAM MEMBERS</span>
+                                                <span className="text-[10px] text-zinc-500 font-mono">
+                                                    [{members.length || activeTeam.memberCount || 1}]
+                                                </span>
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                role="menuitem"
+                                                onClick={() => {
+                                                    setShowMenu(false);
+                                                    setShowInviteModal(true);
+                                                }}
+                                                className="w-full text-left px-3.5 py-2.5 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
+                                            >
+                                                <span>// INVITE MEMBERS</span>
+                                                <span className="text-[10px] text-emerald-400 font-bold">+</span>
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Message History Thread */}
+                            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+                                {messagesLoading ? (
+                                    <div className="py-12 text-center">
+                                        <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
+                                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono">
+                                            // LOADING TEAM CHAT...
+                                        </p>
+                                    </div>
+                                ) : messages.length === 0 ? (
+                                    /* No messages in selected team */
+                                    <div className="h-full flex items-center justify-center p-8 text-center">
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">
+                                                // TEAM CHAT EMPTY
+                                            </span>
+                                            <p className="text-xs text-zinc-400">
+                                                Start the conversation with your team.
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    messages.map((msg) => {
+                                        const isMe = msg.senderId === currentUser?.uid;
+                                        const timeStr = formatTimestamp(msg.createdAt);
+
+                                        return (
+                                            <div
+                                                key={msg.id}
+                                                className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                                            >
+                                                {!isMe && (
+                                                    <div className="flex items-center gap-1.5 mb-1 px-1">
+                                                        <span className="text-[10px] text-zinc-300 font-semibold font-mono">
+                                                            {msg.senderName}
+                                                        </span>
+                                                        {msg.senderId === activeTeam.ownerId && (
+                                                            <span className="text-[8px] bg-zinc-900 border border-zinc-750 text-zinc-400 px-1 py-0 font-mono">
+                                                                LEAD
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <div
+                                                    className={`max-w-[85%] sm:max-w-[70%] px-3 py-2 text-xs border ${
+                                                        isMe
+                                                            ? 'bg-zinc-900 border-zinc-750 text-zinc-100'
+                                                            : 'bg-[#131316] border-zinc-800 text-zinc-200'
+                                                    }`}
+                                                >
+                                                    <p className="whitespace-pre-wrap break-words leading-relaxed font-mono">
+                                                        {msg.text}
+                                                    </p>
+                                                    {timeStr && (
+                                                        <div
+                                                            className={`mt-1 text-[10px] ${
+                                                                isMe
+                                                                    ? 'text-zinc-500 text-right'
+                                                                    : 'text-zinc-600 text-left'
+                                                            }`}
+                                                        >
+                                                            {timeStr}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                                <div ref={messagesEndRef} />
+                            </div>
+
+                            {/* Message Composer (Anchored to bottom of right panel) */}
+                            <div className="p-3 border-t border-zinc-800 bg-[#0c0c0e] flex-shrink-0">
+                                <form
+                                    onSubmit={(e) => {
+                                        e.preventDefault();
+                                        handleSendMessage();
+                                    }}
+                                    className="flex items-center gap-2"
+                                >
+                                    <textarea
+                                        ref={textareaRef}
+                                        rows={1}
+                                        value={inputText}
+                                        onChange={(e) => setInputText(e.target.value)}
+                                        onKeyDown={handleKeyDown}
+                                        placeholder="// MESSAGE YOUR TEAM..."
+                                        disabled={isSending}
+                                        className="flex-1 bg-black/70 border border-zinc-800 focus:border-zinc-600 text-xs text-white px-3 py-2 resize-none focus:outline-none placeholder:text-zinc-600 placeholder:whitespace-nowrap placeholder:truncate leading-relaxed font-mono disabled:opacity-50 h-[38px]"
+                                    />
+
+                                    <button
+                                        type="submit"
+                                        disabled={!inputText.trim() || isSending}
+                                        className="px-4 h-[38px] bg-white text-black hover:bg-zinc-200 border border-white text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex-shrink-0 flex items-center justify-center font-mono"
+                                        title="Send message"
+                                    >
+                                        {isSending ? '// SENDING...' : '// SEND'}
+                                    </button>
+                                </form>
+                            </div>
+
+                            {/* Compact Slide-out Members Panel */}
+                            {showMembersDrawer && (
+                                <div className="absolute right-0 top-0 bottom-0 w-72 sm:w-80 bg-[#0c0c0e] border-l border-zinc-800 z-20 flex flex-col shadow-2xl">
+                                    <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between bg-black/40">
+                                        <div>
+                                            <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block">
+                                                // ROSTER
+                                            </span>
+                                            <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                                                TEAM MEMBERS ({members.length})
+                                            </h4>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowMembersDrawer(false)}
+                                            className="text-zinc-500 hover:text-white text-sm cursor-pointer font-mono"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+
+                                    <div className="flex-1 overflow-y-auto divide-y divide-zinc-850/60 p-3 space-y-1">
+                                        {members.map((m) => (
+                                            <div
+                                                key={m.userId}
+                                                className="py-2.5 flex items-center justify-between gap-2"
+                                            >
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <div className="w-7 h-7 bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0 text-xs font-bold text-zinc-300 overflow-hidden">
+                                                        {m.photoURL ? (
+                                                            <img
+                                                                src={m.photoURL}
+                                                                alt={m.displayName}
+                                                                className="w-full h-full object-cover"
+                                                                onError={handleImageError}
+                                                            />
+                                                        ) : (
+                                                            <span>{m.displayName.charAt(0).toUpperCase()}</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs text-white font-bold truncate">
+                                                            {m.displayName}
+                                                            {m.userId === currentUser?.uid && (
+                                                                <span className="text-zinc-500 text-[10px] font-normal ml-1">
+                                                                    (you)
+                                                                </span>
+                                                            )}
+                                                        </p>
+                                                        <p className="text-[10px] text-zinc-500 truncate">
+                                                            {m.projectRole ||
+                                                                (m.role === 'owner' ? 'Project Lead' : 'Collaborator')}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <span
+                                                    className={`text-[9px] font-bold px-1.5 py-0.5 border flex-shrink-0 ${
+                                                        m.role === 'owner'
+                                                            ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
+                                                            : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                                                    }`}
+                                                >
+                                                    {m.role === 'owner' ? 'OWNER' : 'MEMBER'}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {isOwner && (
+                                        <div className="p-3 border-t border-zinc-800 bg-[#09090b]">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowMembersDrawer(false);
+                                                    setShowInviteModal(true);
+                                                }}
+                                                className="w-full py-2 bg-zinc-900 border border-zinc-750 hover:border-zinc-500 text-white text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                                            >
+                                                + // INVITE MORE MEMBERS
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        /* Initial State: When no Team is selected */
+                        <div className="h-full flex items-center justify-center p-8 text-center bg-[#0a0a0c]">
+                            <div className="space-y-1.5 max-w-sm">
+                                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">
+                                    // SELECT A TEAM
+                                </span>
+                                <p className="text-xs text-zinc-400 leading-relaxed">
+                                    Choose a team from the left panel to start collaborating.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                </main>
+            </div>
+
+            {/* 3. INVITE MEMBERS MODAL */}
+            {showInviteModal && activeTeam && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 font-mono">
+                    <div className="border border-zinc-800 bg-[#0c0c0e] max-w-lg w-full p-5 sm:p-6 space-y-5">
+                        <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                            <div>
+                                <span className="text-[10px] text-zinc-500 uppercase tracking-widest block font-bold">
+                                    // INVITATIONS
+                                </span>
+                                <h3 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider">
+                                    INVITE TEAM MEMBERS
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowInviteModal(false)}
+                                className="text-zinc-500 hover:text-white text-sm cursor-pointer"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Active Link Box */}
+                        <div className="space-y-2">
+                            <label className="text-[11px] text-zinc-400 block font-bold">
+                                // SHAREABLE INVITATION LINK
+                            </label>
+                            {activeInvite ? (
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={activeInviteUrl}
+                                        className="flex-1 bg-zinc-900 border border-zinc-800 p-2 text-xs text-zinc-300 select-all font-mono"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleCopyToken(activeInvite.token)}
+                                        className="px-3 py-2 bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer flex-shrink-0"
+                                    >
+                                        {copiedToken === activeInvite.token ? '// COPIED!' : '// COPY LINK'}
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    disabled={isGeneratingInvite}
+                                    onClick={handleGenerateNewInvite}
+                                    className="w-full py-2 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-white text-xs uppercase tracking-wider transition-colors cursor-pointer"
+                                >
+                                    // GENERATE INVITE LINK
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Accepted Collaborators Quick-Invite */}
+                        {acceptedCollabs.length > 0 && (
+                            <div className="space-y-2 border-t border-zinc-800/80 pt-3">
+                                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest block">
+                                    // ACCEPTED COLLABORATORS READY TO INVITE ({acceptedCollabs.length})
+                                </span>
+                                <div className="max-h-36 overflow-y-auto divide-y divide-zinc-850/60 border border-zinc-800 bg-zinc-900/30 p-2">
+                                    {acceptedCollabs.map((app) => (
+                                        <div
+                                            key={app.id}
+                                            className="py-1.5 flex items-center justify-between text-xs"
+                                        >
+                                            <div>
+                                                <span className="text-white font-bold">{app.applicantName}</span>
+                                                <span className="text-zinc-500 text-[10px] ml-1.5">
+                                                    ({app.roleNeededTitle || 'Role'})
+                                                </span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => activeInvite && handleCopyToken(activeInvite.token)}
+                                                className="px-2 py-0.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-600 text-zinc-300 hover:text-white text-[10px] uppercase transition-colors cursor-pointer"
+                                            >
+                                                // COPY LINK
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Active Invitations List */}
+                        {invitations.length > 0 && (
+                            <div className="space-y-2 border-t border-zinc-800/80 pt-3">
+                                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest block">
+                                    // MANAGE INVITATION LINKS
+                                </span>
+                                <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                                    {invitations.map((inv) => (
+                                        <div
+                                            key={inv.token}
+                                            className="p-2 border border-zinc-800 bg-zinc-900/40 flex items-center justify-between text-xs"
+                                        >
+                                            <div className="truncate mr-2">
+                                                <span className="text-zinc-400 font-mono text-[11px] truncate">
+                                                    ...{inv.token.slice(-8)}
+                                                </span>
+                                                <span className="text-zinc-500 text-[10px] ml-2">
+                                                    used: {inv.usedCount || 0}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                {inv.status === 'active' ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRevokeInvite(inv.token)}
+                                                        className="text-red-400 hover:text-red-300 text-[10px] uppercase font-bold cursor-pointer"
+                                                    >
+                                                        // REVOKE
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-zinc-600 text-[10px] uppercase">
+                                                        // REVOKED
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="text-[11px] text-zinc-400 truncate mt-0.5">
-                                                // {team.projectTitle}
-                                            </p>
                                         </div>
-                                        <span className="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 px-1.5 py-0.5 flex-shrink-0">
-                                            {team.memberCount || 1} MEMBERS
-                                        </span>
-                                    </div>
-
-                                    {/* Preview of latest message */}
-                                    <div className="border border-zinc-850 bg-zinc-900/30 p-2.5 text-xs">
-                                        <div className="flex items-center justify-between text-[10px] text-zinc-500 mb-1">
-                                            <span>
-                                                {team.lastMessageSenderName ? `${team.lastMessageSenderName}:` : '// LATEST MSG:'}
-                                            </span>
-                                            <span>{timeStr}</span>
-                                        </div>
-                                        <p className="text-zinc-300 text-xs truncate">
-                                            {team.lastMessage || 'Team initialized.'}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-between pt-2 border-t border-zinc-850/60 text-[11px] text-zinc-500">
-                                    <div className="flex items-center gap-1.5 truncate">
-                                        <span>Owner:</span>
-                                        <span className="text-zinc-300 font-bold truncate">{team.ownerName}</span>
-                                    </div>
-                                    <span className="text-emerald-400 font-bold group-hover:underline">
-                                        // OPEN TEAM →
-                                    </span>
+                                    ))}
                                 </div>
                             </div>
-                        );
-                    })}
+                        )}
+
+                        <div className="pt-2 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setShowInviteModal(false)}
+                                className="px-4 py-2 bg-zinc-900 border border-zinc-750 text-white text-xs uppercase tracking-wider hover:border-zinc-500 cursor-pointer"
+                            >
+                                // CLOSE
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 
-            {/* 4. CREATE TEAM MODAL */}
+            {/* 4. VIEW PROJECT MODAL */}
+            {showProjectModal && activeTeam && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 font-mono">
+                    <div className="border border-zinc-800 bg-[#0c0c0e] max-w-lg w-full p-5 sm:p-6 space-y-4">
+                        <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                            <div>
+                                <span className="text-[10px] text-zinc-500 uppercase tracking-widest block font-bold">
+                                    // ASSOCIATED PROJECT
+                                </span>
+                                <h3 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider">
+                                    {activeTeam.projectTitle}
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowProjectModal(false)}
+                                className="text-zinc-500 hover:text-white text-sm cursor-pointer"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="space-y-3 text-xs">
+                            <div className="border border-zinc-800 bg-zinc-900/30 p-3 space-y-1.5">
+                                <div className="flex justify-between text-zinc-400">
+                                    <span>DOMAIN:</span>
+                                    <span className="text-white font-bold">{activeTeam.projectDomain || 'General'}</span>
+                                </div>
+                                <div className="flex justify-between text-zinc-400">
+                                    <span>PROJECT LEAD:</span>
+                                    <span className="text-white font-bold">{activeTeam.ownerName}</span>
+                                </div>
+                                <div className="flex justify-between text-zinc-400">
+                                    <span>TEAM MEMBERS:</span>
+                                    <span className="text-emerald-400 font-bold">
+                                        {activeTeam.memberCount || members.length}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {activeTeam.description && (
+                                <div className="space-y-1">
+                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">
+                                        // TEAM MISSION & DESCRIPTION
+                                    </span>
+                                    <p className="text-zinc-300 leading-relaxed bg-zinc-900/40 p-3 border border-zinc-800">
+                                        {activeTeam.description}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="pt-2 flex justify-between">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowProjectModal(false);
+                                    navigate(`/spotlight?tab=Collabs`);
+                                }}
+                                className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white text-xs uppercase tracking-wider cursor-pointer"
+                            >
+                                // BROWSE IN COLLABS
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setShowProjectModal(false)}
+                                className="px-4 py-1.5 bg-zinc-900 border border-zinc-750 text-white text-xs uppercase tracking-wider hover:border-zinc-500 cursor-pointer"
+                            >
+                                // CLOSE
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 5. CREATE TEAM MODAL */}
             {showCreateModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 font-mono">
                     <div className="border border-zinc-800 bg-[#0c0c0e] max-w-lg w-full p-5 sm:p-6 space-y-4">
                         <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
                             <div>
-                                <span className="text-[10px] text-zinc-500 uppercase tracking-widest block font-bold">// CREATE NEW TEAM</span>
+                                <span className="text-[10px] text-zinc-500 uppercase tracking-widest block font-bold">
+                                    // CREATE NEW TEAM
+                                </span>
                                 <h3 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider">
                                     CREATE PROJECT TEAM
                                 </h3>
@@ -1290,7 +1498,11 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                         className="w-full bg-zinc-900 border border-zinc-800 focus:border-zinc-600 focus:outline-none p-2.5 text-white font-mono text-xs cursor-pointer"
                                     >
                                         {userProjects.map((p) => {
-                                            const title = (p as any).aiSummary || (p as any).oneLine || p.title || 'Untitled Project';
+                                            const title =
+                                                (p as any).aiSummary ||
+                                                (p as any).oneLine ||
+                                                p.title ||
+                                                'Untitled Project';
                                             return (
                                                 <option key={p.id} value={p.id}>
                                                     {title}
@@ -1303,7 +1515,9 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
 
                             {/* Optional Team Description */}
                             <div className="space-y-1">
-                                <label className="text-zinc-400 font-bold block">// TEAM DESCRIPTION (OPTIONAL)</label>
+                                <label className="text-zinc-400 font-bold block">
+                                    // TEAM DESCRIPTION (OPTIONAL)
+                                </label>
                                 <textarea
                                     rows={3}
                                     value={createDesc}
@@ -1324,7 +1538,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                 <button
                                     type="submit"
                                     disabled={isCreatingTeam || !createName.trim() || userProjects.length === 0}
-                                    className="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-black font-bold uppercase transition-colors cursor-pointer flex items-center gap-1.5"
+                                    className="px-5 py-2 bg-white hover:bg-zinc-200 disabled:opacity-40 text-black font-bold uppercase transition-colors cursor-pointer flex items-center gap-1.5"
                                 >
                                     {isCreatingTeam ? (
                                         <>
