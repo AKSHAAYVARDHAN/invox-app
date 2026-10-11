@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -12,7 +13,7 @@ import {
     type CollabChatMessage,
 } from '../../services/collabMessageService';
 import { handleImageError } from '../utils/imageUtils';
-import { EllipsisVerticalIcon } from '../ui/Icons';
+import { EllipsisVerticalIcon, Maximize2Icon, Minimize2Icon } from '../ui/Icons';
 
 interface CollabMessageBoardViewProps {
     view: 'inbox' | 'teams';
@@ -45,10 +46,31 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
     // Three-dot dropdown menu state
     const [showMenu, setShowMenu] = useState<boolean>(false);
 
+    // Full-screen expand state
+    const [isExpanded, setIsExpanded] = useState<boolean>(false);
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
     const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+    // Prevent background scrolling when chat is expanded
+    useEffect(() => {
+        if (isExpanded) {
+            const originalOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+            return () => {
+                document.body.style.overflow = originalOverflow;
+            };
+        }
+    }, [isExpanded]);
+
+    // Scroll to bottom when expanded or when messages update
+    useEffect(() => {
+        if (isExpanded && messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+        }
+    }, [isExpanded]);
 
     // Close three-dot menu on outside click or Escape key
     useEffect(() => {
@@ -79,6 +101,22 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
             document.removeEventListener('keydown', handleKeyDown);
         };
     }, [showMenu]);
+
+    // Escape key handler to exit expanded mode when not interacting with open dropdown
+    useEffect(() => {
+        const handleExpandEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape' && isExpanded && !showMenu) {
+                setIsExpanded(false);
+            }
+        };
+
+        if (isExpanded) {
+            document.addEventListener('keydown', handleExpandEscape);
+            return () => {
+                document.removeEventListener('keydown', handleExpandEscape);
+            };
+        }
+    }, [isExpanded, showMenu]);
 
     // Reset menu when switching conversations
     useEffect(() => {
@@ -322,39 +360,68 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
         });
     };
 
-    return (
-        <div className="space-y-4">
-            {/* View Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800 font-mono">
-                <div>
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest block font-bold">// MESSAGE BOARD</span>
-                    <h2 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider">
+    const workspaceContent = (
+        <div
+            className={`font-mono ${
+                isExpanded
+                    ? 'fixed inset-0 w-screen h-screen h-[100dvh] z-[100] bg-[#0c0c0e] flex flex-col m-0 p-0 overflow-hidden'
+                    : 'space-y-4'
+            }`}
+        >
+            {/* View Header: Matches existing INVOX layout with polished alignment */}
+            <div className={`flex items-center justify-between border-b border-zinc-800 ${isExpanded ? 'flex-shrink-0 px-4 sm:px-6 py-3.5 bg-[#0c0c0e]' : 'px-0 pb-3'}`}>
+                {/* Left: Section Label and Title */}
+                <div className="flex flex-col justify-center gap-0.5">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest block font-bold leading-none">
+                        // MESSAGE BOARD
+                    </span>
+                    <h2 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider leading-tight">
                         {view === 'inbox' ? 'INBOX' : 'TEAMS'}
                     </h2>
                 </div>
 
-                {onBack && (
+                {/* Right: Action buttons in a single aligned row */}
+                <div className="flex items-center gap-2">
+                    {onBack && (
+                        <button
+                            type="button"
+                            onClick={onBack}
+                            className="h-8 px-2.5 sm:px-3 bg-transparent hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white text-xs uppercase tracking-wider transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer font-mono whitespace-nowrap"
+                            title="Back to Collabs"
+                        >
+                            <span>←</span>
+                            <span>// BACK TO COLLABS</span>
+                        </button>
+                    )}
                     <button
                         type="button"
-                        onClick={onBack}
-                        className="px-2.5 py-1 bg-transparent hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer font-mono"
-                        title="Back to Collabs"
+                        onClick={() => setIsExpanded((prev) => !prev)}
+                        aria-label={isExpanded ? 'Restore message board' : 'Expand message board'}
+                        title={isExpanded ? 'Restore message board' : 'Expand message board'}
+                        className={`h-8 w-8 border transition-colors cursor-pointer inline-flex items-center justify-center text-xs font-mono flex-shrink-0 ${
+                            isExpanded
+                                ? 'bg-zinc-800 border-zinc-600 text-white'
+                                : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white'
+                        }`}
                     >
-                        <span>←</span>
-                        <span>// BACK TO COLLABS</span>
+                        {isExpanded ? (
+                            <Minimize2Icon className="w-3.5 h-3.5" />
+                        ) : (
+                            <Maximize2Icon className="w-3.5 h-3.5" />
+                        )}
                     </button>
-                )}
+                </div>
             </div>
 
             {/* Content Display */}
             {loading ? (
-                <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e]">
+                <div className={`p-12 text-center border border-zinc-800 bg-[#0c0c0e] ${isExpanded ? 'flex-1 flex flex-col items-center justify-center border-0' : ''}`}>
                     <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
                     <p className="text-xs text-zinc-500 uppercase tracking-wider font-mono">// SYNCHRONIZING...</p>
                 </div>
             ) : !hasData ? (
                 /* Empty State Display */
-                <div className="border border-zinc-800 bg-[#0c0c0e] p-12 sm:p-16 text-center font-mono my-4">
+                <div className={`border border-zinc-800 bg-[#0c0c0e] p-12 sm:p-16 text-center font-mono my-4 ${isExpanded ? 'flex-1 flex items-center justify-center border-0 m-0' : ''}`}>
                     <div className="max-w-md mx-auto space-y-1.5">
                         <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
                             {view === 'inbox' ? '// NO CONVERSATIONS' : '// NO TEAM CONVERSATIONS'}
@@ -368,7 +435,11 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                 </div>
             ) : (
                 /* Two-Column Messaging Workspace for INBOX & TEAMS */
-                <div className="border border-zinc-800 bg-[#0c0c0e] font-mono grid grid-cols-1 md:grid-cols-[30%_70%] h-[600px] sm:h-[640px] overflow-hidden">
+                <div
+                    className={`bg-[#0c0c0e] font-mono grid grid-cols-1 md:grid-cols-[30%_70%] overflow-hidden ${
+                        isExpanded ? 'flex-1 min-h-0 border-0' : 'border border-zinc-800 h-[600px] sm:h-[640px]'
+                    }`}
+                >
                     {/* LEFT: Conversation List (~28-32%) */}
                     <aside
                         className={`border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col h-full overflow-hidden ${
@@ -740,4 +811,8 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
             )}
         </div>
     );
+
+    return isExpanded && typeof document !== 'undefined'
+        ? createPortal(workspaceContent, document.body)
+        : workspaceContent;
 };
