@@ -1106,203 +1106,213 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                 </div>
                             </div>
 
-                            {/* Message History Thread */}
-                            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
-                                {messagesLoading ? (
-                                    <div className="py-12 text-center">
-                                        <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
-                                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono">
-                                            // LOADING TEAM CHAT...
-                                        </p>
-                                    </div>
-                                ) : messages.length === 0 ? (
-                                    /* No messages in selected team */
-                                    <div className="h-full flex items-center justify-center p-8 text-center">
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">
-                                                // TEAM CHAT EMPTY
-                                            </span>
-                                            <p className="text-xs text-zinc-400">
-                                                Start the conversation with your team.
-                                            </p>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    messages.map((msg) => {
-                                        const isMe = msg.senderId === currentUser?.uid;
-                                        const timeStr = formatTimestamp(msg.createdAt);
-
-                                        return (
-                                            <div
-                                                key={msg.id}
-                                                className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
-                                            >
-                                                {!isMe && (
-                                                    <div className="flex items-center gap-1.5 mb-1 px-1">
-                                                        <span className="text-[10px] text-zinc-300 font-semibold font-mono">
-                                                            {msg.senderName}
-                                                        </span>
-                                                        {msg.senderId === activeTeam.ownerId && (
-                                                            <span className="text-[8px] bg-zinc-900 border border-zinc-750 text-zinc-400 px-1 py-0 font-mono">
-                                                                LEAD
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
-                                                <div
-                                                    className={`max-w-[85%] sm:max-w-[70%] px-3 py-2 text-xs border ${
-                                                        isMe
-                                                            ? 'bg-zinc-900 border-zinc-750 text-zinc-100'
-                                                            : 'bg-[#131316] border-zinc-800 text-zinc-200'
-                                                    }`}
-                                                >
-                                                    <p className="whitespace-pre-wrap break-words leading-relaxed font-mono">
-                                                        {msg.text}
+                            {/* Chat Content Body (Chat thread + Message composer, with optional side-by-side / overlay Members Panel confined to workspace) */}
+                            <div className="flex-1 flex overflow-hidden min-h-0 relative">
+                                {/* Left/Main chat column: messages + composer */}
+                                <div className="flex-1 flex flex-col min-w-0 overflow-hidden h-full">
+                                    {/* Message History Thread */}
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+                                        {messagesLoading ? (
+                                            <div className="py-12 text-center">
+                                                <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
+                                                <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono">
+                                                    // LOADING TEAM CHAT...
+                                                </p>
+                                            </div>
+                                        ) : messages.length === 0 ? (
+                                            /* No messages in selected team */
+                                            <div className="h-full flex items-center justify-center p-8 text-center">
+                                                <div className="space-y-1">
+                                                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">
+                                                        // TEAM CHAT EMPTY
+                                                    </span>
+                                                    <p className="text-xs text-zinc-400">
+                                                        Start the conversation with your team.
                                                     </p>
-                                                    {timeStr && (
-                                                        <div
-                                                            className={`mt-1 text-[10px] ${
-                                                                isMe
-                                                                    ? 'text-zinc-500 text-right'
-                                                                    : 'text-zinc-600 text-left'
-                                                            }`}
-                                                        >
-                                                            {timeStr}
-                                                        </div>
-                                                    )}
                                                 </div>
                                             </div>
-                                        );
-                                    })
-                                )}
-                                <div ref={messagesEndRef} />
-                            </div>
+                                        ) : (
+                                            messages.map((msg) => {
+                                                const isMe = msg.senderId === currentUser?.uid;
+                                                const timeStr = formatTimestamp(msg.createdAt);
 
-                            {/* Message Composer (Anchored to bottom of right panel) */}
-                            <div className="p-3 border-t border-zinc-800 bg-[#0c0c0e] flex-shrink-0">
-                                <form
-                                    onSubmit={(e) => {
-                                        e.preventDefault();
-                                        handleSendMessage();
-                                    }}
-                                    className="flex items-center gap-2"
-                                >
-                                    <textarea
-                                        ref={textareaRef}
-                                        rows={1}
-                                        value={inputText}
-                                        onChange={(e) => setInputText(e.target.value)}
-                                        onKeyDown={handleKeyDown}
-                                        placeholder="// MESSAGE YOUR TEAM..."
-                                        disabled={isSending}
-                                        className="flex-1 bg-black/70 border border-zinc-800 focus:border-zinc-600 text-xs text-white px-3 py-2 resize-none focus:outline-none placeholder:text-zinc-600 placeholder:whitespace-nowrap placeholder:truncate leading-relaxed font-mono disabled:opacity-50 h-[38px]"
-                                    />
-
-                                    <button
-                                        type="submit"
-                                        disabled={!inputText.trim() || isSending}
-                                        className="px-4 h-[38px] bg-white text-black hover:bg-zinc-200 border border-white text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex-shrink-0 flex items-center justify-center font-mono"
-                                        title="Send message"
-                                    >
-                                        {isSending ? '// SENDING...' : '// SEND'}
-                                    </button>
-                                </form>
-                            </div>
-
-                            {/* Slide-out Members Panel with Full-Screen Standard Backdrop */}
-                            {showMembersDrawer && (
-                                <div
-                                    className="fixed inset-0 z-50 flex justify-end bg-black/45 backdrop-blur-[5px] font-mono"
-                                    onClick={() => setShowMembersDrawer(false)}
-                                    role="dialog"
-                                    aria-modal="true"
-                                >
-                                    <div
-                                        className="h-full w-72 sm:w-80 bg-[#0c0c0e] border-l border-zinc-800 flex flex-col shadow-2xl"
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between bg-black/40">
-                                            <div>
-                                                <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block">
-                                                    // ROSTER
-                                                </span>
-                                                <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                                                    TEAM MEMBERS ({members.length})
-                                                </h4>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowMembersDrawer(false)}
-                                                className="text-zinc-500 hover:text-white text-sm cursor-pointer font-mono"
-                                            >
-                                                ✕
-                                            </button>
-                                        </div>
-
-                                        <div className="flex-1 overflow-y-auto divide-y divide-zinc-850/60 p-3 space-y-1">
-                                            {members.map((m) => (
-                                                <div
-                                                    key={m.userId}
-                                                    className="py-2.5 flex items-center justify-between gap-2"
-                                                >
-                                                    <div className="flex items-center gap-2 min-w-0">
-                                                        <div className="w-7 h-7 bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0 text-xs font-bold text-zinc-300 overflow-hidden">
-                                                            {m.photoURL ? (
-                                                                <img
-                                                                    src={m.photoURL}
-                                                                    alt={m.displayName}
-                                                                    className="w-full h-full object-cover"
-                                                                    onError={handleImageError}
-                                                                />
-                                                            ) : (
-                                                                <span>{m.displayName.charAt(0).toUpperCase()}</span>
-                                                            )}
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <p className="text-xs text-white font-bold truncate">
-                                                                {m.displayName}
-                                                                {m.userId === currentUser?.uid && (
-                                                                    <span className="text-zinc-500 text-[10px] font-normal ml-1">
-                                                                        (you)
+                                                return (
+                                                    <div
+                                                        key={msg.id}
+                                                        className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                                                    >
+                                                        {!isMe && (
+                                                            <div className="flex items-center gap-1.5 mb-1 px-1">
+                                                                <span className="text-[10px] text-zinc-300 font-semibold font-mono">
+                                                                    {msg.senderName}
+                                                                </span>
+                                                                {msg.senderId === activeTeam.ownerId && (
+                                                                    <span className="text-[8px] bg-zinc-900 border border-zinc-750 text-zinc-400 px-1 py-0 font-mono">
+                                                                        LEAD
                                                                     </span>
                                                                 )}
+                                                            </div>
+                                                        )}
+                                                        <div
+                                                            className={`max-w-[85%] sm:max-w-[70%] px-3 py-2 text-xs border ${
+                                                                isMe
+                                                                    ? 'bg-zinc-900 border-zinc-750 text-zinc-100'
+                                                                    : 'bg-[#131316] border-zinc-800 text-zinc-200'
+                                                            }`}
+                                                        >
+                                                            <p className="whitespace-pre-wrap break-words leading-relaxed font-mono">
+                                                                {msg.text}
                                                             </p>
-                                                            <p className="text-[10px] text-zinc-500 truncate">
-                                                                {m.projectRole ||
-                                                                    (m.role === 'owner' ? 'Project Lead' : 'Collaborator')}
-                                                            </p>
+                                                            {timeStr && (
+                                                                <div
+                                                                    className={`mt-1 text-[10px] ${
+                                                                        isMe
+                                                                            ? 'text-zinc-500 text-right'
+                                                                            : 'text-zinc-600 text-left'
+                                                                    }`}
+                                                                >
+                                                                    {timeStr}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
-                                                    <span
-                                                        className={`text-[9px] font-bold px-1.5 py-0.5 border flex-shrink-0 ${
-                                                            m.role === 'owner'
-                                                                ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
-                                                                : 'bg-zinc-900 border-zinc-800 text-zinc-400'
-                                                        }`}
-                                                    >
-                                                        {m.role === 'owner' ? 'OWNER' : 'MEMBER'}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        {isOwner && (
-                                            <div className="p-3 border-t border-zinc-800 bg-[#09090b]">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setShowMembersDrawer(false);
-                                                        setShowInviteModal(true);
-                                                    }}
-                                                    className="w-full py-2 bg-zinc-900 border border-zinc-750 hover:border-zinc-500 text-white text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
-                                                >
-                                                    + // INVITE MORE MEMBERS
-                                                </button>
-                                            </div>
+                                                );
+                                            })
                                         )}
+                                        <div ref={messagesEndRef} />
+                                    </div>
+
+                                    {/* Message Composer (Anchored to bottom of chat column) */}
+                                    <div className="p-3 border-t border-zinc-800 bg-[#0c0c0e] flex-shrink-0">
+                                        <form
+                                            onSubmit={(e) => {
+                                                e.preventDefault();
+                                                handleSendMessage();
+                                            }}
+                                            className="flex items-center gap-2"
+                                        >
+                                            <textarea
+                                                ref={textareaRef}
+                                                rows={1}
+                                                value={inputText}
+                                                onChange={(e) => setInputText(e.target.value)}
+                                                onKeyDown={handleKeyDown}
+                                                placeholder="// MESSAGE YOUR TEAM..."
+                                                disabled={isSending}
+                                                className="flex-1 bg-black/70 border border-zinc-800 focus:border-zinc-600 text-xs text-white px-3 py-2 resize-none focus:outline-none placeholder:text-zinc-600 placeholder:whitespace-nowrap placeholder:truncate leading-relaxed font-mono disabled:opacity-50 h-[38px]"
+                                            />
+
+                                            <button
+                                                type="submit"
+                                                disabled={!inputText.trim() || isSending}
+                                                className="px-4 h-[38px] bg-white text-black hover:bg-zinc-200 border border-white text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex-shrink-0 flex items-center justify-center font-mono"
+                                                title="Send message"
+                                            >
+                                                {isSending ? '// SENDING...' : '// SEND'}
+                                            </button>
+                                        </form>
                                     </div>
                                 </div>
-                            )}
+
+                                {/* Team Members Panel: Confined entirely within Teams workspace */}
+                                {showMembersDrawer && (
+                                    <>
+                                        {/* Mobile overlay backdrop confined to the Teams chat pane */}
+                                        <div
+                                            className="absolute inset-0 bg-black/50 z-20 md:hidden"
+                                            onClick={() => setShowMembersDrawer(false)}
+                                            aria-hidden="true"
+                                        />
+
+                                        <aside
+                                            className="absolute right-0 top-0 bottom-0 z-30 w-full sm:w-72 md:relative md:w-64 lg:w-72 md:z-10 h-full bg-[#0c0c0e] border-l border-zinc-800 flex flex-col shadow-2xl flex-shrink-0 font-mono transition-all"
+                                            role="region"
+                                            aria-label="Team Members"
+                                        >
+                                            <div className="px-3.5 py-3 border-b border-zinc-800 flex items-center justify-between bg-black/40 flex-shrink-0">
+                                                <div>
+                                                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block leading-none">
+                                                        // ROSTER
+                                                    </span>
+                                                    <h4 className="text-xs font-bold text-white uppercase tracking-wider mt-1">
+                                                        TEAM MEMBERS ({members.length})
+                                                    </h4>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowMembersDrawer(false)}
+                                                    className="w-6 h-6 flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-900 border border-transparent hover:border-zinc-800 text-xs cursor-pointer font-mono transition-colors"
+                                                    title="Close team members"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+
+                                            <div className="flex-1 overflow-y-auto divide-y divide-zinc-850/60 p-3 space-y-1">
+                                                {members.map((m) => (
+                                                    <div
+                                                        key={m.userId}
+                                                        className="py-2.5 flex items-center justify-between gap-2"
+                                                    >
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            <div className="w-7 h-7 bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0 text-xs font-bold text-zinc-300 overflow-hidden">
+                                                                {m.photoURL ? (
+                                                                    <img
+                                                                        src={m.photoURL}
+                                                                        alt={m.displayName}
+                                                                        className="w-full h-full object-cover"
+                                                                        onError={handleImageError}
+                                                                    />
+                                                                ) : (
+                                                                    <span>{m.displayName.charAt(0).toUpperCase()}</span>
+                                                                )}
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="text-xs text-white font-bold truncate">
+                                                                    {m.displayName}
+                                                                    {m.userId === currentUser?.uid && (
+                                                                        <span className="text-zinc-500 text-[10px] font-normal ml-1">
+                                                                            (you)
+                                                                        </span>
+                                                                    )}
+                                                                </p>
+                                                                <p className="text-[10px] text-zinc-500 truncate">
+                                                                    {m.projectRole ||
+                                                                        (m.role === 'owner' ? 'Project Lead' : 'Collaborator')}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <span
+                                                            className={`text-[9px] font-bold px-1.5 py-0.5 border flex-shrink-0 ${
+                                                                m.role === 'owner'
+                                                                    ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
+                                                                    : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                                                            }`}
+                                                        >
+                                                            {m.role === 'owner' ? 'OWNER' : 'MEMBER'}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {isOwner && (
+                                                <div className="p-3 border-t border-zinc-800 bg-[#09090b] flex-shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setShowMembersDrawer(false);
+                                                            setShowInviteModal(true);
+                                                        }}
+                                                        className="w-full py-2 bg-zinc-900 border border-zinc-750 hover:border-zinc-500 text-white text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                                                    >
+                                                        + // INVITE MORE MEMBERS
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </aside>
+                                    </>
+                                )}
+                            </div>
                         </>
                     ) : (
                         /* Initial State: When no Team is selected */
