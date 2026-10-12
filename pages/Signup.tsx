@@ -11,6 +11,21 @@ const SignupPage = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const navigate = ReactRouterDOM.useNavigate();
+    const location = ReactRouterDOM.useLocation();
+
+    const getRedirectTarget = () => {
+        const fromState = (location.state as any)?.from;
+        if (fromState) {
+            const path = typeof fromState === 'string' ? fromState : (fromState.pathname + (fromState.search || ''));
+            if (path && path !== '/' && path !== '/login' && path !== '/signup') return path;
+        }
+        const stored = typeof window !== 'undefined' ? sessionStorage.getItem('invox_redirect') : null;
+        if (stored) {
+            sessionStorage.removeItem('invox_redirect');
+            return stored;
+        }
+        return '/explore';
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -26,7 +41,7 @@ const SignupPage = () => {
         setError('');
         try {
             await registerWithEmail(email, password, displayName.trim() || undefined);
-            navigate('/explore', { replace: true });
+            navigate(getRedirectTarget(), { replace: true });
         } catch (err: any) {
             setError(getFriendlyErrorMessage(err));
             console.error(err);
@@ -39,7 +54,7 @@ const SignupPage = () => {
         setError('');
         try {
             await loginWithGoogle();
-            navigate('/explore', { replace: true });
+            navigate(getRedirectTarget(), { replace: true });
         } catch (err: any) {
             setError(getFriendlyErrorMessage(err));
             console.error(err);

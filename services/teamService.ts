@@ -257,6 +257,27 @@ export const subscribeToUserTeams = (
 };
 
 /**
+ * Fetches a single team's details by ID.
+ */
+export const getTeam = async (teamId: string): Promise<Team | null> => {
+    if (!teamId) return null;
+    try {
+        const teamRef = doc(db, COLLECTIONS.teams, teamId);
+        const snap = await getDoc(teamRef);
+        if (snap.exists()) {
+            return {
+                id: snap.id,
+                ...(snap.data() as any),
+            };
+        }
+        return null;
+    } catch (e) {
+        console.error('[GET_TEAM_ERROR]', e);
+        return null;
+    }
+};
+
+/**
  * Subscribes to a single team's details.
  */
 export const subscribeToTeam = (

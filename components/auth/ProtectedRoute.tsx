@@ -17,7 +17,24 @@ export const ProtectedRoute = () => {
     }
 
     if (!currentUser) {
-        return <Navigate to="/" state={{ from: location }} replace />;
+        // If an invitation token is present in the URL parameters, allow rendering so the recipient
+        // can view the invitation details and team preview before being prompted to sign in.
+        const hasInviteParam = Boolean(location.search && location.search.includes('invite='));
+        if (hasInviteParam) {
+            if (typeof window !== 'undefined') {
+                const redirectPath = location.pathname + (location.search || '');
+                sessionStorage.setItem('invox_redirect', redirectPath);
+            }
+            return <Outlet />;
+        }
+
+        if (typeof window !== 'undefined') {
+            const redirectPath = location.pathname + (location.search || '');
+            if (redirectPath && redirectPath !== '/' && redirectPath !== '/login' && redirectPath !== '/signup') {
+                sessionStorage.setItem('invox_redirect', redirectPath);
+            }
+        }
+        return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
     // Require onboarding before accessing the main app

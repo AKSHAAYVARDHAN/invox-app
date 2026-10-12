@@ -21,10 +21,16 @@ export const LandingPage: React.FC = () => {
     const [authModalOpen, setAuthModalOpen] = useState(false);
     const [authModalMode, setAuthModalMode] = useState<'login' | 'signup'>('signup');
 
-    // If user is already authenticated, redirect to /explore
+    // If user is already authenticated, redirect to destination or /explore
     useEffect(() => {
         if (currentUser) {
-            navigate('/explore', { replace: true });
+            const stored = typeof window !== 'undefined' ? sessionStorage.getItem('invox_redirect') : null;
+            if (stored) {
+                sessionStorage.removeItem('invox_redirect');
+                navigate(stored, { replace: true });
+            } else {
+                navigate('/explore', { replace: true });
+            }
         }
     }, [currentUser, navigate]);
 

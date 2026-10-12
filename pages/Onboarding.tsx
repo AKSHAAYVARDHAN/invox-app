@@ -42,7 +42,15 @@ const OnboardingPage = () => {
                 onboardingCompleted: true,
             });
 
-            navigate('/explore');
+            const redirectTarget = (() => {
+                const stored = typeof window !== 'undefined' ? sessionStorage.getItem('invox_redirect') : null;
+                if (stored) {
+                    sessionStorage.removeItem('invox_redirect');
+                    return stored;
+                }
+                return '/explore';
+            })();
+            navigate(redirectTarget, { replace: true });
         } catch (err: any) {
             setError(getFriendlyErrorMessage(err));
             console.error(err);

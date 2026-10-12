@@ -8,6 +8,29 @@
     <meta name="description" content="A dynamic platform that empowers curious minds to connect, engage, and share ideas. A robust hub for thought-sharing and networking with like-minded comrades, powered by AI." />
     <meta property="og:title" content="Invox - Fuel Curiosity, Expand Consciousness" />
     <meta property="og:description" content="A dynamic platform that empowers curious minds to connect, engage, and share ideas. A robust hub for thought-sharing and networking with like-minded comrades, powered by AI." />
+    <script>
+      (function() {
+        try {
+          var p = window.location.pathname;
+          var s = window.location.search;
+          var h = window.location.hash || '';
+
+          // Check if search query contains an invite token outside the hash
+          if (s && s.indexOf('invite=') !== -1 && h.indexOf('invite=') === -1) {
+            var params = new URLSearchParams(s);
+            if (!params.has('tab')) params.set('tab', 'Collabs');
+            if (!params.has('collabView')) params.set('collabView', 'teams');
+            window.location.replace(window.location.origin + '/#/spotlight?' + params.toString());
+            return;
+          }
+
+          // If a direct path was requested without hash router format (e.g. /spotlight, /login, /explore)
+          if (p && p !== '/' && (!h || h === '' || h === '#/')) {
+            window.location.replace(window.location.origin + '/#' + p + s);
+          }
+        } catch (e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">

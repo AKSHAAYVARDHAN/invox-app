@@ -1313,6 +1313,7 @@ export const SpotlightPage = () => {
         collabViewParam === 'my_applications' || 
         collabViewParam === 'inbox' || 
         collabViewParam === 'teams' || 
+        searchParams.has('invite') || 
         openCollabDashboardParam === 'true'
     );
 
@@ -3132,7 +3133,7 @@ export const SpotlightPage = () => {
                         />
                     );
                 }
-                if (collabViewParam === 'teams') {
+                if (collabViewParam === 'teams' || searchParams.has('invite')) {
                     return (
                         <CollabTeamsView
                             onBack={handleBackToCollabs}

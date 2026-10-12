@@ -12,6 +12,7 @@ import {
     markTeamAsRead,
     createTeamInvitation,
     getTeamInvitation,
+    getTeam,
     subscribeToTeamInvitations,
     revokeTeamInvitation,
     joinTeamViaInvitation,
@@ -25,6 +26,8 @@ import {
 import { subscribeToUserPosts } from '../../services/postService';
 import { handleImageError } from '../utils/imageUtils';
 import { EllipsisVerticalIcon, Maximize2Icon, Minimize2Icon } from '../ui/Icons';
+import { ClickableMessageText } from '../ui/ClickableMessageText';
+import { getTeamInvitationUrl } from '../../utils/urlUtils';
 import type { Post, CollabApplication } from '../../types';
 
 interface CollabTeamsViewProps {
@@ -82,6 +85,8 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
 
     // Join Invitation state
     const [inviteData, setInviteData] = useState<TeamInvitation | null>(null);
+    const [inviteTeam, setInviteTeam] = useState<Team | null>(null);
+    const [isAlreadyMember, setIsAlreadyMember] = useState<boolean>(false);
     const [inviteLoading, setInviteLoading] = useState<boolean>(Boolean(urlInviteToken));
     const [inviteError, setInviteError] = useState<string | null>(null);
     const [isJoining, setIsJoining] = useState<boolean>(false);
@@ -352,40 +357,71 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
     useEffect(() => {
         if (!urlInviteToken) {
             setInviteData(null);
+            setInviteTeam(null);
+            setIsAlreadyMember(false);
             setInviteLoading(false);
             return;
         }
 
         setInviteLoading(true);
         setInviteError(null);
+        setIsAlreadyMember(false);
 
         getTeamInvitation(urlInviteToken)
-            .then((inv) => {
+            .then(async (inv) => {
                 if (!inv) {
-                    setInviteError('Invalid invitation: This invitation link does not exist.');
-                } else if (inv.status === 'revoked') {
+                    setInviteError('Invalid invitation: This invitation link does not exist or has been removed.');
+                    setInviteLoading(false);
+                    return;
+                }
+                if (inv.status === 'revoked') {
                     setInviteError('Invitation revoked: This invitation link has been revoked by the project owner.');
-                } else if (inv.expiresAt) {
+                    setInviteLoading(false);
+                    return;
+                }
+                if (inv.expiresAt) {
                     const expTime = typeof inv.expiresAt?.toDate === 'function'
                         ? inv.expiresAt.toDate().getTime()
                         : new Date(inv.expiresAt).getTime();
                     if (expTime > 0 && Date.now() > expTime) {
                         setInviteError('Invitation expired: This invitation link has expired.');
-                    } else {
-                        setInviteData(inv);
+                        setInviteLoading(false);
+                        return;
                     }
-                } else if (inv.maxUses && inv.maxUses > 0 && inv.usedCount >= inv.maxUses) {
-                    setInviteError('Invitation limit reached: This link has reached maximum allowed uses.');
-                } else {
-                    setInviteData(inv);
                 }
+                if (inv.maxUses && inv.maxUses > 0 && inv.usedCount >= inv.maxUses) {
+                    setInviteError('Invitation limit reached: This invitation link has already reached its maximum allowed uses.');
+                    setInviteLoading(false);
+                    return;
+                }
+
+                setInviteData(inv);
+
+                // Identify team & check whether user is already a member
+                try {
+                    const team = await getTeam(inv.teamId);
+                    if (team) {
+                        setInviteTeam(team);
+                        if (currentUser?.uid) {
+                            const isMember =
+                                (Array.isArray(team.memberIds) && team.memberIds.includes(currentUser.uid)) ||
+                                team.ownerId === currentUser.uid;
+                            setIsAlreadyMember(Boolean(isMember));
+                        }
+                    } else {
+                        setInviteError('Team not found: The project team for this invitation no longer exists.');
+                    }
+                } catch (teamErr) {
+                    console.warn('[CHECK_TEAM_INVITE_WARN]', teamErr);
+                }
+
                 setInviteLoading(false);
             })
             .catch((err) => {
                 setInviteError(err?.message || 'Failed to inspect invitation.');
                 setInviteLoading(false);
             });
-    }, [urlInviteToken]);
+    }, [urlInviteToken, currentUser?.uid]);
 
     // Check if current user is owner of active team
     const isOwner = Boolean(
@@ -541,17 +577,31 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
     };
 
     // Helper: Copy invite URL
-    const getInviteUrl = (token: string) => {
-        const origin = typeof window !== 'undefined' ? window.location.origin : '';
-        return `${origin}/spotlight?tab=Collabs&collabView=teams&invite=${token}`;
+    const getInviteUrl = (token: string, teamId?: string) => {
+        return getTeamInvitationUrl(token, teamId || activeTeam?.id);
     };
 
-    const handleCopyToken = (token: string) => {
-        const url = getInviteUrl(token);
-        if (navigator?.clipboard) {
-            navigator.clipboard.writeText(url);
+    const handleCopyToken = async (token: string, teamId?: string) => {
+        const url = getInviteUrl(token, teamId || activeTeam?.id);
+        if (!url) return;
+        try {
+            if (navigator?.clipboard?.writeText) {
+                await navigator.clipboard.writeText(url);
+            } else {
+                const textArea = document.createElement('textarea');
+                textArea.value = url;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-9999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+            }
             setCopiedToken(token);
             setTimeout(() => setCopiedToken(null), 2500);
+        } catch (err) {
+            console.error('[COPY_INVITE_TOKEN_ERROR]', err);
         }
     };
 
@@ -559,6 +609,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
     const handleJoinTeam = async () => {
         if (!inviteData || !currentUser || isJoining) return;
         setIsJoining(true);
+        setInviteError(null);
         try {
             const res = await joinTeamViaInvitation({
                 token: inviteData.token,
@@ -567,7 +618,8 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
             });
             setJoinSuccess(true);
             setTimeout(() => {
-                // Navigate to the joined team chat
+                // Navigate directly into the joined team chat
+                setSelectedTeamId(res.team.id);
                 setSearchParams((prev) => {
                     const next = new URLSearchParams(prev);
                     next.set('tab', 'Collabs');
@@ -576,7 +628,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                     next.delete('invite');
                     return next;
                 });
-            }, 800);
+            }, 600);
         } catch (err: any) {
             setInviteError(err?.message || 'Failed to join team.');
         } finally {
@@ -673,6 +725,12 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                 <span className="text-white font-bold">{inviteData.ownerName}</span>
                             </div>
                             <div className="flex justify-between items-center text-zinc-400">
+                                <span>CURRENT MEMBERS:</span>
+                                <span className="text-zinc-200 font-bold">
+                                    {inviteTeam?.memberCount || (Array.isArray(inviteTeam?.memberIds) ? inviteTeam?.memberIds.length : 1)} members
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center text-zinc-400">
                                 <span>COMMUNICATION:</span>
                                 <span className="text-emerald-400 font-bold">SHARED TEAM CHAT</span>
                             </div>
@@ -687,18 +745,44 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                         {joinSuccess ? (
                             <div className="p-4 bg-emerald-950/50 border border-emerald-700 text-center">
                                 <span className="text-xs text-emerald-300 font-bold uppercase tracking-wider block">
-                                    // MEMBERSHIP CONFIRMED! OPENING TEAM...
+                                    // MEMBERSHIP CONFIRMED! OPENING TEAM CHAT...
                                 </span>
+                            </div>
+                        ) : isAlreadyMember ? (
+                            <div className="space-y-3">
+                                <div className="p-3 bg-zinc-900/60 border border-zinc-750 text-center">
+                                    <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">
+                                        // STATUS: ALREADY A MEMBER
+                                    </span>
+                                    <p className="text-xs text-zinc-300 mt-1">
+                                        You are already a member of this team.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => handleSelectTeam(inviteData.teamId)}
+                                    className="w-full py-2.5 bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer font-mono"
+                                >
+                                    <span>// OPEN TEAM CHAT</span>
+                                    <span>→</span>
+                                </button>
                             </div>
                         ) : !currentUser ? (
                             <div className="space-y-3 text-center">
                                 <p className="text-xs text-zinc-400">You must sign in to accept this invitation and join the team.</p>
                                 <button
                                     type="button"
-                                    onClick={() => navigate('/login')}
-                                    className="w-full py-2.5 bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+                                    onClick={() => {
+                                        if (typeof window !== 'undefined') {
+                                            const redirectPath = `/spotlight?tab=Collabs&collabView=teams&teamId=${encodeURIComponent(inviteData.teamId)}&invite=${encodeURIComponent(inviteData.token)}`;
+                                            sessionStorage.setItem('invox_redirect', redirectPath);
+                                        }
+                                        const redirectPath = `/spotlight?tab=Collabs&collabView=teams&teamId=${encodeURIComponent(inviteData.teamId)}&invite=${encodeURIComponent(inviteData.token)}`;
+                                        navigate('/login', { state: { from: redirectPath } });
+                                    }}
+                                    className="w-full py-2.5 bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer font-mono"
                                 >
-                                    // SIGN IN TO JOIN
+                                    // SIGN IN TO ACCEPT INVITATION
                                 </button>
                             </div>
                         ) : (
@@ -706,7 +790,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                 type="button"
                                 disabled={isJoining}
                                 onClick={handleJoinTeam}
-                                className="w-full py-2.5 bg-white hover:bg-zinc-200 disabled:opacity-50 text-black font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                                className="w-full py-2.5 bg-white hover:bg-zinc-200 disabled:opacity-50 text-black font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer font-mono"
                             >
                                 {isJoining ? (
                                     <>
@@ -714,7 +798,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                         <span>JOINING TEAM...</span>
                                     </>
                                 ) : (
-                                    <span>// JOIN TEAM</span>
+                                    <span>// ACCEPT INVITATION</span>
                                 )}
                             </button>
                         )}
@@ -725,7 +809,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
     }
 
     const activeInvite = invitations.find((i) => i.status === 'active') || invitations[0];
-    const activeInviteUrl = activeInvite ? getInviteUrl(activeInvite.token) : '';
+    const activeInviteUrl = activeInvite ? getInviteUrl(activeInvite.token, activeTeam?.id) : '';
 
     // -------------------------------------------------------------
     // RENDER: UNIFIED TWO-PANEL TEAMS MESSAGING INTERFACE
@@ -1161,7 +1245,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                             }`}
                                                         >
                                                             <p className="whitespace-pre-wrap break-words leading-relaxed font-mono">
-                                                                {msg.text}
+                                                                <ClickableMessageText text={msg.text} />
                                                             </p>
                                                             {timeStr && (
                                                                 <div

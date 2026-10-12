@@ -207,7 +207,7 @@ service cloud.firestore {
     }
 
     match /teams/{teamId} {
-      allow get: if signedIn();
+      allow get: if true;
       allow list: if signedIn() && (
         ('memberIds' in resource.data && uid() in resource.data.memberIds)
         || resource.data.ownerId == uid()
@@ -264,7 +264,8 @@ service cloud.firestore {
     }
 
     match /teamInvitations/{token} {
-      allow read: if signedIn();
+      allow get: if true;
+      allow list: if signedIn();
       allow create: if signedIn() && request.resource.data.createdBy == uid();
       allow update: if signedIn() && (
         resource.data.createdBy == uid()

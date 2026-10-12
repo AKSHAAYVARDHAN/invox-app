@@ -351,6 +351,11 @@ const DefaultPlatformRedirect = () => {
             </div>
         );
     }
+    const stored = typeof window !== 'undefined' ? sessionStorage.getItem('invox_redirect') : null;
+    if (stored) {
+        sessionStorage.removeItem('invox_redirect');
+        return <ReactRouterDOM.Navigate to={stored} replace />;
+    }
     return <ReactRouterDOM.Navigate to={getDefaultRoute()} replace />;
 };
 

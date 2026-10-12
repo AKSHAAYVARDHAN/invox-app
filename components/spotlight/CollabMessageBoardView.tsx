@@ -14,6 +14,7 @@ import {
 } from '../../services/collabMessageService';
 import { handleImageError } from '../utils/imageUtils';
 import { EllipsisVerticalIcon, Maximize2Icon, Minimize2Icon } from '../ui/Icons';
+import { ClickableMessageText } from '../ui/ClickableMessageText';
 
 interface CollabMessageBoardViewProps {
     view: 'inbox' | 'teams';
@@ -745,7 +746,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                         }`}
                                                     >
                                                         <p className="whitespace-pre-wrap break-words leading-relaxed">
-                                                            {msg.text}
+                                                            <ClickableMessageText text={msg.text} />
                                                         </p>
                                                         {timeStr && (
                                                             <div className={`mt-1 text-[10px] ${
