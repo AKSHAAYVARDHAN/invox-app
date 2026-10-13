@@ -78,10 +78,14 @@ export const getTeamInvitationUrl = (token: string, teamId?: string): string => 
 };
 
 /**
- * Checks if a given host or URL belongs to the INVOX application (same host, localhost, or production domain).
+ * Checks if a given host or URL belongs to the INVOX application (same host, localhost, preview, or production domain).
  */
 export const isInvoxAppUrl = (urlString: string): boolean => {
     try {
+        if (!urlString) return false;
+        if (urlString.startsWith('#') || urlString.startsWith('/')) {
+            return true;
+        }
         const parsed = new URL(urlString);
         if (typeof window !== 'undefined' && parsed.host === window.location.host) {
             return true;
@@ -91,9 +95,130 @@ export const isInvoxAppUrl = (urlString: string): boolean => {
             parsed.host === canonical.host ||
             parsed.host === 'invox.vercel.app' ||
             parsed.host === 'invox-7.web.app' ||
-            parsed.host === 'invox-7.firebaseapp.com'
+            parsed.host === 'invox-7.firebaseapp.com' ||
+            parsed.hostname === 'localhost' ||
+            parsed.hostname === '127.0.0.1' ||
+            isAiStudioPreviewHostname(parsed.hostname)
         );
     } catch {
         return false;
     }
+};
+
+export interface ParsedTeamInvitation {
+    originalUrl: string;
+    token: string;
+    teamId: string | null;
+    tab: string;
+    collabView: string;
+    targetHash: string;
+    allParams: Record<string, string>;
+}
+
+/**
+ * Parses a potential INVOX team invitation URL.
+ * Supports production, staging, localhost, and preview URLs with HashRouter or standard query parameters.
+ * Validates that the URL contains a non-empty invitation token and team invitation parameters.
+ * Does not classify ordinary URLs or general app URLs as team invitations.
+ * Preserves all original tokens, parameters, and fragments.
+ */
+export const parseTeamInvitationUrl = (rawUrl: string): ParsedTeamInvitation | null => {
+    if (!rawUrl || typeof rawUrl !== 'string') return null;
+
+    let trimmed = rawUrl.trim();
+    // Separate trailing punctuation that is not part of the URL (e.g. .,!?:;)
+    const punctMatch = trimmed.match(/([.,!?:;)\]}]+)$/);
+    if (punctMatch) {
+        trimmed = trimmed.slice(0, -punctMatch[1].length);
+    }
+
+    if (!trimmed) return null;
+
+    let parsed: URL;
+    const isRelative = trimmed.startsWith('#') || trimmed.startsWith('/');
+    try {
+        if (isRelative) {
+            const dummyBase = typeof window !== 'undefined' && window.location?.origin
+                ? window.location.origin
+                : DEFAULT_PRODUCTION_URL;
+            parsed = new URL(trimmed.startsWith('#') ? '/' + trimmed : trimmed, dummyBase);
+        } else {
+            parsed = new URL(trimmed);
+        }
+    } catch {
+        return null;
+    }
+
+    // Must be an INVOX app URL or relative link
+    if (!isRelative && !isInvoxAppUrl(trimmed)) {
+        return null;
+    }
+
+    // Collect query parameters from both search and hash
+    const params = new URLSearchParams(parsed.search);
+    if (parsed.hash && parsed.hash.includes('?')) {
+        const hashQuery = parsed.hash.substring(parsed.hash.indexOf('?') + 1);
+        const hashParams = new URLSearchParams(hashQuery);
+        hashParams.forEach((val, key) => {
+            if (!params.has(key)) {
+                params.set(key, val);
+            }
+        });
+    }
+
+    // An invitation URL must have a non-empty `invite` token parameter
+    const inviteToken = params.get('invite');
+    if (!inviteToken || !inviteToken.trim()) {
+        return null;
+    }
+
+    const token = inviteToken.trim();
+    const teamId = params.get('teamId') || null;
+    const tab = params.get('tab') || 'Collabs';
+    const collabView = params.get('collabView') || 'teams';
+
+    // Must match INVOX team invitation format (either collabView=teams, tab=Collabs, teamId parameter, or path containing spotlight)
+    const hasSpotlight = parsed.pathname.includes('spotlight') || parsed.hash.includes('spotlight');
+    const isTeamCollab =
+        collabView === 'teams' ||
+        tab === 'Collabs' ||
+        Boolean(teamId) ||
+        hasSpotlight;
+
+    if (!isTeamCollab) {
+        return null;
+    }
+
+    // Build the preserved internal HashRouter target route
+    const targetParams = new URLSearchParams();
+    const allParams: Record<string, string> = {};
+    params.forEach((val, key) => {
+        targetParams.set(key, val);
+        allParams[key] = val;
+    });
+
+    // Ensure required navigation params exist
+    if (!targetParams.has('tab')) targetParams.set('tab', 'Collabs');
+    if (!targetParams.has('collabView')) targetParams.set('collabView', 'teams');
+    if (!targetParams.has('invite')) targetParams.set('invite', token);
+    if (teamId && !targetParams.has('teamId')) targetParams.set('teamId', teamId);
+
+    const targetHash = `#/spotlight?${targetParams.toString()}`;
+
+    return {
+        originalUrl: trimmed,
+        token,
+        teamId,
+        tab,
+        collabView,
+        targetHash,
+        allParams,
+    };
+};
+
+/**
+ * Returns true if the given URL is a valid INVOX team invitation link.
+ */
+export const isTeamInvitationUrl = (urlString: string): boolean => {
+    return Boolean(parseTeamInvitationUrl(urlString));
 };

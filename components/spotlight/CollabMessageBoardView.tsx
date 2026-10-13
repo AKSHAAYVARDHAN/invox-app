@@ -745,9 +745,9 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                                 : 'bg-[#131316] border-zinc-800 text-zinc-200'
                                                         }`}
                                                     >
-                                                        <p className="whitespace-pre-wrap break-words leading-relaxed">
-                                                            <ClickableMessageText text={msg.text} />
-                                                        </p>
+                                                        <div className="whitespace-pre-wrap break-words leading-relaxed">
+                                                            <ClickableMessageText text={msg.text} isSender={isMe} timestamp={timeStr} />
+                                                        </div>
                                                         {timeStr && (
                                                             <div className={`mt-1 text-[10px] ${
                                                                 isMe ? 'text-zinc-500 text-right' : 'text-zinc-600 text-left'

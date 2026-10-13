@@ -91,7 +91,17 @@ const generateUniqueMessages = (convo: Omit<HubConversation, 'messages'>): Messa
 
     for (let i = 0; i < numMessages; i++) {
         const sender = seededRandom() > 0.4 ? 'me' : 'other';
-        const text = messageTemplates[Math.floor(seededRandom() * messageTemplates.length)];
+        let text = messageTemplates[Math.floor(seededRandom() * messageTemplates.length)];
+
+        // Inject team invitation link into conversations to verify older/pre-existing messages
+        if (convo.id === 'hc4' && i === numMessages - 2) {
+            text = "I set up our squad workspace for the project! Join our team here: https://invox.vercel.app/#/spotlight?tab=Collabs&collabView=teams&teamId=team_demo_phoenix&invite=demo_phoenix_invite";
+        } else if (convo.id === 'hc3' && i === numMessages - 1) {
+            text = "Here is the team invitation link for our collaboration: https://invox.vercel.app/#/spotlight?tab=Collabs&collabView=teams&teamId=team_demo_phoenix&invite=demo_phoenix_invite";
+        } else if (convo.id === 'hc1' && i === 2) {
+            text = "Check out the official framework documentation at https://react.dev/learn for architecture reference.";
+        }
+
         const messageDate = new Date(today.getTime() - (numMessages - i) * (seededRandom() * 5) * 60 * 60 * 1000);
 
         newMessages.push({
@@ -354,7 +364,8 @@ const DefaultPlatformRedirect = () => {
     const stored = typeof window !== 'undefined' ? sessionStorage.getItem('invox_redirect') : null;
     if (stored) {
         sessionStorage.removeItem('invox_redirect');
-        return <ReactRouterDOM.Navigate to={stored} replace />;
+        const cleanPath = stored.startsWith('#') ? stored.slice(1) : stored;
+        return <ReactRouterDOM.Navigate to={cleanPath} replace />;
     }
     return <ReactRouterDOM.Navigate to={getDefaultRoute()} replace />;
 };

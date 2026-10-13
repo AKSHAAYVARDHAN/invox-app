@@ -27,6 +27,7 @@ import { subscribeToUserPosts } from '../../services/postService';
 import { handleImageError } from '../utils/imageUtils';
 import { EllipsisVerticalIcon, Maximize2Icon, Minimize2Icon } from '../ui/Icons';
 import { ClickableMessageText } from '../ui/ClickableMessageText';
+import { TeamInvitationCard } from '../ui/TeamInvitationCard';
 import { getTeamInvitationUrl } from '../../utils/urlUtils';
 import type { Post, CollabApplication } from '../../types';
 
@@ -666,6 +667,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
     // RENDER: INVITATION REVIEW VIEW (if urlInviteToken is present)
     // -------------------------------------------------------------
     if (urlInviteToken) {
+        const inviteUrl = getInviteUrl(urlInviteToken, urlTeamId);
         return (
             <div className="space-y-4 font-mono">
                 {/* Header */}
@@ -686,124 +688,28 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                     </button>
                 </div>
 
-                {inviteLoading ? (
-                    <div className="p-12 text-center border border-zinc-800 bg-[#0c0c0e]">
-                        <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
-                        <p className="text-xs text-zinc-500 uppercase tracking-wider">// VERIFYING INVITATION TOKEN...</p>
-                    </div>
-                ) : inviteError ? (
-                    <div className="border border-red-900/60 bg-red-950/20 p-8 text-center font-mono">
-                        <span className="text-xs font-bold text-red-400 uppercase tracking-widest block mb-2">
-                            // INVITATION INVALID
-                        </span>
-                        <p className="text-xs text-zinc-300 mb-6">{inviteError}</p>
-                        <button
-                            type="button"
-                            onClick={() => handleSelectTeam('')}
-                            className="px-4 py-2 bg-zinc-900 border border-zinc-750 text-white text-xs uppercase tracking-wider hover:border-zinc-500 transition-colors cursor-pointer"
-                        >
-                            // GO TO TEAMS
-                        </button>
-                    </div>
-                ) : inviteData ? (
-                    <div className="border border-zinc-800 bg-[#0c0c0e] p-6 sm:p-8 max-w-xl mx-auto space-y-6">
-                        <div className="space-y-1 text-center sm:text-left">
-                            <span className="text-[10px] text-emerald-400 uppercase tracking-widest font-bold block">
-                                // VALID INVITATION
-                            </span>
-                            <h3 className="text-lg sm:text-xl font-bold text-white uppercase tracking-wider">
-                                {inviteData.teamName}
-                            </h3>
-                            <p className="text-xs text-zinc-400">
-                                Project: <span className="text-zinc-200 font-bold">{inviteData.projectTitle}</span>
-                            </p>
-                        </div>
-
-                        <div className="border border-zinc-800/80 bg-zinc-900/30 p-4 space-y-3 text-xs">
-                            <div className="flex justify-between items-center text-zinc-400">
-                                <span>INVITED BY:</span>
-                                <span className="text-white font-bold">{inviteData.ownerName}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-zinc-400">
-                                <span>CURRENT MEMBERS:</span>
-                                <span className="text-zinc-200 font-bold">
-                                    {inviteTeam?.memberCount || (Array.isArray(inviteTeam?.memberIds) ? inviteTeam?.memberIds.length : 1)} members
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center text-zinc-400">
-                                <span>COMMUNICATION:</span>
-                                <span className="text-emerald-400 font-bold">SHARED TEAM CHAT</span>
-                            </div>
-                            {inviteData.expiresAt && (
-                                <div className="flex justify-between items-center text-zinc-400">
-                                    <span>EXPIRES:</span>
-                                    <span className="text-zinc-300">{formatTimestamp(inviteData.expiresAt)}</span>
-                                </div>
-                            )}
-                        </div>
-
-                        {joinSuccess ? (
-                            <div className="p-4 bg-emerald-950/50 border border-emerald-700 text-center">
-                                <span className="text-xs text-emerald-300 font-bold uppercase tracking-wider block">
-                                    // MEMBERSHIP CONFIRMED! OPENING TEAM CHAT...
-                                </span>
-                            </div>
-                        ) : isAlreadyMember ? (
-                            <div className="space-y-3">
-                                <div className="p-3 bg-zinc-900/60 border border-zinc-750 text-center">
-                                    <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">
-                                        // STATUS: ALREADY A MEMBER
-                                    </span>
-                                    <p className="text-xs text-zinc-300 mt-1">
-                                        You are already a member of this team.
-                                    </p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => handleSelectTeam(inviteData.teamId)}
-                                    className="w-full py-2.5 bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer font-mono"
-                                >
-                                    <span>// OPEN TEAM CHAT</span>
-                                    <span>→</span>
-                                </button>
-                            </div>
-                        ) : !currentUser ? (
-                            <div className="space-y-3 text-center">
-                                <p className="text-xs text-zinc-400">You must sign in to accept this invitation and join the team.</p>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (typeof window !== 'undefined') {
-                                            const redirectPath = `/spotlight?tab=Collabs&collabView=teams&teamId=${encodeURIComponent(inviteData.teamId)}&invite=${encodeURIComponent(inviteData.token)}`;
-                                            sessionStorage.setItem('invox_redirect', redirectPath);
-                                        }
-                                        const redirectPath = `/spotlight?tab=Collabs&collabView=teams&teamId=${encodeURIComponent(inviteData.teamId)}&invite=${encodeURIComponent(inviteData.token)}`;
-                                        navigate('/login', { state: { from: redirectPath } });
-                                    }}
-                                    className="w-full py-2.5 bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer font-mono"
-                                >
-                                    // SIGN IN TO ACCEPT INVITATION
-                                </button>
-                            </div>
-                        ) : (
-                            <button
-                                type="button"
-                                disabled={isJoining}
-                                onClick={handleJoinTeam}
-                                className="w-full py-2.5 bg-white hover:bg-zinc-200 disabled:opacity-50 text-black font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer font-mono"
-                            >
-                                {isJoining ? (
-                                    <>
-                                        <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                                        <span>JOINING TEAM...</span>
-                                    </>
-                                ) : (
-                                    <span>// ACCEPT INVITATION</span>
-                                )}
-                            </button>
-                        )}
-                    </div>
-                ) : null}
+                <div className="flex flex-col items-center justify-center py-6 sm:py-12">
+                    <TeamInvitationCard
+                        inviteUrl={inviteUrl}
+                        token={urlInviteToken}
+                        teamId={urlTeamId}
+                        targetHash={`#/spotlight?tab=Collabs&collabView=teams${urlTeamId ? `&teamId=${urlTeamId}` : ''}&invite=${urlInviteToken}`}
+                        onOpenTeamChat={(tId) => {
+                            handleSelectTeam(tId);
+                        }}
+                        onJoined={(joinedTeam) => {
+                            setSelectedTeamId(joinedTeam.id);
+                            setSearchParams((prev) => {
+                                const next = new URLSearchParams(prev);
+                                next.set('tab', 'Collabs');
+                                next.set('collabView', 'teams');
+                                next.set('teamId', joinedTeam.id);
+                                next.delete('invite');
+                                return next;
+                            });
+                        }}
+                    />
+                </div>
             </div>
         );
     }
@@ -1244,9 +1150,9 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                                     : 'bg-[#131316] border-zinc-800 text-zinc-200'
                                                             }`}
                                                         >
-                                                            <p className="whitespace-pre-wrap break-words leading-relaxed font-mono">
-                                                                <ClickableMessageText text={msg.text} />
-                                                            </p>
+                                                            <div className="whitespace-pre-wrap break-words leading-relaxed font-mono">
+                                                                <ClickableMessageText text={msg.text} isSender={isMe} timestamp={timeStr} />
+                                                            </div>
                                                             {timeStr && (
                                                                 <div
                                                                     className={`mt-1 text-[10px] ${

@@ -5,17 +5,18 @@ import { initializeFirestore, getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 
-const activeProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'invox-7';
+const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : ({} as Record<string, string>);
+const activeProjectId = env.VITE_FIREBASE_PROJECT_ID || 'invox-7';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || `${activeProjectId}.firebaseapp.com`,
+  apiKey: env.VITE_FIREBASE_API_KEY || 'AIzaSyFakeKeyForLocalDevAndTests12345',
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || `${activeProjectId}.firebaseapp.com`,
   projectId: activeProjectId,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || `${activeProjectId}.firebasestorage.app`,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || `https://${activeProjectId}-default-rtdb.firebaseio.com`,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || undefined,
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || `${activeProjectId}.firebasestorage.app`,
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: env.VITE_FIREBASE_APP_ID || '',
+  databaseURL: env.VITE_FIREBASE_DATABASE_URL || `https://${activeProjectId}-default-rtdb.firebaseio.com`,
+  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID || undefined,
 };
 
 export const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
@@ -37,9 +38,9 @@ export const db = (() => {
 })();
 
 export const storage = getStorage(app);
-export const functions = getFunctions(app, import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'asia-southeast1');
+export const functions = getFunctions(app, env.VITE_FIREBASE_FUNCTIONS_REGION || 'asia-southeast1');
 
-const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY;
+const appCheckSiteKey = env.VITE_FIREBASE_APPCHECK_SITE_KEY;
 
 export const appCheck = typeof window !== 'undefined' && appCheckSiteKey
   ? initializeAppCheck(app, {

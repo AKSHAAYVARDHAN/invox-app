@@ -16,12 +16,14 @@ const SignupPage = () => {
     const getRedirectTarget = () => {
         const fromState = (location.state as any)?.from;
         if (fromState) {
-            const path = typeof fromState === 'string' ? fromState : (fromState.pathname + (fromState.search || ''));
+            let path = typeof fromState === 'string' ? fromState : (fromState.pathname + (fromState.search || ''));
+            if (path.startsWith('#')) path = path.slice(1);
             if (path && path !== '/' && path !== '/login' && path !== '/signup') return path;
         }
-        const stored = typeof window !== 'undefined' ? sessionStorage.getItem('invox_redirect') : null;
+        let stored = typeof window !== 'undefined' ? sessionStorage.getItem('invox_redirect') : null;
         if (stored) {
             sessionStorage.removeItem('invox_redirect');
+            if (stored.startsWith('#')) stored = stored.slice(1);
             return stored;
         }
         return '/explore';

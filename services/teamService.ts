@@ -261,6 +261,32 @@ export const subscribeToUserTeams = (
  */
 export const getTeam = async (teamId: string): Promise<Team | null> => {
     if (!teamId) return null;
+
+    if (teamId === 'team_demo_phoenix') {
+        let storedMembers: string[] = ['owner_phoenix'];
+        if (typeof window !== 'undefined') {
+            try {
+                const parsed = JSON.parse(sessionStorage.getItem('invox_demo_phoenix_members') || '["owner_phoenix"]');
+                if (Array.isArray(parsed)) storedMembers = parsed;
+            } catch {
+                // ignore
+            }
+        }
+        return {
+            id: 'team_demo_phoenix',
+            name: 'Phoenix Core',
+            description: 'Core decentralized infrastructure squad',
+            projectId: 'proj-phoenix',
+            projectTitle: 'Phoenix Decentralized Network',
+            projectDomain: 'Cybersecurity',
+            ownerId: 'owner_phoenix',
+            ownerName: 'Phoenix Lead',
+            ownerAvatar: 'https://picsum.photos/seed/phoenix/200',
+            memberCount: storedMembers.length + 2,
+            memberIds: storedMembers,
+        };
+    }
+
     try {
         const teamRef = doc(db, COLLECTIONS.teams, teamId);
         const snap = await getDoc(teamRef);
@@ -274,6 +300,27 @@ export const getTeam = async (teamId: string): Promise<Team | null> => {
     } catch (e) {
         console.error('[GET_TEAM_ERROR]', e);
         return null;
+    }
+};
+
+/**
+ * Checks if a specific user is an active member or owner of a team.
+ */
+export const checkTeamMembership = async (teamId: string, userId: string): Promise<boolean> => {
+    if (!teamId || !userId) return false;
+
+    try {
+        const team = await getTeam(teamId);
+        if (!team) return false;
+        if (team.ownerId === userId) return true;
+        if (Array.isArray(team.memberIds) && team.memberIds.includes(userId)) return true;
+
+        const memberRef = doc(db, COLLECTIONS.teams, teamId, 'members', userId);
+        const memberSnap = await getDoc(memberRef);
+        return memberSnap.exists();
+    } catch (err) {
+        console.warn('[CHECK_TEAM_MEMBERSHIP_WARN]', err);
+        return false;
     }
 };
 
@@ -553,6 +600,83 @@ export const createTeamInvitation = async ({
  */
 export const getTeamInvitation = async (token: string): Promise<TeamInvitation | null> => {
     if (!token) return null;
+
+    // Built-in demo invitations for realistic onboarding and chat tests
+    if (token === 'demo_phoenix_invite' || token === 'demo_invite_phoenix' || token === 'demo_team_invite') {
+        return {
+            id: token,
+            token,
+            teamId: 'team_demo_phoenix',
+            teamName: 'Phoenix Core',
+            projectId: 'proj-phoenix',
+            projectTitle: 'Phoenix Decentralized Network',
+            ownerId: 'owner_phoenix',
+            ownerName: 'Phoenix Lead',
+            createdBy: 'owner_phoenix',
+            createdAt: new Date(),
+            status: 'active',
+            usedCount: 0,
+            usedBy: [],
+        };
+    }
+
+    if (token === 'demo_expired_invite') {
+        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        return {
+            id: token,
+            token,
+            teamId: 'team_demo_phoenix',
+            teamName: 'Phoenix Core (Archived)',
+            projectId: 'proj-phoenix',
+            projectTitle: 'Phoenix Decentralized Network',
+            ownerId: 'owner_phoenix',
+            ownerName: 'Phoenix Lead',
+            createdBy: 'owner_phoenix',
+            createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+            expiresAt: yesterday,
+            status: 'active',
+            usedCount: 0,
+            usedBy: [],
+        };
+    }
+
+    if (token === 'demo_revoked_invite') {
+        return {
+            id: token,
+            token,
+            teamId: 'team_demo_phoenix',
+            teamName: 'Phoenix Core',
+            projectId: 'proj-phoenix',
+            projectTitle: 'Phoenix Decentralized Network',
+            ownerId: 'owner_phoenix',
+            ownerName: 'Phoenix Lead',
+            createdBy: 'owner_phoenix',
+            createdAt: new Date(),
+            status: 'revoked',
+            usedCount: 0,
+            usedBy: [],
+        };
+    }
+
+    if (token === 'demo_limit_invite') {
+        return {
+            id: token,
+            token,
+            teamId: 'team_demo_phoenix',
+            teamName: 'Phoenix Core',
+            projectId: 'proj-phoenix',
+            projectTitle: 'Phoenix Decentralized Network',
+            ownerId: 'owner_phoenix',
+            ownerName: 'Phoenix Lead',
+            createdBy: 'owner_phoenix',
+            createdAt: new Date(),
+            status: 'active',
+            maxUses: 1,
+            usedCount: 1,
+            usedBy: ['user_prior'],
+        };
+    }
+
     try {
         const inviteRef = doc(db, COLLECTIONS.teamInvitations, token);
         const snap = await getDoc(inviteRef);
@@ -669,6 +793,39 @@ export const joinTeamViaInvitation = async ({
     }
 
     // Fetch team
+    if (invitation.teamId === 'team_demo_phoenix') {
+        let storedMembers: string[] = ['owner_phoenix'];
+        if (typeof window !== 'undefined') {
+            try {
+                const parsed = JSON.parse(sessionStorage.getItem('invox_demo_phoenix_members') || '["owner_phoenix"]');
+                if (Array.isArray(parsed)) storedMembers = parsed;
+            } catch {
+                // ignore
+            }
+        }
+        const wasAlreadyMember = storedMembers.includes(user.uid);
+        if (!wasAlreadyMember) {
+            storedMembers.push(user.uid);
+            if (typeof window !== 'undefined') {
+                sessionStorage.setItem('invox_demo_phoenix_members', JSON.stringify(storedMembers));
+            }
+        }
+        const demoTeam: Team = {
+            id: 'team_demo_phoenix',
+            name: 'Phoenix Core',
+            description: 'Core decentralized infrastructure squad',
+            projectId: 'proj-phoenix',
+            projectTitle: 'Phoenix Decentralized Network',
+            projectDomain: 'Cybersecurity',
+            ownerId: 'owner_phoenix',
+            ownerName: 'Phoenix Lead',
+            ownerAvatar: 'https://picsum.photos/seed/phoenix/200',
+            memberCount: storedMembers.length + 2,
+            memberIds: storedMembers,
+        };
+        return { status: wasAlreadyMember ? 'already_member' : 'joined', team: demoTeam };
+    }
+
     const teamRef = doc(db, COLLECTIONS.teams, invitation.teamId);
     const teamSnap = await getDoc(teamRef);
     if (!teamSnap.exists()) {

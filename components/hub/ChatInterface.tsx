@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { HubConversation, Message } from '../../types';
 import { handleImageError } from '../utils/imageUtils';
 import { generateChatSummary } from '../../services/geminiService';
+import { ClickableMessageText } from '../ui/ClickableMessageText';
 import { 
     EllipsisVerticalIcon, 
     ArrowLeftIcon,
@@ -397,6 +398,8 @@ const MessageBubble = React.forwardRef<HTMLDivElement, {
         );
     };
 
+    const isMe = msg.sender === 'me';
+
     let content;
     switch(msg.type) {
         case 'image': 
@@ -409,10 +412,17 @@ const MessageBubble = React.forwardRef<HTMLDivElement, {
             content = <VoiceMessage duration={msg.voiceDuration!} />; 
             break;
         default: 
-            content = <p className="whitespace-pre-wrap break-words text-xs leading-relaxed font-mono">{highlightText(msg.text!, searchTerm)}</p>;
+            content = (
+                <div className="whitespace-pre-wrap break-words text-xs leading-relaxed font-mono">
+                    <ClickableMessageText
+                        text={msg.text || ''}
+                        searchTerm={searchTerm}
+                        timestamp={msg.timestamp}
+                        isSender={isMe}
+                    />
+                </div>
+            );
     }
-
-    const isMe = msg.sender === 'me';
 
     return (
         <div ref={ref} className={`relative flex items-start group ${isMe ? 'justify-end' : 'justify-start'} ${isMenuOpen ? 'z-20' : ''}`}>
