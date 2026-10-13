@@ -540,16 +540,16 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                             </div>
 
                                             {/* Project name / Team info */}
-                                            <p className={`text-[11px] truncate ${
+                                            <div className={`text-[11px] truncate ${
                                                 hasUnread ? 'text-zinc-200 font-medium' : 'text-zinc-500'
                                             }`}>
                                                 {other.isTeam
                                                     ? (convo.collabHook || `${convo.participants?.length || 0} members`)
                                                     : (convo.collabHook || convo.collabTitle)}
-                                            </p>
+                                            </div>
 
                                             {/* Short latest-message preview */}
-                                            <p className={`text-[11px] truncate ${
+                                            <div className={`text-[11px] truncate ${
                                                 hasUnread
                                                     ? 'text-zinc-200 font-medium'
                                                     : convo.lastMessage
@@ -557,7 +557,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                     : 'text-zinc-600 italic'
                                             }`}>
                                                 {convo.lastMessage || 'No messages yet'}
-                                            </p>
+                                            </div>
                                         </div>
                                     </button>
                                 );

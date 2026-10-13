@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -57,7 +58,25 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
     const [lifecycleState, setLifecycleState] = useState<InvitationLifecycleState>('loading');
     const [statusErrorMessage, setStatusErrorMessage] = useState<string | null>(null);
     const [copied, setCopied] = useState<boolean>(false);
+    const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
+    const [confirmedJoinedTeam, setConfirmedJoinedTeam] = useState<Team | null>(null);
     const isJoiningRef = useRef<boolean>(false);
+
+    // Close confirmation modal on Escape key press
+    useEffect(() => {
+        if (!showSuccessModal) return;
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setShowSuccessModal(false);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [showSuccessModal]);
 
     // Load invitation and determine authentic membership state
     const syncInvitationData = useCallback(async (isMountedRef: { current: boolean }) => {
@@ -222,8 +241,10 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
             // State C: Successfully joined verified by backend
             if (result && result.team) {
                 setTeam(result.team);
+                setConfirmedJoinedTeam(result.team);
                 setLifecycleState('member');
                 setStatusErrorMessage(null);
+                setShowSuccessModal(true);
                 if (onJoined) {
                     onJoined(result.team);
                 }
@@ -238,6 +259,30 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
             setLifecycleState('invited');
         } finally {
             isJoiningRef.current = false;
+        }
+    };
+
+    // Handle primary action inside the joined confirmation modal
+    const handleOpenTeamChatFromModal = () => {
+        setShowSuccessModal(false);
+        const effectiveTeamId = confirmedJoinedTeam?.id || team?.id || invitation?.teamId || propTeamId;
+        if (onOpenTeamChat && effectiveTeamId) {
+            onOpenTeamChat(effectiveTeamId);
+            return;
+        }
+        if (effectiveTeamId) {
+            const teamRoute = `/spotlight?tab=Collabs&collabView=teams&teamId=${encodeURIComponent(effectiveTeamId)}`;
+            if (typeof window !== 'undefined') {
+                window.location.hash = `#${teamRoute}`;
+            }
+            navigate(teamRoute);
+        } else if (targetHash) {
+            const cleanHash = targetHash.startsWith('#') ? targetHash : `#${targetHash}`;
+            if (typeof window !== 'undefined') {
+                window.location.hash = cleanHash;
+            }
+            const routePath = cleanHash.startsWith('#') ? cleanHash.slice(1) : cleanHash;
+            navigate(routePath);
         }
     };
 
@@ -483,6 +528,88 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
                     </div>
                 </div>
             </div>
+            {/* Success Confirmation Modal (Polished dark theme, sharp corners, status label) */}
+            {showSuccessModal && typeof document !== 'undefined' && createPortal(
+                <div
+                    className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="team-invitation-success-heading"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                            setShowSuccessModal(false);
+                        }
+                    }}
+                >
+                    <div
+                        className="w-full max-w-md bg-[#0c0c0e] border border-zinc-800 p-6 sm:p-7 font-mono relative shadow-2xl rounded-none animate-fadeInUp select-none text-left"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Accessible Close Button */}
+                        <button
+                            type="button"
+                            onClick={() => setShowSuccessModal(false)}
+                            aria-label="Close dialog"
+                            className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-900 border border-transparent hover:border-zinc-800 text-sm font-mono transition-colors cursor-pointer rounded-none"
+                            title="Close"
+                        >
+                            ✕
+                        </button>
+
+                        <div className="flex flex-col items-center text-center space-y-4">
+                            {/* Success Icon with subtle green accent */}
+                            <div className="w-12 h-12 bg-emerald-950/60 border border-emerald-800/80 text-emerald-400 flex items-center justify-center shadow-md rounded-none">
+                                <CheckIcon className="w-6 h-6 stroke-[2.5]" />
+                            </div>
+
+                            {/* Subtle Status Label */}
+                            <div className="flex items-center gap-1.5 text-emerald-400 text-[10px] uppercase tracking-widest font-bold">
+                                <span className="w-1.5 h-1.5 bg-emerald-400 animate-pulse flex-shrink-0" />
+                                <span>TEAM MEMBERSHIP CONFIRMED</span>
+                            </div>
+
+                            {/* Heading */}
+                            <h2
+                                id="team-invitation-success-heading"
+                                className="text-xl sm:text-2xl font-bold tracking-wider text-white uppercase"
+                            >
+                                YOU'RE IN!
+                            </h2>
+
+                            {/* Supporting Text & Prominent Team Name */}
+                            <div className="w-full space-y-2">
+                                <span className="text-xs text-zinc-400 uppercase tracking-wide block">
+                                    You've successfully joined
+                                </span>
+                                <div
+                                    className="text-base sm:text-lg font-bold text-white uppercase tracking-wide px-3.5 py-2.5 bg-zinc-900/90 border border-zinc-800 truncate"
+                                    title={confirmedJoinedTeam?.name || team?.name || teamTitle}
+                                >
+                                    {confirmedJoinedTeam?.name || team?.name || teamTitle}
+                                </div>
+                            </div>
+
+                            {/* Description */}
+                            <p className="text-xs text-zinc-400 leading-relaxed max-w-sm">
+                                You're now a member. Start collaborating with your team.
+                            </p>
+
+                            {/* Primary Action Button */}
+                            <div className="w-full pt-2">
+                                <button
+                                    type="button"
+                                    onClick={handleOpenTeamChatFromModal}
+                                    className="w-full py-3 px-4 bg-white hover:bg-zinc-200 text-black border border-white font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer rounded-none active:scale-[0.99] shadow-lg"
+                                >
+                                    <span>OPEN TEAM CHAT</span>
+                                    <span>→</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
         </div>
     );
 };
