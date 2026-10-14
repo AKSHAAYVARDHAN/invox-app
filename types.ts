@@ -476,6 +476,7 @@ export type NotificationType =
   | 'team_member_joined'
   | 'team_member_left'
   | 'team_member_removed'
+  | 'team_ownership_transferred'
   | 'collab_application'
   | 'collab_accepted'
   | 'collab_declined'

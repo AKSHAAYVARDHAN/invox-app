@@ -22,6 +22,7 @@ import {
     leaveTeam,
     removeTeamMember,
     deleteTeam,
+    transferTeamOwnership,
     type Team,
     type TeamMember,
     type TeamMessage,
@@ -29,7 +30,7 @@ import {
 } from '../../services/teamService';
 import { subscribeToUserPosts } from '../../services/postService';
 import { handleImageError } from '../utils/imageUtils';
-import { EllipsisVerticalIcon, Maximize2Icon, Minimize2Icon, TrashIcon, LogoutIcon } from '../ui/Icons';
+import { EllipsisVerticalIcon, Maximize2Icon, Minimize2Icon, TrashIcon, LogoutIcon, ShieldCheckIcon } from '../ui/Icons';
 import { ClickableMessageText } from '../ui/ClickableMessageText';
 import { TeamInvitationCard } from '../ui/TeamInvitationCard';
 import { getTeamInvitationUrl } from '../../utils/urlUtils';
@@ -89,6 +90,13 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
     const [memberToRemove, setMemberToRemove] = useState<TeamMember | null>(null);
     const [isRemovingMember, setIsRemovingMember] = useState<boolean>(false);
     const [removeMemberError, setRemoveMemberError] = useState<string | null>(null);
+
+    // Transfer Ownership state
+    const [showTransferModal, setShowTransferModal] = useState<boolean>(false);
+    const [selectedNewOwnerId, setSelectedNewOwnerId] = useState<string | null>(null);
+    const [isTransferringOwnership, setIsTransferringOwnership] = useState<boolean>(false);
+    const [transferError, setTransferError] = useState<string | null>(null);
+    const [transferConfirmed, setTransferConfirmed] = useState<boolean>(false);
 
     // Create Team form state
     const [createName, setCreateName] = useState<string>('');
@@ -197,6 +205,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         const handleModalEscape = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
                 if (messageToDelete && !isDeletingMessage) setMessageToDelete(null);
+                else if (showTransferModal && !isTransferringOwnership) setShowTransferModal(false);
                 else if (showLeaveModal && !isLeavingTeam) setShowLeaveModal(false);
                 else if (memberToRemove && !isRemovingMember) setMemberToRemove(null);
                 else if (showInviteModal) setShowInviteModal(false);
@@ -209,6 +218,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
 
         if (
             messageToDelete ||
+            showTransferModal ||
             showLeaveModal ||
             memberToRemove ||
             showInviteModal ||
@@ -225,6 +235,8 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
     }, [
         messageToDelete,
         isDeletingMessage,
+        showTransferModal,
+        isTransferringOwnership,
         showLeaveModal,
         isLeavingTeam,
         memberToRemove,
@@ -309,7 +321,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
             currentUser.uid,
             (posts) => {
                 const collabs = posts.filter(
-                    (p) => p.category === 'collab' || p.type === 'collab' || Boolean(p.collabDetails)
+                    (p) => (p as any).category === 'collab' || (p as any).type === 'collab' || Boolean(p.collabDetails)
                 );
                 setUserProjects(collabs);
                 if (collabs.length > 0 && !createProjectId) {
@@ -532,6 +544,18 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         currentUser?.uid && activeTeam && (activeTeam.ownerId === currentUser.uid)
     );
 
+    // Eligible collaborators for ownership transfer (all current squad members except the owner)
+    const eligibleMembers = useMemo(() => {
+        if (!currentUser?.uid) return [];
+        return members.filter((m) => m.userId !== currentUser.uid);
+    }, [members, currentUser?.uid]);
+
+    // Selected target collaborator for ownership transfer
+    const selectedNewOwnerMember = useMemo(() => {
+        if (!selectedNewOwnerId) return null;
+        return members.find((m) => m.userId === selectedNewOwnerId) || null;
+    }, [members, selectedNewOwnerId]);
+
     // Filter teams by search query
     const filteredTeams = useMemo(() => {
         if (!searchQuery.trim()) return teams;
@@ -731,6 +755,60 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
             setRemoveMemberError(err?.message || 'Failed to remove member.');
         } finally {
             setIsRemovingMember(false);
+        }
+    };
+
+    // Helper: Open Transfer Ownership Modal
+    const handleOpenTransferModal = (preselectedMemberId?: string) => {
+        setTransferError(null);
+        setTransferConfirmed(false);
+        if (preselectedMemberId && preselectedMemberId !== currentUser?.uid) {
+            setSelectedNewOwnerId(preselectedMemberId);
+        } else {
+            const firstEligible = members.find((m) => m.userId !== currentUser?.uid);
+            setSelectedNewOwnerId(firstEligible ? firstEligible.userId : null);
+        }
+        setShowMenu(false);
+        setShowLeaveModal(false);
+        setShowTransferModal(true);
+    };
+
+    // Helper: Confirm Transfer Ownership
+    const handleConfirmTransferOwnership = async () => {
+        if (!activeTeam || !currentUser?.uid || !selectedNewOwnerId) {
+            setTransferError('Please select an active collaborator to receive squad ownership.');
+            return;
+        }
+
+        if (selectedNewOwnerId === currentUser.uid) {
+            setTransferError('Cannot transfer ownership to yourself. Select another active collaborator.');
+            return;
+        }
+
+        if (!transferConfirmed) {
+            setTransferError('Please check the confirmation box before proceeding.');
+            return;
+        }
+
+        setIsTransferringOwnership(true);
+        setTransferError(null);
+
+        try {
+            await transferTeamOwnership({
+                teamId: activeTeam.id,
+                currentOwnerId: currentUser.uid,
+                newOwnerId: selectedNewOwnerId,
+            });
+
+            // Clean up modal state; real-time listener will sync owner badge & role immediately
+            setShowTransferModal(false);
+            setSelectedNewOwnerId(null);
+            setTransferConfirmed(false);
+        } catch (err: any) {
+            console.error('[TRANSFER_OWNERSHIP_ERROR]', err);
+            setTransferError(err?.message || 'Failed to transfer squad ownership. Please try again.');
+        } finally {
+            setIsTransferringOwnership(false);
         }
     };
 
@@ -1270,6 +1348,21 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                     </span>
                                                 </button>
 
+                                                {isOwner && (
+                                                    <button
+                                                        type="button"
+                                                        role="menuitem"
+                                                        onClick={() => {
+                                                            setShowMenu(false);
+                                                            handleOpenTransferModal();
+                                                        }}
+                                                        className="w-full text-left px-3.5 py-2.5 text-amber-400 hover:text-amber-300 hover:bg-amber-950/20 transition-colors flex items-center justify-between cursor-pointer"
+                                                    >
+                                                        <span>// TRANSFER OWNERSHIP</span>
+                                                        <ShieldCheckIcon className="w-3.5 h-3.5 text-amber-400" />
+                                                    </button>
+                                                )}
+
                                                 <button
                                                     type="button"
                                                     role="menuitem"
@@ -1556,6 +1649,19 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                                 {m.role === 'owner' ? 'OWNER' : 'MEMBER'}
                                                             </span>
 
+                                                            {/* Team Lead: transfer ownership to this member */}
+                                                            {isOwner && m.userId !== currentUser?.uid && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleOpenTransferModal(m.userId)}
+                                                                    className="px-1.5 py-0.5 text-[9px] font-mono text-amber-400 hover:text-amber-300 bg-amber-950/30 border border-amber-900/40 hover:border-amber-700/80 transition-colors cursor-pointer"
+                                                                    title={`Transfer squad ownership to ${m.displayName}`}
+                                                                    aria-label={`Transfer ownership to ${m.displayName}`}
+                                                                >
+                                                                    TRANSFER
+                                                                </button>
+                                                            )}
+
                                                             {/* Team Lead moderation: remove collaborator */}
                                                             {isOwner && m.userId !== currentUser?.uid && (
                                                                 <button
@@ -1578,16 +1684,29 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
 
                                             <div className="p-3 border-t border-zinc-800 bg-[#09090b] flex-shrink-0 space-y-2">
                                                 {isOwner ? (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setShowMembersDrawer(false);
-                                                            setShowInviteModal(true);
-                                                        }}
-                                                        className="w-full py-2 bg-zinc-900 border border-zinc-750 hover:border-zinc-500 text-white text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer font-mono"
-                                                    >
-                                                        + // INVITE MORE MEMBERS
-                                                    </button>
+                                                    <>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setShowMembersDrawer(false);
+                                                                setShowInviteModal(true);
+                                                            }}
+                                                            className="w-full py-2 bg-zinc-900 border border-zinc-750 hover:border-zinc-500 text-white text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer font-mono"
+                                                        >
+                                                            + // INVITE MORE MEMBERS
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setShowMembersDrawer(false);
+                                                                handleOpenTransferModal();
+                                                            }}
+                                                            className="w-full py-2 bg-amber-950/20 border border-amber-800/60 hover:bg-amber-950/40 text-amber-400 hover:text-amber-300 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5 font-mono"
+                                                        >
+                                                            <ShieldCheckIcon className="w-3.5 h-3.5 text-amber-400" />
+                                                            <span>// TRANSFER OWNERSHIP</span>
+                                                        </button>
+                                                    </>
                                                 ) : (
                                                     <button
                                                         type="button"
@@ -2065,21 +2184,30 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                         </div>
 
                         {isOwner && members.length > 1 ? (
-                            /* Case 1: Team Owner with remaining members cannot abandon squad */
+                            /* Case 1: Team Owner with remaining members must transfer ownership first */
                             <div className="space-y-4">
                                 <p className="text-xs text-zinc-300 leading-relaxed">
                                     As the team lead, you cannot abandon an active squad while other collaborators are assigned to "{activeTeam.name}".
                                 </p>
-                                <div className="p-3 bg-amber-950/40 border border-amber-800 text-amber-300 text-xs leading-relaxed">
-                                    // SQUAD RESTRICTION: To leave, remove other collaborators or transfer ownership of the project first.
+                                <div className="p-3 bg-amber-950/40 border border-amber-800 text-amber-300 text-xs leading-relaxed space-y-1">
+                                    <div className="font-bold">// SQUAD OWNERSHIP REQUIREMENT:</div>
+                                    <div>You must transfer squad ownership to another active collaborator before leaving. Once transferred, you will become an ordinary member and can leave freely.</div>
                                 </div>
-                                <div className="pt-2 flex justify-end border-t border-zinc-800/80">
+                                <div className="pt-2 flex items-center justify-end gap-3 border-t border-zinc-800/80">
                                     <button
                                         type="button"
                                         onClick={() => setShowLeaveModal(false)}
-                                        className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold uppercase tracking-wider cursor-pointer font-mono"
+                                        className="px-4 py-2 bg-transparent border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white uppercase transition-colors text-xs font-bold cursor-pointer font-mono"
                                     >
-                                        Understood
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleOpenTransferModal()}
+                                        className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1.5 font-mono"
+                                    >
+                                        <ShieldCheckIcon className="w-3.5 h-3.5 text-black" />
+                                        <span>// TRANSFER OWNERSHIP</span>
                                     </button>
                                 </div>
                             </div>
@@ -2239,6 +2367,206 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                     </>
                                 ) : (
                                     <span>Remove Member</span>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 8. TRANSFER SQUAD OWNERSHIP MODAL */}
+            {showTransferModal && activeTeam && (
+                <div
+                    className="fixed inset-0 z-[125] flex items-center justify-center bg-black/60 backdrop-blur-[5px] p-4 font-mono"
+                    onClick={() => {
+                        if (!isTransferringOwnership) setShowTransferModal(false);
+                    }}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="transfer-ownership-title"
+                >
+                    <div
+                        className="border border-zinc-800 bg-[#0c0c0e] max-w-lg w-full p-5 sm:p-6 space-y-4 shadow-2xl relative"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex items-start justify-between border-b border-zinc-800 pb-3">
+                            <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 bg-amber-400 inline-block animate-pulse" />
+                                <h3 id="transfer-ownership-title" className="text-sm font-bold text-white uppercase tracking-wider">
+                                    // TRANSFER SQUAD OWNERSHIP
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!isTransferringOwnership) setShowTransferModal(false);
+                                }}
+                                disabled={isTransferringOwnership}
+                                className="text-zinc-500 hover:text-white text-base leading-none p-1 cursor-pointer font-mono disabled:opacity-40"
+                                title="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Team Details Summary */}
+                        <div className="p-2.5 bg-black/60 border border-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
+                            <div>
+                                <span className="text-zinc-500">Squad:</span>{' '}
+                                <span className="text-white font-bold">{activeTeam.name}</span>
+                            </div>
+                            {activeTeam.projectTitle && (
+                                <div className="text-[11px] text-zinc-500 truncate max-w-[200px]">
+                                    {activeTeam.projectTitle}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Warning Box */}
+                        <div className="p-3 bg-amber-950/30 border border-amber-900/60 text-amber-200/90 text-[11px] leading-relaxed space-y-1">
+                            <div className="font-bold text-amber-400 uppercase tracking-wider">
+                                ⚠ Authoritative Ownership Handover
+                            </div>
+                            <div>
+                                You are about to transfer full ownership to an active collaborator. The selected member will gain all squad management controls (member removal, invitation creation, squad settings). You will become an ordinary member and lose owner privileges.
+                            </div>
+                        </div>
+
+                        {/* Collaborator Selection */}
+                        <div className="space-y-2">
+                            <label className="text-[11px] text-zinc-400 uppercase tracking-wider font-bold block">
+                                Select New Squad Owner:
+                            </label>
+
+                            {eligibleMembers.length === 0 ? (
+                                <div className="p-4 border border-zinc-800/80 bg-zinc-950 text-center text-xs text-zinc-500">
+                                    No other collaborators are currently assigned to this squad.
+                                </div>
+                            ) : (
+                                <div className="max-h-56 overflow-y-auto space-y-1.5 border border-zinc-800/80 p-2 bg-zinc-950">
+                                    {eligibleMembers.map((m) => {
+                                        const isSelected = selectedNewOwnerId === m.userId;
+                                        return (
+                                            <div
+                                                key={m.userId}
+                                                onClick={() => {
+                                                    if (!isTransferringOwnership) {
+                                                        setSelectedNewOwnerId(m.userId);
+                                                        setTransferError(null);
+                                                    }
+                                                }}
+                                                className={`p-2.5 border transition-all cursor-pointer flex items-center justify-between ${
+                                                    isSelected
+                                                        ? 'border-amber-500/80 bg-amber-950/20 text-white'
+                                                        : 'border-zinc-800/70 bg-[#09090b] text-zinc-300 hover:border-zinc-700 hover:text-white'
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <div className="w-7 h-7 bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0 text-xs font-bold text-zinc-300 overflow-hidden">
+                                                        {m.photoURL ? (
+                                                            <img
+                                                                src={m.photoURL}
+                                                                alt={m.displayName}
+                                                                className="w-full h-full object-cover"
+                                                                onError={handleImageError}
+                                                            />
+                                                        ) : (
+                                                            <span>{m.displayName.charAt(0).toUpperCase()}</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-bold truncate">
+                                                            {m.displayName}
+                                                        </p>
+                                                        <p className="text-[10px] text-zinc-500 truncate">
+                                                            {m.projectRole || 'Collaborator'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 flex-shrink-0">
+                                                    <div
+                                                        className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                                                            isSelected
+                                                                ? 'border-amber-400 bg-amber-500'
+                                                                : 'border-zinc-700 bg-zinc-900'
+                                                        }`}
+                                                    >
+                                                        {isSelected && (
+                                                            <div className="w-1.5 h-1.5 bg-black rounded-full" />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Explicit confirmation checkbox */}
+                        {selectedNewOwnerMember && (
+                            <label className="flex items-start gap-2.5 p-2.5 border border-zinc-800/90 bg-black/40 text-xs text-zinc-300 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={transferConfirmed}
+                                    onChange={(e) => {
+                                        setTransferConfirmed(e.target.checked);
+                                        setTransferError(null);
+                                    }}
+                                    disabled={isTransferringOwnership}
+                                    className="mt-0.5 accent-amber-500 rounded-none cursor-pointer"
+                                />
+                                <span>
+                                    I confirm that I want to transfer ownership of{' '}
+                                    <strong className="text-white">{activeTeam.name}</strong> to{' '}
+                                    <strong className="text-amber-300">{selectedNewOwnerMember.displayName}</strong>{' '}
+                                    and step down to an ordinary member.
+                                </span>
+                            </label>
+                        )}
+
+                        {/* Error message */}
+                        {transferError && (
+                            <div className="p-2.5 bg-red-950/60 border border-red-800 text-red-200 text-xs">
+                                {transferError}
+                            </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="pt-2 flex items-center justify-end gap-3 border-t border-zinc-800/80">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowTransferModal(false);
+                                    setTransferError(null);
+                                    setSelectedNewOwnerId(null);
+                                    setTransferConfirmed(false);
+                                }}
+                                disabled={isTransferringOwnership}
+                                className="px-4 py-2 bg-transparent border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white uppercase transition-colors text-xs font-bold cursor-pointer disabled:opacity-40 font-mono"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmTransferOwnership}
+                                disabled={
+                                    !selectedNewOwnerId ||
+                                    !transferConfirmed ||
+                                    isTransferringOwnership ||
+                                    eligibleMembers.length === 0
+                                }
+                                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2 font-mono"
+                            >
+                                {isTransferringOwnership ? (
+                                    <>
+                                        <div className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                                        <span>TRANSFERRING...</span>
+                                    </>
+                                ) : (
+                                    <span>Transfer Ownership</span>
                                 )}
                             </button>
                         </div>

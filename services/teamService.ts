@@ -16,6 +16,7 @@ import {
     arrayRemove,
     deleteDoc,
     limit,
+    runTransaction,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { COLLECTIONS, sanitizeForFirestore } from './firestoreService';
@@ -801,6 +802,132 @@ export const removeTeamMember = async ({
             projectId: teamData.projectId,
         },
     }).catch((err) => console.warn('[REMOVE_MEMBER_NOTIF_WARN]', err));
+};
+
+/**
+ * Atomically transfers team ownership from the current owner to an eligible active member.
+ *
+ * Enforces:
+ * - Only the current verified team owner can execute this action.
+ * - The new owner must be an active team member and present in memberIds.
+ * - The owner cannot transfer ownership to themselves, a non-member, or removed member.
+ * - Previous owner remains an active team member with role 'member'.
+ * - New owner gets role 'owner'.
+ * - Team document ownerId, ownerName, and ownerAvatar are updated atomically in a Firestore transaction.
+ * - Real-time listeners automatically sync the changes across all active sessions.
+ */
+export const transferTeamOwnership = async ({
+    teamId,
+    currentOwnerId,
+    newOwnerId,
+}: {
+    teamId: string;
+    currentOwnerId: string;
+    newOwnerId: string;
+}): Promise<{ success: boolean; newOwnerName: string }> => {
+    if (!teamId || !currentOwnerId || !newOwnerId) {
+        throw new Error('Invalid arguments: teamId, currentOwnerId, and newOwnerId are required.');
+    }
+
+    if (currentOwnerId === newOwnerId) {
+        throw new Error('Cannot transfer ownership to yourself. Select another active squad member.');
+    }
+
+    // Demo team handling
+    if (teamId === 'team_demo_phoenix') {
+        if (typeof window !== 'undefined') {
+            try {
+                sessionStorage.setItem('invox_demo_phoenix_owner', newOwnerId);
+            } catch {
+                // ignore
+            }
+        }
+        return { success: true, newOwnerName: 'Collaborator' };
+    }
+
+    const teamRef = doc(db, COLLECTIONS.teams, teamId);
+    const oldOwnerMemberRef = doc(db, COLLECTIONS.teams, teamId, 'members', currentOwnerId);
+    const newOwnerMemberRef = doc(db, COLLECTIONS.teams, teamId, 'members', newOwnerId);
+
+    let newOwnerDisplayName = 'Squad Member';
+    let teamName = 'Team';
+    let projectId = '';
+
+    await runTransaction(db, async (transaction) => {
+        const teamSnap = await transaction.get(teamRef);
+        if (!teamSnap.exists()) {
+            throw new Error('Team workspace does not exist.');
+        }
+        const teamData = teamSnap.data() as Team;
+
+        if (teamData.ownerId !== currentOwnerId) {
+            throw new Error('Unauthorized: Only the current team owner can transfer ownership.');
+        }
+
+        const memberIds = Array.isArray(teamData.memberIds) ? teamData.memberIds : [];
+        if (!memberIds.includes(newOwnerId)) {
+            throw new Error('The selected user is not an active collaborator in this squad.');
+        }
+
+        const newOwnerSnap = await transaction.get(newOwnerMemberRef);
+        if (!newOwnerSnap.exists()) {
+            throw new Error('Selected member record could not be found. They may have left the team.');
+        }
+        const newOwnerData = newOwnerSnap.data() as TeamMember;
+
+        const oldOwnerSnap = await transaction.get(oldOwnerMemberRef);
+
+        teamName = teamData.name || 'Team';
+        projectId = teamData.projectId || '';
+        newOwnerDisplayName = newOwnerData.displayName || newOwnerData.username || 'Collaborator';
+
+        // 1. Demote old owner to member in subcollection
+        if (oldOwnerSnap.exists()) {
+            transaction.update(oldOwnerMemberRef, {
+                role: 'member',
+            });
+        } else {
+            transaction.set(oldOwnerMemberRef, {
+                id: currentOwnerId,
+                teamId,
+                userId: currentOwnerId,
+                displayName: teamData.ownerName || 'Previous Lead',
+                role: 'member',
+                joinedAt: serverTimestamp(),
+            });
+        }
+
+        // 2. Promote new owner in subcollection
+        transaction.update(newOwnerMemberRef, {
+            role: 'owner',
+        });
+
+        // 3. Atomically update authoritative team owner fields
+        transaction.update(teamRef, {
+            ownerId: newOwnerId,
+            ownerName: newOwnerDisplayName,
+            ownerAvatar: newOwnerData.photoURL || null,
+            updatedAt: serverTimestamp(),
+        });
+    });
+
+    // 4. Send notification to the new owner
+    sendNotification({
+        recipientId: newOwnerId,
+        actorId: currentOwnerId,
+        actorName: 'Previous Squad Lead',
+        type: 'team_ownership_transferred',
+        title: 'Team Ownership Transferred',
+        body: `You are now the team owner of "${teamName}".`,
+        targetType: 'team',
+        targetId: teamId,
+        metadata: {
+            teamId,
+            projectId,
+        },
+    }).catch((err) => console.warn('[TRANSFER_OWNERSHIP_NOTIF_WARN]', err));
+
+    return { success: true, newOwnerName: newOwnerDisplayName };
 };
 
 /**
