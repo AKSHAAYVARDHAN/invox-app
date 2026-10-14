@@ -172,6 +172,29 @@
         "usedBy": { "type": "array" }
       },
       "required": ["token", "teamId", "createdBy", "status", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System and user event notifications for messages, teams, collabs, and connections.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "recipientId": { "type": "string", "description": "Target recipient user UID" },
+        "actorId": { "type": "string", "description": "Actor user UID who triggered the event" },
+        "actorName": { "type": "string" },
+        "actorAvatar": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "read": { "type": "boolean" },
+        "readAt": { "type": "string", "format": "date-time" },
+        "targetType": { "type": "string" },
+        "targetId": { "type": "string" },
+        "metadata": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["recipientId", "type", "title", "read", "createdAt"]
     }
   },
   "firestore": {
@@ -210,6 +233,10 @@
     "/teamInvitations/{token}": {
       "schema": "TeamInvitation",
       "description": "Secure invitation tokens for joining project teams."
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notification documents."
     }
   }
 }

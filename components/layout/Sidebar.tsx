@@ -2,8 +2,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 // FIX: Use namespace import for react-router-dom to avoid "no exported member" issues.
 import * as ReactRouterDOM from 'react-router-dom';
-import { HomeIcon, ExploreIcon, SpotlightIcon, CommunityIcon, HubIcon, LogoutIcon, TrendingUpIcon, MicrophoneIcon, CubeIcon, ProfileIcon, CogIcon } from '../ui/Icons';
+import { HomeIcon, ExploreIcon, SpotlightIcon, CommunityIcon, HubIcon, LogoutIcon, TrendingUpIcon, MicrophoneIcon, CubeIcon, ProfileIcon, CogIcon, BellIcon } from '../ui/Icons';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNotifications } from '../../contexts/NotificationContext';
 import { usePlatformConfig } from '../../contexts/PlatformConfigContext';
 import { logout } from '../../services/authService';
 import type { SectionId } from '../../types';
@@ -34,6 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHu
     const navLinkClasses = "flex items-center space-x-3.5 px-3.5 py-2.5 rounded-none text-zinc-400 hover:bg-zinc-900/80 hover:text-white border border-transparent hover:border-zinc-800/80 transition-all duration-150 text-sm font-medium tracking-wide";
     const activeLinkClasses = "bg-zinc-900 text-white border-zinc-700/90 shadow-none font-semibold";
     const { currentUser, userProfile, isAdmin } = useAuth();
+    const { unreadCount } = useNotifications();
     const { isSectionVisible } = usePlatformConfig();
     const location = ReactRouterDOM.useLocation();
     const navigate = ReactRouterDOM.useNavigate();
@@ -151,8 +153,38 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHu
                     </nav>
                 </div>
 
+                {/* Notifications Entry - Positioned directly above profile section */}
+                {currentUser && (
+                    <div className="pt-2 pb-1 border-t border-zinc-800/80">
+                        <ReactRouterDOM.NavLink
+                            to="/notifications"
+                            className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''} justify-between`}
+                            onClick={() => {
+                                if (isOpen) {
+                                    toggleSidebar();
+                                }
+                            }}
+                        >
+                            <div className="flex items-center space-x-3.5 min-w-0">
+                                <div className="relative flex items-center justify-center">
+                                    <BellIcon className="w-4 h-4 flex-shrink-0 text-zinc-400 group-hover:text-white" />
+                                    {unreadCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 block w-1.5 h-1.5 bg-rose-500 rounded-none animate-pulse" aria-hidden="true" />
+                                    )}
+                                </div>
+                                <span className="truncate font-mono uppercase text-xs tracking-wider">Notifications</span>
+                            </div>
+                            {unreadCount > 0 && (
+                                <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40 rounded-none shrink-0 tabular-nums">
+                                    {unreadCount > 99 ? '99+' : unreadCount}
+                                </span>
+                            )}
+                        </ReactRouterDOM.NavLink>
+                    </div>
+                )}
+
                 {/* Profile Footer */}
-                <div className="pt-3 border-t border-zinc-800/80 mt-auto">
+                <div className="pt-2 border-t border-zinc-800/80 mt-auto">
                     {currentUser && (
                         <div className="relative" ref={dropdownRef}>
                             <button
@@ -202,6 +234,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHu
                                                 </button>
                                             </li>
                                         )}
+                                        <li>
+                                            <button
+                                                onClick={() => handleMenuNavigation('/notifications')}
+                                                className="w-full flex items-center justify-between px-3 py-2 text-left text-xs font-mono text-zinc-300 hover:bg-zinc-800/80 hover:text-white transition-colors"
+                                                role="menuitem"
+                                            >
+                                                <div className="flex items-center gap-2.5">
+                                                    <BellIcon className="w-4 h-4 text-zinc-400" />
+                                                    <span>Notifications</span>
+                                                </div>
+                                                {unreadCount > 0 && (
+                                                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40">
+                                                        {unreadCount}
+                                                    </span>
+                                                )}
+                                            </button>
+                                        </li>
                                         <li>
                                             <button
                                                 onClick={() => handleMenuNavigation('/profile')}

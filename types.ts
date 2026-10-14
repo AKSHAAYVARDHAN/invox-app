@@ -467,3 +467,50 @@ export interface PollVote {
   optionId: string;
   votedAt: Date;
 }
+
+export type NotificationType =
+  | 'message_direct'
+  | 'message_team'
+  | 'team_invite_received'
+  | 'team_invite_accepted'
+  | 'team_member_joined'
+  | 'team_member_left'
+  | 'team_member_removed'
+  | 'collab_application'
+  | 'collab_accepted'
+  | 'collab_declined'
+  | 'connection_request'
+  | 'connection_accepted'
+  | 'post_comment'
+  | 'collab_message';
+
+export interface InvoxNotification {
+  id: string;
+  recipientId: string;
+  actorId?: string;
+  senderId?: string;
+  actorName?: string;
+  actorAvatar?: string | null;
+  actorUsername?: string;
+  type: NotificationType | string;
+  title: string;
+  body: string;
+  message?: string;
+  read: boolean;
+  readAt?: any;
+  createdAt: any;
+  targetType?: 'message' | 'team' | 'collab' | 'profile' | 'application' | 'post' | 'url';
+  targetId?: string;
+  metadata?: {
+    conversationId?: string;
+    teamId?: string;
+    inviteToken?: string;
+    collabId?: string;
+    applicationId?: string;
+    roleId?: string;
+    postId?: string;
+    userId?: string;
+    url?: string;
+    [key: string]: any;
+  };
+}

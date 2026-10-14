@@ -9,6 +9,7 @@ import { uploadFile } from '../services/storageService';
 import { COLLECTIONS, updateDocument } from '../services/firestoreService';
 import { getFriendlyErrorMessage } from '../utils/errorHandler';
 import { updateUserAuthProfile, subscribeUserProfile } from '../services/authService';
+import { subscribeConnectionStatus, connectWithUser, disconnectFromUser } from '../services/connectionService';
 import { computeProfileCompletion } from './Settings';
 import type { InvoxUser } from '../types';
 
@@ -64,6 +65,39 @@ const ProfilePage = () => {
     // Local preview URLs — shown instantly while upload is in-flight
     const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null);
     const [localCoverUrl, setLocalCoverUrl]   = useState<string | null>(null);
+
+    const [isConnected, setIsConnected] = useState(false);
+    const [isConnecting, setIsConnecting] = useState(false);
+
+    useEffect(() => {
+        if (isOwnProfile || !userId || !currentUser?.uid) return;
+        const unsub = subscribeConnectionStatus(currentUser.uid, userId, (status) => {
+            setIsConnected(status.isConnected);
+        });
+        return () => {
+            unsub();
+        };
+    }, [isOwnProfile, userId, currentUser?.uid]);
+
+    const handleToggleConnect = async () => {
+        if (!currentUser || isOwnProfile || !userId || isConnecting) return;
+        setIsConnecting(true);
+        try {
+            if (isConnected) {
+                await disconnectFromUser(currentUser.uid, userId);
+            } else {
+                await connectWithUser({
+                    currentUser,
+                    currentUserProfile: userProfile,
+                    targetUserId: userId,
+                });
+            }
+        } catch (e) {
+            console.error('Connection error', e);
+        } finally {
+            setIsConnecting(false);
+        }
+    };
 
     useEffect(() => {
         if (isOwnProfile || !userId) {
@@ -360,9 +394,21 @@ const ProfilePage = () => {
                                     <span>// EDIT_PROFILE</span>
                                 </button>
                             ) : (
-                                <span className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 text-zinc-300 font-mono text-xs uppercase tracking-wider">
-                                    // INVOX_PROFILE
-                                </span>
+                                <button
+                                    onClick={handleToggleConnect}
+                                    disabled={isConnecting}
+                                    className={`flex items-center gap-2 px-3.5 py-1.5 font-mono text-xs uppercase tracking-wider transition-colors font-bold border ${
+                                        isConnected
+                                            ? 'bg-emerald-950/40 text-emerald-300 border-emerald-700/80 hover:bg-rose-950/30 hover:text-rose-300 hover:border-rose-800'
+                                            : 'bg-white text-black hover:bg-zinc-200 border-white'
+                                    }`}
+                                >
+                                    {isConnecting
+                                        ? '// SYNCING...'
+                                        : isConnected
+                                            ? '✓ CONNECTED // COMRADE'
+                                            : '+ CONNECT // COMRADE'}
+                                </button>
                             )}
                         </div>
                     </div>

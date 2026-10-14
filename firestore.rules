@@ -171,8 +171,14 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow read, update, delete: if signedIn() && resource.data.recipientId == uid();
-      allow create: if signedIn() && request.resource.data.recipientId is string;
+      allow read, delete: if signedIn() && resource.data.recipientId == uid();
+      allow update: if signedIn() && resource.data.recipientId == uid()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt', 'updatedAt']);
+      allow create: if signedIn()
+        && request.resource.data.recipientId is string
+        && request.resource.data.recipientId != uid()
+        && (!('actorId' in request.resource.data) || request.resource.data.actorId == uid() || request.resource.data.actorId == null)
+        && (!('senderId' in request.resource.data) || request.resource.data.senderId == uid() || request.resource.data.senderId == null);
     }
 
     match /reports/{reportId} {
@@ -218,6 +224,8 @@ service cloud.firestore {
         resource.data.ownerId == uid()
         || (('memberIds' in resource.data && uid() in resource.data.memberIds)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageSenderId', 'lastMessageSenderName', 'lastMessageTimestamp', 'updatedAt']))
+        || (('memberIds' in resource.data && uid() in resource.data.memberIds)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'memberCount', 'updatedAt']))
         || (!('memberIds' in resource.data) || !(uid() in resource.data.memberIds))
         || isModerator()
       );
@@ -235,8 +243,8 @@ service cloud.firestore {
           || isModerator()
         );
         allow update: if signedIn() && (
-          memberId == uid()
-          || get(/databases/$(database)/documents/teams/$(teamId)).data.ownerId == uid()
+          get(/databases/$(database)/documents/teams/$(teamId)).data.ownerId == uid()
+          || (memberId == uid() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastReadAt']))
           || isModerator()
         );
         allow delete: if signedIn() && (
@@ -259,7 +267,11 @@ service cloud.firestore {
           || resource.data.senderId == uid()
           || isModerator()
         );
-        allow delete: if signedIn() && (resource.data.senderId == uid() || isModerator());
+        allow delete: if signedIn() && (
+          resource.data.senderId == uid()
+          || get(/databases/$(database)/documents/teams/$(teamId)).data.ownerId == uid()
+          || isModerator()
+        );
       }
     }
 

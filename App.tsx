@@ -26,6 +26,8 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import { AIAssistantButton, AIChatModal } from './components/ui/AIAssistant';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { PlatformConfigProvider, usePlatformConfig } from './contexts/PlatformConfigContext';
+import { NotificationProvider } from './contexts/NotificationContext';
+import NotificationsPage from './pages/NotificationsPage';
 import GoForItFilterModal from './components/spotlight/GoForItFilterModal';
 import { usePullToRefresh } from './components/hooks/usePullToRefresh';
 import PullToRefreshIndicator from './components/ui/PullToRefreshIndicator';
@@ -42,6 +44,7 @@ const pageTitles: { [key: string]: string } = {
     '/myspace': 'My Space',
     '/myspace/uploads': 'Create Content',
     '/profile': 'Profile',
+    '/notifications': 'Notifications',
     '/applications': 'My Applications',
     '/saved-applications': 'Saved Opportunities',
 };
@@ -441,6 +444,7 @@ const MainAppRoutes = () => (
             <ReactRouterDOM.Route path="/myspace/uploads" element={<SectionRouteGuard sectionId="mySpace"><UploadsPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/profile" element={<ProfilePage />} />
             <ReactRouterDOM.Route path="/profile/:userId" element={<ProfilePage />} />
+            <ReactRouterDOM.Route path="/notifications" element={<NotificationsPage />} />
             <ReactRouterDOM.Route path="/settings" element={<SettingsPage />} />
             <ReactRouterDOM.Route path="/applications" element={<SectionRouteGuard sectionId="spotlight"><ApplicationStatusPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/saved-applications" element={<SectionRouteGuard sectionId="spotlight"><SavedApplicationsPage /></SectionRouteGuard>} />
@@ -461,16 +465,18 @@ function App() {
   return (
     <ReactRouterDOM.HashRouter>
         <AuthProvider>
-            <PlatformConfigProvider>
-                <FilterProvider>
-                    <AIAssistantProvider>
-                        <div id="main-app-wrapper">
-                            <AppRoutes />
-                        </div>
-                        <AIChatManager />
-                    </AIAssistantProvider>
-                </FilterProvider>
-            </PlatformConfigProvider>
+            <NotificationProvider>
+                <PlatformConfigProvider>
+                    <FilterProvider>
+                        <AIAssistantProvider>
+                            <div id="main-app-wrapper">
+                                <AppRoutes />
+                            </div>
+                            <AIChatManager />
+                        </AIAssistantProvider>
+                    </FilterProvider>
+                </PlatformConfigProvider>
+            </NotificationProvider>
         </AuthProvider>
     </ReactRouterDOM.HashRouter>
   );

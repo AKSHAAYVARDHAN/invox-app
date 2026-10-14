@@ -2,6 +2,7 @@ import React from 'react';
 import { MenuIcon, ProfileIcon, BellIcon } from '../ui/Icons';
 // FIX: Use namespace import for react-router-dom to avoid "no exported member" issues.
 import * as ReactRouterDOM from 'react-router-dom';
+import { useNotifications } from '../../contexts/NotificationContext';
 
 interface HeaderProps {
     toggleSidebar: () => void;
@@ -9,6 +10,8 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ toggleSidebar, pageTitle }) => {
+    const { unreadCount } = useNotifications();
+
     return (
         <>
             {/* Mobile + tablet header (hidden only on lg+ where the sidebar is always visible) */}
@@ -27,10 +30,18 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, pageTitle }) => {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button className="text-zinc-300 hover:text-white p-1.5 border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 relative transition-colors" aria-label="Notifications">
+                    <ReactRouterDOM.Link 
+                        to="/notifications"
+                        className="text-zinc-300 hover:text-white p-1.5 border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 relative transition-colors inline-flex items-center justify-center" 
+                        aria-label="Notifications"
+                    >
                         <BellIcon className="w-4 h-4" />
-                        <span className="absolute top-1 right-1 block h-1.5 w-1.5 bg-rose-500" aria-hidden="true"></span>
-                    </button>
+                        {unreadCount > 0 && (
+                            <span className="absolute -top-1 -right-1 flex items-center justify-center px-1 min-w-[14px] h-[14px] text-[8px] font-mono font-bold bg-rose-500 text-white rounded-none tabular-nums" aria-label={`${unreadCount} unread notifications`}>
+                                {unreadCount > 99 ? '99+' : unreadCount}
+                            </span>
+                        )}
+                    </ReactRouterDOM.Link>
                     <ReactRouterDOM.Link 
                         to="/profile" 
                         className="p-1 border border-zinc-800 bg-zinc-900/60 hover:border-zinc-600 inline-block transition-colors" 

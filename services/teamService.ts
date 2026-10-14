@@ -13,11 +13,13 @@ import {
     orderBy,
     increment,
     arrayUnion,
+    arrayRemove,
     deleteDoc,
     limit,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { COLLECTIONS, sanitizeForFirestore } from './firestoreService';
+import { sendNotification } from './notificationService';
 import type { InvoxUser, Post, Project, User, CollabApplication } from '../types';
 
 export interface Team {
@@ -499,6 +501,36 @@ export const sendTeamMessage = async ({
     await updateDoc(memberRef, {
         lastReadAt: serverTimestamp(),
     }).catch(() => {});
+
+    // 4. Notify all other team members in real-time
+    try {
+        const teamSnap = await getDoc(teamRef);
+        if (teamSnap.exists()) {
+            const teamData = teamSnap.data() as Team;
+            const memberIds = Array.isArray(teamData.memberIds) ? teamData.memberIds : [];
+            const otherMembers = memberIds.filter((mId) => mId && mId !== senderId);
+
+            for (const mId of otherMembers) {
+                sendNotification({
+                    recipientId: mId,
+                    actorId: senderId,
+                    actorName: senderName,
+                    actorAvatar: senderAvatar || null,
+                    type: 'message_team',
+                    title: `Team Message • ${teamData.name || 'Team Workspace'}`,
+                    body: `${senderName}: ${cleanText.slice(0, 100)}`,
+                    targetType: 'team',
+                    targetId: teamId,
+                    metadata: {
+                        teamId,
+                        projectId: teamData.projectId,
+                    },
+                }).catch(() => {});
+            }
+        }
+    } catch (notifErr) {
+        console.warn('[TEAM_MESSAGE_NOTIF_WARN]', notifErr);
+    }
 };
 
 /**
@@ -530,6 +562,274 @@ export const markTeamAsRead = async (teamId: string, userId: string): Promise<vo
     } catch (e) {
         console.warn('[MARK_TEAM_READ_MESSAGES_ERROR]', e);
     }
+};
+
+/**
+ * Deletes a message from a team conversation.
+ * Permissions enforced:
+ * - Message author can delete their own message.
+ * - Team owner/lead can moderate and delete any message in their team.
+ * - Non-authors/unauthorized members are rejected.
+ * - Updates the team document's lastMessage preview in real time if the deleted message was latest.
+ */
+export const deleteTeamMessage = async ({
+    teamId,
+    messageId,
+    userId,
+}: {
+    teamId: string;
+    messageId: string;
+    userId: string;
+}): Promise<void> => {
+    if (!teamId || !messageId || !userId) {
+        throw new Error('Invalid arguments: teamId, messageId, and userId are required.');
+    }
+
+    // Demo team handling
+    if (teamId === 'team_demo_phoenix') {
+        return;
+    }
+
+    const teamRef = doc(db, COLLECTIONS.teams, teamId);
+    const teamSnap = await getDoc(teamRef);
+    if (!teamSnap.exists()) {
+        throw new Error('Team workspace not found.');
+    }
+    const teamData = teamSnap.data() as Team;
+
+    const messageRef = doc(db, COLLECTIONS.teams, teamId, 'messages', messageId);
+    const messageSnap = await getDoc(messageRef);
+    if (!messageSnap.exists()) {
+        // Already deleted or does not exist
+        return;
+    }
+    const messageData = messageSnap.data();
+
+    // Permissions check: message sender OR team owner
+    const isSender = messageData.senderId === userId;
+    const isOwner = teamData.ownerId === userId;
+
+    if (!isSender && !isOwner) {
+        throw new Error('Unauthorized: You can only delete your own messages or moderate as team owner.');
+    }
+
+    // Delete message doc in Firestore
+    await deleteDoc(messageRef);
+
+    // Recalculate team's lastMessage metadata if needed
+    try {
+        const msgsRef = collection(db, COLLECTIONS.teams, teamId, 'messages');
+        const q = query(msgsRef, orderBy('createdAt', 'desc'), limit(1));
+        const latestSnap = await getDocs(q);
+
+        if (!latestSnap.empty) {
+            const latestData = latestSnap.docs[0].data();
+            await updateDoc(teamRef, {
+                lastMessage: (latestData.text || '').slice(0, 120),
+                lastMessageSenderId: latestData.senderId || null,
+                lastMessageSenderName: latestData.senderName || 'Team Member',
+                lastMessageTimestamp: latestData.createdAt || serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            }).catch((err) => console.warn('[UPDATE_LAST_MESSAGE_AFTER_DELETE_WARN]', err));
+        } else {
+            // No messages remain in team
+            await updateDoc(teamRef, {
+                lastMessage: null,
+                lastMessageSenderId: null,
+                lastMessageSenderName: null,
+                lastMessageTimestamp: null,
+                updatedAt: serverTimestamp(),
+            }).catch((err) => console.warn('[CLEAR_LAST_MESSAGE_AFTER_DELETE_WARN]', err));
+        }
+    } catch (recalcErr) {
+        console.warn('[RECALCULATE_LAST_MESSAGE_WARN]', recalcErr);
+    }
+};
+
+/**
+ * Allows a team member to voluntarily leave a team.
+ * Edge cases:
+ * - If current user is the team owner and other members exist:
+ *   Throws an error prompting ownership transfer or disbanding.
+ * - If current user is the team owner and sole member:
+ *   Disbands/deletes the team workspace safely.
+ * - If ordinary member:
+ *   Removes membership doc, decrements memberCount, removes user from memberIds,
+ *   and notifies the team owner.
+ */
+export const leaveTeam = async ({
+    teamId,
+    userId,
+    userName,
+}: {
+    teamId: string;
+    userId: string;
+    userName?: string;
+}): Promise<{ status: 'left' | 'deleted' }> => {
+    if (!teamId || !userId) {
+        throw new Error('Invalid arguments: teamId and userId are required.');
+    }
+
+    // Handle demo team
+    if (teamId === 'team_demo_phoenix') {
+        if (typeof window !== 'undefined') {
+            try {
+                let storedMembers: string[] = ['owner_phoenix'];
+                const parsed = JSON.parse(sessionStorage.getItem('invox_demo_phoenix_members') || '["owner_phoenix"]');
+                if (Array.isArray(parsed)) storedMembers = parsed;
+                storedMembers = storedMembers.filter((m) => m !== userId);
+                sessionStorage.setItem('invox_demo_phoenix_members', JSON.stringify(storedMembers));
+            } catch {
+                // ignore
+            }
+        }
+        return { status: 'left' };
+    }
+
+    const teamRef = doc(db, COLLECTIONS.teams, teamId);
+    const teamSnap = await getDoc(teamRef);
+    if (!teamSnap.exists()) {
+        throw new Error('Team does not exist.');
+    }
+    const teamData = teamSnap.data() as Team;
+
+    const isOwner = teamData.ownerId === userId;
+    const memberIds = Array.isArray(teamData.memberIds) ? teamData.memberIds : [];
+    const otherMembers = memberIds.filter((m) => m !== userId);
+
+    if (isOwner) {
+        if (otherMembers.length > 0) {
+            throw new Error(
+                'Team Lead Restriction: As the team lead, you cannot leave while other collaborators are assigned to the squad. Transfer leadership or disband the squad first.'
+            );
+        } else {
+            // Sole member and owner: delete the team workspace
+            await deleteDoc(teamRef);
+            return { status: 'deleted' };
+        }
+    }
+
+    // 1. Delete member document in subcollection
+    const memberRef = doc(db, COLLECTIONS.teams, teamId, 'members', userId);
+    await deleteDoc(memberRef).catch((e) => console.warn('[DELETE_MEMBER_DOC_WARN]', e));
+
+    // 2. Atomically update team document: remove from memberIds, decrement memberCount
+    await updateDoc(teamRef, {
+        memberIds: arrayRemove(userId),
+        memberCount: increment(-1),
+        updatedAt: serverTimestamp(),
+    });
+
+    // 3. Notify team owner that a member left
+    if (teamData.ownerId && teamData.ownerId !== userId) {
+        sendNotification({
+            recipientId: teamData.ownerId,
+            actorId: userId,
+            actorName: userName || 'Team Member',
+            type: 'team_member_left',
+            title: 'Team Member Departed',
+            body: `${userName || 'A member'} has voluntarily left the team "${teamData.name}".`,
+            targetType: 'team',
+            targetId: teamId,
+            metadata: {
+                teamId,
+                projectId: teamData.projectId,
+                memberId: userId,
+            },
+        }).catch((err) => console.warn('[LEAVE_TEAM_NOTIF_WARN]', err));
+    }
+
+    return { status: 'left' };
+};
+
+/**
+ * Removes a member from a team. Only team owners can execute this.
+ */
+export const removeTeamMember = async ({
+    teamId,
+    memberUserId,
+    requesterUserId,
+    memberName,
+}: {
+    teamId: string;
+    memberUserId: string;
+    requesterUserId: string;
+    memberName?: string;
+}): Promise<void> => {
+    if (!teamId || !memberUserId || !requesterUserId) {
+        throw new Error('Invalid arguments: teamId, memberUserId, and requesterUserId are required.');
+    }
+
+    const teamRef = doc(db, COLLECTIONS.teams, teamId);
+    const teamSnap = await getDoc(teamRef);
+    if (!teamSnap.exists()) {
+        throw new Error('Team workspace not found.');
+    }
+    const teamData = teamSnap.data() as Team;
+
+    if (teamData.ownerId !== requesterUserId) {
+        throw new Error('Unauthorized: Only the team owner can remove collaborators.');
+    }
+
+    if (memberUserId === teamData.ownerId) {
+        throw new Error('Cannot remove the team lead.');
+    }
+
+    // Delete subcollection doc
+    const memberRef = doc(db, COLLECTIONS.teams, teamId, 'members', memberUserId);
+    await deleteDoc(memberRef).catch((e) => console.warn('[REMOVE_MEMBER_DOC_WARN]', e));
+
+    // Update team document
+    await updateDoc(teamRef, {
+        memberIds: arrayRemove(memberUserId),
+        memberCount: increment(-1),
+        updatedAt: serverTimestamp(),
+    });
+
+    // Notify the removed member
+    sendNotification({
+        recipientId: memberUserId,
+        actorId: requesterUserId,
+        actorName: teamData.ownerName || 'Team Lead',
+        type: 'team_member_removed',
+        title: 'Team Membership Update',
+        body: `You were removed from the team "${teamData.name}".`,
+        targetType: 'team',
+        targetId: teamId,
+        metadata: {
+            teamId,
+            projectId: teamData.projectId,
+        },
+    }).catch((err) => console.warn('[REMOVE_MEMBER_NOTIF_WARN]', err));
+};
+
+/**
+ * Disbands and permanently deletes a team workspace.
+ * Only the team owner can disband a team.
+ */
+export const deleteTeam = async (teamId: string, userId: string): Promise<void> => {
+    if (!teamId || !userId) {
+        throw new Error('Invalid arguments: teamId and userId are required.');
+    }
+
+    if (teamId === 'team_demo_phoenix') {
+        if (typeof window !== 'undefined') {
+            sessionStorage.removeItem('invox_demo_phoenix_members');
+        }
+        return;
+    }
+
+    const teamRef = doc(db, COLLECTIONS.teams, teamId);
+    const teamSnap = await getDoc(teamRef);
+    if (!teamSnap.exists()) return;
+
+    const teamData = teamSnap.data() as Team;
+    if (teamData.ownerId !== userId) {
+        throw new Error('Unauthorized: Only the team owner can disband this team.');
+    }
+
+    // Delete team doc
+    await deleteDoc(teamRef);
 };
 
 /**
@@ -876,6 +1176,26 @@ export const joinTeamViaInvitation = async ({
         usedBy: arrayUnion(user.uid),
         updatedAt: serverTimestamp(),
     }).catch(() => {});
+
+    // Notify team owner that a member joined via invitation
+    if (team.ownerId && team.ownerId !== user.uid) {
+        sendNotification({
+            recipientId: team.ownerId,
+            actorId: user.uid,
+            actorName: memberName,
+            actorAvatar: memberAvatar,
+            type: 'team_invite_accepted',
+            title: 'Team Member Joined',
+            body: `${memberName} accepted your invitation and joined team "${team.name}".`,
+            targetType: 'team',
+            targetId: team.id,
+            metadata: {
+                teamId: team.id,
+                projectId: team.projectId,
+                memberId: user.uid,
+            },
+        }).catch((err) => console.warn('[JOIN_TEAM_NOTIF_WARN]', err));
+    }
 
     return {
         status: 'joined',

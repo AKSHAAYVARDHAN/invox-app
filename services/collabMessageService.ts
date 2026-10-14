@@ -17,6 +17,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { COLLECTIONS, sanitizeForFirestore } from './firestoreService';
+import { sendNotification } from './notificationService';
 import type { CollabApplication, InvoxUser, Post, User } from '../types';
 
 export interface CollabConversationParticipant {
@@ -377,16 +378,20 @@ export const sendCollabMessage = async ({
     // Notification for recipients
     for (const rId of recipientsToNotify) {
         try {
-            await addDoc(collection(db, COLLECTIONS.notifications), sanitizeForFirestore({
+            await sendNotification({
                 recipientId: rId,
-                senderId,
-                type: 'collab_message',
+                actorId: senderId,
+                actorName: senderName,
+                actorAvatar: senderAvatar || null,
+                type: 'message_direct',
                 title: 'New Message',
-                message: `${senderName}: ${cleanText.slice(0, 100)}`,
-                conversationId,
-                read: false,
-                createdAt: serverTimestamp(),
-            }));
+                body: `${senderName}: ${cleanText.slice(0, 100)}`,
+                targetType: 'message',
+                targetId: conversationId,
+                metadata: {
+                    conversationId,
+                },
+            });
         } catch (e) {
             console.warn('[MESSAGE_NOTIF_ERROR]', e);
         }

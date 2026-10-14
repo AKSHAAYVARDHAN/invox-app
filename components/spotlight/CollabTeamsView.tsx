@@ -18,6 +18,10 @@ import {
     joinTeamViaInvitation,
     subscribeToUserTeamUnreadCounts,
     getProjectAcceptedCollaborators,
+    deleteTeamMessage,
+    leaveTeam,
+    removeTeamMember,
+    deleteTeam,
     type Team,
     type TeamMember,
     type TeamMessage,
@@ -25,7 +29,7 @@ import {
 } from '../../services/teamService';
 import { subscribeToUserPosts } from '../../services/postService';
 import { handleImageError } from '../utils/imageUtils';
-import { EllipsisVerticalIcon, Maximize2Icon, Minimize2Icon } from '../ui/Icons';
+import { EllipsisVerticalIcon, Maximize2Icon, Minimize2Icon, TrashIcon, LogoutIcon } from '../ui/Icons';
 import { ClickableMessageText } from '../ui/ClickableMessageText';
 import { TeamInvitationCard } from '../ui/TeamInvitationCard';
 import { getTeamInvitationUrl } from '../../utils/urlUtils';
@@ -69,6 +73,22 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
     const [showInviteModal, setShowInviteModal] = useState<boolean>(false);
     const [showProjectModal, setShowProjectModal] = useState<boolean>(false);
     const [showMenu, setShowMenu] = useState<boolean>(false);
+
+    // Message actions & deletion state
+    const [activeMessageMenuId, setActiveMessageMenuId] = useState<string | null>(null);
+    const [messageToDelete, setMessageToDelete] = useState<TeamMessage | null>(null);
+    const [isDeletingMessage, setIsDeletingMessage] = useState<boolean>(false);
+    const [deleteMessageError, setDeleteMessageError] = useState<string | null>(null);
+
+    // Leave / Disband Team state
+    const [showLeaveModal, setShowLeaveModal] = useState<boolean>(false);
+    const [isLeavingTeam, setIsLeavingTeam] = useState<boolean>(false);
+    const [leaveTeamError, setLeaveTeamError] = useState<string | null>(null);
+
+    // Remove Member state
+    const [memberToRemove, setMemberToRemove] = useState<TeamMember | null>(null);
+    const [isRemovingMember, setIsRemovingMember] = useState<boolean>(false);
+    const [removeMemberError, setRemoveMemberError] = useState<string | null>(null);
 
     // Create Team form state
     const [createName, setCreateName] = useState<string>('');
@@ -149,11 +169,37 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         };
     }, [showMenu]);
 
+    // Close active message menu on outside click or Escape key
+    useEffect(() => {
+        if (!activeMessageMenuId) return;
+
+        const handleOutsideMessageClick = () => {
+            setActiveMessageMenuId(null);
+        };
+
+        const handleMessageKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setActiveMessageMenuId(null);
+            }
+        };
+
+        document.addEventListener('click', handleOutsideMessageClick);
+        document.addEventListener('keydown', handleMessageKeyDown);
+
+        return () => {
+            document.removeEventListener('click', handleOutsideMessageClick);
+            document.removeEventListener('keydown', handleMessageKeyDown);
+        };
+    }, [activeMessageMenuId]);
+
     // Close active modal, drawer, or collapse expanded chat on Escape key
     useEffect(() => {
         const handleModalEscape = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
-                if (showInviteModal) setShowInviteModal(false);
+                if (messageToDelete && !isDeletingMessage) setMessageToDelete(null);
+                else if (showLeaveModal && !isLeavingTeam) setShowLeaveModal(false);
+                else if (memberToRemove && !isRemovingMember) setMemberToRemove(null);
+                else if (showInviteModal) setShowInviteModal(false);
                 else if (showProjectModal) setShowProjectModal(false);
                 else if (showCreateModal) setShowCreateModal(false);
                 else if (showMembersDrawer) setShowMembersDrawer(false);
@@ -161,17 +207,39 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
             }
         };
 
-        if (showInviteModal || showProjectModal || showCreateModal || showMembersDrawer || isExpanded) {
+        if (
+            messageToDelete ||
+            showLeaveModal ||
+            memberToRemove ||
+            showInviteModal ||
+            showProjectModal ||
+            showCreateModal ||
+            showMembersDrawer ||
+            isExpanded
+        ) {
             document.addEventListener('keydown', handleModalEscape);
             return () => {
                 document.removeEventListener('keydown', handleModalEscape);
             };
         }
-    }, [showInviteModal, showProjectModal, showCreateModal, showMembersDrawer, isExpanded]);
+    }, [
+        messageToDelete,
+        isDeletingMessage,
+        showLeaveModal,
+        isLeavingTeam,
+        memberToRemove,
+        isRemovingMember,
+        showInviteModal,
+        showProjectModal,
+        showCreateModal,
+        showMembersDrawer,
+        isExpanded,
+    ]);
 
     // Reset menu when switching teams
     useEffect(() => {
         setShowMenu(false);
+        setActiveMessageMenuId(null);
     }, [selectedTeamId]);
 
     // 1. Sync URL teamId with local state
@@ -266,13 +334,46 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         }
 
         const unsubTeam = subscribeToTeam(selectedTeamId, (team) => {
+            if (!team) {
+                // Team was deleted or not found
+                setActiveTeam(null);
+                setSelectedTeamId(null);
+                setSearchParams((prev) => {
+                    const next = new URLSearchParams(prev);
+                    next.delete('teamId');
+                    return next;
+                });
+                return;
+            }
+
+            // Verify current user still has membership access
+            if (currentUser?.uid) {
+                const isMemberOrOwner =
+                    team.ownerId === currentUser.uid ||
+                    (Array.isArray(team.memberIds) && team.memberIds.includes(currentUser.uid));
+
+                if (!isMemberOrOwner) {
+                    // Former member no longer has access; immediately clear active chat
+                    setActiveTeam(null);
+                    setSelectedTeamId(null);
+                    setMessages([]);
+                    setMembers([]);
+                    setSearchParams((prev) => {
+                        const next = new URLSearchParams(prev);
+                        next.delete('teamId');
+                        return next;
+                    });
+                    return;
+                }
+            }
+
             setActiveTeam(team);
         });
 
         return () => {
             unsubTeam();
         };
-    }, [selectedTeamId]);
+    }, [selectedTeamId, currentUser?.uid, setSearchParams]);
 
     // 6. Subscribe to members of selected team
     useEffect(() => {
@@ -309,7 +410,9 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                     markTeamAsRead(selectedTeamId, currentUser.uid);
                 }
             },
-            () => {
+            (err) => {
+                console.warn('[SUBSCRIBE_TEAM_MESSAGES_ERROR]', err);
+                setMessages([]);
                 setMessagesLoading(false);
             }
         );
@@ -539,6 +642,95 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSendMessage();
+        }
+    };
+
+    // Helper: Confirm Delete Message
+    const handleConfirmDeleteMessage = async () => {
+        if (!messageToDelete || !activeTeam || !currentUser?.uid) return;
+        setIsDeletingMessage(true);
+        setDeleteMessageError(null);
+
+        try {
+            await deleteTeamMessage({
+                teamId: activeTeam.id,
+                messageId: messageToDelete.id,
+                userId: currentUser.uid,
+            });
+
+            // Optimistically update message list locally
+            setMessages((prev) => prev.filter((m) => m.id !== messageToDelete.id));
+            setMessageToDelete(null);
+        } catch (err: any) {
+            console.error('[DELETE_TEAM_MESSAGE_ERROR]', err);
+            setDeleteMessageError(err?.message || 'Failed to delete message. Please try again.');
+        } finally {
+            setIsDeletingMessage(false);
+        }
+    };
+
+    // Helper: Confirm Leave or Disband Team
+    const handleConfirmLeaveOrDisband = async () => {
+        if (!activeTeam || !currentUser?.uid) return;
+        setIsLeavingTeam(true);
+        setLeaveTeamError(null);
+
+        const teamToLeaveId = activeTeam.id;
+
+        try {
+            await leaveTeam({
+                teamId: teamToLeaveId,
+                userId: currentUser.uid,
+                userName: userProfile?.displayName || currentUser.displayName || 'Collaborator',
+            });
+
+            // 1. Immediately reset active team state
+            setActiveTeam(null);
+            setSelectedTeamId(null);
+            setMessages([]);
+            setMembers([]);
+            setShowLeaveModal(false);
+            setShowMembersDrawer(false);
+            setIsExpanded(false);
+
+            // 2. Remove teamId from URL
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete('teamId');
+                return next;
+            });
+
+            // 3. Remove from local teams list
+            setTeams((prev) => prev.filter((t) => t.id !== teamToLeaveId));
+        } catch (err: any) {
+            console.error('[LEAVE_TEAM_ERROR]', err);
+            setLeaveTeamError(err?.message || 'Failed to process team leave request.');
+        } finally {
+            setIsLeavingTeam(false);
+        }
+    };
+
+    // Helper: Confirm Remove Team Member (Owner Moderation)
+    const handleConfirmRemoveMember = async () => {
+        if (!memberToRemove || !activeTeam || !currentUser?.uid) return;
+        setIsRemovingMember(true);
+        setRemoveMemberError(null);
+
+        try {
+            await removeTeamMember({
+                teamId: activeTeam.id,
+                memberUserId: memberToRemove.userId,
+                requesterUserId: currentUser.uid,
+                memberName: memberToRemove.displayName,
+            });
+
+            setMembers((prev) => prev.filter((m) => m.userId !== memberToRemove.userId));
+            setMemberToRemove(null);
+        } catch (err: any) {
+            console.error('[REMOVE_MEMBER_ERROR]', err);
+            setRemoveMemberError(err?.message || 'Failed to remove member.');
+        } finally {
+            setIsRemovingMember(false);
         }
     };
 
@@ -1090,6 +1282,20 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                     <span>// INVITE MEMBERS</span>
                                                     <span className="text-[10px] text-emerald-400 font-bold">+</span>
                                                 </button>
+
+                                                <button
+                                                    type="button"
+                                                    role="menuitem"
+                                                    onClick={() => {
+                                                        setShowMenu(false);
+                                                        setLeaveTeamError(null);
+                                                        setShowLeaveModal(true);
+                                                    }}
+                                                    className="w-full text-left px-3.5 py-2.5 text-red-400 hover:text-red-300 hover:bg-red-950/20 transition-colors flex items-center justify-between cursor-pointer"
+                                                >
+                                                    <span>{isOwner && members.length <= 1 ? '// DISBAND SQUAD' : '// LEAVE SQUAD'}</span>
+                                                    <LogoutIcon className="w-3.5 h-3.5 text-red-400" />
+                                                </button>
                                             </div>
                                         )}
                                     </div>
@@ -1124,12 +1330,14 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                         ) : (
                                             messages.map((msg) => {
                                                 const isMe = msg.senderId === currentUser?.uid;
+                                                const canDelete = isMe || (activeTeam && activeTeam.ownerId === currentUser?.uid);
                                                 const timeStr = formatTimestamp(msg.createdAt);
+                                                const isMenuOpen = activeMessageMenuId === msg.id;
 
                                                 return (
                                                     <div
                                                         key={msg.id}
-                                                        className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                                                        className={`flex flex-col group relative ${isMe ? 'items-end' : 'items-start'}`}
                                                     >
                                                         {!isMe && (
                                                             <div className="flex items-center gap-1.5 mb-1 px-1">
@@ -1144,24 +1352,89 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                             </div>
                                                         )}
                                                         <div
-                                                            className={`max-w-[85%] sm:max-w-[70%] px-3 py-2 text-xs border ${
-                                                                isMe
-                                                                    ? 'bg-zinc-900 border-zinc-750 text-zinc-100'
-                                                                    : 'bg-[#131316] border-zinc-800 text-zinc-200'
+                                                            className={`relative max-w-[85%] sm:max-w-[70%] flex items-start gap-1.5 ${
+                                                                isMe ? 'flex-row-reverse' : 'flex-row'
                                                             }`}
                                                         >
-                                                            <div className="whitespace-pre-wrap break-words leading-relaxed font-mono">
-                                                                <ClickableMessageText text={msg.text} isSender={isMe} timestamp={timeStr} />
+                                                            <div
+                                                                className={`px-3 py-2 text-xs border ${
+                                                                    isMe
+                                                                        ? 'bg-zinc-900 border-zinc-750 text-zinc-100'
+                                                                        : 'bg-[#131316] border-zinc-800 text-zinc-200'
+                                                                }`}
+                                                            >
+                                                                <div className="whitespace-pre-wrap break-words leading-relaxed font-mono">
+                                                                    <ClickableMessageText text={msg.text} isSender={isMe} timestamp={timeStr} />
+                                                                </div>
+                                                                {timeStr && (
+                                                                    <div
+                                                                        className={`mt-1 text-[10px] ${
+                                                                            isMe
+                                                                                ? 'text-zinc-500 text-right'
+                                                                                : 'text-zinc-600 text-left'
+                                                                        }`}
+                                                                    >
+                                                                        {timeStr}
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                            {timeStr && (
-                                                                <div
-                                                                    className={`mt-1 text-[10px] ${
-                                                                        isMe
-                                                                            ? 'text-zinc-500 text-right'
-                                                                            : 'text-zinc-600 text-left'
-                                                                    }`}
-                                                                >
-                                                                    {timeStr}
+
+                                                            {/* Contextual message options (hover or menu open) */}
+                                                            {canDelete && (
+                                                                <div className="relative self-center flex-shrink-0">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setActiveMessageMenuId(isMenuOpen ? null : msg.id);
+                                                                        }}
+                                                                        className={`w-6 h-6 flex items-center justify-center text-zinc-500 hover:text-white bg-black/60 hover:bg-zinc-850 border border-zinc-800/80 hover:border-zinc-700 transition-all cursor-pointer ${
+                                                                            isMenuOpen
+                                                                                ? 'opacity-100 bg-zinc-800 text-white'
+                                                                                : 'opacity-0 group-hover:opacity-100'
+                                                                        }`}
+                                                                        title="Message options"
+                                                                        aria-label="Message options"
+                                                                    >
+                                                                        <EllipsisVerticalIcon className="w-3.5 h-3.5" />
+                                                                    </button>
+
+                                                                    {/* Contextual Dropdown */}
+                                                                    {isMenuOpen && (
+                                                                        <div
+                                                                            className={`absolute z-30 top-full mt-1 w-44 bg-[#0e0e11] border border-zinc-800 shadow-2xl font-mono text-xs py-1 divide-y divide-zinc-850 ${
+                                                                                isMe ? 'right-0' : 'left-0'
+                                                                            }`}
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                        >
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    setActiveMessageMenuId(null);
+                                                                                    if (navigator?.clipboard?.writeText) {
+                                                                                        navigator.clipboard.writeText(msg.text);
+                                                                                    }
+                                                                                }}
+                                                                                className="w-full text-left px-3 py-1.5 text-zinc-400 hover:text-white hover:bg-zinc-900 flex items-center justify-between cursor-pointer"
+                                                                            >
+                                                                                <span>// COPY TEXT</span>
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    setActiveMessageMenuId(null);
+                                                                                    setMessageToDelete(msg);
+                                                                                    setDeleteMessageError(null);
+                                                                                }}
+                                                                                className="w-full text-left px-3 py-1.5 text-red-400 hover:text-red-300 hover:bg-red-950/30 flex items-center justify-between cursor-pointer"
+                                                                            >
+                                                                                <span>
+                                                                                    {isMe ? '// DELETE MESSAGE' : '// MODERATE (DEL)'}
+                                                                                </span>
+                                                                                <TrashIcon className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -1272,33 +1545,64 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                                 </p>
                                                             </div>
                                                         </div>
-                                                        <span
-                                                            className={`text-[9px] font-bold px-1.5 py-0.5 border flex-shrink-0 ${
-                                                                m.role === 'owner'
-                                                                    ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
-                                                                    : 'bg-zinc-900 border-zinc-800 text-zinc-400'
-                                                            }`}
-                                                        >
-                                                            {m.role === 'owner' ? 'OWNER' : 'MEMBER'}
-                                                        </span>
+                                                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                            <span
+                                                                className={`text-[9px] font-bold px-1.5 py-0.5 border ${
+                                                                    m.role === 'owner'
+                                                                        ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
+                                                                        : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                                                                }`}
+                                                            >
+                                                                {m.role === 'owner' ? 'OWNER' : 'MEMBER'}
+                                                            </span>
+
+                                                            {/* Team Lead moderation: remove collaborator */}
+                                                            {isOwner && m.userId !== currentUser?.uid && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setMemberToRemove(m);
+                                                                        setRemoveMemberError(null);
+                                                                    }}
+                                                                    className="w-5 h-5 flex items-center justify-center text-zinc-500 hover:text-red-400 hover:bg-red-950/30 border border-transparent hover:border-red-900/40 text-[10px] transition-colors cursor-pointer"
+                                                                    title={`Remove ${m.displayName} from squad`}
+                                                                    aria-label={`Remove ${m.displayName}`}
+                                                                >
+                                                                    ✕
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
 
-                                            {isOwner && (
-                                                <div className="p-3 border-t border-zinc-800 bg-[#09090b] flex-shrink-0">
+                                            <div className="p-3 border-t border-zinc-800 bg-[#09090b] flex-shrink-0 space-y-2">
+                                                {isOwner ? (
                                                     <button
                                                         type="button"
                                                         onClick={() => {
                                                             setShowMembersDrawer(false);
                                                             setShowInviteModal(true);
                                                         }}
-                                                        className="w-full py-2 bg-zinc-900 border border-zinc-750 hover:border-zinc-500 text-white text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                                                        className="w-full py-2 bg-zinc-900 border border-zinc-750 hover:border-zinc-500 text-white text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer font-mono"
                                                     >
                                                         + // INVITE MORE MEMBERS
                                                     </button>
-                                                </div>
-                                            )}
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setShowMembersDrawer(false);
+                                                            setLeaveTeamError(null);
+                                                            setShowLeaveModal(true);
+                                                        }}
+                                                        className="w-full py-2 bg-red-950/20 border border-red-900/60 hover:bg-red-950/40 text-red-400 hover:text-red-300 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5 font-mono"
+                                                    >
+                                                        <LogoutIcon className="w-3.5 h-3.5" />
+                                                        <span>// LEAVE SQUAD</span>
+                                                    </button>
+                                                )}
+                                            </div>
                                         </aside>
                                     </>
                                 )}
@@ -1625,6 +1929,319 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* 5. DELETE MESSAGE CONFIRMATION MODAL */}
+            {messageToDelete && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-[5px] p-4 font-mono"
+                    onClick={() => {
+                        if (!isDeletingMessage) setMessageToDelete(null);
+                    }}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="delete-message-title"
+                >
+                    <div
+                        className="border border-zinc-800 bg-[#0c0c0e] max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl relative"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex items-start justify-between border-b border-zinc-800 pb-3">
+                            <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 bg-red-500 inline-block animate-pulse" />
+                                <h3 id="delete-message-title" className="text-sm font-bold text-white uppercase tracking-wider">
+                                    Delete this message?
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!isDeletingMessage) setMessageToDelete(null);
+                                }}
+                                disabled={isDeletingMessage}
+                                className="text-zinc-500 hover:text-white text-base leading-none p-1 cursor-pointer font-mono disabled:opacity-40"
+                                title="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                            This action cannot be undone. The message will be permanently removed for all squad members.
+                        </p>
+
+                        {messageToDelete.senderId !== currentUser?.uid && (
+                            <div className="p-2.5 bg-amber-950/40 border border-amber-800/60 text-amber-300 text-[11px] leading-relaxed">
+                                // TEAM LEAD MODERATION: You are deleting a message sent by {messageToDelete.senderName}.
+                            </div>
+                        )}
+
+                        {/* Message Preview Box */}
+                        <div className="p-3 bg-black/60 border border-zinc-850 text-xs text-zinc-300 max-h-32 overflow-y-auto whitespace-pre-wrap break-words border-l-2 border-l-zinc-600">
+                            <span className="text-[10px] text-zinc-500 block mb-1">
+                                {messageToDelete.senderName} • {formatTimestamp(messageToDelete.createdAt)}
+                            </span>
+                            "{messageToDelete.text}"
+                        </div>
+
+                        {deleteMessageError && (
+                            <div className="p-2.5 bg-red-950/60 border border-red-800 text-red-200 text-xs flex items-center gap-2">
+                                <span className="text-red-400 font-bold">!</span>
+                                <span>{deleteMessageError}</span>
+                            </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="pt-2 flex items-center justify-end gap-3 border-t border-zinc-800/80">
+                            <button
+                                type="button"
+                                onClick={() => setMessageToDelete(null)}
+                                disabled={isDeletingMessage}
+                                className="px-4 py-2 bg-transparent border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white uppercase transition-colors text-xs font-bold cursor-pointer disabled:opacity-40 font-mono"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmDeleteMessage}
+                                disabled={isDeletingMessage}
+                                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-2 font-mono"
+                            >
+                                {isDeletingMessage ? (
+                                    <>
+                                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        <span>DELETING...</span>
+                                    </>
+                                ) : (
+                                    <span>Delete message</span>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 6. LEAVE / DISBAND TEAM CONFIRMATION MODAL */}
+            {showLeaveModal && activeTeam && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-[5px] p-4 font-mono"
+                    onClick={() => {
+                        if (!isLeavingTeam) setShowLeaveModal(false);
+                    }}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="leave-team-title"
+                >
+                    <div
+                        className="border border-zinc-800 bg-[#0c0c0e] max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl relative"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex items-start justify-between border-b border-zinc-800 pb-3">
+                            <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 bg-red-500 inline-block" />
+                                <h3 id="leave-team-title" className="text-sm font-bold text-white uppercase tracking-wider">
+                                    {isOwner && members.length > 1
+                                        ? 'Cannot Leave Team'
+                                        : isOwner && members.length <= 1
+                                        ? 'Disband this team?'
+                                        : 'Leave this team?'}
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!isLeavingTeam) setShowLeaveModal(false);
+                                }}
+                                disabled={isLeavingTeam}
+                                className="text-zinc-500 hover:text-white text-base leading-none p-1 cursor-pointer font-mono disabled:opacity-40"
+                                title="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {isOwner && members.length > 1 ? (
+                            /* Case 1: Team Owner with remaining members cannot abandon squad */
+                            <div className="space-y-4">
+                                <p className="text-xs text-zinc-300 leading-relaxed">
+                                    As the team lead, you cannot abandon an active squad while other collaborators are assigned to "{activeTeam.name}".
+                                </p>
+                                <div className="p-3 bg-amber-950/40 border border-amber-800 text-amber-300 text-xs leading-relaxed">
+                                    // SQUAD RESTRICTION: To leave, remove other collaborators or transfer ownership of the project first.
+                                </div>
+                                <div className="pt-2 flex justify-end border-t border-zinc-800/80">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowLeaveModal(false)}
+                                        className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold uppercase tracking-wider cursor-pointer font-mono"
+                                    >
+                                        Understood
+                                    </button>
+                                </div>
+                            </div>
+                        ) : isOwner && members.length <= 1 ? (
+                            /* Case 2: Team Owner and sole member can disband/delete the team */
+                            <div className="space-y-4">
+                                <p className="text-xs text-zinc-300 leading-relaxed">
+                                    You are the creator and sole member of "{activeTeam.name}". Leaving will permanently disband and delete this team workspace.
+                                </p>
+                                {leaveTeamError && (
+                                    <div className="p-2.5 bg-red-950/60 border border-red-800 text-red-200 text-xs">
+                                        {leaveTeamError}
+                                    </div>
+                                )}
+                                <div className="pt-2 flex items-center justify-end gap-3 border-t border-zinc-800/80">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowLeaveModal(false)}
+                                        disabled={isLeavingTeam}
+                                        className="px-4 py-2 bg-transparent border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white uppercase transition-colors text-xs font-bold cursor-pointer disabled:opacity-40 font-mono"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleConfirmLeaveOrDisband}
+                                        disabled={isLeavingTeam}
+                                        className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-2 font-mono"
+                                    >
+                                        {isLeavingTeam ? (
+                                            <>
+                                                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                <span>DISBANDING...</span>
+                                            </>
+                                        ) : (
+                                            <span>Disband & Delete</span>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            /* Case 3: Regular team member leaving voluntarily */
+                            <div className="space-y-4">
+                                <p className="text-xs text-zinc-300 leading-relaxed">
+                                    You'll lose access to this team's chat and collaboration space. You may need a new invitation to rejoin.
+                                </p>
+                                <div className="p-2.5 bg-black/60 border border-zinc-800 text-xs text-zinc-400 space-y-0.5">
+                                    <div>Squad: <span className="text-white font-bold">{activeTeam.name}</span></div>
+                                    {activeTeam.projectTitle && (
+                                        <div className="text-[11px] text-zinc-500">Project: {activeTeam.projectTitle}</div>
+                                    )}
+                                </div>
+                                {leaveTeamError && (
+                                    <div className="p-2.5 bg-red-950/60 border border-red-800 text-red-200 text-xs">
+                                        {leaveTeamError}
+                                    </div>
+                                )}
+                                <div className="pt-2 flex items-center justify-end gap-3 border-t border-zinc-800/80">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowLeaveModal(false)}
+                                        disabled={isLeavingTeam}
+                                        className="px-4 py-2 bg-transparent border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white uppercase transition-colors text-xs font-bold cursor-pointer disabled:opacity-40 font-mono"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleConfirmLeaveOrDisband}
+                                        disabled={isLeavingTeam}
+                                        className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-2 font-mono"
+                                    >
+                                        {isLeavingTeam ? (
+                                            <>
+                                                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                <span>LEAVING...</span>
+                                            </>
+                                        ) : (
+                                            <span>Leave Team</span>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* 7. REMOVE MEMBER CONFIRMATION MODAL (LEAD MODERATION) */}
+            {memberToRemove && activeTeam && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-[5px] p-4 font-mono"
+                    onClick={() => {
+                        if (!isRemovingMember) setMemberToRemove(null);
+                    }}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="remove-member-title"
+                >
+                    <div
+                        className="border border-zinc-800 bg-[#0c0c0e] max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl relative"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex items-start justify-between border-b border-zinc-800 pb-3">
+                            <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 bg-amber-500 inline-block" />
+                                <h3 id="remove-member-title" className="text-sm font-bold text-white uppercase tracking-wider">
+                                    Remove collaborator?
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!isRemovingMember) setMemberToRemove(null);
+                                }}
+                                disabled={isRemovingMember}
+                                className="text-zinc-500 hover:text-white text-base leading-none p-1 cursor-pointer font-mono disabled:opacity-40"
+                                title="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <p className="text-xs text-zinc-300 leading-relaxed">
+                            Are you sure you want to remove <span className="text-white font-bold">{memberToRemove.displayName}</span> from "{activeTeam.name}"?
+                        </p>
+                        <p className="text-[11px] text-zinc-500 leading-relaxed">
+                            They will immediately lose access to this team's chat and collaborative workspace.
+                        </p>
+
+                        {removeMemberError && (
+                            <div className="p-2.5 bg-red-950/60 border border-red-800 text-red-200 text-xs">
+                                {removeMemberError}
+                            </div>
+                        )}
+
+                        <div className="pt-2 flex items-center justify-end gap-3 border-t border-zinc-800/80">
+                            <button
+                                type="button"
+                                onClick={() => setMemberToRemove(null)}
+                                disabled={isRemovingMember}
+                                className="px-4 py-2 bg-transparent border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white uppercase transition-colors text-xs font-bold cursor-pointer disabled:opacity-40 font-mono"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmRemoveMember}
+                                disabled={isRemovingMember}
+                                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-2 font-mono"
+                            >
+                                {isRemovingMember ? (
+                                    <>
+                                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        <span>REMOVING...</span>
+                                    </>
+                                ) : (
+                                    <span>Remove Member</span>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

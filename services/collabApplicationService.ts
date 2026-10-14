@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { COLLECTIONS, sanitizeForFirestore } from './firestoreService';
+import { sendNotification } from './notificationService';
 import type { CollabApplication, CollabApplicationStatus, CollabRole, InvoxUser, Project, User } from '../types';
 
 /**
@@ -154,20 +155,25 @@ export const submitCollabApplication = async ({
     await setDoc(appDocRef, sanitized);
 
     // Create notification for creator
-    if (creatorId) {
+    if (creatorId && creatorId !== applicantUser.uid) {
         try {
-            await addDoc(collection(db, COLLECTIONS.notifications), sanitizeForFirestore({
+            await sendNotification({
                 recipientId: creatorId,
-                senderId: applicantUser.uid,
+                actorId: applicantUser.uid,
+                actorName: displayName,
+                actorAvatar: photoURL || null,
+                actorUsername: username,
                 type: 'collab_application',
                 title: 'New Collab Application',
-                message: `${displayName} applied for "${role.title}" on "${collabTitle}".`,
-                collabId: collab.id,
-                roleId: role.id,
-                applicationId,
-                read: false,
-                createdAt: serverTimestamp(),
-            }));
+                body: `${displayName} applied for "${role.title}" on "${collabTitle}".`,
+                targetType: 'collab',
+                targetId: collab.id,
+                metadata: {
+                    collabId: collab.id,
+                    roleId: role.id,
+                    applicationId,
+                },
+            });
         } catch (notifErr) {
             console.warn('[NOTIF_CREATION_WARN] Could not write creator notification:', notifErr);
         }
@@ -326,18 +332,22 @@ export const acceptCollabApplication = async ({
 
     // Notify applicant
     try {
-        await addDoc(collection(db, COLLECTIONS.notifications), sanitizeForFirestore({
+        await sendNotification({
             recipientId: application.applicantId,
-            senderId: application.creatorId,
+            actorId: application.creatorId,
+            actorName: application.collabCreatorName,
+            actorAvatar: application.collabCreatorAvatar || null,
             type: 'collab_accepted',
             title: 'Application Accepted!',
-            message: `Congratulations! Your application for "${application.roleTitle}" on "${application.collabTitle}" was accepted.`,
-            collabId: application.collabId,
-            roleId: application.roleId,
-            applicationId: application.id,
-            read: false,
-            createdAt: serverTimestamp(),
-        }));
+            body: `Congratulations! Your application for "${application.roleTitle}" on "${application.collabTitle}" was accepted.`,
+            targetType: 'application',
+            targetId: application.id,
+            metadata: {
+                collabId: application.collabId,
+                roleId: application.roleId,
+                applicationId: application.id,
+            },
+        });
     } catch (notifErr) {
         console.warn('[NOTIF_ACCEPTED_WARN]', notifErr);
     }
@@ -355,18 +365,22 @@ export const declineCollabApplication = async (application: CollabApplication): 
 
     // Notify applicant
     try {
-        await addDoc(collection(db, COLLECTIONS.notifications), sanitizeForFirestore({
+        await sendNotification({
             recipientId: application.applicantId,
-            senderId: application.creatorId,
+            actorId: application.creatorId,
+            actorName: application.collabCreatorName,
+            actorAvatar: application.collabCreatorAvatar || null,
             type: 'collab_declined',
             title: 'Application Update',
-            message: `Your application for "${application.roleTitle}" on "${application.collabTitle}" was declined.`,
-            collabId: application.collabId,
-            roleId: application.roleId,
-            applicationId: application.id,
-            read: false,
-            createdAt: serverTimestamp(),
-        }));
+            body: `Your application for "${application.roleTitle}" on "${application.collabTitle}" was declined.`,
+            targetType: 'application',
+            targetId: application.id,
+            metadata: {
+                collabId: application.collabId,
+                roleId: application.roleId,
+                applicationId: application.id,
+            },
+        });
     } catch (notifErr) {
         console.warn('[NOTIF_DECLINED_WARN]', notifErr);
     }
