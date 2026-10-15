@@ -23,14 +23,31 @@ import {
     removeTeamMember,
     deleteTeam,
     transferTeamOwnership,
+    updateTeamJoinPolicy,
+    subscribeToTeamJoinRequests,
+    approveTeamJoinRequest,
+    rejectTeamJoinRequest,
     type Team,
     type TeamMember,
     type TeamMessage,
     type TeamInvitation,
+    type TeamJoinPolicy,
+    type TeamJoinRequest,
 } from '../../services/teamService';
 import { subscribeToUserPosts } from '../../services/postService';
 import { handleImageError } from '../utils/imageUtils';
-import { EllipsisVerticalIcon, Maximize2Icon, Minimize2Icon, TrashIcon, LogoutIcon, ShieldCheckIcon } from '../ui/Icons';
+import {
+    EllipsisVerticalIcon,
+    Maximize2Icon,
+    Minimize2Icon,
+    TrashIcon,
+    LogoutIcon,
+    ShieldCheckIcon,
+    ClockIcon,
+    CheckIcon,
+    LockClosedIcon,
+    UsersIcon,
+} from '../ui/Icons';
 import { ClickableMessageText } from '../ui/ClickableMessageText';
 import { TeamInvitationCard } from '../ui/TeamInvitationCard';
 import { getTeamInvitationUrl } from '../../utils/urlUtils';
@@ -74,6 +91,19 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
     const [showInviteModal, setShowInviteModal] = useState<boolean>(false);
     const [showProjectModal, setShowProjectModal] = useState<boolean>(false);
     const [showMenu, setShowMenu] = useState<boolean>(false);
+
+    // Join Access & Join Requests state
+    const [showJoinSettingsModal, setShowJoinSettingsModal] = useState<boolean>(false);
+    const [showJoinRequestsModal, setShowJoinRequestsModal] = useState<boolean>(false);
+    const [selectedJoinPolicy, setSelectedJoinPolicy] = useState<TeamJoinPolicy>('open');
+    const [isUpdatingJoinPolicy, setIsUpdatingJoinPolicy] = useState<boolean>(false);
+    const [joinPolicyFeedback, setJoinPolicyFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [joinRequests, setJoinRequests] = useState<TeamJoinRequest[]>([]);
+    const [loadingJoinRequests, setLoadingJoinRequests] = useState<boolean>(false);
+    const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
+    const [joinRequestsFeedback, setJoinRequestsFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [membersTab, setMembersTab] = useState<'roster' | 'requests' | 'access'>('roster');
+    const [rejectionReasonMap, setRejectionReasonMap] = useState<Record<string, string>>({});
 
     // Message actions & deletion state
     const [activeMessageMenuId, setActiveMessageMenuId] = useState<string | null>(null);
@@ -208,6 +238,8 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                 else if (showTransferModal && !isTransferringOwnership) setShowTransferModal(false);
                 else if (showLeaveModal && !isLeavingTeam) setShowLeaveModal(false);
                 else if (memberToRemove && !isRemovingMember) setMemberToRemove(null);
+                else if (showJoinSettingsModal) setShowJoinSettingsModal(false);
+                else if (showJoinRequestsModal) setShowJoinRequestsModal(false);
                 else if (showInviteModal) setShowInviteModal(false);
                 else if (showProjectModal) setShowProjectModal(false);
                 else if (showCreateModal) setShowCreateModal(false);
@@ -221,6 +253,8 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
             showTransferModal ||
             showLeaveModal ||
             memberToRemove ||
+            showJoinSettingsModal ||
+            showJoinRequestsModal ||
             showInviteModal ||
             showProjectModal ||
             showCreateModal ||
@@ -241,6 +275,8 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         isLeavingTeam,
         memberToRemove,
         isRemovingMember,
+        showJoinSettingsModal,
+        showJoinRequestsModal,
         showInviteModal,
         showProjectModal,
         showCreateModal,
@@ -248,10 +284,15 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         isExpanded,
     ]);
 
-    // Reset menu when switching teams
+    // Reset menu and feedback when switching teams
     useEffect(() => {
         setShowMenu(false);
         setActiveMessageMenuId(null);
+        setShowJoinSettingsModal(false);
+        setShowJoinRequestsModal(false);
+        setJoinPolicyFeedback(null);
+        setJoinRequestsFeedback(null);
+        setMembersTab('roster');
     }, [selectedTeamId]);
 
     // 1. Sync URL teamId with local state
@@ -380,6 +421,9 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
             }
 
             setActiveTeam(team);
+            if (team.joinPolicy) {
+                setSelectedJoinPolicy(team.joinPolicy);
+            }
         });
 
         return () => {
@@ -456,6 +500,33 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
             unsubInvites();
         };
     }, [selectedTeamId]);
+
+    // 9b. Subscribe to join requests for selected team
+    useEffect(() => {
+        if (!selectedTeamId || !currentUser?.uid) {
+            setJoinRequests([]);
+            setLoadingJoinRequests(false);
+            return;
+        }
+
+        setLoadingJoinRequests(true);
+        const unsubRequests = subscribeToTeamJoinRequests(
+            selectedTeamId,
+            (reqs) => {
+                setJoinRequests(reqs);
+                setLoadingJoinRequests(false);
+            },
+            (err) => {
+                console.warn('[SUBSCRIBE_JOIN_REQUESTS_WARN]', err);
+                setJoinRequests([]);
+                setLoadingJoinRequests(false);
+            }
+        );
+
+        return () => {
+            unsubRequests();
+        };
+    }, [selectedTeamId, currentUser?.uid]);
 
     // 10. Fetch accepted collaborators for the project
     useEffect(() => {
@@ -543,6 +614,11 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
     const isOwner = Boolean(
         currentUser?.uid && activeTeam && (activeTeam.ownerId === currentUser.uid)
     );
+
+    // Pending join requests count for badges and indicators
+    const pendingJoinRequestsCount = useMemo(() => {
+        return joinRequests.filter((r) => r.status === 'PENDING').length;
+    }, [joinRequests]);
 
     // Eligible collaborators for ownership transfer (all current squad members except the owner)
     const eligibleMembers = useMemo(() => {
@@ -905,6 +981,119 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         } finally {
             setIsJoining(false);
         }
+    };
+
+    // Helper: Update team join policy
+    const handleSaveJoinPolicy = async (policyToSave?: TeamJoinPolicy) => {
+        const targetPolicy = policyToSave || selectedJoinPolicy;
+        if (!activeTeam || !currentUser?.uid) return;
+        if (!isOwner) {
+            setJoinPolicyFeedback({
+                type: 'error',
+                message: 'Unauthorized: Only team owner can update join access settings.',
+            });
+            return;
+        }
+
+        setIsUpdatingJoinPolicy(true);
+        setJoinPolicyFeedback(null);
+        try {
+            await updateTeamJoinPolicy(activeTeam.id, targetPolicy, currentUser.uid);
+            setSelectedJoinPolicy(targetPolicy);
+            setJoinPolicyFeedback({
+                type: 'success',
+                message: `Join settings updated: "${
+                    targetPolicy === 'approval_required'
+                        ? 'APPROVAL REQUIRED'
+                        : 'ANYONE WITH THE LINK'
+                }".`,
+            });
+            setTimeout(() => {
+                setJoinPolicyFeedback(null);
+            }, 3500);
+        } catch (err: any) {
+            setJoinPolicyFeedback({
+                type: 'error',
+                message: err?.message || 'Failed to update team join settings.',
+            });
+        } finally {
+            setIsUpdatingJoinPolicy(false);
+        }
+    };
+
+    // Helper: Approve a join request
+    const handleApproveJoinRequest = async (req: TeamJoinRequest) => {
+        if (!activeTeam || !currentUser?.uid) return;
+        if (!isOwner) {
+            setJoinRequestsFeedback({
+                type: 'error',
+                message: 'Unauthorized: Only team owner can approve join requests.',
+            });
+            return;
+        }
+
+        setProcessingRequestId(req.id);
+        setJoinRequestsFeedback(null);
+        try {
+            const approverName = currentUser.displayName || userProfile?.displayName || 'Team Owner';
+            await approveTeamJoinRequest(req.teamId, req.userId, currentUser.uid, approverName);
+            setJoinRequestsFeedback({
+                type: 'success',
+                message: `Approved ${req.displayName || 'applicant'} for membership.`,
+            });
+            setTimeout(() => {
+                setJoinRequestsFeedback(null);
+            }, 3500);
+        } catch (err: any) {
+            setJoinRequestsFeedback({
+                type: 'error',
+                message: err?.message || 'Failed to process approval.',
+            });
+        } finally {
+            setProcessingRequestId(null);
+        }
+    };
+
+    // Helper: Reject a join request
+    const handleRejectJoinRequest = async (req: TeamJoinRequest) => {
+        if (!activeTeam || !currentUser?.uid) return;
+        if (!isOwner) {
+            setJoinRequestsFeedback({
+                type: 'error',
+                message: 'Unauthorized: Only team owner can reject join requests.',
+            });
+            return;
+        }
+
+        setProcessingRequestId(req.id);
+        setJoinRequestsFeedback(null);
+        try {
+            const rejecterName = currentUser.displayName || userProfile?.displayName || 'Team Owner';
+            const reason = rejectionReasonMap[req.id]?.trim() || undefined;
+            await rejectTeamJoinRequest(req.teamId, req.userId, currentUser.uid, rejecterName, reason);
+            setJoinRequestsFeedback({
+                type: 'success',
+                message: `Request from ${req.displayName || 'applicant'} was declined.`,
+            });
+            setTimeout(() => {
+                setJoinRequestsFeedback(null);
+            }, 3500);
+        } catch (err: any) {
+            setJoinRequestsFeedback({
+                type: 'error',
+                message: err?.message || 'Failed to reject join request.',
+            });
+        } finally {
+            setProcessingRequestId(null);
+        }
+    };
+
+    // Helper: Store custom rejection reason note for request
+    const handleSetRejectionReason = (reqId: string, reason: string) => {
+        setRejectionReasonMap((prev) => ({
+            ...prev,
+            [reqId]: reason,
+        }));
     };
 
     // Helper: Timestamp formatter matching Inbox compact format
@@ -1338,6 +1527,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                     role="menuitem"
                                                     onClick={() => {
                                                         setShowMenu(false);
+                                                        setMembersTab('roster');
                                                         setShowMembersDrawer(true);
                                                     }}
                                                     className="w-full text-left px-3.5 py-2.5 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
@@ -1347,6 +1537,62 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                         [{members.length || activeTeam.memberCount || 1}]
                                                     </span>
                                                 </button>
+
+                                                {isOwner && (
+                                                    <button
+                                                        type="button"
+                                                        role="menuitem"
+                                                        onClick={() => {
+                                                            setShowMenu(false);
+                                                            setJoinRequestsFeedback(null);
+                                                            setShowJoinRequestsModal(true);
+                                                        }}
+                                                        className="w-full text-left px-3.5 py-2.5 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
+                                                    >
+                                                        <span className="flex items-center gap-1.5">
+                                                            <span>// JOIN REQUESTS</span>
+                                                            {pendingJoinRequestsCount > 0 && (
+                                                                <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
+                                                            )}
+                                                        </span>
+                                                        {pendingJoinRequestsCount > 0 ? (
+                                                            <span className="text-[9px] font-bold text-amber-300 bg-amber-950/80 border border-amber-700/90 px-1.5 py-0.2">
+                                                                [{pendingJoinRequestsCount} PENDING]
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] text-zinc-500 font-mono">
+                                                                [{joinRequests.length}]
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                )}
+
+                                                {isOwner && (
+                                                    <button
+                                                        type="button"
+                                                        role="menuitem"
+                                                        onClick={() => {
+                                                            setShowMenu(false);
+                                                            setSelectedJoinPolicy(activeTeam.joinPolicy || 'open');
+                                                            setJoinPolicyFeedback(null);
+                                                            setShowJoinSettingsModal(true);
+                                                        }}
+                                                        className="w-full text-left px-3.5 py-2.5 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
+                                                    >
+                                                        <span>// TEAM ACCESS</span>
+                                                        <span
+                                                            className={`text-[9px] font-bold px-1.5 py-0.2 border ${
+                                                                (activeTeam.joinPolicy || 'open') === 'approval_required'
+                                                                    ? 'bg-purple-950/60 border-purple-800 text-purple-300'
+                                                                    : 'bg-zinc-900 border-zinc-750 text-zinc-400'
+                                                            }`}
+                                                        >
+                                                            {(activeTeam.joinPolicy || 'open') === 'approval_required'
+                                                                ? 'APPROVAL REQ'
+                                                                : 'ANYONE WITH LINK'}
+                                                        </span>
+                                                    </button>
+                                                )}
 
                                                 {isOwner && (
                                                     <button
@@ -1585,143 +1831,423 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                             role="region"
                                             aria-label="Team Members"
                                         >
-                                            <div className="px-3.5 py-3 border-b border-zinc-800 flex items-center justify-between bg-black/40 flex-shrink-0">
-                                                <div>
-                                                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block leading-none">
-                                                        // ROSTER
-                                                    </span>
-                                                    <h4 className="text-xs font-bold text-white uppercase tracking-wider mt-1">
-                                                        TEAM MEMBERS ({members.length})
-                                                    </h4>
+                                            {/* Drawer Header with Tabs */}
+                                            <div className="border-b border-zinc-800 bg-black/40 flex-shrink-0">
+                                                <div className="px-3.5 py-2.5 flex items-center justify-between">
+                                                    <div>
+                                                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block leading-none">
+                                                            // MANAGEMENT
+                                                        </span>
+                                                        <h4 className="text-xs font-bold text-white uppercase tracking-wider mt-1 truncate max-w-[180px]">
+                                                            {activeTeam.name}
+                                                        </h4>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowMembersDrawer(false)}
+                                                        className="w-6 h-6 flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-900 border border-transparent hover:border-zinc-800 text-xs cursor-pointer font-mono transition-colors"
+                                                        title="Close panel"
+                                                    >
+                                                        ✕
+                                                    </button>
                                                 </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowMembersDrawer(false)}
-                                                    className="w-6 h-6 flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-900 border border-transparent hover:border-zinc-800 text-xs cursor-pointer font-mono transition-colors"
-                                                    title="Close team members"
-                                                >
-                                                    ✕
-                                                </button>
+
+                                                {/* Tab navigation */}
+                                                <div className="flex border-t border-zinc-800/80 bg-zinc-950/80 text-[10px] divide-x divide-zinc-800">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setMembersTab('roster')}
+                                                        className={`flex-1 py-1.5 px-2 text-center font-bold tracking-wider uppercase transition-colors cursor-pointer truncate ${
+                                                            membersTab === 'roster'
+                                                                ? 'bg-[#0c0c0e] text-white border-b-2 border-b-emerald-400'
+                                                                : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                                                        }`}
+                                                    >
+                                                        ROSTER ({members.length})
+                                                    </button>
+                                                    {isOwner && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setMembersTab('requests')}
+                                                            className={`flex-1 py-1.5 px-2 text-center font-bold tracking-wider uppercase transition-colors cursor-pointer flex items-center justify-center gap-1 truncate ${
+                                                                membersTab === 'requests'
+                                                                    ? 'bg-[#0c0c0e] text-white border-b-2 border-b-amber-400'
+                                                                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                                                            }`}
+                                                        >
+                                                            <span>REQUESTS</span>
+                                                            {pendingJoinRequestsCount > 0 ? (
+                                                                <span className="px-1 py-0.2 text-[9px] bg-amber-950/80 border border-amber-700 text-amber-300 font-bold">
+                                                                    {pendingJoinRequestsCount}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-zinc-600">({joinRequests.length})</span>
+                                                            )}
+                                                        </button>
+                                                    )}
+                                                    {isOwner && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setMembersTab('access')}
+                                                            className={`flex-1 py-1.5 px-2 text-center font-bold tracking-wider uppercase transition-colors cursor-pointer truncate ${
+                                                                membersTab === 'access'
+                                                                    ? 'bg-[#0c0c0e] text-white border-b-2 border-b-purple-400'
+                                                                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                                                            }`}
+                                                        >
+                                                            ACCESS
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
 
-                                            <div className="flex-1 overflow-y-auto divide-y divide-zinc-850/60 p-3 space-y-1">
-                                                {members.map((m) => (
-                                                    <div
-                                                        key={m.userId}
-                                                        className="py-2.5 flex items-center justify-between gap-2"
-                                                    >
-                                                        <div className="flex items-center gap-2 min-w-0">
-                                                            <div className="w-7 h-7 bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0 text-xs font-bold text-zinc-300 overflow-hidden">
-                                                                {m.photoURL ? (
-                                                                    <img
-                                                                        src={m.photoURL}
-                                                                        alt={m.displayName}
-                                                                        className="w-full h-full object-cover"
-                                                                        onError={handleImageError}
-                                                                    />
-                                                                ) : (
-                                                                    <span>{m.displayName.charAt(0).toUpperCase()}</span>
-                                                                )}
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <p className="text-xs text-white font-bold truncate">
-                                                                    {m.displayName}
-                                                                    {m.userId === currentUser?.uid && (
-                                                                        <span className="text-zinc-500 text-[10px] font-normal ml-1">
-                                                                            (you)
-                                                                        </span>
-                                                                    )}
-                                                                </p>
-                                                                <p className="text-[10px] text-zinc-500 truncate">
-                                                                    {m.projectRole ||
-                                                                        (m.role === 'owner' ? 'Project Lead' : 'Collaborator')}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                                                            <span
-                                                                className={`text-[9px] font-bold px-1.5 py-0.5 border ${
-                                                                    m.role === 'owner'
-                                                                        ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
-                                                                        : 'bg-zinc-900 border-zinc-800 text-zinc-400'
-                                                                }`}
+                                            {/* TAB 1: MEMBERS ROSTER */}
+                                            {membersTab === 'roster' && (
+                                                <>
+                                                    <div className="flex-1 overflow-y-auto divide-y divide-zinc-850/60 p-3 space-y-1">
+                                                        {members.map((m) => (
+                                                            <div
+                                                                key={m.userId}
+                                                                className="py-2.5 flex items-center justify-between gap-2"
                                                             >
-                                                                {m.role === 'owner' ? 'OWNER' : 'MEMBER'}
-                                                            </span>
+                                                                <div className="flex items-center gap-2 min-w-0">
+                                                                    <div className="w-7 h-7 bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0 text-xs font-bold text-zinc-300 overflow-hidden">
+                                                                        {m.photoURL ? (
+                                                                            <img
+                                                                                src={m.photoURL}
+                                                                                alt={m.displayName}
+                                                                                className="w-full h-full object-cover"
+                                                                                onError={handleImageError}
+                                                                            />
+                                                                        ) : (
+                                                                            <span>{m.displayName.charAt(0).toUpperCase()}</span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-xs text-white font-bold truncate">
+                                                                            {m.displayName}
+                                                                            {m.userId === currentUser?.uid && (
+                                                                                <span className="text-zinc-500 text-[10px] font-normal ml-1">
+                                                                                    (you)
+                                                                                </span>
+                                                                            )}
+                                                                        </p>
+                                                                        <p className="text-[10px] text-zinc-500 truncate">
+                                                                            {m.projectRole ||
+                                                                                (m.role === 'owner' ? 'Project Lead' : 'Collaborator')}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                                    <span
+                                                                        className={`text-[9px] font-bold px-1.5 py-0.5 border ${
+                                                                            m.role === 'owner'
+                                                                                ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
+                                                                                : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                                                                        }`}
+                                                                    >
+                                                                        {m.role === 'owner' ? 'OWNER' : 'MEMBER'}
+                                                                    </span>
 
-                                                            {/* Team Lead: transfer ownership to this member */}
-                                                            {isOwner && m.userId !== currentUser?.uid && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleOpenTransferModal(m.userId)}
-                                                                    className="px-1.5 py-0.5 text-[9px] font-mono text-amber-400 hover:text-amber-300 bg-amber-950/30 border border-amber-900/40 hover:border-amber-700/80 transition-colors cursor-pointer"
-                                                                    title={`Transfer squad ownership to ${m.displayName}`}
-                                                                    aria-label={`Transfer ownership to ${m.displayName}`}
-                                                                >
-                                                                    TRANSFER
-                                                                </button>
-                                                            )}
+                                                                    {/* Team Lead: transfer ownership to this member */}
+                                                                    {isOwner && m.userId !== currentUser?.uid && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleOpenTransferModal(m.userId)}
+                                                                            className="px-1.5 py-0.5 text-[9px] font-mono text-amber-400 hover:text-amber-300 bg-amber-950/30 border border-amber-900/40 hover:border-amber-700/80 transition-colors cursor-pointer"
+                                                                            title={`Transfer squad ownership to ${m.displayName}`}
+                                                                            aria-label={`Transfer ownership to ${m.displayName}`}
+                                                                        >
+                                                                            TRANSFER
+                                                                        </button>
+                                                                    )}
 
-                                                            {/* Team Lead moderation: remove collaborator */}
-                                                            {isOwner && m.userId !== currentUser?.uid && (
+                                                                    {/* Team Lead moderation: remove collaborator */}
+                                                                    {isOwner && m.userId !== currentUser?.uid && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setMemberToRemove(m);
+                                                                                setRemoveMemberError(null);
+                                                                            }}
+                                                                            className="w-5 h-5 flex items-center justify-center text-zinc-500 hover:text-red-400 hover:bg-red-950/30 border border-transparent hover:border-red-900/40 text-[10px] transition-colors cursor-pointer"
+                                                                            title={`Remove ${m.displayName} from squad`}
+                                                                            aria-label={`Remove ${m.displayName}`}
+                                                                        >
+                                                                            ✕
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+
+                                                    <div className="p-3 border-t border-zinc-800 bg-[#09090b] flex-shrink-0 space-y-2">
+                                                        {isOwner ? (
+                                                            <>
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => {
-                                                                        setMemberToRemove(m);
-                                                                        setRemoveMemberError(null);
+                                                                        setShowMembersDrawer(false);
+                                                                        setShowInviteModal(true);
                                                                     }}
-                                                                    className="w-5 h-5 flex items-center justify-center text-zinc-500 hover:text-red-400 hover:bg-red-950/30 border border-transparent hover:border-red-900/40 text-[10px] transition-colors cursor-pointer"
-                                                                    title={`Remove ${m.displayName} from squad`}
-                                                                    aria-label={`Remove ${m.displayName}`}
+                                                                    className="w-full py-2 bg-zinc-900 border border-zinc-750 hover:border-zinc-500 text-white text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer font-mono"
                                                                 >
-                                                                    ✕
+                                                                    + // INVITE MORE MEMBERS
                                                                 </button>
-                                                            )}
-                                                        </div>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setShowMembersDrawer(false);
+                                                                        handleOpenTransferModal();
+                                                                    }}
+                                                                    className="w-full py-2 bg-amber-950/20 border border-amber-800/60 hover:bg-amber-950/40 text-amber-400 hover:text-amber-300 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5 font-mono"
+                                                                >
+                                                                    <ShieldCheckIcon className="w-3.5 h-3.5 text-amber-400" />
+                                                                    <span>// TRANSFER OWNERSHIP</span>
+                                                                </button>
+                                                            </>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setShowMembersDrawer(false);
+                                                                    setLeaveTeamError(null);
+                                                                    setShowLeaveModal(true);
+                                                                }}
+                                                                className="w-full py-2 bg-red-950/20 border border-red-900/60 hover:bg-red-950/40 text-red-400 hover:text-red-300 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5 font-mono"
+                                                            >
+                                                                <LogoutIcon className="w-3.5 h-3.5" />
+                                                                <span>// LEAVE SQUAD</span>
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                ))}
-                                            </div>
+                                                </>
+                                            )}
 
-                                            <div className="p-3 border-t border-zinc-800 bg-[#09090b] flex-shrink-0 space-y-2">
-                                                {isOwner ? (
-                                                    <>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setShowMembersDrawer(false);
-                                                                setShowInviteModal(true);
-                                                            }}
-                                                            className="w-full py-2 bg-zinc-900 border border-zinc-750 hover:border-zinc-500 text-white text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer font-mono"
+                                            {/* TAB 2: JOIN REQUESTS */}
+                                            {membersTab === 'requests' && isOwner && (
+                                                <div className="flex-1 flex flex-col min-h-0">
+                                                    {/* Feedback banner */}
+                                                    {joinRequestsFeedback && (
+                                                        <div
+                                                            className={`p-2.5 text-[11px] border m-3 mb-0 flex items-center gap-2 ${
+                                                                joinRequestsFeedback.type === 'success'
+                                                                    ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300'
+                                                                    : 'bg-red-950/60 border-red-800 text-red-300'
+                                                            }`}
                                                         >
-                                                            + // INVITE MORE MEMBERS
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setShowMembersDrawer(false);
-                                                                handleOpenTransferModal();
-                                                            }}
-                                                            className="w-full py-2 bg-amber-950/20 border border-amber-800/60 hover:bg-amber-950/40 text-amber-400 hover:text-amber-300 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5 font-mono"
-                                                        >
-                                                            <ShieldCheckIcon className="w-3.5 h-3.5 text-amber-400" />
-                                                            <span>// TRANSFER OWNERSHIP</span>
-                                                        </button>
-                                                    </>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setShowMembersDrawer(false);
-                                                            setLeaveTeamError(null);
-                                                            setShowLeaveModal(true);
-                                                        }}
-                                                        className="w-full py-2 bg-red-950/20 border border-red-900/60 hover:bg-red-950/40 text-red-400 hover:text-red-300 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5 font-mono"
+                                                            <span>//</span>
+                                                            <span>{joinRequestsFeedback.message}</span>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="flex-1 overflow-y-auto divide-y divide-zinc-850/60 p-3 space-y-2">
+                                                        {loadingJoinRequests ? (
+                                                            <div className="py-8 text-center space-y-2">
+                                                                <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto" />
+                                                                <p className="text-[10px] text-zinc-500 uppercase tracking-wider">
+                                                                    // SYNCING REQUESTS...
+                                                                </p>
+                                                            </div>
+                                                        ) : joinRequests.length === 0 ? (
+                                                            <div className="py-10 text-center space-y-1">
+                                                                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
+                                                                    // NO JOIN REQUESTS
+                                                                </span>
+                                                                <p className="text-xs text-zinc-400">
+                                                                    No pending or prior requests found.
+                                                                </p>
+                                                            </div>
+                                                        ) : (
+                                                            joinRequests.map((req) => {
+                                                                const isProcessing = processingRequestId === req.id;
+                                                                const isPending = req.status === 'PENDING';
+                                                                return (
+                                                                    <div key={req.id} className="pt-2.5 space-y-2">
+                                                                        <div className="flex items-start justify-between gap-2">
+                                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                                <div className="w-7 h-7 bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0 text-xs font-bold text-zinc-300 overflow-hidden">
+                                                                                    {req.photoURL ? (
+                                                                                        <img
+                                                                                            src={req.photoURL}
+                                                                                            alt={req.displayName}
+                                                                                            className="w-full h-full object-cover"
+                                                                                            onError={handleImageError}
+                                                                                        />
+                                                                                    ) : (
+                                                                                        <span>
+                                                                                            {(req.displayName || 'U').charAt(0).toUpperCase()}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="min-w-0">
+                                                                                    <p className="text-xs text-white font-bold truncate">
+                                                                                        {req.displayName || 'Anonymous User'}
+                                                                                    </p>
+                                                                                    <p className="text-[10px] text-zinc-500 truncate">
+                                                                                        {formatTimestamp(req.createdAt)}
+                                                                                    </p>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <span
+                                                                                className={`text-[9px] font-bold px-1.5 py-0.5 border flex-shrink-0 ${
+                                                                                    req.status === 'PENDING'
+                                                                                        ? 'bg-amber-950/70 border-amber-700 text-amber-300 animate-pulse'
+                                                                                        : req.status === 'APPROVED'
+                                                                                        ? 'bg-emerald-950/70 border-emerald-700 text-emerald-300'
+                                                                                        : 'bg-zinc-900 border-zinc-800 text-zinc-500'
+                                                                                }`}
+                                                                            >
+                                                                                {req.status}
+                                                                            </span>
+                                                                        </div>
+
+                                                                        {/* Action buttons if Pending */}
+                                                                        {isPending && (
+                                                                            <div className="flex items-center gap-2 pt-1">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={isProcessing}
+                                                                                    onClick={() => handleApproveJoinRequest(req)}
+                                                                                    className="flex-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-black font-bold text-[10px] uppercase tracking-wider transition-colors disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1 rounded-none font-mono"
+                                                                                >
+                                                                                    {isProcessing ? (
+                                                                                        <span>PROCESSING...</span>
+                                                                                    ) : (
+                                                                                        <span>APPROVE</span>
+                                                                                    )}
+                                                                                </button>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={isProcessing}
+                                                                                    onClick={() => handleRejectJoinRequest(req)}
+                                                                                    className="flex-1 py-1.5 px-2 bg-zinc-900 hover:bg-red-950/40 border border-zinc-800 hover:border-red-800 text-zinc-300 hover:text-red-300 font-bold text-[10px] uppercase tracking-wider transition-colors disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1 rounded-none font-mono"
+                                                                                >
+                                                                                    <span>REJECT</span>
+                                                                                </button>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* TAB 3: TEAM ACCESS / JOIN SETTINGS */}
+                                            {membersTab === 'access' && isOwner && (
+                                                <div className="flex-1 flex flex-col p-3 space-y-4 overflow-y-auto">
+                                                    <div>
+                                                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block">
+                                                            // ACCESS POLICY
+                                                        </span>
+                                                        <h4 className="text-xs font-bold text-white uppercase tracking-wider mt-0.5">
+                                                            TEAM JOIN SETTINGS
+                                                        </h4>
+                                                        <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
+                                                            Control how collaborators and invitees are permitted to join "{activeTeam.name}".
+                                                        </p>
+                                                    </div>
+
+                                                    {/* Mode A card */}
+                                                    <div
+                                                        onClick={() => setSelectedJoinPolicy('open')}
+                                                        className={`p-3 border transition-colors cursor-pointer space-y-1.5 ${
+                                                            selectedJoinPolicy === 'open'
+                                                                ? 'border-emerald-500/80 bg-emerald-950/20'
+                                                                : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
+                                                        }`}
                                                     >
-                                                        <LogoutIcon className="w-3.5 h-3.5" />
-                                                        <span>// LEAVE SQUAD</span>
-                                                    </button>
-                                                )}
-                                            </div>
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <span
+                                                                    className={`w-2 h-2 ${
+                                                                        selectedJoinPolicy === 'open'
+                                                                            ? 'bg-emerald-400'
+                                                                            : 'border border-zinc-600'
+                                                                    }`}
+                                                                />
+                                                                <span className="text-xs font-bold text-white uppercase tracking-wide">
+                                                                    ANYONE WITH THE LINK
+                                                                </span>
+                                                            </div>
+                                                            <span className="text-[9px] text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-800 px-1 py-0.2">
+                                                                DIRECT
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[11px] text-zinc-400 leading-relaxed">
+                                                            Anyone with a valid team invitation link can join without manual approval.
+                                                        </p>
+                                                    </div>
+
+                                                    {/* Mode B card */}
+                                                    <div
+                                                        onClick={() => setSelectedJoinPolicy('approval_required')}
+                                                        className={`p-3 border transition-colors cursor-pointer space-y-1.5 ${
+                                                            selectedJoinPolicy === 'approval_required'
+                                                                ? 'border-purple-500/80 bg-purple-950/20'
+                                                                : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <span
+                                                                    className={`w-2 h-2 ${
+                                                                        selectedJoinPolicy === 'approval_required'
+                                                                            ? 'bg-purple-400'
+                                                                            : 'border border-zinc-600'
+                                                                    }`}
+                                                                />
+                                                                <span className="text-xs font-bold text-white uppercase tracking-wide">
+                                                                    APPROVAL REQUIRED
+                                                                </span>
+                                                            </div>
+                                                            <span className="text-[9px] text-purple-400 font-bold bg-purple-950/60 border border-purple-800 px-1 py-0.2">
+                                                                GATEKEEPER
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[11px] text-zinc-400 leading-relaxed">
+                                                            Users must request access. The team owner or an authorized admin must approve them before they become members.
+                                                        </p>
+                                                    </div>
+
+                                                    {/* Feedback */}
+                                                    {joinPolicyFeedback && (
+                                                        <div
+                                                            className={`p-2.5 text-[11px] border flex items-center gap-2 ${
+                                                                joinPolicyFeedback.type === 'success'
+                                                                    ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300'
+                                                                    : 'bg-red-950/60 border-red-800 text-red-300'
+                                                            }`}
+                                                        >
+                                                            <span>//</span>
+                                                            <span>{joinPolicyFeedback.message}</span>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Save Button */}
+                                                    <div className="pt-2">
+                                                        <button
+                                                            type="button"
+                                                            disabled={isUpdatingJoinPolicy}
+                                                            onClick={() => handleSaveJoinPolicy()}
+                                                            className="w-full py-2.5 px-3 bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wider transition-colors disabled:opacity-40 cursor-pointer flex items-center justify-center gap-2 rounded-none font-mono"
+                                                        >
+                                                            {isUpdatingJoinPolicy ? (
+                                                                <>
+                                                                    <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                                                                    <span>SAVING SETTINGS...</span>
+                                                                </>
+                                                            ) : (
+                                                                <span>SAVE ACCESS SETTINGS</span>
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </aside>
                                     </>
                                 )}
@@ -2568,6 +3094,335 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                 ) : (
                                     <span>Transfer Ownership</span>
                                 )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 8. TEAM JOIN ACCESS SETTINGS MODAL */}
+            {showJoinSettingsModal && activeTeam && isOwner && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center bg-black/65 backdrop-blur-[5px] p-4 font-mono animate-fadeIn"
+                    onClick={() => {
+                        if (!isUpdatingJoinPolicy) setShowJoinSettingsModal(false);
+                    }}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="join-settings-title"
+                >
+                    <div
+                        className="border border-zinc-800 bg-[#0c0c0e] max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl relative animate-fadeInUp select-none text-left"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex items-start justify-between border-b border-zinc-800 pb-3">
+                            <div>
+                                <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block">
+                                    // TEAM ACCESS
+                                </span>
+                                <h3 id="join-settings-title" className="text-sm font-bold text-white uppercase tracking-wider mt-0.5">
+                                    JOIN SETTINGS
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!isUpdatingJoinPolicy) setShowJoinSettingsModal(false);
+                                }}
+                                disabled={isUpdatingJoinPolicy}
+                                className="text-zinc-500 hover:text-white text-base leading-none p-1 cursor-pointer font-mono disabled:opacity-40"
+                                title="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Team Info */}
+                        <div className="p-2.5 bg-black/60 border border-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
+                            <span className="text-zinc-500">Team:</span>
+                            <span className="text-white font-bold truncate max-w-[240px]">{activeTeam.name}</span>
+                        </div>
+
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                            Select who is allowed to join this squad and whether owner or admin authorization is mandatory:
+                        </p>
+
+                        {/* Join Mode Options */}
+                        <div className="space-y-3">
+                            {/* Mode A: Anyone with the link */}
+                            <div
+                                onClick={() => setSelectedJoinPolicy('open')}
+                                className={`p-3.5 border transition-all cursor-pointer space-y-1.5 ${
+                                    selectedJoinPolicy === 'open'
+                                        ? 'border-emerald-500/90 bg-emerald-950/20 shadow-md'
+                                        : 'border-zinc-800/80 bg-zinc-950 hover:border-zinc-700'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div
+                                            className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors ${
+                                                selectedJoinPolicy === 'open'
+                                                    ? 'border-emerald-400 bg-emerald-500'
+                                                    : 'border-zinc-700 bg-zinc-900'
+                                            }`}
+                                        >
+                                            {selectedJoinPolicy === 'open' && (
+                                                <div className="w-1.5 h-1.5 bg-black rounded-full" />
+                                            )}
+                                        </div>
+                                        <span className="text-xs font-bold text-white uppercase tracking-wider">
+                                            ANYONE WITH THE LINK
+                                        </span>
+                                    </div>
+                                    <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-1.5 py-0.2">
+                                        OPEN ACCESS
+                                    </span>
+                                </div>
+                                <p className="text-[11px] text-zinc-400 leading-relaxed pl-5.5">
+                                    Anyone with a valid team invitation link can join without manual approval.
+                                </p>
+                            </div>
+
+                            {/* Mode B: Owner/Admin approval required */}
+                            <div
+                                onClick={() => setSelectedJoinPolicy('approval_required')}
+                                className={`p-3.5 border transition-all cursor-pointer space-y-1.5 ${
+                                    selectedJoinPolicy === 'approval_required'
+                                        ? 'border-purple-500/90 bg-purple-950/20 shadow-md'
+                                        : 'border-zinc-800/80 bg-zinc-950 hover:border-zinc-700'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div
+                                            className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors ${
+                                                selectedJoinPolicy === 'approval_required'
+                                                    ? 'border-purple-400 bg-purple-500'
+                                                    : 'border-zinc-700 bg-zinc-900'
+                                            }`}
+                                        >
+                                            {selectedJoinPolicy === 'approval_required' && (
+                                                <div className="w-1.5 h-1.5 bg-black rounded-full" />
+                                            )}
+                                        </div>
+                                        <span className="text-xs font-bold text-white uppercase tracking-wider">
+                                            APPROVAL REQUIRED
+                                        </span>
+                                    </div>
+                                    <span className="text-[9px] font-bold text-purple-400 bg-purple-950/80 border border-purple-800 px-1.5 py-0.2">
+                                        RESTRICTED
+                                    </span>
+                                </div>
+                                <p className="text-[11px] text-zinc-400 leading-relaxed pl-5.5">
+                                    Users must request access. The team owner or an authorized admin must approve them before they become members.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Feedback Banner */}
+                        {joinPolicyFeedback && (
+                            <div
+                                className={`p-2.5 text-xs border flex items-center gap-2 ${
+                                    joinPolicyFeedback.type === 'success'
+                                        ? 'bg-emerald-950/60 border-emerald-800 text-emerald-200'
+                                        : 'bg-red-950/60 border-red-800 text-red-200'
+                                }`}
+                            >
+                                <span className="font-bold">//</span>
+                                <span>{joinPolicyFeedback.message}</span>
+                            </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="pt-2 flex items-center justify-end gap-3 border-t border-zinc-800/80">
+                            <button
+                                type="button"
+                                onClick={() => setShowJoinSettingsModal(false)}
+                                disabled={isUpdatingJoinPolicy}
+                                className="px-4 py-2 bg-transparent border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white uppercase transition-colors text-xs font-bold cursor-pointer disabled:opacity-40 font-mono"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleSaveJoinPolicy()}
+                                disabled={isUpdatingJoinPolicy}
+                                className="px-4 py-2 bg-white hover:bg-zinc-200 text-black text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40 cursor-pointer flex items-center gap-2 font-mono"
+                            >
+                                {isUpdatingJoinPolicy ? (
+                                    <>
+                                        <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                                        <span>SAVING...</span>
+                                    </>
+                                ) : (
+                                    <span>Save Access Settings</span>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 9. TEAM JOIN REQUESTS MANAGEMENT MODAL */}
+            {showJoinRequestsModal && activeTeam && isOwner && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center bg-black/65 backdrop-blur-[5px] p-4 font-mono animate-fadeIn"
+                    onClick={() => setShowJoinRequestsModal(false)}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="join-requests-title"
+                >
+                    <div
+                        className="border border-zinc-800 bg-[#0c0c0e] max-w-lg w-full p-5 sm:p-6 space-y-4 shadow-2xl relative animate-fadeInUp select-none text-left flex flex-col max-h-[85vh]"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex items-start justify-between border-b border-zinc-800 pb-3 flex-shrink-0">
+                            <div>
+                                <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block">
+                                    // MEMBERSHIP CONTROL
+                                </span>
+                                <h3 id="join-requests-title" className="text-sm font-bold text-white uppercase tracking-wider mt-0.5">
+                                    JOIN REQUESTS ({joinRequests.length})
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowJoinRequestsModal(false)}
+                                className="text-zinc-500 hover:text-white text-base leading-none p-1 cursor-pointer font-mono"
+                                title="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Feedback Banner */}
+                        {joinRequestsFeedback && (
+                            <div
+                                className={`p-2.5 text-xs border flex items-center gap-2 flex-shrink-0 ${
+                                    joinRequestsFeedback.type === 'success'
+                                        ? 'bg-emerald-950/60 border-emerald-800 text-emerald-200'
+                                        : 'bg-red-950/60 border-red-800 text-red-200'
+                                }`}
+                            >
+                                <span className="font-bold">//</span>
+                                <span>{joinRequestsFeedback.message}</span>
+                            </div>
+                        )}
+
+                        {/* Request List Area */}
+                        <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 min-h-[160px]">
+                            {loadingJoinRequests ? (
+                                <div className="py-12 text-center space-y-2">
+                                    <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto" />
+                                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider">
+                                        // SYNCHRONIZING REQUESTS...
+                                    </p>
+                                </div>
+                            ) : joinRequests.length === 0 ? (
+                                <div className="py-12 text-center space-y-1.5">
+                                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
+                                        // NO REQUESTS PENDING
+                                    </span>
+                                    <p className="text-xs text-zinc-400">
+                                        No access requests have been submitted for {activeTeam.name}.
+                                    </p>
+                                </div>
+                            ) : (
+                                joinRequests.map((req) => {
+                                    const isProcessing = processingRequestId === req.id;
+                                    const isPending = req.status === 'PENDING';
+                                    return (
+                                        <div
+                                            key={req.id}
+                                            className={`p-3.5 border transition-all space-y-2.5 ${
+                                                isPending
+                                                    ? 'border-amber-700/60 bg-amber-950/10'
+                                                    : 'border-zinc-800/80 bg-zinc-950/50'
+                                            }`}
+                                        >
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <div className="w-8 h-8 bg-zinc-900 border border-zinc-800 flex items-center justify-center flex-shrink-0 text-xs font-bold text-zinc-300 overflow-hidden">
+                                                        {req.photoURL ? (
+                                                            <img
+                                                                src={req.photoURL}
+                                                                alt={req.displayName}
+                                                                className="w-full h-full object-cover"
+                                                                onError={handleImageError}
+                                                            />
+                                                        ) : (
+                                                            <span>{(req.displayName || 'U').charAt(0).toUpperCase()}</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs text-white font-bold truncate">
+                                                            {req.displayName || 'Anonymous User'}
+                                                        </p>
+                                                        <div className="text-[10px] text-zinc-500 truncate flex items-center gap-2">
+                                                            <span>{formatTimestamp(req.createdAt)}</span>
+                                                            {req.email && <span>• {req.email}</span>}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <span
+                                                    className={`text-[9px] font-bold px-1.5 py-0.5 border flex-shrink-0 ${
+                                                        req.status === 'PENDING'
+                                                            ? 'bg-amber-950/80 border-amber-700 text-amber-300 animate-pulse'
+                                                            : req.status === 'APPROVED'
+                                                            ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
+                                                            : 'bg-zinc-900 border-zinc-800 text-zinc-500'
+                                                    }`}
+                                                >
+                                                    {req.status}
+                                                </span>
+                                            </div>
+
+                                            {/* Action buttons if Pending */}
+                                            {isPending && (
+                                                <div className="flex items-center justify-end gap-2 pt-1 border-t border-zinc-850/60">
+                                                    <button
+                                                        type="button"
+                                                        disabled={isProcessing}
+                                                        onClick={() => handleRejectJoinRequest(req)}
+                                                        className="px-3 py-1.5 bg-zinc-900 hover:bg-red-950/40 border border-zinc-800 hover:border-red-800 text-zinc-300 hover:text-red-300 text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-40 cursor-pointer rounded-none font-mono"
+                                                    >
+                                                        REJECT
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={isProcessing}
+                                                        onClick={() => handleApproveJoinRequest(req)}
+                                                        className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-black text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-40 cursor-pointer flex items-center gap-1.5 rounded-none font-mono"
+                                                    >
+                                                        {isProcessing ? (
+                                                            <>
+                                                                <div className="w-3 h-3 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                                                                <span>APPROVING...</span>
+                                                            </>
+                                                        ) : (
+                                                            <span>APPROVE</span>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="pt-2 flex items-center justify-end border-t border-zinc-800/80 flex-shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setShowJoinRequestsModal(false)}
+                                className="px-4 py-2 bg-transparent border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white uppercase transition-colors text-xs font-bold cursor-pointer font-mono"
+                            >
+                                Close
                             </button>
                         </div>
                     </div>

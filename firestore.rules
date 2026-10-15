@@ -276,6 +276,32 @@ service cloud.firestore {
           || isModerator()
         );
       }
+
+      match /joinRequests/{requestId} {
+        allow read: if signedIn() && (
+          requestId == uid()
+          || resource.data.userId == uid()
+          || get(/databases/$(database)/documents/teams/$(teamId)).data.ownerId == uid()
+          || isModerator()
+        );
+        allow create: if signedIn()
+          && (requestId == uid() || request.resource.data.userId == uid())
+          && request.resource.data.teamId == teamId
+          && request.resource.data.status == 'PENDING';
+        allow update: if signedIn() && (
+          get(/databases/$(database)/documents/teams/$(teamId)).data.ownerId == uid()
+          || isModerator()
+          || (resource.data.userId == uid()
+              && request.resource.data.status == 'CANCELLED'
+              && resource.data.status == 'PENDING'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+        );
+        allow delete: if signedIn() && (
+          resource.data.userId == uid()
+          || get(/databases/$(database)/documents/teams/$(teamId)).data.ownerId == uid()
+          || isModerator()
+        );
+      }
     }
 
     match /teamInvitations/{token} {

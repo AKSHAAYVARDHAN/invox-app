@@ -468,6 +468,34 @@ export interface PollVote {
   votedAt: Date;
 }
 
+export type TeamJoinPolicy = 'open' | 'approval_required';
+
+export type TeamJoinRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+
+export interface TeamJoinRequest {
+  id: string; // userId or document ID
+  teamId: string;
+  teamName: string;
+  projectId: string;
+  projectTitle: string;
+  userId: string;
+  userName: string;
+  userUsername?: string;
+  userAvatar?: string | null;
+  userEmail?: string | null;
+  userBio?: string;
+  userSkills?: string[];
+  inviteToken?: string;
+  status: TeamJoinRequestStatus;
+  requestedAt: any;
+  decidedAt?: any | null;
+  decidedBy?: string | null;
+  decidedByName?: string | null;
+  rejectionReason?: string | null;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
 export type NotificationType =
   | 'message_direct'
   | 'message_team'
@@ -477,6 +505,9 @@ export type NotificationType =
   | 'team_member_left'
   | 'team_member_removed'
   | 'team_ownership_transferred'
+  | 'team_join_request'
+  | 'team_join_approved'
+  | 'team_join_rejected'
   | 'collab_application'
   | 'collab_accepted'
   | 'collab_declined'

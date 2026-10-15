@@ -7,14 +7,19 @@ import {
     getTeam,
     checkTeamMembership,
     joinTeamViaInvitation,
+    createTeamJoinRequest,
+    getTeamJoinRequest,
+    subscribeToUserJoinRequest,
     type TeamInvitation,
     type Team,
+    type TeamJoinRequest,
 } from '../../services/teamService';
 import {
     UsersIcon,
     CheckIcon,
     ClipboardIcon,
     ArrowUpRightIcon,
+    ClockIcon,
 } from './Icons';
 
 export interface TeamInvitationCardProps {
@@ -33,6 +38,10 @@ export type InvitationLifecycleState =
     | 'loading'
     | 'invited'
     | 'joining'
+    | 'approval_required'
+    | 'requesting'
+    | 'request_pending'
+    | 'request_rejected'
     | 'member'
     | 'expired'
     | 'revoked'
@@ -55,20 +64,23 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
 
     const [invitation, setInvitation] = useState<TeamInvitation | null>(null);
     const [team, setTeam] = useState<Team | null>(null);
+    const [joinRequest, setJoinRequest] = useState<TeamJoinRequest | null>(null);
     const [lifecycleState, setLifecycleState] = useState<InvitationLifecycleState>('loading');
     const [statusErrorMessage, setStatusErrorMessage] = useState<string | null>(null);
     const [copied, setCopied] = useState<boolean>(false);
     const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
+    const [showRequestSentModal, setShowRequestSentModal] = useState<boolean>(false);
     const [confirmedJoinedTeam, setConfirmedJoinedTeam] = useState<Team | null>(null);
     const isJoiningRef = useRef<boolean>(false);
 
     // Close confirmation modal on Escape key press
     useEffect(() => {
-        if (!showSuccessModal) return;
+        if (!showSuccessModal && !showRequestSentModal) return;
 
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
                 setShowSuccessModal(false);
+                setShowRequestSentModal(false);
             }
         };
 
@@ -76,7 +88,7 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, [showSuccessModal]);
+    }, [showSuccessModal, showRequestSentModal]);
 
     // Load invitation and determine authentic membership state
     const syncInvitationData = useCallback(async (isMountedRef: { current: boolean }) => {
@@ -137,18 +149,48 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
                     // Verify if current user is an authentic member
                     if (currentUser?.uid) {
                         const isMember = await checkTeamMembership(resolvedTeamId, currentUser.uid);
-                        if (isMountedRef.current) {
-                            if (isMember) {
-                                setLifecycleState('member');
+                        if (isMountedRef.current && isMember) {
+                            setLifecycleState('member');
+                            setStatusErrorMessage(null);
+                            return;
+                        }
+
+                        // Check join policy
+                        if (teamData.joinPolicy === 'approval_required') {
+                            const req = await getTeamJoinRequest(resolvedTeamId, currentUser.uid);
+                            if (isMountedRef.current) {
+                                setJoinRequest(req);
+                                if (req) {
+                                    if (req.status === 'PENDING') {
+                                        setLifecycleState('request_pending');
+                                        setStatusErrorMessage(null);
+                                        return;
+                                    } else if (req.status === 'APPROVED') {
+                                        setLifecycleState('member');
+                                        setStatusErrorMessage(null);
+                                        return;
+                                    } else if (req.status === 'REJECTED') {
+                                        setLifecycleState('request_rejected');
+                                        setStatusErrorMessage(req.rejectionReason || 'Previous request was not approved at this time.');
+                                        return;
+                                    }
+                                }
+                                setLifecycleState('approval_required');
                                 setStatusErrorMessage(null);
                                 return;
                             }
+                        }
+                    } else if (teamData.joinPolicy === 'approval_required') {
+                        if (isMountedRef.current) {
+                            setLifecycleState('approval_required');
+                            setStatusErrorMessage(null);
+                            return;
                         }
                     }
                 }
             }
 
-            // Not yet a member -> State A: Invited
+            // Not yet a member -> State A: Invited (Open link)
             if (isMountedRef.current) {
                 setLifecycleState('invited');
                 setStatusErrorMessage(null);
@@ -172,7 +214,44 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
         };
     }, [syncInvitationData]);
 
-    // Handle primary action: JOIN TEAM vs OPEN TEAM CHAT
+    // Real-time subscription to current user's join request for reactive state transitions
+    useEffect(() => {
+        const resolvedTeamId = invitation?.teamId || team?.id || propTeamId;
+        if (!currentUser?.uid || !resolvedTeamId || team?.joinPolicy !== 'approval_required') {
+            return;
+        }
+
+        const unsub = subscribeToUserJoinRequest(resolvedTeamId, currentUser.uid, async (req) => {
+            setJoinRequest(req);
+            if (!req) {
+                const isMember = await checkTeamMembership(resolvedTeamId, currentUser.uid);
+                if (isMember) {
+                    setLifecycleState('member');
+                    setStatusErrorMessage(null);
+                } else {
+                    setLifecycleState('approval_required');
+                }
+                return;
+            }
+
+            if (req.status === 'PENDING') {
+                setLifecycleState('request_pending');
+                setStatusErrorMessage(null);
+            } else if (req.status === 'APPROVED') {
+                setLifecycleState('member');
+                setStatusErrorMessage(null);
+            } else if (req.status === 'REJECTED') {
+                setLifecycleState('request_rejected');
+                setStatusErrorMessage(req.rejectionReason || 'Your previous join request was not approved at this time.');
+            }
+        });
+
+        return () => {
+            unsub();
+        };
+    }, [currentUser?.uid, invitation?.teamId, team?.id, team?.joinPolicy, propTeamId]);
+
+    // Handle primary action: JOIN TEAM vs REQUEST TO JOIN vs OPEN TEAM CHAT
     const handlePrimaryAction = async (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
@@ -180,6 +259,8 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
         if (
             lifecycleState === 'loading' ||
             lifecycleState === 'joining' ||
+            lifecycleState === 'requesting' ||
+            lifecycleState === 'request_pending' ||
             lifecycleState === 'invalid' ||
             lifecycleState === 'expired' ||
             lifecycleState === 'revoked' ||
@@ -212,7 +293,7 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
             return;
         }
 
-        // Action when not yet a member: JOIN TEAM
+        // Action when not yet a member:
         if (!currentUser) {
             // Unauthenticated: preserve invitation in sessionStorage & redirect to login
             const targetRedirect = targetHash.startsWith('#') ? targetHash.slice(1) : targetHash;
@@ -227,7 +308,34 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
         if (isJoiningRef.current) return;
         isJoiningRef.current = true;
 
-        // State B: Joining in progress
+        // MODE B: APPROVAL REQUIRED (or retrying after rejection)
+        if (lifecycleState === 'approval_required' || lifecycleState === 'request_rejected' || team?.joinPolicy === 'approval_required') {
+            setLifecycleState('requesting');
+            setStatusErrorMessage(null);
+
+            try {
+                const req = await createTeamJoinRequest({
+                    token,
+                    user: currentUser,
+                    userProfile,
+                });
+
+                setJoinRequest(req);
+                setLifecycleState('request_pending');
+                setStatusErrorMessage(null);
+                setShowRequestSentModal(true);
+            } catch (err: any) {
+                console.error('[CREATE_JOIN_REQUEST_ERROR]', err);
+                const msg = err?.message || 'Failed to submit join request.';
+                setStatusErrorMessage(msg);
+                setLifecycleState('approval_required');
+            } finally {
+                isJoiningRef.current = false;
+            }
+            return;
+        }
+
+        // MODE A: ANYONE WITH THE LINK (joining in progress)
         setLifecycleState('joining');
         setStatusErrorMessage(null);
 
@@ -360,6 +468,22 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
                         <span className="text-amber-400 font-bold uppercase tracking-wider text-[9px] bg-amber-950/60 border border-amber-800 px-1.5 py-0.5">
                             JOINING
                         </span>
+                    ) : lifecycleState === 'requesting' ? (
+                        <span className="text-amber-400 font-bold uppercase tracking-wider text-[9px] bg-amber-950/60 border border-amber-800 px-1.5 py-0.5">
+                            SUBMITTING
+                        </span>
+                    ) : lifecycleState === 'request_pending' ? (
+                        <span className="text-amber-400 font-bold uppercase tracking-wider text-[9px] bg-amber-950/60 border border-amber-800 px-1.5 py-0.5 animate-pulse">
+                            PENDING
+                        </span>
+                    ) : lifecycleState === 'request_rejected' ? (
+                        <span className="text-red-400 font-bold uppercase tracking-wider text-[9px] bg-red-950/60 border border-red-800 px-1.5 py-0.5">
+                            NOT APPROVED
+                        </span>
+                    ) : lifecycleState === 'approval_required' ? (
+                        <span className="text-purple-400 font-bold uppercase tracking-wider text-[9px] bg-purple-950/60 border border-purple-800 px-1.5 py-0.5">
+                            APPROVAL REQ
+                        </span>
                     ) : lifecycleState === 'expired' ? (
                         <span className="text-amber-400 font-bold uppercase tracking-wider text-[9px] bg-amber-950/60 border border-amber-800 px-1.5 py-0.5">
                             EXPIRED
@@ -432,13 +556,23 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
                     </div>
                 </div>
 
-                {/* Status Notice for errors or warnings */}
-                {statusErrorMessage && (
+                {/* Status Notice for errors, warnings, or policy status */}
+                {statusErrorMessage ? (
                     <div className="px-2.5 py-1 bg-zinc-950 border border-zinc-800 text-[10px] text-amber-400 flex items-center gap-1.5">
                         <span className="font-bold flex-shrink-0">// NOTE:</span>
                         <span className="truncate">{statusErrorMessage}</span>
                     </div>
-                )}
+                ) : lifecycleState === 'request_pending' ? (
+                    <div className="px-2.5 py-1 bg-amber-950/40 border border-amber-800/80 text-[10px] text-amber-300 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 bg-amber-400 animate-pulse flex-shrink-0" />
+                        <span className="truncate">Your request is waiting for team approval.</span>
+                    </div>
+                ) : lifecycleState === 'approval_required' ? (
+                    <div className="px-2.5 py-1 bg-purple-950/30 border border-purple-900/60 text-[10px] text-purple-300 flex items-center gap-1.5">
+                        <span className="font-bold flex-shrink-0">// ACCESS:</span>
+                        <span className="truncate">Owner approval required to join.</span>
+                    </div>
+                ) : null}
 
                 {/* Pinned Bottom Actions */}
                 <div className="mt-auto pt-2.5 border-t border-zinc-850/80 space-y-2">
@@ -448,6 +582,8 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
                         disabled={
                             lifecycleState === 'loading' ||
                             lifecycleState === 'joining' ||
+                            lifecycleState === 'requesting' ||
+                            lifecycleState === 'request_pending' ||
                             lifecycleState === 'invalid' ||
                             lifecycleState === 'expired' ||
                             lifecycleState === 'revoked' ||
@@ -456,8 +592,12 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
                         className={`w-full h-9 py-2 px-3 text-xs uppercase tracking-wider font-bold transition-all flex items-center justify-center gap-2 font-mono rounded-none ${
                             lifecycleState === 'member'
                                 ? 'bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-600 cursor-pointer active:scale-[0.99]'
-                                : lifecycleState === 'joining'
+                                : lifecycleState === 'joining' || lifecycleState === 'requesting'
                                 ? 'bg-zinc-900 border border-zinc-700 text-zinc-300 cursor-wait'
+                                : lifecycleState === 'request_pending'
+                                ? 'bg-amber-950/40 border border-amber-800/80 text-amber-300 cursor-default'
+                                : lifecycleState === 'request_rejected'
+                                ? 'bg-zinc-900 border border-red-800/80 text-red-300 hover:bg-zinc-850 cursor-pointer active:scale-[0.99]'
                                 : lifecycleState === 'invalid' ||
                                   lifecycleState === 'expired' ||
                                   lifecycleState === 'revoked' ||
@@ -476,9 +616,29 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
                                 <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                                 <span>JOINING TEAM...</span>
                             </>
+                        ) : lifecycleState === 'requesting' ? (
+                            <>
+                                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                <span>SUBMITTING REQUEST...</span>
+                            </>
                         ) : lifecycleState === 'member' ? (
                             <>
                                 <span>OPEN TEAM CHAT</span>
+                                <span>→</span>
+                            </>
+                        ) : lifecycleState === 'request_pending' ? (
+                            <>
+                                <span className="w-1.5 h-1.5 bg-amber-400 animate-pulse flex-shrink-0" />
+                                <span>REQUEST PENDING</span>
+                            </>
+                        ) : lifecycleState === 'request_rejected' ? (
+                            <>
+                                <span>REQUEST NOT APPROVED</span>
+                                <span className="text-[10px] text-zinc-400 font-normal ml-1">(RETRY)</span>
+                            </>
+                        ) : lifecycleState === 'approval_required' ? (
+                            <>
+                                <span>REQUEST TO JOIN</span>
                                 <span>→</span>
                             </>
                         ) : lifecycleState === 'expired' ? (
@@ -603,6 +763,88 @@ export const TeamInvitationCard: React.FC<TeamInvitationCardProps> = ({
                                 >
                                     <span>OPEN TEAM CHAT</span>
                                     <span>→</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Request Sent Confirmation Modal */}
+            {showRequestSentModal && typeof document !== 'undefined' && createPortal(
+                <div
+                    className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="team-join-request-sent-heading"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                            setShowRequestSentModal(false);
+                        }
+                    }}
+                >
+                    <div
+                        className="w-full max-w-md bg-[#0c0c0e] border border-zinc-800 p-6 sm:p-7 font-mono relative shadow-2xl rounded-none animate-fadeInUp select-none text-left"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Accessible Close Button */}
+                        <button
+                            type="button"
+                            onClick={() => setShowRequestSentModal(false)}
+                            aria-label="Close dialog"
+                            className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-900 border border-transparent hover:border-zinc-800 text-sm font-mono transition-colors cursor-pointer rounded-none"
+                            title="Close"
+                        >
+                            ✕
+                        </button>
+
+                        <div className="flex flex-col items-center text-center space-y-4">
+                            {/* Clock / Approval Pending Icon with amber accent */}
+                            <div className="w-12 h-12 bg-amber-950/60 border border-amber-800/80 text-amber-400 flex items-center justify-center shadow-md rounded-none">
+                                <ClockIcon className="w-6 h-6 stroke-[2.2]" />
+                            </div>
+
+                            {/* Subtle Status Label */}
+                            <div className="flex items-center gap-1.5 text-amber-400 text-[10px] uppercase tracking-widest font-bold">
+                                <span className="w-1.5 h-1.5 bg-amber-400 animate-pulse flex-shrink-0" />
+                                <span>APPROVAL PENDING</span>
+                            </div>
+
+                            {/* Heading */}
+                            <h2
+                                id="team-join-request-sent-heading"
+                                className="text-xl sm:text-2xl font-bold tracking-wider text-white uppercase"
+                            >
+                                REQUEST SENT
+                            </h2>
+
+                            {/* Supporting Text & Prominent Team Name */}
+                            <div className="w-full space-y-2">
+                                <span className="text-xs text-zinc-400 uppercase tracking-wide block">
+                                    Your request is waiting for team approval
+                                </span>
+                                <div
+                                    className="text-base sm:text-lg font-bold text-white uppercase tracking-wide px-3.5 py-2.5 bg-zinc-900/90 border border-zinc-800 truncate"
+                                    title={team?.name || teamTitle}
+                                >
+                                    {team?.name || teamTitle}
+                                </div>
+                            </div>
+
+                            {/* Description */}
+                            <p className="text-xs text-zinc-400 leading-relaxed max-w-sm">
+                                The team owner or an authorized administrator will review your access request. You'll receive a notification as soon as access is granted.
+                            </p>
+
+                            {/* Primary Action Button */}
+                            <div className="w-full pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowRequestSentModal(false)}
+                                    className="w-full py-3 px-4 bg-white hover:bg-zinc-200 text-black border border-white font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer rounded-none active:scale-[0.99] shadow-lg"
+                                >
+                                    <span>UNDERSTOOD</span>
                                 </button>
                             </div>
                         </div>

@@ -108,6 +108,7 @@
         "ownerId": { "type": "string", "description": "Team owner UID" },
         "ownerName": { "type": "string", "description": "Team owner name" },
         "ownerAvatar": { "type": "string" },
+        "joinPolicy": { "type": "string", "enum": ["open", "approval_required"], "description": "Team join policy" },
         "memberCount": { "type": "number", "description": "Count of members" },
         "memberIds": { "type": "array", "description": "List of user UIDs" },
         "lastMessage": { "type": "string" },
@@ -150,6 +151,33 @@
         "readBy": { "type": "array" }
       },
       "required": ["teamId", "senderId", "text", "createdAt"]
+    },
+    "TeamJoinRequest": {
+      "title": "TeamJoinRequest",
+      "description": "Membership requests submitted by users for approval-required teams.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "teamId": { "type": "string" },
+        "teamName": { "type": "string" },
+        "projectId": { "type": "string" },
+        "projectTitle": { "type": "string" },
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "username": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "email": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] },
+        "invitationToken": { "type": "string" },
+        "requestMessage": { "type": "string" },
+        "reviewedBy": { "type": "string" },
+        "reviewedByName": { "type": "string" },
+        "reviewedAt": { "type": "string", "format": "date-time" },
+        "rejectionReason": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["teamId", "userId", "displayName", "status", "createdAt"]
     },
     "TeamInvitation": {
       "title": "TeamInvitation",
@@ -229,6 +257,10 @@
     "/teams/{teamId}/messages/{messageId}": {
       "schema": "TeamMessage",
       "description": "Group chat messages sent within a team."
+    },
+    "/teams/{teamId}/joinRequests/{requestId}": {
+      "schema": "TeamJoinRequest",
+      "description": "Membership requests submitted by users for approval-required teams."
     },
     "/teamInvitations/{token}": {
       "schema": "TeamInvitation",

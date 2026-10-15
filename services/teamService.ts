@@ -21,7 +21,9 @@ import {
 import { db } from '../firebase';
 import { COLLECTIONS, sanitizeForFirestore } from './firestoreService';
 import { sendNotification } from './notificationService';
-import type { InvoxUser, Post, Project, User, CollabApplication } from '../types';
+import type { InvoxUser, Post, Project, User, CollabApplication, TeamJoinPolicy, TeamJoinRequestStatus, TeamJoinRequest } from '../types';
+
+export type { TeamJoinPolicy, TeamJoinRequestStatus, TeamJoinRequest };
 
 export interface Team {
     id: string;
@@ -35,6 +37,7 @@ export interface Team {
     ownerAvatar?: string | null;
     memberCount: number;
     memberIds: string[];
+    joinPolicy?: TeamJoinPolicy; // Mode A: 'open' (ANYONE WITH THE LINK) | Mode B: 'approval_required' (APPROVAL REQUIRED)
     lastMessage?: string;
     lastMessageSenderId?: string;
     lastMessageSenderName?: string;
@@ -156,6 +159,7 @@ export const createTeam = async ({
         ownerAvatar,
         memberCount: 1,
         memberIds: [user.uid],
+        joinPolicy: 'open',
         lastMessage: 'Team space created.',
         lastMessageSenderId: user.uid,
         lastMessageSenderName: ownerName,
@@ -267,10 +271,14 @@ export const getTeam = async (teamId: string): Promise<Team | null> => {
 
     if (teamId === 'team_demo_phoenix') {
         let storedMembers: string[] = ['owner_phoenix'];
+        let storedPolicy: TeamJoinPolicy = 'open';
         if (typeof window !== 'undefined') {
             try {
                 const parsed = JSON.parse(sessionStorage.getItem('invox_demo_phoenix_members') || '["owner_phoenix"]');
                 if (Array.isArray(parsed)) storedMembers = parsed;
+                if (sessionStorage.getItem('invox_demo_phoenix_policy') === 'approval_required') {
+                    storedPolicy = 'approval_required';
+                }
             } catch {
                 // ignore
             }
@@ -287,6 +295,7 @@ export const getTeam = async (teamId: string): Promise<Team | null> => {
             ownerAvatar: 'https://picsum.photos/seed/phoenix/200',
             memberCount: storedMembers.length + 2,
             memberIds: storedMembers,
+            joinPolicy: storedPolicy,
         };
     }
 
@@ -1221,6 +1230,9 @@ export const joinTeamViaInvitation = async ({
 
     // Fetch team
     if (invitation.teamId === 'team_demo_phoenix') {
+        if (typeof window !== 'undefined' && sessionStorage.getItem('invox_demo_phoenix_policy') === 'approval_required') {
+            throw new Error('Approval required: This team requires owner approval before joining. Please submit a join request.');
+        }
         let storedMembers: string[] = ['owner_phoenix'];
         if (typeof window !== 'undefined') {
             try {
@@ -1249,6 +1261,7 @@ export const joinTeamViaInvitation = async ({
             ownerAvatar: 'https://picsum.photos/seed/phoenix/200',
             memberCount: storedMembers.length + 2,
             memberIds: storedMembers,
+            joinPolicy: typeof window !== 'undefined' && sessionStorage.getItem('invox_demo_phoenix_policy') === 'approval_required' ? 'approval_required' : 'open',
         };
         return { status: wasAlreadyMember ? 'already_member' : 'joined', team: demoTeam };
     }
@@ -1261,6 +1274,10 @@ export const joinTeamViaInvitation = async ({
 
     const teamData = teamSnap.data() as Team;
     const isAlreadyMember = Array.isArray(teamData.memberIds) && teamData.memberIds.includes(user.uid);
+
+    if (teamData.joinPolicy === 'approval_required' && !isAlreadyMember) {
+        throw new Error('Approval required: This team requires owner approval before joining. Please submit a join request.');
+    }
 
     const team: Team = {
         id: teamSnap.id,
@@ -1457,3 +1474,633 @@ export const getProjectAcceptedCollaborators = async (projectId: string): Promis
         return [];
     }
 };
+
+/**
+ * Updates a team's join access policy ('open' vs 'approval_required').
+ * Mode A: 'open' — ANYONE WITH THE LINK can join immediately without manual approval.
+ * Mode B: 'approval_required' — Users must request access and receive owner/admin approval.
+ * Only the team owner (and authorized admin) can change this setting.
+ */
+export const updateTeamJoinPolicy = async ({
+    teamId,
+    userId,
+    policy,
+}: {
+    teamId: string;
+    userId: string;
+    policy: TeamJoinPolicy;
+}): Promise<void> => {
+    if (!teamId || !userId || !policy) {
+        throw new Error('Invalid arguments: teamId, userId, and policy are required.');
+    }
+
+    if (policy !== 'open' && policy !== 'approval_required') {
+        throw new Error('Invalid policy: Policy must be either "open" or "approval_required".');
+    }
+
+    // Demo team handling
+    if (teamId === 'team_demo_phoenix') {
+        if (typeof window !== 'undefined') {
+            sessionStorage.setItem('invox_demo_phoenix_policy', policy);
+        }
+        return;
+    }
+
+    const teamRef = doc(db, COLLECTIONS.teams, teamId);
+    const snap = await getDoc(teamRef);
+    if (!snap.exists()) {
+        throw new Error('Team workspace not found.');
+    }
+
+    const teamData = snap.data() as Team;
+    if (teamData.ownerId !== userId) {
+        throw new Error('Unauthorized: Only the team owner can configure team join settings.');
+    }
+
+    await updateDoc(teamRef, {
+        joinPolicy: policy,
+        updatedAt: serverTimestamp(),
+    });
+};
+
+/**
+ * Submits a join access request for a team when Mode B (APPROVAL REQUIRED) is enabled.
+ * Validates invitation token validity, expiration, usage limits, and existing membership.
+ * Prevents duplicate pending submissions.
+ */
+export const createTeamJoinRequest = async ({
+    token,
+    user,
+    userProfile,
+}: {
+    token: string;
+    user: User;
+    userProfile?: InvoxUser | null;
+}): Promise<TeamJoinRequest> => {
+    if (!user?.uid) {
+        throw new Error('Authentication required: You must be signed in to request access.');
+    }
+
+    const invitation = await getTeamInvitation(token);
+    if (!invitation) {
+        throw new Error('Invalid invitation: This invitation does not exist.');
+    }
+
+    if (invitation.status === 'revoked') {
+        throw new Error('Invitation revoked: This invitation link has been revoked by the project owner.');
+    }
+
+    // Check expiration
+    if (invitation.expiresAt) {
+        const expTime = typeof invitation.expiresAt?.toDate === 'function'
+            ? invitation.expiresAt.toDate().getTime()
+            : new Date(invitation.expiresAt).getTime();
+        if (expTime > 0 && Date.now() > expTime) {
+            throw new Error('Invitation expired: This invitation link has expired.');
+        }
+    }
+
+    // Check max uses
+    if (invitation.maxUses && invitation.maxUses > 0 && invitation.usedCount >= invitation.maxUses) {
+        throw new Error('Invitation limit reached: This invitation link has already reached its maximum allowed uses.');
+    }
+
+    // Demo team handling
+    if (invitation.teamId === 'team_demo_phoenix') {
+        const now = new Date();
+        const demoReq: TeamJoinRequest = {
+            id: user.uid,
+            teamId: 'team_demo_phoenix',
+            teamName: 'Phoenix Core',
+            projectId: 'proj-phoenix',
+            projectTitle: 'Phoenix Decentralized Network',
+            userId: user.uid,
+            userName: userProfile?.displayName || user.displayName || 'Collaborator',
+            userUsername: userProfile?.username || user.email?.split('@')[0] || '',
+            userAvatar: userProfile?.photoURL || user.photoURL || null,
+            userEmail: user.email || null,
+            userBio: userProfile?.bio || '',
+            userSkills: userProfile?.skills || [],
+            inviteToken: token,
+            status: 'PENDING',
+            requestedAt: now,
+            createdAt: now,
+            updatedAt: now,
+        };
+        if (typeof window !== 'undefined') {
+            try {
+                const list = JSON.parse(sessionStorage.getItem('invox_demo_phoenix_requests') || '[]');
+                const filtered = list.filter((r: any) => r.userId !== user.uid);
+                filtered.push(demoReq);
+                sessionStorage.setItem('invox_demo_phoenix_requests', JSON.stringify(filtered));
+            } catch {
+                // ignore
+            }
+        }
+        return demoReq;
+    }
+
+    const teamRef = doc(db, COLLECTIONS.teams, invitation.teamId);
+    const teamSnap = await getDoc(teamRef);
+    if (!teamSnap.exists()) {
+        throw new Error('Team workspace no longer exists.');
+    }
+
+    const teamData = teamSnap.data() as Team;
+    const isMember = Array.isArray(teamData.memberIds) && teamData.memberIds.includes(user.uid);
+    if (isMember || teamData.ownerId === user.uid) {
+        throw new Error('You are already an active member of this team.');
+    }
+
+    const requestRef = doc(db, COLLECTIONS.teams, invitation.teamId, 'joinRequests', user.uid);
+    const existingReqSnap = await getDoc(requestRef);
+
+    if (existingReqSnap.exists()) {
+        const existingData = existingReqSnap.data() as TeamJoinRequest;
+        if (existingData.status === 'PENDING') {
+            return {
+                id: user.uid,
+                ...existingData,
+            };
+        }
+    }
+
+    const userName = userProfile?.displayName || user.displayName || 'Collaborator';
+    const userAvatar = userProfile?.photoURL || user.photoURL || null;
+
+    const requestData: Omit<TeamJoinRequest, 'id'> = {
+        teamId: invitation.teamId,
+        teamName: teamData.name,
+        projectId: teamData.projectId,
+        projectTitle: teamData.projectTitle,
+        userId: user.uid,
+        userName,
+        userUsername: userProfile?.username || user.email?.split('@')[0] || '',
+        userAvatar,
+        userEmail: user.email || null,
+        userBio: userProfile?.bio || '',
+        userSkills: userProfile?.skills || [],
+        inviteToken: token,
+        status: 'PENDING',
+        requestedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+    };
+
+    await setDoc(requestRef, sanitizeForFirestore(requestData));
+
+    // Notify team owner of the new join request
+    if (teamData.ownerId && teamData.ownerId !== user.uid) {
+        sendNotification({
+            recipientId: teamData.ownerId,
+            actorId: user.uid,
+            actorName: userName,
+            actorAvatar: userAvatar,
+            type: 'team_join_request',
+            title: 'New Team Join Request',
+            body: `${userName} has requested to join team "${teamData.name}".`,
+            targetType: 'team',
+            targetId: invitation.teamId,
+            metadata: {
+                teamId: invitation.teamId,
+                projectId: teamData.projectId,
+                requesterId: user.uid,
+                inviteToken: token,
+            },
+        }).catch((err) => console.warn('[JOIN_REQUEST_NOTIF_WARN]', err));
+    }
+
+    return {
+        id: user.uid,
+        ...requestData,
+    };
+};
+
+/**
+ * Fetches a user's join request for a specific team.
+ */
+export const getTeamJoinRequest = async (teamId: string, userId: string): Promise<TeamJoinRequest | null> => {
+    if (!teamId || !userId) return null;
+
+    if (teamId === 'team_demo_phoenix') {
+        if (typeof window !== 'undefined') {
+            try {
+                const list = JSON.parse(sessionStorage.getItem('invox_demo_phoenix_requests') || '[]');
+                const found = list.find((r: any) => r.userId === userId);
+                if (found) return found;
+            } catch {
+                // ignore
+            }
+        }
+        return null;
+    }
+
+    try {
+        const reqRef = doc(db, COLLECTIONS.teams, teamId, 'joinRequests', userId);
+        const snap = await getDoc(reqRef);
+        if (snap.exists()) {
+            return {
+                id: snap.id,
+                ...(snap.data() as any),
+            };
+        }
+        return null;
+    } catch (err) {
+        console.warn('[GET_TEAM_JOIN_REQUEST_WARN]', err);
+        return null;
+    }
+};
+
+/**
+ * Subscribes to real-time join requests for a team (for owner/admin view).
+ */
+export const subscribeToTeamJoinRequests = (
+    teamId: string,
+    onUpdate: (requests: TeamJoinRequest[]) => void,
+    onError?: (error: any) => void
+): (() => void) => {
+    if (!teamId) {
+        onUpdate([]);
+        return () => {};
+    }
+
+    if (teamId === 'team_demo_phoenix') {
+        const readDemo = () => {
+            if (typeof window !== 'undefined') {
+                try {
+                    const list = JSON.parse(sessionStorage.getItem('invox_demo_phoenix_requests') || '[]');
+                    onUpdate(list);
+                    return;
+                } catch {
+                    // ignore
+                }
+            }
+            onUpdate([]);
+        };
+        readDemo();
+        const interval = setInterval(readDemo, 1500);
+        return () => clearInterval(interval);
+    }
+
+    const q = query(
+        collection(db, COLLECTIONS.teams, teamId, 'joinRequests'),
+        orderBy('requestedAt', 'desc')
+    );
+
+    return onSnapshot(
+        q,
+        (snapshot) => {
+            const list: TeamJoinRequest[] = snapshot.docs.map((docSnap) => ({
+                id: docSnap.id,
+                ...(docSnap.data() as any),
+            }));
+            onUpdate(list);
+        },
+        (err) => {
+            console.warn('[SUBSCRIBE_JOIN_REQUESTS_FALLBACK]', err);
+            // Fallback without ordering in case composite index is not yet built
+            const fallbackUnsub = onSnapshot(
+                collection(db, COLLECTIONS.teams, teamId, 'joinRequests'),
+                (fbSnap) => {
+                    const list: TeamJoinRequest[] = fbSnap.docs.map((docSnap) => ({
+                        id: docSnap.id,
+                        ...(docSnap.data() as any),
+                    }));
+                    list.sort((a, b) => {
+                        const getT = (val: any) => {
+                            if (!val) return 0;
+                            if (typeof val.toDate === 'function') return val.toDate().getTime();
+                            if (val instanceof Date) return val.getTime();
+                            return new Date(val).getTime() || 0;
+                        };
+                        return getT(b.requestedAt || b.createdAt) - getT(a.requestedAt || a.createdAt);
+                    });
+                    onUpdate(list);
+                },
+                (fbErr) => {
+                    console.error('[SUBSCRIBE_JOIN_REQUESTS_ERROR]', fbErr);
+                    if (onError) onError(fbErr);
+                }
+            );
+            return fallbackUnsub;
+        }
+    );
+};
+
+/**
+ * Subscribes to a specific user's join request for a team in real-time.
+ */
+export const subscribeToUserJoinRequest = (
+    teamId: string,
+    userId: string,
+    onUpdate: (request: TeamJoinRequest | null) => void,
+    onError?: (error: any) => void
+): (() => void) => {
+    if (!teamId || !userId) {
+        onUpdate(null);
+        return () => {};
+    }
+
+    if (teamId === 'team_demo_phoenix') {
+        const readDemo = () => {
+            if (typeof window !== 'undefined') {
+                try {
+                    const list = JSON.parse(sessionStorage.getItem('invox_demo_phoenix_requests') || '[]');
+                    const found = list.find((r: any) => r.userId === userId) || null;
+                    onUpdate(found);
+                    return;
+                } catch {
+                    // ignore
+                }
+            }
+            onUpdate(null);
+        };
+        readDemo();
+        const interval = setInterval(readDemo, 1000);
+        return () => clearInterval(interval);
+    }
+
+    const reqRef = doc(db, COLLECTIONS.teams, teamId, 'joinRequests', userId);
+    return onSnapshot(
+        reqRef,
+        (docSnap) => {
+            if (docSnap.exists()) {
+                onUpdate({
+                    id: docSnap.id,
+                    ...(docSnap.data() as any),
+                });
+            } else {
+                onUpdate(null);
+            }
+        },
+        (err) => {
+            console.warn('[SUBSCRIBE_USER_JOIN_REQUEST_WARN]', err);
+            if (onError) onError(err);
+        }
+    );
+};
+
+/**
+ * Approves a team join request atomically.
+ * Verifies caller authorization (team owner/admin), checks that request is PENDING,
+ * creates the membership document, updates team member count and roster, updates request to APPROVED,
+ * and notifies the requester.
+ */
+export const approveTeamJoinRequest = async ({
+    teamId,
+    requestId,
+    adminUser,
+    adminProfile,
+}: {
+    teamId: string;
+    requestId: string;
+    adminUser: User;
+    adminProfile?: InvoxUser | null;
+}): Promise<void> => {
+    if (!teamId || !requestId || !adminUser?.uid) {
+        throw new Error('Invalid arguments: teamId, requestId, and adminUser are required.');
+    }
+
+    // Demo team handling
+    if (teamId === 'team_demo_phoenix') {
+        if (typeof window !== 'undefined') {
+            try {
+                let storedMembers: string[] = ['owner_phoenix'];
+                const parsed = JSON.parse(sessionStorage.getItem('invox_demo_phoenix_members') || '["owner_phoenix"]');
+                if (Array.isArray(parsed)) storedMembers = parsed;
+                if (!storedMembers.includes(requestId)) storedMembers.push(requestId);
+                sessionStorage.setItem('invox_demo_phoenix_members', JSON.stringify(storedMembers));
+
+                const list = JSON.parse(sessionStorage.getItem('invox_demo_phoenix_requests') || '[]');
+                const updated = list.map((r: any) => {
+                    if (r.userId === requestId) {
+                        return {
+                            ...r,
+                            status: 'APPROVED',
+                            decidedAt: new Date(),
+                            decidedBy: adminUser.uid,
+                            decidedByName: adminProfile?.displayName || adminUser.displayName || 'Phoenix Lead',
+                        };
+                    }
+                    return r;
+                });
+                sessionStorage.setItem('invox_demo_phoenix_requests', JSON.stringify(updated));
+            } catch {
+                // ignore
+            }
+        }
+        return;
+    }
+
+    const teamRef = doc(db, COLLECTIONS.teams, teamId);
+    const requestRef = doc(db, COLLECTIONS.teams, teamId, 'joinRequests', requestId);
+    const memberRef = doc(db, COLLECTIONS.teams, teamId, 'members', requestId);
+
+    const adminName = adminProfile?.displayName || adminUser.displayName || 'Team Lead';
+    let teamName = 'Team';
+    let inviteTokenToUpdate: string | null = null;
+
+    await runTransaction(db, async (transaction) => {
+        const teamSnap = await transaction.get(teamRef);
+        if (!teamSnap.exists()) {
+            throw new Error('Team workspace does not exist.');
+        }
+        const teamData = teamSnap.data() as Team;
+        teamName = teamData.name || 'Team';
+
+        if (teamData.ownerId !== adminUser.uid) {
+            throw new Error('Unauthorized: Only the team owner can approve join requests.');
+        }
+
+        const requestSnap = await transaction.get(requestRef);
+        if (!requestSnap.exists()) {
+            throw new Error('Join request not found or removed.');
+        }
+        const reqData = requestSnap.data() as TeamJoinRequest;
+
+        if (reqData.status === 'APPROVED') {
+            throw new Error('This request has already been approved.');
+        }
+        if (reqData.status === 'REJECTED') {
+            throw new Error('This request has already been rejected.');
+        }
+        if (reqData.status !== 'PENDING') {
+            throw new Error(`Cannot approve request with status "${reqData.status}".`);
+        }
+
+        const memberSnap = await transaction.get(memberRef);
+        if (memberSnap.exists()) {
+            transaction.update(requestRef, {
+                status: 'APPROVED',
+                decidedAt: serverTimestamp(),
+                decidedBy: adminUser.uid,
+                decidedByName: adminName,
+                updatedAt: serverTimestamp(),
+            });
+            return;
+        }
+
+        // 1. Create membership record
+        transaction.set(memberRef, sanitizeForFirestore({
+            teamId,
+            userId: requestId,
+            displayName: reqData.userName || 'Team Collaborator',
+            username: reqData.userUsername || '',
+            photoURL: reqData.userAvatar || null,
+            role: 'member',
+            projectRole: 'Team Collaborator',
+            joinedAt: serverTimestamp(),
+            lastReadAt: serverTimestamp(),
+        }));
+
+        // 2. Atomically update team document: add to memberIds and increment count
+        transaction.update(teamRef, {
+            memberIds: arrayUnion(requestId),
+            memberCount: increment(1),
+            updatedAt: serverTimestamp(),
+        });
+
+        // 3. Mark request as APPROVED
+        transaction.update(requestRef, {
+            status: 'APPROVED',
+            decidedAt: serverTimestamp(),
+            decidedBy: adminUser.uid,
+            decidedByName: adminName,
+            updatedAt: serverTimestamp(),
+        });
+
+        if (reqData.inviteToken) {
+            inviteTokenToUpdate = reqData.inviteToken;
+        }
+    });
+
+    // Update invitation usage if token was attached
+    if (inviteTokenToUpdate) {
+        const invRef = doc(db, COLLECTIONS.teamInvitations, inviteTokenToUpdate);
+        updateDoc(invRef, {
+            usedCount: increment(1),
+            usedBy: arrayUnion(requestId),
+            updatedAt: serverTimestamp(),
+        }).catch(() => {});
+    }
+
+    // Send notification to the newly approved member
+    sendNotification({
+        recipientId: requestId,
+        actorId: adminUser.uid,
+        actorName: adminName,
+        type: 'team_join_approved',
+        title: 'Team Join Request Approved',
+        body: `Your request to join team "${teamName}" has been approved. You are now an active member!`,
+        targetType: 'team',
+        targetId: teamId,
+        metadata: {
+            teamId,
+        },
+    }).catch((err) => console.warn('[APPROVE_JOIN_REQUEST_NOTIF_WARN]', err));
+};
+
+/**
+ * Rejects a team join request.
+ * Marks the request as REJECTED, prevents membership creation, and sends a respectful notification.
+ */
+export const rejectTeamJoinRequest = async ({
+    teamId,
+    requestId,
+    adminUser,
+    adminProfile,
+    reason,
+}: {
+    teamId: string;
+    requestId: string;
+    adminUser: User;
+    adminProfile?: InvoxUser | null;
+    reason?: string;
+}): Promise<void> => {
+    if (!teamId || !requestId || !adminUser?.uid) {
+        throw new Error('Invalid arguments: teamId, requestId, and adminUser are required.');
+    }
+
+    // Demo team handling
+    if (teamId === 'team_demo_phoenix') {
+        if (typeof window !== 'undefined') {
+            try {
+                const list = JSON.parse(sessionStorage.getItem('invox_demo_phoenix_requests') || '[]');
+                const updated = list.map((r: any) => {
+                    if (r.userId === requestId) {
+                        return {
+                            ...r,
+                            status: 'REJECTED',
+                            decidedAt: new Date(),
+                            decidedBy: adminUser.uid,
+                            decidedByName: adminProfile?.displayName || adminUser.displayName || 'Phoenix Lead',
+                            rejectionReason: reason || null,
+                        };
+                    }
+                    return r;
+                });
+                sessionStorage.setItem('invox_demo_phoenix_requests', JSON.stringify(updated));
+            } catch {
+                // ignore
+            }
+        }
+        return;
+    }
+
+    const teamRef = doc(db, COLLECTIONS.teams, teamId);
+    const requestRef = doc(db, COLLECTIONS.teams, teamId, 'joinRequests', requestId);
+
+    const adminName = adminProfile?.displayName || adminUser.displayName || 'Team Lead';
+    let teamName = 'Team';
+
+    await runTransaction(db, async (transaction) => {
+        const teamSnap = await transaction.get(teamRef);
+        if (!teamSnap.exists()) {
+            throw new Error('Team workspace does not exist.');
+        }
+        const teamData = teamSnap.data() as Team;
+        teamName = teamData.name || 'Team';
+
+        if (teamData.ownerId !== adminUser.uid) {
+            throw new Error('Unauthorized: Only the team owner can reject join requests.');
+        }
+
+        const requestSnap = await transaction.get(requestRef);
+        if (!requestSnap.exists()) {
+            throw new Error('Join request not found or removed.');
+        }
+        const reqData = requestSnap.data() as TeamJoinRequest;
+
+        if (reqData.status === 'APPROVED') {
+            throw new Error('Cannot reject a request that has already been approved.');
+        }
+        if (reqData.status === 'REJECTED') {
+            throw new Error('This request has already been rejected.');
+        }
+
+        transaction.update(requestRef, {
+            status: 'REJECTED',
+            decidedAt: serverTimestamp(),
+            decidedBy: adminUser.uid,
+            decidedByName: adminName,
+            rejectionReason: reason ? reason.trim() : null,
+            updatedAt: serverTimestamp(),
+        });
+    });
+
+    // Notify the requester using neutral and respectful wording
+    sendNotification({
+        recipientId: requestId,
+        actorId: adminUser.uid,
+        actorName: adminName,
+        type: 'team_join_rejected',
+        title: 'Team Join Request Update',
+        body: `Your request to join team "${teamName}" was not approved at this time.`,
+        targetType: 'team',
+        targetId: teamId,
+        metadata: {
+            teamId,
+        },
+    }).catch((err) => console.warn('[REJECT_JOIN_REQUEST_NOTIF_WARN]', err));
+};
+
