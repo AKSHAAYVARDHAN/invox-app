@@ -18,7 +18,7 @@ import {
     limit,
     runTransaction,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { COLLECTIONS, sanitizeForFirestore } from './firestoreService';
 import { sendNotification } from './notificationService';
 import type { InvoxUser, Post, Project, User, CollabApplication, TeamJoinPolicy, TeamJoinRequestStatus, TeamJoinRequest } from '../types';
@@ -1481,21 +1481,42 @@ export const getProjectAcceptedCollaborators = async (projectId: string): Promis
  * Mode B: 'approval_required' — Users must request access and receive owner/admin approval.
  * Only the team owner (and authorized admin) can change this setting.
  */
-export const updateTeamJoinPolicy = async ({
-    teamId,
-    userId,
-    policy,
-}: {
-    teamId: string;
-    userId: string;
-    policy: TeamJoinPolicy;
-}): Promise<void> => {
+export const updateTeamJoinPolicy = async (
+    arg1: { teamId: string; userId: string; policy: TeamJoinPolicy } | string,
+    arg2?: TeamJoinPolicy | string,
+    arg3?: string
+): Promise<void> => {
+    let teamId: string;
+    let userId: string;
+    let policy: TeamJoinPolicy;
+
+    if (arg1 && typeof arg1 === 'object') {
+        teamId = arg1.teamId;
+        userId = arg1.userId;
+        policy = arg1.policy;
+    } else {
+        teamId = typeof arg1 === 'string' ? arg1 : '';
+        if (arg2 === 'open' || arg2 === 'approval_required') {
+            policy = arg2 as TeamJoinPolicy;
+            userId = typeof arg3 === 'string' ? arg3 : '';
+        } else {
+            userId = typeof arg2 === 'string' ? arg2 : '';
+            policy = (arg3 as TeamJoinPolicy) || ('' as any);
+        }
+    }
+
     if (!teamId || !userId || !policy) {
         throw new Error('Invalid arguments: teamId, userId, and policy are required.');
     }
 
     if (policy !== 'open' && policy !== 'approval_required') {
         throw new Error('Invalid policy: Policy must be either "open" or "approval_required".');
+    }
+
+    // Verify caller identity against authenticated user
+    const currentUid = auth.currentUser?.uid;
+    if (currentUid && currentUid !== userId) {
+        throw new Error('Unauthorized: Caller identity does not match authenticated user.');
     }
 
     // Demo team handling

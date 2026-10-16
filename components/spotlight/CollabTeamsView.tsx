@@ -94,6 +94,10 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
 
     // Join Access & Join Requests state
     const [showJoinSettingsModal, setShowJoinSettingsModal] = useState<boolean>(false);
+    const showJoinSettingsModalRef = useRef<boolean>(false);
+    useEffect(() => {
+        showJoinSettingsModalRef.current = showJoinSettingsModal;
+    }, [showJoinSettingsModal]);
     const [showJoinRequestsModal, setShowJoinRequestsModal] = useState<boolean>(false);
     const [selectedJoinPolicy, setSelectedJoinPolicy] = useState<TeamJoinPolicy>('open');
     const [isUpdatingJoinPolicy, setIsUpdatingJoinPolicy] = useState<boolean>(false);
@@ -421,7 +425,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
             }
 
             setActiveTeam(team);
-            if (team.joinPolicy) {
+            if (team.joinPolicy && !showJoinSettingsModalRef.current) {
                 setSelectedJoinPolicy(team.joinPolicy);
             }
         });
@@ -985,12 +989,38 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
 
     // Helper: Update team join policy
     const handleSaveJoinPolicy = async (policyToSave?: TeamJoinPolicy) => {
+        if (isUpdatingJoinPolicy) return;
+
         const targetPolicy = policyToSave || selectedJoinPolicy;
-        if (!activeTeam || !currentUser?.uid) return;
+
+        if (!activeTeam || !activeTeam.id) {
+            setJoinPolicyFeedback({
+                type: 'error',
+                message: 'No valid team selected. Please select a squad first.',
+            });
+            return;
+        }
+
+        if (!currentUser?.uid) {
+            setJoinPolicyFeedback({
+                type: 'error',
+                message: 'Authentication required. Please sign in to modify squad access.',
+            });
+            return;
+        }
+
+        if (!targetPolicy || (targetPolicy !== 'open' && targetPolicy !== 'approval_required')) {
+            setJoinPolicyFeedback({
+                type: 'error',
+                message: 'Invalid policy: Please select either "ANYONE WITH THE LINK" or "APPROVAL REQUIRED".',
+            });
+            return;
+        }
+
         if (!isOwner) {
             setJoinPolicyFeedback({
                 type: 'error',
-                message: 'Unauthorized: Only team owner can update join access settings.',
+                message: 'Unauthorized: Only the team owner can configure team join settings.',
             });
             return;
         }
@@ -998,8 +1028,15 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         setIsUpdatingJoinPolicy(true);
         setJoinPolicyFeedback(null);
         try {
-            await updateTeamJoinPolicy(activeTeam.id, targetPolicy, currentUser.uid);
+            await updateTeamJoinPolicy({
+                teamId: activeTeam.id,
+                userId: currentUser.uid,
+                policy: targetPolicy,
+            });
             setSelectedJoinPolicy(targetPolicy);
+            setActiveTeam((prev) => (prev ? { ...prev, joinPolicy: targetPolicy } : prev));
+            // Close the modal only after the policy has been saved successfully
+            setShowJoinSettingsModal(false);
             setJoinPolicyFeedback({
                 type: 'success',
                 message: `Join settings updated: "${
@@ -1010,8 +1047,9 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
             });
             setTimeout(() => {
                 setJoinPolicyFeedback(null);
-            }, 3500);
+            }, 4000);
         } catch (err: any) {
+            // Keep modal open and preserve selected option so user can see what failed and retry
             setJoinPolicyFeedback({
                 type: 'error',
                 message: err?.message || 'Failed to update team join settings.',
@@ -1035,11 +1073,15 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         setProcessingRequestId(req.id);
         setJoinRequestsFeedback(null);
         try {
-            const approverName = currentUser.displayName || userProfile?.displayName || 'Team Owner';
-            await approveTeamJoinRequest(req.teamId, req.userId, currentUser.uid, approverName);
+            await approveTeamJoinRequest({
+                teamId: req.teamId,
+                requestId: req.id,
+                adminUser: currentUser,
+                adminProfile: userProfile,
+            });
             setJoinRequestsFeedback({
                 type: 'success',
-                message: `Approved ${req.displayName || 'applicant'} for membership.`,
+                message: `Approved ${req.userName || 'applicant'} for membership.`,
             });
             setTimeout(() => {
                 setJoinRequestsFeedback(null);
@@ -1068,12 +1110,17 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         setProcessingRequestId(req.id);
         setJoinRequestsFeedback(null);
         try {
-            const rejecterName = currentUser.displayName || userProfile?.displayName || 'Team Owner';
             const reason = rejectionReasonMap[req.id]?.trim() || undefined;
-            await rejectTeamJoinRequest(req.teamId, req.userId, currentUser.uid, rejecterName, reason);
+            await rejectTeamJoinRequest({
+                teamId: req.teamId,
+                requestId: req.id,
+                adminUser: currentUser,
+                adminProfile: userProfile,
+                reason,
+            });
             setJoinRequestsFeedback({
                 type: 'success',
-                message: `Request from ${req.displayName || 'applicant'} was declined.`,
+                message: `Request from ${req.userName || 'applicant'} was declined.`,
             });
             setTimeout(() => {
                 setJoinRequestsFeedback(null);
@@ -1640,6 +1687,30 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Join Policy Feedback Notification Banner (outside modal) */}
+                            {joinPolicyFeedback && !showJoinSettingsModal && (
+                                <div
+                                    className={`px-4 py-2 border-b flex items-center justify-between text-xs font-mono transition-all animate-fadeIn ${
+                                        joinPolicyFeedback.type === 'success'
+                                            ? 'bg-emerald-950/70 border-emerald-800 text-emerald-300'
+                                            : 'bg-red-950/70 border-red-800 text-red-300'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-bold">//</span>
+                                        <span>{joinPolicyFeedback.message}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setJoinPolicyFeedback(null)}
+                                        className="text-zinc-400 hover:text-white text-xs px-1 cursor-pointer font-bold"
+                                        title="Dismiss"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            )}
 
                             {/* Chat Content Body (Chat thread + Message composer, with optional side-by-side / overlay Members Panel confined to workspace) */}
                             <div className="flex-1 flex overflow-hidden min-h-0 relative">
@@ -3105,7 +3176,11 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                 <div
                     className="fixed inset-0 z-[120] flex items-center justify-center bg-black/65 backdrop-blur-[5px] p-4 font-mono animate-fadeIn"
                     onClick={() => {
-                        if (!isUpdatingJoinPolicy) setShowJoinSettingsModal(false);
+                        if (!isUpdatingJoinPolicy) {
+                            setShowJoinSettingsModal(false);
+                            setSelectedJoinPolicy(activeTeam.joinPolicy || 'open');
+                            setJoinPolicyFeedback(null);
+                        }
                     }}
                     role="dialog"
                     aria-modal="true"
@@ -3128,7 +3203,11 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                             <button
                                 type="button"
                                 onClick={() => {
-                                    if (!isUpdatingJoinPolicy) setShowJoinSettingsModal(false);
+                                    if (!isUpdatingJoinPolicy) {
+                                        setShowJoinSettingsModal(false);
+                                        setSelectedJoinPolicy(activeTeam.joinPolicy || 'open');
+                                        setJoinPolicyFeedback(null);
+                                    }
                                 }}
                                 disabled={isUpdatingJoinPolicy}
                                 className="text-zinc-500 hover:text-white text-base leading-none p-1 cursor-pointer font-mono disabled:opacity-40"
@@ -3149,10 +3228,19 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                         </p>
 
                         {/* Join Mode Options */}
-                        <div className="space-y-3">
+                        <div className="space-y-3" role="radiogroup" aria-label="Team join access settings">
                             {/* Mode A: Anyone with the link */}
                             <div
-                                onClick={() => setSelectedJoinPolicy('open')}
+                                role="radio"
+                                aria-checked={selectedJoinPolicy === 'open'}
+                                tabIndex={0}
+                                onClick={() => !isUpdatingJoinPolicy && setSelectedJoinPolicy('open')}
+                                onKeyDown={(e) => {
+                                    if ((e.key === ' ' || e.key === 'Enter') && !isUpdatingJoinPolicy) {
+                                        e.preventDefault();
+                                        setSelectedJoinPolicy('open');
+                                    }
+                                }}
                                 className={`p-3.5 border transition-all cursor-pointer space-y-1.5 ${
                                     selectedJoinPolicy === 'open'
                                         ? 'border-emerald-500/90 bg-emerald-950/20 shadow-md'
@@ -3187,7 +3275,16 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
 
                             {/* Mode B: Owner/Admin approval required */}
                             <div
-                                onClick={() => setSelectedJoinPolicy('approval_required')}
+                                role="radio"
+                                aria-checked={selectedJoinPolicy === 'approval_required'}
+                                tabIndex={0}
+                                onClick={() => !isUpdatingJoinPolicy && setSelectedJoinPolicy('approval_required')}
+                                onKeyDown={(e) => {
+                                    if ((e.key === ' ' || e.key === 'Enter') && !isUpdatingJoinPolicy) {
+                                        e.preventDefault();
+                                        setSelectedJoinPolicy('approval_required');
+                                    }
+                                }}
                                 className={`p-3.5 border transition-all cursor-pointer space-y-1.5 ${
                                     selectedJoinPolicy === 'approval_required'
                                         ? 'border-purple-500/90 bg-purple-950/20 shadow-md'
@@ -3239,7 +3336,11 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                         <div className="pt-2 flex items-center justify-end gap-3 border-t border-zinc-800/80">
                             <button
                                 type="button"
-                                onClick={() => setShowJoinSettingsModal(false)}
+                                onClick={() => {
+                                    setShowJoinSettingsModal(false);
+                                    setSelectedJoinPolicy(activeTeam.joinPolicy || 'open');
+                                    setJoinPolicyFeedback(null);
+                                }}
                                 disabled={isUpdatingJoinPolicy}
                                 className="px-4 py-2 bg-transparent border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white uppercase transition-colors text-xs font-bold cursor-pointer disabled:opacity-40 font-mono"
                             >
