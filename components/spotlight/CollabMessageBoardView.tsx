@@ -12,9 +12,15 @@ import {
     type CollabConversation,
     type CollabChatMessage,
 } from '../../services/collabMessageService';
-import { handleImageError } from '../utils/imageUtils';
 import { EllipsisVerticalIcon, Maximize2Icon, Minimize2Icon } from '../ui/Icons';
 import { ClickableMessageText } from '../ui/ClickableMessageText';
+import {
+    ConversationCard,
+    SearchInput,
+    ChatHeader,
+    MessageComposer,
+    EmptyMessagingState,
+} from './MessagingComponents';
 
 interface CollabMessageBoardViewProps {
     view: 'inbox' | 'teams';
@@ -34,6 +40,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
     const [conversations, setConversations] = useState<CollabConversation[]>([]);
     const [convUnreadMap, setConvUnreadMap] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState<boolean>(true);
+    const [searchQuery, setSearchQuery] = useState<string>('');
 
     const urlConvId = searchParams.get('conversationId') || initialConversationId || null;
     const [selectedConvId, setSelectedConvId] = useState<string | null>(urlConvId);
@@ -50,10 +57,14 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
     // Full-screen expand state
     const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
+    // Smart scrolling state
+    const timelineRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
     const menuButtonRef = useRef<HTMLButtonElement>(null);
+    const [isNearBottom, setIsNearBottom] = useState<boolean>(true);
+    const [hasUnreadBelow, setHasUnreadBelow] = useState<boolean>(false);
 
     // Prevent background scrolling when chat is expanded
     useEffect(() => {
@@ -63,13 +74,6 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
             return () => {
                 document.body.style.overflow = originalOverflow;
             };
-        }
-    }, [isExpanded]);
-
-    // Scroll to bottom when expanded or when messages update
-    useEffect(() => {
-        if (isExpanded && messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
         }
     }, [isExpanded]);
 
@@ -172,15 +176,58 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
     }, [currentUser?.uid]);
 
     // Data partitioning: Inbox (direct collab applications) vs Teams
-    const inboxConversations = useMemo(() => conversations.filter(c => !c.isTeam && c.type !== 'team'), [conversations]);
-    const teamConversations = useMemo(() => conversations.filter(c => c.isTeam || c.type === 'team'), [conversations]);
-    const activeList = useMemo(() => view === 'inbox' ? inboxConversations : teamConversations, [view, inboxConversations, teamConversations]);
+    const inboxConversations = useMemo(
+        () => conversations.filter((c) => !c.isTeam && c.type !== 'team'),
+        [conversations]
+    );
+    const teamConversations = useMemo(
+        () => conversations.filter((c) => c.isTeam || c.type === 'team'),
+        [conversations]
+    );
+    const activeList = useMemo(
+        () => (view === 'inbox' ? inboxConversations : teamConversations),
+        [view, inboxConversations, teamConversations]
+    );
+
+    // Filter conversations by search query
+    const filteredActiveList = useMemo(() => {
+        if (!searchQuery.trim()) return activeList;
+        const q = searchQuery.toLowerCase().trim();
+        return activeList.filter((convo) => {
+            const other = getOtherParticipant(convo);
+            return (
+                other.displayName?.toLowerCase().includes(q) ||
+                convo.collabTitle?.toLowerCase().includes(q) ||
+                convo.collabHook?.toLowerCase().includes(q) ||
+                convo.roleTitle?.toLowerCase().includes(q) ||
+                convo.lastMessage?.toLowerCase().includes(q)
+            );
+        });
+    }, [activeList, searchQuery]);
+
+    // Sort conversations by most recent activity timestamp
+    const sortedActiveList = useMemo(() => {
+        const copy = [...filteredActiveList];
+        copy.sort((a, b) => {
+            const getTime = (val: any) => {
+                if (!val) return 0;
+                if (typeof val.toDate === 'function') return val.toDate().getTime();
+                if (val instanceof Date) return val.getTime();
+                return new Date(val).getTime() || 0;
+            };
+            const timeA = getTime(a.lastMessageTimestamp || a.updatedAt || a.createdAt);
+            const timeB = getTime(b.lastMessageTimestamp || b.updatedAt || b.createdAt);
+            return timeB - timeA;
+        });
+        return copy;
+    }, [filteredActiveList]);
+
     const hasData = activeList.length > 0;
 
     // Synchronize selected conversation with URL parameter
     useEffect(() => {
         if (urlConvId) {
-            if (activeList.some(c => c.id === urlConvId)) {
+            if (activeList.some((c) => c.id === urlConvId)) {
                 setSelectedConvId(urlConvId);
             }
         } else {
@@ -189,7 +236,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
     }, [urlConvId, activeList]);
 
     // Find the currently selected conversation object
-    const selectedConversation = activeList.find(c => c.id === selectedConvId) || null;
+    const selectedConversation = activeList.find((c) => c.id === selectedConvId) || null;
 
     // Automatically mark the currently viewed conversation as read
     useEffect(() => {
@@ -211,10 +258,11 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
             (newMessages) => {
                 setMessages(newMessages);
                 setMessagesLoading(false);
-                // If user is actively viewing this conversation and unread incoming messages exist, mark as read
                 if (currentUser?.uid && newMessages.length > 0) {
                     const hasUnreadIncoming = newMessages.some(
-                        (m) => m.senderId !== currentUser.uid && (!m.read || (Array.isArray(m.readBy) && !m.readBy.includes(currentUser.uid)))
+                        (m) =>
+                            m.senderId !== currentUser.uid &&
+                            (!m.read || (Array.isArray(m.readBy) && !m.readBy.includes(currentUser.uid)))
                     );
                     if (hasUnreadIncoming) {
                         markConversationAsRead(selectedConvId, currentUser.uid);
@@ -233,12 +281,30 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
         };
     }, [selectedConvId, currentUser?.uid]);
 
-    // Auto-scroll to bottom of message thread
-    useEffect(() => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    // Handle scroll events on message timeline
+    const handleTimelineScroll = () => {
+        if (!timelineRef.current) return;
+        const { scrollTop, scrollHeight, clientHeight } = timelineRef.current;
+        const nearBottom = scrollHeight - scrollTop - clientHeight < 100;
+        setIsNearBottom(nearBottom);
+        if (nearBottom) {
+            setHasUnreadBelow(false);
         }
-    }, [messages]);
+    };
+
+    // Smart auto-scroll: only scrolls to bottom if near bottom or if user sent the message
+    useEffect(() => {
+        if (messages.length === 0) return;
+        const lastMsg = messages[messages.length - 1];
+        const isMyMessage = lastMsg?.senderId === currentUser?.uid;
+
+        if (isNearBottom || isMyMessage) {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            setHasUnreadBelow(false);
+        } else {
+            setHasUnreadBelow(true);
+        }
+    }, [messages, currentUser?.uid, isNearBottom]);
 
     // Handle sending a message
     const handleSendMessage = async () => {
@@ -252,11 +318,19 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
 
         try {
             const otherParticipantId =
-                (selectedConversation.participants || []).find(p => p && p !== currentUser.uid)
-                || (selectedConversation.ownerId && selectedConversation.ownerId !== currentUser.uid ? selectedConversation.ownerId : null)
-                || (selectedConversation.applicantId && selectedConversation.applicantId !== currentUser.uid ? selectedConversation.applicantId : null)
-                || (selectedConversation.ownerDetails?.uid && selectedConversation.ownerDetails.uid !== currentUser.uid ? selectedConversation.ownerDetails.uid : null)
-                || (selectedConversation.applicantDetails?.uid && selectedConversation.applicantDetails.uid !== currentUser.uid ? selectedConversation.applicantDetails.uid : null);
+                (selectedConversation.participants || []).find((p) => p && p !== currentUser.uid) ||
+                (selectedConversation.ownerId && selectedConversation.ownerId !== currentUser.uid
+                    ? selectedConversation.ownerId
+                    : null) ||
+                (selectedConversation.applicantId && selectedConversation.applicantId !== currentUser.uid
+                    ? selectedConversation.applicantId
+                    : null) ||
+                (selectedConversation.ownerDetails?.uid && selectedConversation.ownerDetails.uid !== currentUser.uid
+                    ? selectedConversation.ownerDetails.uid
+                    : null) ||
+                (selectedConversation.applicantDetails?.uid && selectedConversation.applicantDetails.uid !== currentUser.uid
+                    ? selectedConversation.applicantDetails.uid
+                    : null);
             const senderName = userProfile?.displayName || currentUser.displayName || 'You';
             const senderAvatar = userProfile?.photoURL || currentUser.photoURL || null;
 
@@ -277,14 +351,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
         }
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSendMessage();
-        }
-    };
-
-    // Helper to format timestamps compactly
+    // Format timestamps compactly
     const formatTimestamp = (val: any) => {
         if (!val) return '';
         try {
@@ -324,7 +391,9 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                 userId: null,
             };
         }
-        const isOwner = currentUser?.uid && (convo.ownerId === currentUser.uid || convo.ownerDetails?.uid === currentUser.uid);
+        const isOwner =
+            currentUser?.uid &&
+            (convo.ownerId === currentUser.uid || convo.ownerDetails?.uid === currentUser.uid);
         if (isOwner) {
             return {
                 displayName: convo.applicantDetails?.displayName || 'Applicant',
@@ -348,7 +417,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
     // Return to the application in Incoming Applications or My Applications
     const handleReturnToApplication = () => {
         if (!selectedConversation?.applicationId) return;
-        setSearchParams(prev => {
+        setSearchParams((prev) => {
             const next = new URLSearchParams(prev);
             next.set('tab', 'Collabs');
             if (currentUser?.uid === selectedConversation.ownerId) {
@@ -369,8 +438,12 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                     : 'space-y-4'
             }`}
         >
-            {/* View Header: Matches existing INVOX layout with polished alignment */}
-            <div className={`flex items-center justify-between border-b border-zinc-800 ${isExpanded ? 'flex-shrink-0 px-4 sm:px-6 py-3.5 bg-[#0c0c0e]' : 'px-0 pb-3'}`}>
+            {/* View Header: Clean INVOX layout with aligned actions */}
+            <div
+                className={`flex items-center justify-between border-b border-zinc-800 ${
+                    isExpanded ? 'flex-shrink-0 px-4 sm:px-6 py-3.5 bg-[#0c0c0e]' : 'px-0 pb-3'
+                }`}
+            >
                 {/* Left: Section Label and Title */}
                 <div className="flex flex-col justify-center gap-0.5">
                     <span className="text-[10px] text-zinc-500 uppercase tracking-widest block font-bold leading-none">
@@ -381,7 +454,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                     </h2>
                 </div>
 
-                {/* Right: Action buttons in a single aligned row */}
+                {/* Right: Actions */}
                 <div className="flex items-center gap-2">
                     {onBack && (
                         <button
@@ -416,38 +489,50 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
 
             {/* Content Display */}
             {loading ? (
-                <div className={`p-12 text-center border border-zinc-800 bg-[#0c0c0e] ${isExpanded ? 'flex-1 flex flex-col items-center justify-center border-0' : ''}`}>
-                    <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
-                    <p className="text-xs text-zinc-500 uppercase tracking-wider font-mono">// SYNCHRONIZING...</p>
+                <div
+                    className={`p-12 text-center border border-zinc-800 bg-[#0c0c0e] ${
+                        isExpanded ? 'flex-1 flex flex-col items-center justify-center border-0' : 'h-[640px] flex items-center justify-center'
+                    }`}
+                >
+                    <div>
+                        <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
+                        <p className="text-xs text-zinc-500 uppercase tracking-wider font-mono">
+                            // SYNCHRONIZING CONVERSATIONS...
+                        </p>
+                    </div>
                 </div>
             ) : !hasData ? (
                 /* Empty State Display */
-                <div className={`border border-zinc-800 bg-[#0c0c0e] p-12 sm:p-16 text-center font-mono my-4 ${isExpanded ? 'flex-1 flex items-center justify-center border-0 m-0' : ''}`}>
+                <div
+                    className={`border border-zinc-800 bg-[#0c0c0e] p-12 sm:p-16 text-center font-mono my-4 ${
+                        isExpanded ? 'flex-1 flex items-center justify-center border-0 m-0' : 'h-[640px] flex items-center justify-center'
+                    }`}
+                >
                     <div className="max-w-md mx-auto space-y-1.5">
                         <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
                             {view === 'inbox' ? '// NO CONVERSATIONS' : '// NO TEAM CONVERSATIONS'}
                         </span>
                         <p className="text-xs text-zinc-400 leading-relaxed">
                             {view === 'inbox'
-                                ? 'No conversations yet.'
-                                : 'You don\'t have any team conversations yet.'}
+                                ? 'No direct collaborative conversations yet.'
+                                : "You don't have any team conversations yet."}
                         </p>
                     </div>
                 </div>
             ) : (
-                /* Two-Column Messaging Workspace for INBOX & TEAMS */
+                /* Two-Column Messaging Workspace: Compact Sidebar + Large Active Chat */
                 <div
-                    className={`bg-[#0c0c0e] font-mono grid grid-cols-1 md:grid-cols-[30%_70%] overflow-hidden ${
-                        isExpanded ? 'flex-1 min-h-0 border-0' : 'border border-zinc-800 h-[600px] sm:h-[640px]'
+                    className={`bg-[#0c0c0e] font-mono flex flex-col md:flex-row overflow-hidden ${
+                        isExpanded ? 'flex-1 min-h-0 border-0' : 'border border-zinc-800 h-[640px] sm:h-[700px]'
                     }`}
                 >
-                    {/* LEFT: Conversation List (~28-32%) */}
+                    {/* LEFT PANEL: Compact Conversation Sidebar */}
                     <aside
-                        className={`border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col h-full overflow-hidden ${
+                        className={`w-full md:w-80 lg:w-84 flex-shrink-0 border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col h-full bg-[#0b0b0d] overflow-hidden ${
                             selectedConvId ? 'hidden md:flex' : 'flex'
                         }`}
                     >
-                        {/* Section Label Header */}
+                        {/* Section Header */}
                         <div className="px-3.5 py-3 border-b border-zinc-800 flex items-center justify-between bg-black/40 flex-shrink-0">
                             <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
                                 {view === 'inbox' ? '// CONVERSATIONS' : '// TEAM_CHANNELS'}
@@ -459,115 +544,71 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                             )}
                         </div>
 
-                        {/* Clean Compact Messaging Rows */}
+                        {/* Search Bar */}
+                        <SearchInput
+                            value={searchQuery}
+                            onChange={setSearchQuery}
+                            placeholder={view === 'inbox' ? 'SEARCH INBOX...' : 'SEARCH CHANNELS...'}
+                        />
+
+                        {/* Conversation Cards List */}
                         <div className="flex-1 overflow-y-auto divide-y divide-zinc-850/60">
-                            {activeList.map((convo) => {
-                                const other = getOtherParticipant(convo);
-                                const isSelected = convo.id === selectedConvId;
-                                const unreadCount = isSelected
-                                    ? 0
-                                    : (convUnreadMap[convo.id] !== undefined
+                            {sortedActiveList.length === 0 ? (
+                                <div className="p-6 text-center text-xs text-zinc-500 font-mono">
+                                    No conversations matching "{searchQuery}"
+                                </div>
+                            ) : (
+                                sortedActiveList.map((convo) => {
+                                    const other = getOtherParticipant(convo);
+                                    const isSelected = convo.id === selectedConvId;
+                                    const unreadCount = isSelected
+                                        ? 0
+                                        : convUnreadMap[convo.id] !== undefined
                                         ? convUnreadMap[convo.id]
-                                        : getConversationUnreadCount(convo, currentUser?.uid));
-                                const hasUnread = unreadCount > 0;
-                                const timestampStr = formatTimestamp(convo.lastMessageTimestamp || convo.updatedAt || convo.createdAt);
+                                        : getConversationUnreadCount(convo, currentUser?.uid);
+                                    const timestampStr = formatTimestamp(
+                                        convo.lastMessageTimestamp || convo.updatedAt || convo.createdAt
+                                    );
 
-                                return (
-                                    <button
-                                        key={convo.id}
-                                        type="button"
-                                        onClick={() => {
-                                            setSelectedConvId(convo.id);
-                                            if (currentUser?.uid && hasUnread) {
-                                                markConversationAsRead(convo.id, currentUser.uid);
-                                            }
-                                            setSearchParams(prev => {
-                                                const next = new URLSearchParams(prev);
-                                                next.set('tab', 'Collabs');
-                                                next.set('collabView', view);
-                                                next.set('conversationId', convo.id);
-                                                return next;
-                                            });
-                                        }}
-                                        className={`w-full px-3 py-2.5 text-left transition-colors flex items-start gap-2.5 border-l-2 cursor-pointer ${
-                                            isSelected
-                                                ? 'bg-zinc-900 border-emerald-400 text-white'
-                                                : hasUnread
-                                                ? 'bg-zinc-900/40 border-emerald-500/80 text-zinc-200 hover:bg-zinc-900/60'
-                                                : 'bg-transparent border-transparent text-zinc-400 hover:bg-zinc-900/40 hover:text-zinc-200'
-                                        }`}
-                                    >
-                                        {/* Avatar (Sharp rectangular) */}
-                                        <div className={`w-8 h-8 bg-zinc-900 border flex items-center justify-center flex-shrink-0 text-xs font-bold text-white overflow-hidden mt-0.5 ${
-                                            hasUnread && !isSelected ? 'border-emerald-700/60' : 'border-zinc-750'
-                                        }`}>
-                                            {other.photoURL ? (
-                                                <img
-                                                    src={other.photoURL}
-                                                    alt={other.displayName}
-                                                    className="w-full h-full object-cover"
-                                                    onError={handleImageError}
-                                                />
-                                            ) : other.isTeam ? (
-                                                <span className="text-emerald-400 font-bold">//</span>
-                                            ) : (
-                                                <span>{other.displayName.charAt(0).toUpperCase()}</span>
-                                            )}
-                                        </div>
-
-                                        {/* Row Content */}
-                                        <div className="min-w-0 flex-1 space-y-0.5">
-                                            <div className="flex items-center justify-between gap-1">
-                                                <span className={`text-xs truncate ${
-                                                    isSelected || hasUnread ? 'font-bold text-white' : 'font-semibold text-zinc-300'
-                                                }`}>
-                                                    {other.displayName}
-                                                </span>
-                                                <div className="flex items-center gap-1.5 flex-shrink-0">
-                                                    {timestampStr && (
-                                                        <span className={`text-[10px] font-mono ${
-                                                            hasUnread ? 'text-emerald-400 font-semibold' : 'text-zinc-500'
-                                                        }`}>
-                                                            {timestampStr}
-                                                        </span>
-                                                    )}
-                                                    {hasUnread && (
-                                                        <span className="font-mono font-bold px-1.5 py-0.2 bg-emerald-950/80 text-emerald-400 border border-emerald-700 text-[10px] leading-tight">
-                                                            [{unreadCount}]
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Project name / Team info */}
-                                            <div className={`text-[11px] truncate ${
-                                                hasUnread ? 'text-zinc-200 font-medium' : 'text-zinc-500'
-                                            }`}>
-                                                {other.isTeam
-                                                    ? (convo.collabHook || `${convo.participants?.length || 0} members`)
-                                                    : (convo.collabHook || convo.collabTitle)}
-                                            </div>
-
-                                            {/* Short latest-message preview */}
-                                            <div className={`text-[11px] truncate ${
-                                                hasUnread
-                                                    ? 'text-zinc-200 font-medium'
-                                                    : convo.lastMessage
-                                                    ? (isSelected ? 'text-zinc-300' : 'text-zinc-400')
-                                                    : 'text-zinc-600 italic'
-                                            }`}>
-                                                {convo.lastMessage || 'No messages yet'}
-                                            </div>
-                                        </div>
-                                    </button>
-                                );
-                            })}
+                                    return (
+                                        <ConversationCard
+                                            key={convo.id}
+                                            data={{
+                                                id: convo.id,
+                                                name: other.displayName,
+                                                avatarUrl: other.photoURL,
+                                                isTeam: other.isTeam,
+                                                lastMessage: convo.lastMessage,
+                                                timestampStr,
+                                                unreadCount,
+                                                isSelected,
+                                                subtitle: convo.roleTitle
+                                                    ? `[${convo.roleTitle}]`
+                                                    : convo.collabHook || convo.collabTitle,
+                                            }}
+                                            onClick={() => {
+                                                setSelectedConvId(convo.id);
+                                                if (currentUser?.uid && unreadCount > 0) {
+                                                    markConversationAsRead(convo.id, currentUser.uid);
+                                                }
+                                                setSearchParams((prev) => {
+                                                    const next = new URLSearchParams(prev);
+                                                    next.set('tab', 'Collabs');
+                                                    next.set('collabView', view);
+                                                    next.set('conversationId', convo.id);
+                                                    return next;
+                                                });
+                                            }}
+                                        />
+                                    );
+                                })
+                            )}
                         </div>
                     </aside>
 
-                    {/* RIGHT: Active Conversation (~68-72%) */}
+                    {/* RIGHT PANEL: Large Active Chat Panel */}
                     <main
-                        className={`flex flex-col h-full overflow-hidden bg-[#0a0a0c] ${
+                        className={`flex-1 min-w-0 flex flex-col bg-[#08080a] overflow-hidden relative h-full ${
                             !selectedConvId ? 'hidden md:flex' : 'flex'
                         }`}
                     >
@@ -576,51 +617,25 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                 {/* Active Conversation Header */}
                                 {(() => {
                                     const other = getOtherParticipant(selectedConversation);
+                                    const subtitleText =
+                                        selectedConversation.collabHook || selectedConversation.collabTitle
+                                            ? `// ${selectedConversation.collabHook || selectedConversation.collabTitle}${
+                                                  selectedConversation.roleTitle
+                                                      ? ` • [${selectedConversation.roleTitle}]`
+                                                      : ''
+                                              }`
+                                            : undefined;
+
                                     return (
-                                        <div className="px-4 py-3 border-b border-zinc-800 bg-[#0c0c0e] flex items-center justify-between gap-3 flex-shrink-0 relative z-20">
-                                            {/* Left side: Avatar, Display Name, Username */}
-                                            <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
-                                                {/* Mobile back button to conversation list */}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSelectedConvId(null)}
-                                                    className="md:hidden text-xs text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer pr-1 flex-shrink-0 font-mono"
-                                                    title="Back to conversations"
-                                                >
-                                                    <span>←</span>
-                                                </button>
-
-                                                {/* Avatar */}
-                                                <div className="w-8 h-8 sm:w-9 sm:h-9 bg-zinc-900 border border-zinc-750 flex items-center justify-center flex-shrink-0 text-xs font-bold text-white overflow-hidden">
-                                                    {other.photoURL ? (
-                                                        <img
-                                                            src={other.photoURL}
-                                                            alt={other.displayName}
-                                                            className="w-full h-full object-cover"
-                                                            onError={handleImageError}
-                                                        />
-                                                    ) : other.isTeam ? (
-                                                        <span className="text-emerald-400 font-bold">//</span>
-                                                    ) : (
-                                                        <span>{other.displayName.charAt(0).toUpperCase()}</span>
-                                                    )}
-                                                </div>
-
-                                                {/* Display Name */}
-                                                <div className="min-w-0 flex items-center gap-2">
-                                                    <span className="text-xs sm:text-sm font-bold text-white truncate">
-                                                        {other.displayName}
-                                                    </span>
-                                                    {other.isTeam && (
-                                                        <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-1.5 py-0.2 flex-shrink-0">
-                                                            TEAM
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Right side: Three-dot overflow menu */}
-                                            <div className="relative flex-shrink-0">
+                                        <ChatHeader
+                                            title={other.displayName}
+                                            subtitle={subtitleText}
+                                            avatarUrl={other.photoURL}
+                                            isTeam={other.isTeam}
+                                            onBackMobile={() => setSelectedConvId(null)}
+                                        >
+                                            {/* Overflow Menu */}
+                                            <div className="relative">
                                                 <button
                                                     ref={menuButtonRef}
                                                     type="button"
@@ -628,7 +643,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                     aria-label="Conversation options"
                                                     aria-expanded={showMenu}
                                                     aria-haspopup="true"
-                                                    className={`p-2 border transition-colors cursor-pointer flex items-center justify-center text-xs ${
+                                                    className={`w-8 h-8 border transition-colors cursor-pointer flex items-center justify-center text-xs ${
                                                         showMenu
                                                             ? 'bg-zinc-800 border-zinc-600 text-white'
                                                             : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white'
@@ -637,7 +652,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                     <EllipsisVerticalIcon className="w-4 h-4" />
                                                 </button>
 
-                                                {/* Overflow Dropdown Menu */}
+                                                {/* Overflow Dropdown */}
                                                 {showMenu && (
                                                     <div
                                                         ref={menuRef}
@@ -645,18 +660,24 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                         aria-orientation="vertical"
                                                         className="absolute right-0 top-full mt-1.5 w-56 bg-[#0c0c0e] border border-zinc-800 shadow-2xl z-30 font-mono text-xs divide-y divide-zinc-850/80"
                                                     >
-                                                        {/* Conversation Context Details (Project and Role) */}
-                                                        {(selectedConversation.collabTitle || selectedConversation.collabHook || selectedConversation.roleTitle) && (
+                                                        {/* Context Details */}
+                                                        {(selectedConversation.collabTitle ||
+                                                            selectedConversation.collabHook ||
+                                                            selectedConversation.roleTitle) && (
                                                             <div className="px-3.5 py-2.5 text-[10px] text-zinc-400 bg-zinc-950/60 space-y-1">
                                                                 <div className="truncate">
-                                                                    <span className="text-zinc-500 font-bold uppercase mr-1">PROJECT:</span>
+                                                                    <span className="text-zinc-500 font-bold uppercase mr-1">
+                                                                        PROJECT:
+                                                                    </span>
                                                                     <span className="text-zinc-300">
                                                                         "{selectedConversation.collabHook || selectedConversation.collabTitle}"
                                                                     </span>
                                                                 </div>
                                                                 {selectedConversation.roleTitle && (
                                                                     <div className="truncate">
-                                                                        <span className="text-zinc-500 font-bold uppercase mr-1">ROLE:</span>
+                                                                        <span className="text-zinc-500 font-bold uppercase mr-1">
+                                                                            ROLE:
+                                                                        </span>
                                                                         <span className="text-zinc-300 font-bold">
                                                                             [{selectedConversation.roleTitle}]
                                                                         </span>
@@ -681,7 +702,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                             </button>
                                                         )}
 
-                                                        {/* Action 2: View Profile (if user id available) */}
+                                                        {/* Action 2: View Profile */}
                                                         {other.userId && (
                                                             <button
                                                                 type="button"
@@ -699,30 +720,28 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                     </div>
                                                 )}
                                             </div>
-                                        </div>
+                                        </ChatHeader>
                                     );
                                 })()}
 
-                                {/* Message Thread (Occupies majority of vertical space) */}
-                                <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+                                {/* Message Thread Timeline */}
+                                <div
+                                    ref={timelineRef}
+                                    onScroll={handleTimelineScroll}
+                                    className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 min-h-0 relative"
+                                >
                                     {messagesLoading ? (
-                                        <div className="py-12 text-center">
+                                        <div className="py-12 text-center my-auto">
                                             <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
                                             <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono">
                                                 // LOADING MESSAGES...
                                             </p>
                                         </div>
                                     ) : messages.length === 0 ? (
-                                        <div className="h-full flex items-center justify-center p-8 text-center">
-                                            <div className="space-y-1">
-                                                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">
-                                                    // NO MESSAGES YET
-                                                </span>
-                                                <p className="text-xs text-zinc-400">
-                                                    Start the conversation below.
-                                                </p>
-                                            </div>
-                                        </div>
+                                        <EmptyMessagingState
+                                            title="// NO MESSAGES YET"
+                                            description="Start communicating with your collaborator below."
+                                        />
                                     ) : (
                                         messages.map((msg) => {
                                             const isMe = msg.senderId === currentUser?.uid;
@@ -734,24 +753,32 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                     className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                                                 >
                                                     {!isMe && msg.senderName && (
-                                                        <span className="text-[10px] text-zinc-400 mb-0.5 px-1 font-semibold font-mono">
+                                                        <span className="text-[10px] text-zinc-400 mb-1 px-1 font-semibold font-mono tracking-wide">
                                                             {msg.senderName}
                                                         </span>
                                                     )}
                                                     <div
-                                                        className={`max-w-[85%] sm:max-w-[70%] px-3 py-2 text-xs border ${
+                                                        className={`max-w-[85%] sm:max-w-[70%] px-3.5 py-2.5 text-xs border shadow-sm ${
                                                             isMe
-                                                                ? 'bg-zinc-900 border-zinc-750 text-zinc-100'
-                                                                : 'bg-[#131316] border-zinc-800 text-zinc-200'
+                                                                ? 'bg-zinc-850 border-zinc-750 text-zinc-100'
+                                                                : 'bg-[#131317] border-zinc-800 text-zinc-200'
                                                         }`}
                                                     >
-                                                        <div className="whitespace-pre-wrap break-words leading-relaxed">
-                                                            <ClickableMessageText text={msg.text} isSender={isMe} timestamp={timeStr} />
+                                                        <div className="whitespace-pre-wrap break-words leading-relaxed font-mono">
+                                                            <ClickableMessageText
+                                                                text={msg.text}
+                                                                isSender={isMe}
+                                                                timestamp={timeStr}
+                                                            />
                                                         </div>
                                                         {timeStr && (
-                                                            <div className={`mt-1 text-[10px] ${
-                                                                isMe ? 'text-zinc-500 text-right' : 'text-zinc-600 text-left'
-                                                            }`}>
+                                                            <div
+                                                                className={`mt-1.5 text-[10px] font-mono tabular-nums ${
+                                                                    isMe
+                                                                        ? 'text-zinc-500 text-right'
+                                                                        : 'text-zinc-600 text-left'
+                                                                }`}
+                                                            >
                                                                 {timeStr}
                                                             </div>
                                                         )}
@@ -763,46 +790,43 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                     <div ref={messagesEndRef} />
                                 </div>
 
-                                {/* Message Composer (Permanently anchored to bottom) */}
-                                <div className="p-3 border-t border-zinc-800 bg-[#0c0c0e] flex-shrink-0">
-                                    <form
-                                        onSubmit={(e) => {
-                                            e.preventDefault();
-                                            handleSendMessage();
+                                {/* Floating Jump to Latest Button */}
+                                {hasUnreadBelow && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                                            setHasUnreadBelow(false);
                                         }}
-                                        className="flex items-center gap-2"
+                                        className="absolute bottom-16 right-6 z-10 px-3 py-1 bg-zinc-900 border border-emerald-500 text-emerald-400 text-[10px] font-bold font-mono uppercase tracking-wider shadow-lg hover:bg-zinc-850 cursor-pointer animate-bounce"
                                     >
-                                        <textarea
-                                            ref={textareaRef}
-                                            rows={1}
-                                            value={inputText}
-                                            onChange={(e) => setInputText(e.target.value)}
-                                            onKeyDown={handleKeyDown}
-                                            placeholder="Type a message..."
-                                            disabled={isSending}
-                                            className="flex-1 bg-black/70 border border-zinc-800 focus:border-zinc-600 text-xs text-white px-3 py-2 resize-none focus:outline-none placeholder:text-zinc-600 leading-relaxed font-mono disabled:opacity-50 h-[38px]"
-                                        />
+                                        ↓ NEW MESSAGES BELOW
+                                    </button>
+                                )}
 
-                                        <button
-                                            type="submit"
-                                            disabled={!inputText.trim() || isSending}
-                                            className="px-4 h-[38px] bg-white text-black hover:bg-zinc-200 border border-white text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex-shrink-0 flex items-center justify-center font-mono"
-                                            title="Send message"
-                                        >
-                                            {isSending ? '// SENDING...' : '// SEND'}
-                                        </button>
-                                    </form>
-                                </div>
+                                {/* Bottom Message Composer */}
+                                <MessageComposer
+                                    value={inputText}
+                                    onChange={setInputText}
+                                    onSend={handleSendMessage}
+                                    disabled={isSending}
+                                    isSending={isSending}
+                                    placeholder="// TYPE A MESSAGE (ENTER TO SEND)..."
+                                    textareaRef={textareaRef}
+                                />
                             </>
                         ) : (
-                            /* When a conversation is not selected */
-                            <div className="h-full flex items-center justify-center p-8 text-center">
-                                <div className="space-y-1">
+                            /* Initial / No Selected Conversation */
+                            <div className="h-full flex items-center justify-center p-8 text-center bg-[#09090c] font-mono select-none">
+                                <div className="space-y-2 max-w-sm">
                                     <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">
-                                        // SELECT A CONVERSATION
+                                        // SPOTLIGHT INBOX
                                     </span>
-                                    <p className="text-xs text-zinc-400">
-                                        Select a conversation to start messaging.
+                                    <h4 className="text-sm font-bold text-white uppercase tracking-wider">
+                                        NO CONVERSATION SELECTED
+                                    </h4>
+                                    <p className="text-xs text-zinc-400 leading-relaxed">
+                                        Select a conversation from the sidebar to view direct collaboration messages and application threads.
                                     </p>
                                 </div>
                             </div>

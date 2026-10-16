@@ -47,11 +47,20 @@ import {
     CheckIcon,
     LockClosedIcon,
     UsersIcon,
+    MagnifyingGlassIcon,
+    SendIcon,
 } from '../ui/Icons';
 import { ClickableMessageText } from '../ui/ClickableMessageText';
 import { TeamInvitationCard } from '../ui/TeamInvitationCard';
 import { getTeamInvitationUrl } from '../../utils/urlUtils';
 import type { Post, CollabApplication } from '../../types';
+import {
+    ConversationCard,
+    SearchInput,
+    ChatHeader,
+    MessageComposer,
+    EmptyMessagingState,
+} from './MessagingComponents';
 
 interface CollabTeamsViewProps {
     onBack?: () => void;
@@ -158,10 +167,23 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
     // Expand / collapse chat workspace state
     const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
+    const timelineRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
     const menuButtonRef = useRef<HTMLButtonElement>(null);
+    const [isNearBottom, setIsNearBottom] = useState<boolean>(true);
+    const [hasUnreadBelow, setHasUnreadBelow] = useState<boolean>(false);
+
+    const handleTimelineScroll = () => {
+        if (!timelineRef.current) return;
+        const { scrollTop, scrollHeight, clientHeight } = timelineRef.current;
+        const nearBottom = scrollHeight - scrollTop - clientHeight < 100;
+        setIsNearBottom(nearBottom);
+        if (nearBottom) {
+            setHasUnreadBelow(false);
+        }
+    };
 
     // Prevent background scrolling when chat is expanded
     useEffect(() => {
@@ -180,6 +202,45 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
             messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
         }
     }, [isExpanded]);
+
+    // Escape key handler to exit expanded mode when not interacting with an open modal or dropdown
+    useEffect(() => {
+        const handleExpandEscape = (event: KeyboardEvent) => {
+            if (
+                event.key === 'Escape' &&
+                isExpanded &&
+                !showMenu &&
+                !showMembersDrawer &&
+                !showInviteModal &&
+                !showCreateModal &&
+                !showProjectModal &&
+                !showLeaveModal &&
+                !showTransferModal &&
+                !showJoinRequestsModal &&
+                !showJoinSettingsModal
+            ) {
+                setIsExpanded(false);
+            }
+        };
+
+        if (isExpanded) {
+            document.addEventListener('keydown', handleExpandEscape);
+            return () => {
+                document.removeEventListener('keydown', handleExpandEscape);
+            };
+        }
+    }, [
+        isExpanded,
+        showMenu,
+        showMembersDrawer,
+        showInviteModal,
+        showCreateModal,
+        showProjectModal,
+        showLeaveModal,
+        showTransferModal,
+        showJoinRequestsModal,
+        showJoinSettingsModal,
+    ]);
 
     // Close three-dot menu on outside click or Escape key
     useEffect(() => {
@@ -482,12 +543,19 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         };
     }, [selectedTeamId, currentUser?.uid]);
 
-    // 8. Auto-scroll on new messages
+    // 8. Smart auto-scroll on new messages
     useEffect(() => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        if (messages.length === 0) return;
+        const lastMsg = messages[messages.length - 1];
+        const isMyMessage = lastMsg?.senderId === currentUser?.uid;
+
+        if (isNearBottom || isMyMessage) {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            setHasUnreadBelow(false);
+        } else {
+            setHasUnreadBelow(true);
         }
-    }, [messages]);
+    }, [messages, currentUser?.uid, isNearBottom]);
 
     // 9. Subscribe to invitations for selected team
     useEffect(() => {
@@ -1234,8 +1302,14 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                     : 'space-y-4'
             }`}
         >
-            {/* 1. View Header: Matches existing INVOX layout with polished alignment */}
-            <div className={`flex items-center justify-between border-b border-zinc-800 ${isExpanded ? 'flex-shrink-0 px-4 sm:px-6 py-3.5 bg-[#0c0c0e]' : 'px-0 pb-3'}`}>
+            {/* 1. View Header: Consistent INVOX layout with aligned actions */}
+            <div
+                className={`flex items-center justify-between border-b border-zinc-800 ${
+                    isExpanded
+                        ? 'h-14 px-4 sm:px-6 bg-[#0c0c0e] flex-shrink-0'
+                        : 'h-14 px-0 pb-3'
+                }`}
+            >
                 {/* Left: Section Label and Title */}
                 <div className="flex flex-col justify-center gap-0.5">
                     <span className="text-[10px] text-zinc-500 uppercase tracking-widest block font-bold leading-none">
@@ -1289,57 +1363,61 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                 </div>
             </div>
 
-            {/* 2. Two-Panel Messaging Workspace (Proportions: ~32% Left, ~68% Right) */}
+            {/* 2. Two-Panel Messaging Workspace (Consistent shared layout grid) */}
             <div
-                className={`bg-[#0c0c0e] font-mono grid grid-cols-1 md:grid-cols-[32%_68%] overflow-hidden ${
-                    isExpanded ? 'flex-1 min-h-0 border-0' : 'border border-zinc-800 h-[600px] sm:h-[640px]'
+                className={`bg-[#0c0c0e] font-mono grid grid-cols-1 md:grid-cols-[minmax(280px,340px)_minmax(0,1fr)] lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)] overflow-hidden ${
+                    isExpanded ? 'flex-1 min-h-0 border-0' : 'border border-zinc-800 h-[640px] sm:h-[680px]'
                 }`}
             >
                 {/* ─────────────────────────────────────────────────────────── */}
-                {/* LEFT PANEL: YOUR TEAMS LIST (~32%)                          */}
+                {/* LEFT PANEL: YOUR TEAMS LIST (~320-360px)                    */}
                 {/* ─────────────────────────────────────────────────────────── */}
                 <aside
-                    className={`border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col h-full overflow-hidden ${
+                    className={`border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col h-full min-h-0 overflow-hidden bg-[#0a0a0c] ${
                         selectedTeamId ? 'hidden md:flex' : 'flex'
                     }`}
                 >
-                    {/* Header: // YOUR TEAMS */}
-                    <div className="px-3.5 py-3 border-b border-zinc-800 flex items-center justify-between bg-black/40 flex-shrink-0">
+                    {/* Header: // YOUR TEAMS - Standardized h-14 height matching right chat header */}
+                    <div className="h-14 px-4 border-b border-zinc-800 flex items-center justify-between bg-[#0c0c0e] flex-shrink-0">
                         <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                            <span className="text-[11px] font-bold text-zinc-300 uppercase tracking-widest font-mono">
                                 // YOUR TEAMS
                             </span>
                             {teams.length > 0 && (
-                                <span className="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 px-1.5 py-0.2 font-mono">
+                                <span className="text-[10px] bg-zinc-900 border border-zinc-750 text-zinc-400 px-1.5 py-0.5 font-mono tabular-nums leading-none">
                                     {teams.length}
                                 </span>
                             )}
                         </div>
                     </div>
 
-                    {/* Compact Search Field: // SEARCH TEAMS... */}
-                    <div className="px-3 py-2 border-b border-zinc-800 bg-[#09090b] flex items-center gap-2 flex-shrink-0">
-                        <span className="text-zinc-600 text-xs font-bold font-mono">//</span>
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="SEARCH TEAMS..."
-                            className="w-full bg-transparent text-xs text-white placeholder-zinc-600 focus:outline-none font-mono"
-                        />
-                        {searchQuery && (
-                            <button
-                                type="button"
-                                onClick={() => setSearchQuery('')}
-                                className="text-zinc-500 hover:text-white text-xs cursor-pointer font-mono"
-                            >
-                                ✕
-                            </button>
-                        )}
+                    {/* Search Field: SEARCH TEAMS... - Standardized h-[52px] */}
+                    <div className="h-[52px] px-3.5 py-2 border-b border-zinc-800 bg-[#09090b] flex items-center flex-shrink-0">
+                        <div className="relative flex items-center w-full h-9 bg-[#111114] hover:bg-[#151518] border border-zinc-750 hover:border-zinc-600 focus-within:border-emerald-500/80 focus-within:ring-1 focus-within:ring-emerald-500/20 px-2.5 transition-all duration-150">
+                            <MagnifyingGlassIcon className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0 mr-2 transition-colors pointer-events-none" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="SEARCH TEAMS..."
+                                className="w-full bg-transparent text-xs text-zinc-100 placeholder:text-zinc-400 focus:outline-none font-mono tracking-wide h-full leading-none"
+                            />
+                            {searchQuery && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchQuery('')}
+                                    className="ml-1 text-zinc-400 hover:text-white p-1 hover:bg-zinc-800 transition-colors cursor-pointer flex-shrink-0 flex items-center justify-center font-mono text-xs leading-none"
+                                    title="Clear search"
+                                    aria-label="Clear search"
+                                >
+                                    ✕
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {/* Team List Scroll Area */}
-                    <div className="flex-1 overflow-y-auto divide-y divide-zinc-850/60">
+                    <div className="flex-1 overflow-y-auto divide-y divide-zinc-850/60 min-h-0">
                         {loadingTeams ? (
                             <div className="py-12 text-center">
                                 <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
@@ -1387,18 +1465,18 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                         key={team.id}
                                         type="button"
                                         onClick={() => handleSelectTeam(team.id)}
-                                        className={`w-full px-3 py-2.5 text-left transition-colors flex items-start gap-2.5 border-l-2 cursor-pointer ${
+                                        className={`w-full px-3.5 py-3 text-left transition-colors flex items-center gap-3 border-l-2 cursor-pointer font-mono select-none outline-none focus-visible:bg-zinc-900/60 ${
                                             isSelected
-                                                ? 'bg-zinc-900 border-emerald-400 text-white'
+                                                ? 'bg-zinc-900/90 border-emerald-400 text-white'
                                                 : hasUnread
                                                 ? 'bg-zinc-900/40 border-emerald-500/80 text-zinc-200 hover:bg-zinc-900/60'
-                                                : 'bg-transparent border-transparent text-zinc-400 hover:bg-zinc-900/40 hover:text-zinc-200'
+                                                : 'bg-transparent border-transparent text-zinc-400 hover:bg-zinc-900/40 hover:text-zinc-200 hover:border-zinc-700'
                                         }`}
                                     >
-                                        {/* Avatar (Sharp rectangular box) */}
+                                        {/* Avatar (Sharp, compact rectangular box) */}
                                         <div
-                                            className={`w-8 h-8 bg-zinc-900 border flex items-center justify-center flex-shrink-0 text-xs font-bold text-white overflow-hidden mt-0.5 ${
-                                                hasUnread && !isSelected ? 'border-emerald-700/60' : 'border-zinc-750'
+                                            className={`w-9 h-9 bg-zinc-900 border flex items-center justify-center flex-shrink-0 text-xs font-bold text-white overflow-hidden transition-colors ${
+                                                hasUnread && !isSelected ? 'border-emerald-700/80 ring-1 ring-emerald-500/30' : isSelected ? 'border-zinc-600' : 'border-zinc-750'
                                             }`}
                                         >
                                             {team.ownerAvatar ? (
@@ -1409,18 +1487,19 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                     onError={handleImageError}
                                                 />
                                             ) : (
-                                                <span className="text-emerald-400 font-bold">//</span>
+                                                <span className="text-emerald-400 font-bold text-sm tracking-tighter">//</span>
                                             )}
                                         </div>
 
                                         {/* Compact Row Content */}
-                                        <div className="min-w-0 flex-1 space-y-0.5">
-                                            <div className="flex items-center justify-between gap-1">
+                                        <div className="min-w-0 flex-1 flex flex-col justify-center gap-0.5">
+                                            {/* Top Row: Name + Timestamp / Badge */}
+                                            <div className="flex items-center justify-between gap-2">
                                                 <span
-                                                    className={`text-xs truncate ${
+                                                    className={`text-xs truncate tracking-wide ${
                                                         isSelected || hasUnread
                                                             ? 'font-bold text-white'
-                                                            : 'font-semibold text-zinc-300'
+                                                            : 'font-semibold text-zinc-200'
                                                     }`}
                                                 >
                                                     {team.name}
@@ -1428,38 +1507,38 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                 <div className="flex items-center gap-1.5 flex-shrink-0">
                                                     {timestampStr && (
                                                         <span
-                                                            className={`text-[10px] font-mono ${
-                                                                hasUnread ? 'text-emerald-400 font-semibold' : 'text-zinc-500'
+                                                            className={`text-[10px] font-mono tabular-nums ${
+                                                                hasUnread ? 'text-emerald-400 font-bold' : 'text-zinc-500'
                                                             }`}
                                                         >
                                                             {timestampStr}
                                                         </span>
                                                     )}
                                                     {hasUnread && (
-                                                        <span className="font-mono font-bold px-1.5 py-0.2 bg-emerald-950/80 text-emerald-400 border border-emerald-700 text-[10px] leading-tight">
-                                                            [{unreadCount}]
+                                                        <span className="font-mono font-bold text-[10px] px-1.5 py-0.2 bg-emerald-500 text-black flex-shrink-0 leading-tight">
+                                                            {unreadCount}
                                                         </span>
                                                     )}
                                                 </div>
                                             </div>
 
-                                            {/* Project Title & Member Count */}
-                                            <div className="flex items-center justify-between gap-1 text-[11px] truncate">
+                                            {/* Middle Row: Project Title & Member Count */}
+                                            <div className="flex items-center justify-between gap-2 text-[11px] truncate">
                                                 <span
                                                     className={`truncate ${
-                                                        hasUnread ? 'text-zinc-200 font-medium' : 'text-zinc-500'
+                                                        hasUnread ? 'text-zinc-300 font-medium' : 'text-zinc-500'
                                                     }`}
                                                 >
                                                     // {team.projectTitle}
                                                 </span>
-                                                <span className="text-[10px] text-zinc-500 font-mono flex-shrink-0">
-                                                    [{team.memberCount || 1} members]
+                                                <span className="text-[10px] text-zinc-500 font-mono flex-shrink-0 tabular-nums">
+                                                    [{team.memberCount || 1} {team.memberCount === 1 ? 'member' : 'members'}]
                                                 </span>
                                             </div>
 
-                                            {/* Short latest-message preview */}
+                                            {/* Bottom Row: Latest message preview */}
                                             <p
-                                                className={`text-[11px] truncate ${
+                                                className={`text-[11px] truncate leading-tight mt-0.5 ${
                                                     hasUnread
                                                         ? 'text-zinc-200 font-medium'
                                                         : team.lastMessage
@@ -1469,8 +1548,16 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                         : 'text-zinc-600 italic'
                                                 }`}
                                             >
-                                                {team.lastMessageSenderName ? `${team.lastMessageSenderName}: ` : ''}
-                                                {team.lastMessage || 'Team initialized.'}
+                                                {team.lastMessage ? (
+                                                    <>
+                                                        {team.lastMessageSenderName && (
+                                                            <span className="text-zinc-400 font-normal">{team.lastMessageSenderName}: </span>
+                                                        )}
+                                                        <span>{team.lastMessage}</span>
+                                                    </>
+                                                ) : (
+                                                    <span>Team initialized.</span>
+                                                )}
                                             </p>
                                         </div>
                                     </button>
@@ -1481,23 +1568,23 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                 </aside>
 
                 {/* ─────────────────────────────────────────────────────────── */}
-                {/* RIGHT PANEL: SELECTED TEAM GROUP CHAT (~68%)                */}
+                {/* RIGHT PANEL: SELECTED TEAM GROUP CHAT                       */}
                 {/* ─────────────────────────────────────────────────────────── */}
                 <main
-                    className={`flex flex-col bg-[#0a0a0c] overflow-hidden relative h-full ${
+                    className={`flex flex-col bg-[#08080a] overflow-hidden relative h-full min-h-0 min-w-0 ${
                         !selectedTeamId ? 'hidden md:flex' : 'flex'
                     }`}
                 >
                     {activeTeam ? (
                         <>
-                            {/* Chat Header */}
-                            <div className="px-4 py-3 border-b border-zinc-800 bg-[#0c0c0e] flex items-center justify-between gap-3 flex-shrink-0 relative z-20">
+                            {/* Chat Header: Standardized h-14 height matching left sidebar header */}
+                            <div className="h-14 px-4 border-b border-zinc-800 bg-[#0c0c0e] flex items-center justify-between gap-3 flex-shrink-0 relative z-20 font-mono">
                                 <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
                                     {/* Mobile back button to teams list */}
                                     <button
                                         type="button"
                                         onClick={() => handleSelectTeam('')}
-                                        className="md:hidden text-xs text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer pr-1 flex-shrink-0 font-mono"
+                                        className="md:hidden h-8 w-8 inline-flex items-center justify-center text-xs text-zinc-400 hover:text-white border border-zinc-800 bg-zinc-900 cursor-pointer flex-shrink-0 font-mono"
                                         title="Back to teams list"
                                     >
                                         <span>←</span>
@@ -1513,7 +1600,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                 onError={handleImageError}
                                             />
                                         ) : (
-                                            <span className="text-emerald-400 font-bold">//</span>
+                                            <span className="text-emerald-400 font-bold text-sm tracking-tighter">//</span>
                                         )}
                                     </div>
 
@@ -1522,7 +1609,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                         <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider truncate">
                                             {activeTeam.name}
                                         </h3>
-                                        <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-1.5 py-0.2 flex-shrink-0">
+                                        <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/70 border border-emerald-800/80 px-1.5 py-0.5 font-bold tracking-wider flex-shrink-0 leading-none">
                                             TEAM
                                         </span>
                                     </div>
@@ -1856,13 +1943,13 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                     </div>
 
                                     {/* Message Composer (Anchored to bottom of chat column) */}
-                                    <div className="p-3 border-t border-zinc-800 bg-[#0c0c0e] flex-shrink-0">
+                                    <div className="p-3 sm:p-3.5 border-t border-zinc-800 bg-[#0c0c0e] flex-shrink-0">
                                         <form
                                             onSubmit={(e) => {
                                                 e.preventDefault();
                                                 handleSendMessage();
                                             }}
-                                            className="flex items-center gap-2"
+                                            className="flex items-end gap-2"
                                         >
                                             <textarea
                                                 ref={textareaRef}
@@ -1872,16 +1959,26 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                 onKeyDown={handleKeyDown}
                                                 placeholder="// MESSAGE YOUR TEAM..."
                                                 disabled={isSending}
-                                                className="flex-1 bg-black/70 border border-zinc-800 focus:border-zinc-600 text-xs text-white px-3 py-2 resize-none focus:outline-none placeholder:text-zinc-600 placeholder:whitespace-nowrap placeholder:truncate leading-relaxed font-mono disabled:opacity-50 h-[38px]"
+                                                className="flex-1 bg-[#121215] border border-zinc-750 hover:border-zinc-600 focus:border-emerald-500/80 focus:ring-1 focus:ring-emerald-500/20 text-xs text-white px-3.5 py-2.5 resize-none focus:outline-none placeholder:text-zinc-500 leading-relaxed font-mono disabled:opacity-50 min-h-[40px] max-h-[120px] transition-colors"
                                             />
 
                                             <button
                                                 type="submit"
                                                 disabled={!inputText.trim() || isSending}
-                                                className="px-4 h-[38px] bg-white text-black hover:bg-zinc-200 border border-white text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex-shrink-0 flex items-center justify-center font-mono"
-                                                title="Send message"
+                                                className="h-10 px-4 bg-white text-black hover:bg-zinc-200 border border-white text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex-shrink-0 flex items-center justify-center gap-1.5 font-mono"
+                                                title="Send message (Enter)"
                                             >
-                                                {isSending ? '// SENDING...' : '// SEND'}
+                                                {isSending ? (
+                                                    <>
+                                                        <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                                                        <span className="hidden sm:inline">// SENDING...</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <span>// SEND</span>
+                                                        <SendIcon className="w-3 h-3 text-black" />
+                                                    </>
+                                                )}
                                             </button>
                                         </form>
                                     </div>
@@ -2325,15 +2422,26 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                             </div>
                         </>
                     ) : (
-                        /* Initial State: When no Team is selected */
-                        <div className="h-full flex items-center justify-center p-8 text-center bg-[#0a0a0c]">
-                            <div className="space-y-1.5 max-w-sm">
-                                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">
-                                    // SELECT A TEAM
+                        /* Initial State: When no Team is selected - Standardized h-14 header and layout */
+                        <div className="flex flex-col h-full min-h-0 font-mono">
+                            <div className="h-14 px-4 border-b border-zinc-800 bg-[#0c0c0e] flex items-center justify-between gap-3 flex-shrink-0">
+                                <div className="flex items-center gap-2 text-zinc-500 text-xs">
+                                    <span className="text-zinc-600 font-bold">//</span>
+                                    <span className="uppercase tracking-widest text-[11px] font-bold text-zinc-400">TEAM WORKSPACE</span>
+                                </div>
+                                <span className="text-[10px] text-zinc-600 font-mono uppercase tracking-wider">
+                                    NO TEAM SELECTED
                                 </span>
-                                <p className="text-xs text-zinc-400 leading-relaxed">
-                                    Choose a team from the left panel to start collaborating.
-                                </p>
+                            </div>
+                            <div className="flex-1 flex items-center justify-center p-8 text-center bg-[#0a0a0c]">
+                                <div className="space-y-1.5 max-w-sm">
+                                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">
+                                        // SELECT A TEAM
+                                    </span>
+                                    <p className="text-xs text-zinc-400 leading-relaxed">
+                                        Choose a team from the left panel to start collaborating.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     )}
