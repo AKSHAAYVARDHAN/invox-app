@@ -49,6 +49,7 @@ import {
     UsersIcon,
     MagnifyingGlassIcon,
     SendIcon,
+    SparklesIcon,
 } from '../ui/Icons';
 import { ClickableMessageText } from '../ui/ClickableMessageText';
 import { TeamInvitationCard } from '../ui/TeamInvitationCard';
@@ -61,6 +62,8 @@ import {
     MessageComposer,
     EmptyMessagingState,
 } from './MessagingComponents';
+import { ConversationSummaryModal } from './ConversationSummaryModal';
+import { ConversationSearchBar } from './ConversationSearchBar';
 
 interface CollabTeamsViewProps {
     onBack?: () => void;
@@ -93,6 +96,14 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
     const [messagesLoading, setMessagesLoading] = useState<boolean>(false);
     const [inputText, setInputText] = useState<string>('');
     const [isSending, setIsSending] = useState<boolean>(false);
+
+    // Active team conversation search state
+    const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
+    const [chatSearchQuery, setChatSearchQuery] = useState<string>('');
+    const [currentMatchIndex, setCurrentMatchIndex] = useState<number>(0);
+
+    // AI Summary Modal state
+    const [showSummaryModal, setShowSummaryModal] = useState<boolean>(false);
 
     // Panels & Modals
     const [showMembersDrawer, setShowMembersDrawer] = useState<boolean>(false);
@@ -217,7 +228,9 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                 !showLeaveModal &&
                 !showTransferModal &&
                 !showJoinRequestsModal &&
-                !showJoinSettingsModal
+                !showJoinSettingsModal &&
+                !isSearchOpen &&
+                !showSummaryModal
             ) {
                 setIsExpanded(false);
             }
@@ -240,7 +253,67 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         showTransferModal,
         showJoinRequestsModal,
         showJoinSettingsModal,
+        isSearchOpen,
+        showSummaryModal,
     ]);
+
+    // Reset search, match index, and summary modal when switching teams
+    useEffect(() => {
+        setIsSearchOpen(false);
+        setChatSearchQuery('');
+        setCurrentMatchIndex(0);
+        setShowSummaryModal(false);
+        setShowMenu(false);
+    }, [selectedTeamId]);
+
+    // Compute search matches within the active team conversation only
+    const matchingMessages = useMemo(() => {
+        if (!isSearchOpen || !chatSearchQuery.trim()) return [];
+        const q = chatSearchQuery.toLowerCase().trim();
+        return messages.filter((m) => {
+            const textMatch = typeof m.text === 'string' && m.text.toLowerCase().includes(q);
+            const senderMatch = typeof m.senderName === 'string' && m.senderName.toLowerCase().includes(q);
+            return textMatch || senderMatch;
+        });
+    }, [messages, isSearchOpen, chatSearchQuery]);
+
+    const activeMatchedMessageId = matchingMessages[currentMatchIndex]?.id || null;
+
+    const scrollToMessage = (msgId: string) => {
+        const el = document.getElementById(`team-msg-${msgId}`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    };
+
+    const handleNextMatch = () => {
+        if (matchingMessages.length === 0) return;
+        const nextIndex = (currentMatchIndex + 1) % matchingMessages.length;
+        setCurrentMatchIndex(nextIndex);
+        scrollToMessage(matchingMessages[nextIndex].id);
+    };
+
+    const handlePrevMatch = () => {
+        if (matchingMessages.length === 0) return;
+        const prevIndex = (currentMatchIndex - 1 + matchingMessages.length) % matchingMessages.length;
+        setCurrentMatchIndex(prevIndex);
+        scrollToMessage(matchingMessages[prevIndex].id);
+    };
+
+    const handleCloseSearch = () => {
+        setIsSearchOpen(false);
+        setChatSearchQuery('');
+        setCurrentMatchIndex(0);
+    };
+
+    useEffect(() => {
+        if (matchingMessages.length > 0) {
+            setCurrentMatchIndex(0);
+            scrollToMessage(matchingMessages[0].id);
+        } else {
+            setCurrentMatchIndex(0);
+        }
+    }, [chatSearchQuery]);
 
     // Close three-dot menu on outside click or Escape key
     useEffect(() => {
@@ -1391,22 +1464,22 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                         </div>
                     </div>
 
-                    {/* Search Field: SEARCH TEAMS... - Standardized h-[52px] */}
-                    <div className="h-[52px] px-3.5 py-2 border-b border-zinc-800 bg-[#09090b] flex items-center flex-shrink-0">
-                        <div className="relative flex items-center w-full h-9 bg-[#111114] hover:bg-[#151518] border border-zinc-750 hover:border-zinc-600 focus-within:border-emerald-500/80 focus-within:ring-1 focus-within:ring-emerald-500/20 px-2.5 transition-all duration-150">
-                            <MagnifyingGlassIcon className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0 mr-2 transition-colors pointer-events-none" />
+                    {/* Search Field: Search teams... - Clearly defined, interactive input */}
+                    <div className="h-[52px] px-3.5 py-2 border-b border-zinc-800 bg-[#0c0d10] flex items-center flex-shrink-0">
+                        <div className="relative flex items-center w-full h-9 bg-[#121315] hover:bg-[#151619] border border-zinc-700 hover:border-zinc-500 focus-within:border-emerald-400 focus-within:ring-1 focus-within:ring-emerald-400/20 px-3 transition-colors duration-150 rounded-none">
+                            <MagnifyingGlassIcon className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0 mr-2.5 transition-colors pointer-events-none" />
                             <input
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="SEARCH TEAMS..."
-                                className="w-full bg-transparent text-xs text-zinc-100 placeholder:text-zinc-400 focus:outline-none font-mono tracking-wide h-full leading-none"
+                                placeholder="Search teams..."
+                                className="w-full bg-transparent text-xs text-white placeholder:text-zinc-400 focus:outline-none font-mono tracking-wide h-full leading-none"
                             />
                             {searchQuery && (
                                 <button
                                     type="button"
                                     onClick={() => setSearchQuery('')}
-                                    className="ml-1 text-zinc-400 hover:text-white p-1 hover:bg-zinc-800 transition-colors cursor-pointer flex-shrink-0 flex items-center justify-center font-mono text-xs leading-none"
+                                    className="ml-1.5 text-zinc-400 hover:text-white px-1.5 py-0.5 hover:bg-zinc-800 transition-colors cursor-pointer flex-shrink-0 flex items-center justify-center font-mono text-xs leading-none"
                                     title="Clear search"
                                     aria-label="Clear search"
                                 >
@@ -1615,9 +1688,38 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                     </div>
                                 </div>
 
-                                {/* Right Side Actions: Three-Dot Overflow Menu */}
+                                {/* Right Side Actions: AI Summary, Search, and Three-Dot Overflow Menu */}
                                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                                    {/* Three-Dot Overflow Menu */}
+                                    {/* 1. AI Summary Action Button */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowSummaryModal(true)}
+                                        className="h-8 px-2 sm:px-2.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-850 text-zinc-300 hover:text-white transition-colors flex items-center gap-1.5 text-xs font-mono flex-shrink-0 cursor-pointer"
+                                        aria-label="Generate AI summary"
+                                        title="Generate AI summary of team conversation"
+                                    >
+                                        <SparklesIcon className="w-3.5 h-3.5 text-zinc-300" />
+                                        <span className="hidden sm:inline text-[10px] font-bold tracking-wider uppercase whitespace-nowrap">
+                                            // AI SUMMARY
+                                        </span>
+                                    </button>
+
+                                    {/* 2. Conversation Search Icon Button */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsSearchOpen((prev) => !prev)}
+                                        aria-label="Search messages"
+                                        title="Search messages in this team chat"
+                                        className={`h-8 w-8 border transition-colors cursor-pointer flex items-center justify-center text-xs font-mono flex-shrink-0 ${
+                                            isSearchOpen
+                                                ? 'bg-zinc-800 border-zinc-600 text-white'
+                                                : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white'
+                                        }`}
+                                    >
+                                        <MagnifyingGlassIcon className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    {/* 3. Three-Dot Overflow Menu */}
                                     <div className="relative">
                                         <button
                                             ref={menuButtonRef}
@@ -1799,6 +1901,19 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                 </div>
                             )}
 
+                            {/* Active Team Conversation Search Bar */}
+                            <ConversationSearchBar
+                                isOpen={isSearchOpen}
+                                searchQuery={chatSearchQuery}
+                                onQueryChange={setChatSearchQuery}
+                                onClose={handleCloseSearch}
+                                totalMatches={matchingMessages.length}
+                                currentMatchIndex={currentMatchIndex}
+                                onPrevMatch={handlePrevMatch}
+                                onNextMatch={handleNextMatch}
+                                placeholder="Search messages in this team channel..."
+                            />
+
                             {/* Chat Content Body (Chat thread + Message composer, with optional side-by-side / overlay Members Panel confined to workspace) */}
                             <div className="flex-1 flex overflow-hidden min-h-0 relative">
                                 {/* Left/Main chat column: messages + composer */}
@@ -1830,11 +1945,13 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                 const canDelete = isMe || (activeTeam && activeTeam.ownerId === currentUser?.uid);
                                                 const timeStr = formatTimestamp(msg.createdAt);
                                                 const isMenuOpen = activeMessageMenuId === msg.id;
+                                                const isMatchActive = isSearchOpen && activeMatchedMessageId === msg.id;
 
                                                 return (
                                                     <div
+                                                        id={`team-msg-${msg.id}`}
                                                         key={msg.id}
-                                                        className={`flex flex-col group relative ${isMe ? 'items-end' : 'items-start'}`}
+                                                        className={`flex flex-col group relative transition-all duration-200 ${isMe ? 'items-end' : 'items-start'}`}
                                                     >
                                                         {!isMe && (
                                                             <div className="flex items-center gap-1.5 mb-1 px-1">
@@ -1854,14 +1971,21 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                             }`}
                                                         >
                                                             <div
-                                                                className={`px-3 py-2 text-xs border ${
-                                                                    isMe
+                                                                className={`px-3 py-2 text-xs border transition-all duration-200 ${
+                                                                    isMatchActive
+                                                                        ? 'ring-2 ring-emerald-400 border-emerald-400 bg-zinc-850 text-white shadow-lg'
+                                                                        : isMe
                                                                         ? 'bg-zinc-900 border-zinc-750 text-zinc-100'
                                                                         : 'bg-[#131316] border-zinc-800 text-zinc-200'
                                                                 }`}
                                                             >
                                                                 <div className="whitespace-pre-wrap break-words leading-relaxed font-mono">
-                                                                    <ClickableMessageText text={msg.text} isSender={isMe} timestamp={timeStr} />
+                                                                    <ClickableMessageText
+                                                                        text={msg.text}
+                                                                        isSender={isMe}
+                                                                        timestamp={timeStr}
+                                                                        searchTerm={isSearchOpen ? chatSearchQuery : undefined}
+                                                                    />
                                                                 </div>
                                                                 {timeStr && (
                                                                     <div
@@ -3636,6 +3760,19 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* AI Summary Modal for active team conversation */}
+            {activeTeam && (
+                <ConversationSummaryModal
+                    isOpen={showSummaryModal}
+                    onClose={() => setShowSummaryModal(false)}
+                    conversationId={activeTeam.id}
+                    conversationTitle={activeTeam.name}
+                    conversationType="team"
+                    messages={messages}
+                    currentUser={currentUser}
+                />
             )}
         </>
     );

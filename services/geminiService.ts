@@ -18,26 +18,29 @@ export const generateFeedPost = async (idea: string): Promise<{ title: string; b
     }
 };
 
-export const generateChatSummary = async (transcript: string): Promise<string> => {
+export const generateChatSummary = async (
+    transcript: string,
+    options?: { title?: string; conversationType?: 'inbox' | 'team'; periodLabel?: string }
+): Promise<string> => {
     if (!transcript.trim()) {
         return "The chat is empty. Nothing to summarize.";
     }
-    try {
-        const response = await fetch('/api/gemini/chat-summary', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ transcript }),
-        });
-        if (!response.ok) {
-            const err = await response.json().catch(() => ({}));
-            return err.summary || "Sorry, I couldn't generate a summary for this chat at the moment.";
-        }
-        const data = await response.json();
-        return data.summary || "No summary generated.";
-    } catch (error) {
-        console.error("Error generating chat summary:", error);
-        return "Sorry, I couldn't generate a summary for this chat at the moment.";
+    const response = await fetch('/api/gemini/chat-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            transcript,
+            title: options?.title,
+            conversationType: options?.conversationType,
+            periodLabel: options?.periodLabel,
+        }),
+    });
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || err.summary || `Server error (${response.status})`);
     }
+    const data = await response.json();
+    return data.summary || "No summary generated.";
 };
 
 export const generateSummary = async (text: string): Promise<string> => {

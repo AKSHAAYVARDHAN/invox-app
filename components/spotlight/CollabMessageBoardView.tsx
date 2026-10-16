@@ -12,7 +12,13 @@ import {
     type CollabConversation,
     type CollabChatMessage,
 } from '../../services/collabMessageService';
-import { EllipsisVerticalIcon, Maximize2Icon, Minimize2Icon } from '../ui/Icons';
+import {
+    EllipsisVerticalIcon,
+    Maximize2Icon,
+    Minimize2Icon,
+    SparklesIcon,
+    MagnifyingGlassIcon,
+} from '../ui/Icons';
 import { ClickableMessageText } from '../ui/ClickableMessageText';
 import {
     ConversationCard,
@@ -21,6 +27,8 @@ import {
     MessageComposer,
     EmptyMessagingState,
 } from './MessagingComponents';
+import { ConversationSummaryModal } from './ConversationSummaryModal';
+import { ConversationSearchBar } from './ConversationSearchBar';
 
 interface CollabMessageBoardViewProps {
     view: 'inbox' | 'teams';
@@ -53,6 +61,14 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
 
     // Three-dot dropdown menu state
     const [showMenu, setShowMenu] = useState<boolean>(false);
+
+    // Conversation Search state
+    const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
+    const [chatSearchQuery, setChatSearchQuery] = useState<string>('');
+    const [currentMatchIndex, setCurrentMatchIndex] = useState<number>(0);
+
+    // AI Summary Modal state
+    const [showSummaryModal, setShowSummaryModal] = useState<boolean>(false);
 
     // Full-screen expand state
     const [isExpanded, setIsExpanded] = useState<boolean>(false);
@@ -110,7 +126,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
     // Escape key handler to exit expanded mode when not interacting with open dropdown
     useEffect(() => {
         const handleExpandEscape = (event: KeyboardEvent) => {
-            if (event.key === 'Escape' && isExpanded && !showMenu) {
+            if (event.key === 'Escape' && isExpanded && !showMenu && !isSearchOpen && !showSummaryModal) {
                 setIsExpanded(false);
             }
         };
@@ -121,12 +137,65 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                 document.removeEventListener('keydown', handleExpandEscape);
             };
         }
-    }, [isExpanded, showMenu]);
+    }, [isExpanded, showMenu, isSearchOpen, showSummaryModal]);
 
-    // Reset menu when switching conversations
+    // Reset menu, search, and summary when switching conversations
     useEffect(() => {
         setShowMenu(false);
+        setIsSearchOpen(false);
+        setChatSearchQuery('');
+        setCurrentMatchIndex(0);
+        setShowSummaryModal(false);
     }, [selectedConvId]);
+
+    // Compute search matches within the active conversation only
+    const matchingMessages = useMemo(() => {
+        if (!isSearchOpen || !chatSearchQuery.trim()) return [];
+        const q = chatSearchQuery.toLowerCase().trim();
+        return messages.filter((m) => {
+            const textMatch = typeof m.text === 'string' && m.text.toLowerCase().includes(q);
+            const senderMatch = typeof m.senderName === 'string' && m.senderName.toLowerCase().includes(q);
+            return textMatch || senderMatch;
+        });
+    }, [messages, isSearchOpen, chatSearchQuery]);
+
+    const activeMatchedMessageId = matchingMessages[currentMatchIndex]?.id || null;
+
+    const scrollToMessage = (msgId: string) => {
+        const el = document.getElementById(`inbox-msg-${msgId}`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    };
+
+    const handleNextMatch = () => {
+        if (matchingMessages.length === 0) return;
+        const nextIndex = (currentMatchIndex + 1) % matchingMessages.length;
+        setCurrentMatchIndex(nextIndex);
+        scrollToMessage(matchingMessages[nextIndex].id);
+    };
+
+    const handlePrevMatch = () => {
+        if (matchingMessages.length === 0) return;
+        const prevIndex = (currentMatchIndex - 1 + matchingMessages.length) % matchingMessages.length;
+        setCurrentMatchIndex(prevIndex);
+        scrollToMessage(matchingMessages[prevIndex].id);
+    };
+
+    const handleCloseSearch = () => {
+        setIsSearchOpen(false);
+        setChatSearchQuery('');
+        setCurrentMatchIndex(0);
+    };
+
+    useEffect(() => {
+        if (matchingMessages.length > 0) {
+            setCurrentMatchIndex(0);
+            scrollToMessage(matchingMessages[0].id);
+        } else {
+            setCurrentMatchIndex(0);
+        }
+    }, [chatSearchQuery]);
 
     // Subscribe to real-time message unread counts per conversation
     useEffect(() => {
@@ -634,7 +703,36 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                             isTeam={other.isTeam}
                                             onBackMobile={() => setSelectedConvId(null)}
                                         >
-                                            {/* Overflow Menu */}
+                                            {/* 1. AI Summary Action Button */}
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowSummaryModal(true)}
+                                                className="h-8 px-2 sm:px-2.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-850 text-zinc-300 hover:text-white transition-colors flex items-center gap-1.5 text-xs font-mono flex-shrink-0 cursor-pointer"
+                                                aria-label="Generate AI summary"
+                                                title="Generate AI summary of conversation"
+                                            >
+                                                <SparklesIcon className="w-3.5 h-3.5 text-zinc-300" />
+                                                <span className="hidden sm:inline text-[10px] font-bold tracking-wider uppercase whitespace-nowrap">
+                                                    // AI SUMMARY
+                                                </span>
+                                            </button>
+
+                                            {/* 2. Conversation Search Icon Button */}
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsSearchOpen((prev) => !prev)}
+                                                aria-label="Search messages"
+                                                title="Search messages in this conversation"
+                                                className={`h-8 w-8 border transition-colors cursor-pointer flex items-center justify-center text-xs font-mono flex-shrink-0 ${
+                                                    isSearchOpen
+                                                        ? 'bg-zinc-800 border-zinc-600 text-white'
+                                                        : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white'
+                                                }`}
+                                            >
+                                                <MagnifyingGlassIcon className="w-3.5 h-3.5" />
+                                            </button>
+
+                                            {/* 3. Overflow Menu */}
                                             <div className="relative">
                                                 <button
                                                     ref={menuButtonRef}
@@ -724,6 +822,19 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                     );
                                 })()}
 
+                                {/* Active Conversation Search Bar */}
+                                <ConversationSearchBar
+                                    isOpen={isSearchOpen}
+                                    searchQuery={chatSearchQuery}
+                                    onQueryChange={setChatSearchQuery}
+                                    onClose={handleCloseSearch}
+                                    totalMatches={matchingMessages.length}
+                                    currentMatchIndex={currentMatchIndex}
+                                    onPrevMatch={handlePrevMatch}
+                                    onNextMatch={handleNextMatch}
+                                    placeholder="Search messages in this inbox thread..."
+                                />
+
                                 {/* Message Thread Timeline */}
                                 <div
                                     ref={timelineRef}
@@ -746,11 +857,13 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                         messages.map((msg) => {
                                             const isMe = msg.senderId === currentUser?.uid;
                                             const timeStr = formatTimestamp(msg.createdAt);
+                                            const isMatchActive = isSearchOpen && activeMatchedMessageId === msg.id;
 
                                             return (
                                                 <div
+                                                    id={`inbox-msg-${msg.id}`}
                                                     key={msg.id}
-                                                    className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                                                    className={`flex flex-col transition-all duration-200 ${isMe ? 'items-end' : 'items-start'}`}
                                                 >
                                                     {!isMe && msg.senderName && (
                                                         <span className="text-[10px] text-zinc-400 mb-1 px-1 font-semibold font-mono tracking-wide">
@@ -758,8 +871,10 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                         </span>
                                                     )}
                                                     <div
-                                                        className={`max-w-[85%] sm:max-w-[70%] px-3.5 py-2.5 text-xs border shadow-sm ${
-                                                            isMe
+                                                        className={`max-w-[85%] sm:max-w-[70%] px-3.5 py-2.5 text-xs border shadow-sm transition-all duration-200 ${
+                                                            isMatchActive
+                                                                ? 'ring-2 ring-emerald-400 border-emerald-400 bg-zinc-850 text-white shadow-lg'
+                                                                : isMe
                                                                 ? 'bg-zinc-850 border-zinc-750 text-zinc-100'
                                                                 : 'bg-[#131317] border-zinc-800 text-zinc-200'
                                                         }`}
@@ -769,6 +884,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                                 text={msg.text}
                                                                 isSender={isMe}
                                                                 timestamp={timeStr}
+                                                                searchTerm={isSearchOpen ? chatSearchQuery : undefined}
                                                             />
                                                         </div>
                                                         {timeStr && (
@@ -833,6 +949,19 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                         )}
                     </main>
                 </div>
+            )}
+
+            {/* AI Summary Modal for active inbox conversation */}
+            {selectedConversation && (
+                <ConversationSummaryModal
+                    isOpen={showSummaryModal}
+                    onClose={() => setShowSummaryModal(false)}
+                    conversationId={selectedConversation.id}
+                    conversationTitle={getOtherParticipant(selectedConversation).displayName}
+                    conversationType="inbox"
+                    messages={messages}
+                    currentUser={currentUser}
+                />
             )}
         </div>
     );

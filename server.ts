@@ -34,6 +34,36 @@ async function startServer() {
     res.json({ status: "ok", server: "invox-fullstack" });
   });
 
+  // Resilient multi-model executor with automatic fallback
+  async function generateWithFallback(params: {
+    contents: any;
+    config?: any;
+    models?: string[];
+  }) {
+    const ai = getGeminiClient();
+    const candidateModels = params.models || [
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite",
+      "gemini-3.8-flash",
+    ];
+
+    let lastError: any = null;
+    for (const model of candidateModels) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: params.contents,
+          ...(params.config ? { config: params.config } : {}),
+        });
+        return response;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[SERVER_GEMINI] Model '${model}' failed:`, err?.message?.slice(0, 120) || err);
+      }
+    }
+    throw lastError || new Error("All Gemini fallback models were unavailable.");
+  }
+
   // Gemini Feed Post Generation
   app.post("/api/gemini/feed-post", async (req, res) => {
     try {
@@ -42,9 +72,7 @@ async function startServer() {
         return res.status(400).json({ error: "Idea string is required" });
       }
 
-      const ai = getGeminiClient();
-      const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
+      const response = await generateWithFallback({
         contents: `Based on the following user idea, generate a full feed post. The idea is: "${idea}".`,
         config: {
           thinkingConfig: { thinkingBudget: 0 },
@@ -78,28 +106,51 @@ async function startServer() {
   // Gemini Chat Summarization
   app.post("/api/gemini/chat-summary", async (req, res) => {
     try {
-      const { transcript } = req.body;
+      const { transcript, title, conversationType, periodLabel } = req.body;
       if (!transcript || !transcript.trim()) {
         return res.json({ summary: "The chat is empty. Nothing to summarize." });
       }
 
-      const ai = getGeminiClient();
-      const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
-        contents: `Summarize the key points and takeaways of the following chat conversation. Keep it concise, easy to read, and use bullet points for important items.
+      const prompt = `You are an AI assistant for INVOX collaborative workspaces.
+Summarize the following chat conversation concisely, accurately, and objectively based ONLY on the provided messages within the specified time period.
+
+Conversation Context:
+- Subject / Title: "${title || 'Active Conversation'}"
+- Conversation Type: ${conversationType === 'team' ? 'Team Channel Group Chat' : 'Direct Collaboration Chat'}
+${periodLabel ? `- Summary Period: ${periodLabel}` : ''}
+
+Instructions:
+1. When supported by the conversation content, organize the summary into the following sections:
+   ### OVERVIEW
+   (A concise paragraph summarizing the main discussion and context)
+   ### KEY POINTS
+   (Bullet points of important information, updates, and developments)
+   ### DECISIONS
+   (Bullet points of decisions actually made. Omit this section if no decisions were made)
+   ### ACTION ITEMS
+   (Tasks, owners, and deadlines when explicitly identifiable from messages. Omit if none)
+   ### OPEN QUESTIONS
+   (Unresolved issues, questions, or pending decisions. Omit if none)
+2. Do not invent or assume decisions, deadlines, tasks, or participants. Omit sections that do not apply.
+3. For short or simple conversations, a simple paragraph is sufficient.
+4. Never fabricate information, commitments, or messages not present in the transcript.
+5. Keep the tone sharp, professional, and readable in dark monospace terminal style.
 
 Conversation Transcript:
-${transcript}`,
-        config: {
-          thinkingConfig: { thinkingBudget: 0 }
-        }
+${transcript}`;
+
+      const response = await generateWithFallback({
+        contents: prompt,
       });
 
       const summary = response.text?.trim() || "No summary generated.";
       res.json({ summary });
     } catch (error: any) {
       console.error("[SERVER_GEMINI] Error in chat-summary:", error);
-      res.status(500).json({ error: error.message || "Failed to generate chat summary", summary: "Sorry, I couldn't generate a summary for this chat at the moment." });
+      res.status(500).json({
+        error: error.message || "Failed to generate chat summary",
+        summary: "Sorry, I couldn't generate a summary for this chat at the moment."
+      });
     }
   });
 
@@ -111,13 +162,8 @@ ${transcript}`,
         return res.json({ summary: "No content to summarize." });
       }
 
-      const ai = getGeminiClient();
-      const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
+      const response = await generateWithFallback({
         contents: `Generate a concise, one-line summary for the following content: "${text}"`,
-        config: {
-          thinkingConfig: { thinkingBudget: 0 }
-        }
       });
 
       const summary = response.text?.trim() || "Could not generate summary.";
@@ -156,11 +202,23 @@ Your conversation should be focused on this content. Answer questions about it, 
         config.tools = [{ googleSearch: {} }];
       }
 
-      const responseStream = await ai.models.generateContentStream({
-        model: "gemini-3.7-flash",
-        contents: history || [],
-        config,
-      });
+      let responseStream: any = null;
+      for (const model of ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash"]) {
+        try {
+          responseStream = await ai.models.generateContentStream({
+            model,
+            contents: history || [],
+            config,
+          });
+          break;
+        } catch (streamErr) {
+          console.warn(`[SERVER_GEMINI] Stream model '${model}' failed:`, streamErr);
+        }
+      }
+
+      if (!responseStream) {
+        throw new Error("All Gemini streaming models are currently unavailable.");
+      }
 
       for await (const chunk of responseStream) {
         const sources = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks
