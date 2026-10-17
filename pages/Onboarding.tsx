@@ -1,8 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { COLLECTIONS, updateDocument } from '../services/firestoreService';
 import { getFriendlyErrorMessage } from '../utils/errorHandler';
+import {
+    normalizeUsername,
+    validateUsernameFormat,
+    checkUsernameAvailability,
+    claimUsername,
+    isUsernameReserved,
+    type UsernameValidationStatus,
+} from '../services/usernameService';
 
 const OnboardingPage = () => {
     const { currentUser, userProfile } = useAuth();
@@ -11,7 +19,9 @@ const OnboardingPage = () => {
     
     // Form state
     const [displayName, setDisplayName] = useState(userProfile?.displayName || '');
-    const [username, setUsername] = useState(userProfile?.username || '');
+    const [username, setUsername] = useState(userProfile?.username ? normalizeUsername(userProfile.username) : '');
+    const [usernameStatus, setUsernameStatus] = useState<UsernameValidationStatus>('idle');
+    const [usernameMessage, setUsernameMessage] = useState('');
     const [headline, setHeadline] = useState(userProfile?.headline || '');
     const [skillsInput, setSkillsInput] = useState(userProfile?.skills?.join(', ') || '');
     const [interestsInput, setInterestsInput] = useState(userProfile?.interests?.join(', ') || '');
@@ -19,8 +29,95 @@ const OnboardingPage = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    const handleNext = () => setStep(prev => prev + 1);
+    const checkTimerRef = useRef<any>(null);
+
+    const handleNext = async () => {
+        if (!username.trim()) {
+            setError('Please enter a username.');
+            return;
+        }
+        const normalized = normalizeUsername(username);
+        const formatCheck = validateUsernameFormat(normalized);
+        if (!formatCheck.isValid) {
+            setError(formatCheck.error || 'Invalid username format.');
+            return;
+        }
+        if (isUsernameReserved(normalized)) {
+            setError('This username is reserved.');
+            return;
+        }
+
+        setLoading(true);
+        setError('');
+        try {
+            const res = await checkUsernameAvailability(normalized, currentUser?.uid, userProfile?.username);
+            if (res.status === 'taken') {
+                setError('This username is already taken. Please choose another.');
+                setUsernameStatus('taken');
+                setUsernameMessage('Username already taken');
+                setLoading(false);
+                return;
+            }
+            if (res.status === 'reserved') {
+                setError('This username is reserved.');
+                setUsernameStatus('reserved');
+                setUsernameMessage('This username is reserved');
+                setLoading(false);
+                return;
+            }
+            if (!res.isValid) {
+                setError(res.message);
+                setUsernameStatus(res.status);
+                setUsernameMessage(res.message);
+                setLoading(false);
+                return;
+            }
+            setUsernameStatus(res.status);
+            setUsernameMessage(res.message);
+            setStep(prev => prev + 1);
+        } catch (err: any) {
+            setError(err?.message || 'Failed to verify username availability.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handlePrev = () => setStep(prev => prev - 1);
+
+    const handleUsernameChange = (val: string) => {
+        setUsername(val);
+        const normalized = normalizeUsername(val);
+        if (checkTimerRef.current) clearTimeout(checkTimerRef.current);
+
+        if (!val.trim()) {
+            setUsernameStatus('invalid_format');
+            setUsernameMessage('Username cannot be empty');
+            return;
+        }
+        const formatCheck = validateUsernameFormat(normalized);
+        if (!formatCheck.isValid) {
+            setUsernameStatus('invalid_format');
+            setUsernameMessage(formatCheck.error || 'Invalid username format');
+            return;
+        }
+        if (isUsernameReserved(normalized)) {
+            setUsernameStatus('reserved');
+            setUsernameMessage('This username is reserved');
+            return;
+        }
+        setUsernameStatus('checking');
+        setUsernameMessage('Checking availability...');
+        
+        checkTimerRef.current = setTimeout(async () => {
+            try {
+                const res = await checkUsernameAvailability(normalized, currentUser?.uid, userProfile?.username);
+                setUsernameStatus(res.status);
+                setUsernameMessage(res.message);
+            } catch {
+                setUsernameStatus('idle');
+            }
+        }, 300);
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -30,12 +127,12 @@ const OnboardingPage = () => {
         setError('');
 
         try {
+            const normalized = normalizeUsername(username);
             const skills = skillsInput.split(',').map(s => s.trim()).filter(Boolean);
             const interests = interestsInput.split(',').map(s => s.trim()).filter(Boolean);
 
-            await updateDocument(COLLECTIONS.users, currentUser.uid, {
+            await claimUsername(currentUser.uid, normalized, {
                 displayName,
-                username,
                 headline,
                 skills,
                 interests,
@@ -52,7 +149,7 @@ const OnboardingPage = () => {
             })();
             navigate(redirectTarget, { replace: true });
         } catch (err: any) {
-            setError(getFriendlyErrorMessage(err));
+            setError(err?.message || getFriendlyErrorMessage(err));
             console.error(err);
         }
         setLoading(false);
@@ -121,17 +218,27 @@ const OnboardingPage = () => {
                             </div>
                             <div>
                                 <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5" htmlFor="username">
-                                    // SYSTEM_USERNAME
+                                    // USERNAME
                                 </label>
-                                <input
-                                    type="text"
-                                    id="username"
-                                    value={username}
-                                    placeholder="alex_mercer"
-                                    onChange={(e) => setUsername(e.target.value)}
-                                    required
-                                    className="w-full bg-[#09090b] border border-zinc-800 focus:border-zinc-500 focus:outline-none p-3 text-xs text-white placeholder-zinc-600 font-mono transition-colors"
-                                />
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-xs font-mono select-none">@</span>
+                                    <input
+                                        type="text"
+                                        id="username"
+                                        value={username}
+                                        placeholder="username"
+                                        onChange={(e) => handleUsernameChange(e.target.value)}
+                                        required
+                                        className="w-full bg-[#09090b] border border-zinc-800 focus:border-zinc-500 focus:outline-none p-3 pl-8 text-xs text-white placeholder-zinc-600 font-mono transition-colors"
+                                    />
+                                </div>
+                                {usernameStatus !== 'idle' && (
+                                    <p className={`mt-1 text-[11px] font-mono ${
+                                        usernameStatus === 'available' || usernameStatus === 'unchanged' ? 'text-emerald-400' : usernameStatus === 'checking' ? 'text-zinc-400' : 'text-rose-400'
+                                    }`}>
+                                        // {usernameMessage}
+                                    </p>
+                                )}
                             </div>
                             <div>
                                 <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5" htmlFor="headline">

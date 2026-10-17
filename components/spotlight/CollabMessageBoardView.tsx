@@ -651,7 +651,9 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                                 timestampStr,
                                                 unreadCount,
                                                 isSelected,
-                                                subtitle: convo.roleTitle
+                                                subtitle: other.username
+                                                    ? `@${other.username}${convo.roleTitle ? ` • [${convo.roleTitle}]` : convo.collabHook ? ` • ${convo.collabHook}` : ''}`
+                                                    : convo.roleTitle
                                                     ? `[${convo.roleTitle}]`
                                                     : convo.collabHook || convo.collabTitle,
                                             }}
@@ -686,14 +688,15 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                 {/* Active Conversation Header */}
                                 {(() => {
                                     const other = getOtherParticipant(selectedConversation);
-                                    const subtitleText =
-                                        selectedConversation.collabHook || selectedConversation.collabTitle
-                                            ? `// ${selectedConversation.collabHook || selectedConversation.collabTitle}${
-                                                  selectedConversation.roleTitle
-                                                      ? ` • [${selectedConversation.roleTitle}]`
-                                                      : ''
-                                              }`
-                                            : undefined;
+                                    const handleTag = other.username ? `@${other.username}` : '';
+                                    const projectTag = selectedConversation.collabHook || selectedConversation.collabTitle
+                                        ? `// ${selectedConversation.collabHook || selectedConversation.collabTitle}${
+                                              selectedConversation.roleTitle
+                                                  ? ` • [${selectedConversation.roleTitle}]`
+                                                  : ''
+                                          }`
+                                        : '';
+                                    const subtitleText = [handleTag, projectTag].filter(Boolean).join(' • ') || undefined;
 
                                     return (
                                         <ChatHeader

@@ -16,6 +16,7 @@ import {
 import { doc, getDoc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import type { InvoxUser } from '../types';
+import { normalizeUsername, ensureUserUsernameMapping } from './usernameService';
 
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
@@ -30,12 +31,14 @@ const emptyReputation = {
 export const ADMIN_EMAILS = ['akshaayvardhans@gmail.com'];
 
 /** Build a complete, safe profile document for a new user. */
-const buildUserProfile = (user: FirebaseUser, overrides: Partial<InvoxUser> = {}) => {
+const buildUserProfile = (user: FirebaseUser, overrides: Partial<InvoxUser> = {}, assignedUsername?: string) => {
     const isOwnerAdmin = !!user.email && ADMIN_EMAILS.includes(user.email.toLowerCase());
+    const rawUsername = assignedUsername || overrides.username || user.email?.split('@')[0] || `user_${Date.now().toString().slice(-4)}`;
+    const finalUsername = normalizeUsername(rawUsername);
     return {
         uid: user.uid,
         email: user.email,
-        username: overrides.username ?? user.email?.split('@')[0] ?? 'user' + Date.now().toString().slice(-4),
+        username: finalUsername,
         displayName: overrides.displayName ?? user.displayName ?? user.email?.split('@')[0] ?? 'Invox User',
         photoURL: overrides.photoURL ?? user.photoURL ?? null,
         role: overrides.role ?? (isOwnerAdmin ? 'admin' : 'user'),
@@ -89,14 +92,15 @@ export const ensureUserProfile = async (
 
             if (!snapshot.exists()) {
                 // ── NEW USER ────────────────────────────────────────────────
-                const profile = buildUserProfile(user, overrides);
+                const assignedUsername = await ensureUserUsernameMapping(user.uid, overrides.username, user.email);
+                const profile = buildUserProfile(user, overrides, assignedUsername);
                 console.log(`[PROFILE_CREATE] Document not found. Creating users/${user.uid}`, {
                     email: profile.email,
                     displayName: profile.displayName,
                     username: profile.username,
                 });
                 await setDoc(userRef, profile);
-                console.log(`[PROFILE_CREATE] users/${user.uid} created successfully.`);
+                console.log(`[PROFILE_CREATE] users/${user.uid} created successfully with username @${profile.username}.`);
                 return;
             }
 
@@ -105,6 +109,18 @@ export const ensureUserProfile = async (
             // Only sync fields owned by Firebase Auth; never overwrite user edits.
             const existing = snapshot.data();
             console.log(`[PROFILE_LOAD] users/${user.uid} found. Syncing auth fields.`);
+
+            // Ensure username registry has this user's username mapped, normalizing any legacy @ prefix
+            let existingUsername = existing.username;
+            if (!existingUsername) {
+                existingUsername = user.email?.split('@')[0] || `user_${user.uid.slice(0, 6)}`;
+            }
+            const normalizedExisting = normalizeUsername(existingUsername);
+            const usernameBackfill = (normalizedExisting !== existing.username) ? { username: normalizedExisting } : {};
+
+            ensureUserUsernameMapping(user.uid, normalizedExisting, user.email).catch(err => {
+                console.warn('[PROFILE_LOAD] Non-blocking username mapping sync warning:', err);
+            });
 
             const isOwnerAdmin = !!user.email && ADMIN_EMAILS.includes(user.email.toLowerCase());
             const roleUpdates = (isOwnerAdmin && existing.role !== 'admin') ? { role: 'admin' } : {};
@@ -117,6 +133,7 @@ export const ensureUserProfile = async (
                 // Prefer stored photoURL; fall back to Auth only if empty
                 photoURL: existing.photoURL || user.photoURL || null,
                 ...roleUpdates,
+                ...usernameBackfill,
                 updatedAt: serverTimestamp(),
                 lastSeenAt: serverTimestamp(),
             });
@@ -142,7 +159,8 @@ export const ensureUserProfile = async (
             if (isOffline) {
                 console.warn(`[PROFILE_LOAD] Firestore connection connecting in background. Queuing initial user profile sync.`);
                 try {
-                    const fallbackProfile = buildUserProfile(user, overrides);
+                    const fallbackUsername = overrides.username ? normalizeUsername(overrides.username) : `user_${user.uid.slice(0, 6)}`;
+                    const fallbackProfile = buildUserProfile(user, overrides, fallbackUsername);
                     await setDoc(userRef, fallbackProfile, { merge: true });
                 } catch (fallbackErr) {
                     console.warn('[PROFILE_LOAD] Offline fallback queued:', fallbackErr);

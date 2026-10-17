@@ -1,8 +1,9 @@
-import React from 'react';
-import { MenuIcon, ProfileIcon, BellIcon } from '../ui/Icons';
+import React, { useState } from 'react';
+import { MenuIcon, ProfileIcon, BellIcon, MagnifyingGlassIcon } from '../ui/Icons';
 // FIX: Use namespace import for react-router-dom to avoid "no exported member" issues.
 import * as ReactRouterDOM from 'react-router-dom';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { FindByInvoxIdModal } from '../ui/FindByInvoxIdModal';
 
 interface HeaderProps {
     toggleSidebar: () => void;
@@ -11,6 +12,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ toggleSidebar, pageTitle }) => {
     const { unreadCount } = useNotifications();
+    const [isFindModalOpen, setIsFindModalOpen] = useState(false);
 
     return (
         <>
@@ -30,6 +32,15 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, pageTitle }) => {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setIsFindModalOpen(true)}
+                        className="text-zinc-300 hover:text-white px-2 py-1.5 border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 font-mono text-[10px] uppercase font-bold tracking-wider inline-flex items-center gap-1 transition-colors"
+                        aria-label="Find by INVOX ID"
+                        title="Find Comrade by INVOX ID"
+                    >
+                        <MagnifyingGlassIcon className="w-3.5 h-3.5 text-zinc-400" />
+                        <span>ID</span>
+                    </button>
                     <ReactRouterDOM.Link 
                         to="/notifications"
                         className="text-zinc-300 hover:text-white p-1.5 border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 relative transition-colors inline-flex items-center justify-center" 
@@ -51,6 +62,10 @@ export const Header: React.FC<HeaderProps> = ({ toggleSidebar, pageTitle }) => {
                     </ReactRouterDOM.Link>
                 </div>
             </header>
+            <FindByInvoxIdModal
+                isOpen={isFindModalOpen}
+                onClose={() => setIsFindModalOpen(false)}
+            />
         </>
     );
 };

@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -42,23 +42,28 @@ async function startServer() {
   }) {
     const ai = getGeminiClient();
     const candidateModels = params.models || [
-      "gemini-3.5-flash-lite",
-      "gemini-3.1-flash-lite",
       "gemini-3.8-flash",
+      "gemini-3.1-flash-lite",
+      "gemini-flash-latest",
     ];
 
     let lastError: any = null;
     for (const model of candidateModels) {
       try {
+        const isGemini3Or4 = model.startsWith("gemini-3") || model.startsWith("gemini-4");
+        const modelConfig = {
+          ...(isGemini3Or4 ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
+          ...(params.config || {}),
+        };
         const response = await ai.models.generateContent({
           model,
           contents: params.contents,
-          ...(params.config ? { config: params.config } : {}),
+          config: modelConfig,
         });
         return response;
       } catch (err: any) {
         lastError = err;
-        console.warn(`[SERVER_GEMINI] Model '${model}' failed:`, err?.message?.slice(0, 120) || err);
+        console.warn(`[GEMINI_RETRY] Model '${model}' fallback:`, err?.message?.slice(0, 120) || err);
       }
     }
     throw lastError || new Error("All Gemini fallback models were unavailable.");
@@ -75,7 +80,6 @@ async function startServer() {
       const response = await generateWithFallback({
         contents: `Based on the following user idea, generate a full feed post. The idea is: "${idea}".`,
         config: {
-          thinkingConfig: { thinkingBudget: 0 },
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -195,7 +199,6 @@ Your conversation should be focused on this content. Answer questions about it, 
 
       const config: any = {
         systemInstruction,
-        thinkingConfig: { thinkingBudget: 0 }
       };
 
       if (useSearch) {
@@ -203,16 +206,21 @@ Your conversation should be focused on this content. Answer questions about it, 
       }
 
       let responseStream: any = null;
-      for (const model of ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash"]) {
+      for (const model of ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"]) {
         try {
+          const isGemini3Or4 = model.startsWith("gemini-3") || model.startsWith("gemini-4");
+          const streamConfig = {
+            ...config,
+            ...(isGemini3Or4 ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
+          };
           responseStream = await ai.models.generateContentStream({
             model,
             contents: history || [],
-            config,
+            config: streamConfig,
           });
           break;
         } catch (streamErr) {
-          console.warn(`[SERVER_GEMINI] Stream model '${model}' failed:`, streamErr);
+          console.warn(`[GEMINI_RETRY] Stream model '${model}' fallback:`, (streamErr as any)?.message || streamErr);
         }
       }
 

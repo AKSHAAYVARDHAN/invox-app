@@ -13,6 +13,8 @@ import { subscribeConnectionStatus, connectWithUser, disconnectFromUser } from '
 import { computeProfileCompletion } from './Settings';
 import type { InvoxUser } from '../types';
 
+import { resolveUsernameToUid, normalizeUsername } from '../services/usernameService';
+
 /* ─── helpers ─────────────────────────────────────────────────────────────── */
 
 /** Format a Firestore Timestamp or ISO string to "Month YYYY" */
@@ -49,8 +51,17 @@ const ProfilePage = () => {
     const { currentUser, userProfile, loading } = useAuth();
     const navigate = useNavigate();
     const { userId } = useParams<{ userId?: string }>();
-    const isOwnProfile = !userId || (Boolean(currentUser) && userId === currentUser?.uid);
+    
+    const [resolvedUid, setResolvedUid] = useState<string | null>(null);
 
+    // Check if the param points to the logged-in user either by UID, raw username, or resolved UID
+    const isOwnProfile = !userId || Boolean(
+        currentUser && (
+            userId === currentUser.uid ||
+            (userProfile?.username && normalizeUsername(userProfile.username) === normalizeUsername(userId)) ||
+            (resolvedUid && resolvedUid === currentUser.uid)
+        )
+    );
     const [targetProfile, setTargetProfile] = useState<InvoxUser | null>(null);
     const [targetLoading, setTargetLoading] = useState<boolean>(!isOwnProfile);
     const [targetError, setTargetError] = useState<string | null>(null);
@@ -64,32 +75,65 @@ const ProfilePage = () => {
     const [uploadError, setUploadError] = useState('');
     // Local preview URLs — shown instantly while upload is in-flight
     const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null);
-    const [localCoverUrl, setLocalCoverUrl]   = useState<string | null>(null);
+    const [localCoverUrl,  setLocalCoverUrl]  = useState<string | null>(null);
 
     const [isConnected, setIsConnected] = useState(false);
     const [isConnecting, setIsConnecting] = useState(false);
 
+    // Resolve username to UID if param is not already own profile
     useEffect(() => {
-        if (isOwnProfile || !userId || !currentUser?.uid) return;
-        const unsub = subscribeConnectionStatus(currentUser.uid, userId, (status) => {
+        let isMounted = true;
+        if (isOwnProfile || !userId) {
+            setResolvedUid(currentUser?.uid || null);
+            return;
+        }
+
+        const resolveTarget = async () => {
+            setTargetLoading(true);
+            setTargetError(null);
+            try {
+                // If starts with @ or is a username
+                const candidateUid = await resolveUsernameToUid(userId);
+                if (isMounted) {
+                    if (candidateUid) {
+                        setResolvedUid(candidateUid);
+                    } else {
+                        // Fall back to assuming userId is directly a Firebase Auth UID
+                        setResolvedUid(userId);
+                    }
+                }
+            } catch (err) {
+                if (isMounted) setResolvedUid(userId);
+            }
+        };
+
+        resolveTarget();
+        return () => { isMounted = false; };
+    }, [userId, isOwnProfile, currentUser?.uid]);
+
+    useEffect(() => {
+        const effectiveTargetUid = resolvedUid;
+        if (isOwnProfile || !effectiveTargetUid || !currentUser?.uid) return;
+        const unsub = subscribeConnectionStatus(currentUser.uid, effectiveTargetUid, (status) => {
             setIsConnected(status.isConnected);
         });
         return () => {
             unsub();
         };
-    }, [isOwnProfile, userId, currentUser?.uid]);
+    }, [isOwnProfile, resolvedUid, currentUser?.uid]);
 
     const handleToggleConnect = async () => {
-        if (!currentUser || isOwnProfile || !userId || isConnecting) return;
+        const effectiveTargetUid = resolvedUid || targetProfile?.uid;
+        if (!currentUser || isOwnProfile || !effectiveTargetUid || isConnecting) return;
         setIsConnecting(true);
         try {
             if (isConnected) {
-                await disconnectFromUser(currentUser.uid, userId);
+                await disconnectFromUser(currentUser.uid, effectiveTargetUid);
             } else {
                 await connectWithUser({
                     currentUser,
                     currentUserProfile: userProfile,
-                    targetUserId: userId,
+                    targetUserId: effectiveTargetUid,
                 });
             }
         } catch (e) {
@@ -100,10 +144,12 @@ const ProfilePage = () => {
     };
 
     useEffect(() => {
-        if (isOwnProfile || !userId) {
-            setTargetProfile(null);
-            setTargetLoading(false);
-            setTargetError(null);
+        if (isOwnProfile || !resolvedUid) {
+            if (isOwnProfile) {
+                setTargetProfile(null);
+                setTargetLoading(false);
+                setTargetError(null);
+            }
             return;
         }
 
@@ -111,7 +157,7 @@ const ProfilePage = () => {
         setTargetError(null);
 
         const unsubscribe = subscribeUserProfile(
-            userId,
+            resolvedUid,
             (profile) => {
                 if (profile) {
                     setTargetProfile(profile);
@@ -132,7 +178,7 @@ const ProfilePage = () => {
         return () => {
             unsubscribe();
         };
-    }, [userId, isOwnProfile]);
+    }, [resolvedUid, isOwnProfile]);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'profile' | 'cover') => {
         if (!e.target.files || !e.target.files[0] || !currentUser || !isOwnProfile) return;

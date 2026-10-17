@@ -2216,14 +2216,21 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                                         )}
                                                                     </div>
                                                                     <div className="min-w-0">
-                                                                        <p className="text-xs text-white font-bold truncate">
-                                                                            {m.displayName}
-                                                                            {m.userId === currentUser?.uid && (
-                                                                                <span className="text-zinc-500 text-[10px] font-normal ml-1">
-                                                                                    (you)
+                                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                                            <p className="text-xs text-white font-bold truncate">
+                                                                                {m.displayName}
+                                                                                {m.userId === currentUser?.uid && (
+                                                                                    <span className="text-zinc-500 text-[10px] font-normal ml-1">
+                                                                                        (you)
+                                                                                    </span>
+                                                                                )}
+                                                                            </p>
+                                                                            {m.username && (
+                                                                                <span className="text-[10px] text-zinc-500 font-mono truncate">
+                                                                                    @{m.username}
                                                                                 </span>
                                                                             )}
-                                                                        </p>
+                                                                        </div>
                                                                         <p className="text-[10px] text-zinc-500 truncate">
                                                                             {m.projectRole ||
                                                                                 (m.role === 'owner' ? 'Project Lead' : 'Collaborator')}

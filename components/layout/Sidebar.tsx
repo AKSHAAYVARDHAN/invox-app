@@ -2,11 +2,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 // FIX: Use namespace import for react-router-dom to avoid "no exported member" issues.
 import * as ReactRouterDOM from 'react-router-dom';
-import { HomeIcon, ExploreIcon, SpotlightIcon, CommunityIcon, HubIcon, LogoutIcon, TrendingUpIcon, MicrophoneIcon, CubeIcon, ProfileIcon, CogIcon, BellIcon } from '../ui/Icons';
+import { HomeIcon, ExploreIcon, SpotlightIcon, CommunityIcon, HubIcon, LogoutIcon, TrendingUpIcon, MicrophoneIcon, CubeIcon, ProfileIcon, CogIcon, BellIcon, MagnifyingGlassIcon } from '../ui/Icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { usePlatformConfig } from '../../contexts/PlatformConfigContext';
 import { logout } from '../../services/authService';
+import { FindByInvoxIdModal } from '../ui/FindByInvoxIdModal';
 import type { SectionId } from '../../types';
 
 interface NavItem {
@@ -48,6 +49,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHu
     });
 
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [isFindModalOpen, setIsFindModalOpen] = useState(false);
+    const [copiedSidebarId, setCopiedSidebarId] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -153,9 +156,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHu
                     </nav>
                 </div>
 
-                {/* Notifications Entry - Positioned directly above profile section */}
+                {/* Find by ID Action */}
                 {currentUser && (
                     <div className="pt-2 pb-1 border-t border-zinc-800/80">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsFindModalOpen(true);
+                                if (isOpen) toggleSidebar();
+                            }}
+                            className="w-full flex items-center space-x-3.5 px-3.5 py-2.5 rounded-none text-zinc-400 hover:bg-zinc-900/80 hover:text-white border border-transparent hover:border-zinc-800/80 transition-all text-xs font-mono uppercase tracking-wider"
+                            title="Find Comrade by permanent INVOX ID"
+                        >
+                            <MagnifyingGlassIcon className="w-4 h-4 flex-shrink-0 text-zinc-400 group-hover:text-white" />
+                            <span className="truncate">// FIND BY ID</span>
+                        </button>
+                    </div>
+                )}
+
+                {/* Notifications Entry - Positioned directly above profile section */}
+                {currentUser && (
+                    <div className="pt-1 pb-1 border-t border-zinc-800/80">
                         <ReactRouterDOM.NavLink
                             to="/notifications"
                             className={({ isActive }) => `${navLinkClasses} ${isActive ? activeLinkClasses : ''} justify-between`}
@@ -221,6 +242,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHu
                                     <div className="px-3 py-1.5 text-[10px] font-mono text-zinc-500 border-b border-zinc-800 uppercase tracking-widest">
                                         Account
                                     </div>
+                                    {userProfile?.invoxId && (
+                                        <div className="px-3 py-1.5 border-b border-zinc-800 bg-black/60 flex items-center justify-between">
+                                            <span className="text-[10px] text-zinc-400 font-mono tracking-wider">
+                                                ID: <span className="text-white font-bold">{userProfile.invoxId}</span>
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (userProfile?.invoxId) {
+                                                        navigator.clipboard.writeText(userProfile.invoxId);
+                                                        setCopiedSidebarId(true);
+                                                        setTimeout(() => setCopiedSidebarId(false), 2000);
+                                                    }
+                                                }}
+                                                className="text-[9px] text-zinc-400 hover:text-white uppercase font-mono px-1.5 py-0.5 border border-zinc-800 hover:border-zinc-700 bg-zinc-900"
+                                                title="Copy INVOX ID"
+                                            >
+                                                {copiedSidebarId ? '✓' : 'COPY'}
+                                            </button>
+                                        </div>
+                                    )}
                                     <ul className="py-1" role="menu">
                                         {isAdmin && (
                                             <li className="border-b border-zinc-800/80 mb-1 pb-1">
@@ -288,6 +331,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, resetHu
                     )}
                 </div>
             </aside>
+            <FindByInvoxIdModal
+                isOpen={isFindModalOpen}
+                onClose={() => setIsFindModalOpen(false)}
+            />
         </>
     );
 };

@@ -29,6 +29,7 @@ import {
     MagnifyingGlassIcon,
     XMarkIcon
 } from '../components/ui/Icons';
+import { searchUsersByUsername } from '../services/usernameService';
 
 const initialMockPosts: Post[] = [
     {
@@ -511,12 +512,31 @@ const ExplorePage = () => {
         setDiscoverSearchTerm
     } = outletContext || {};
 
+    const navigate = ReactRouterDOM.useNavigate();
+    const [matchingUsers, setMatchingUsers] = useState<Array<{ uid: string; username: string; displayName?: string; photoURL?: string | null; headline?: string }>>([]);
+
     const activeSearch = (discoverSearchTerm !== undefined ? discoverSearchTerm : localSearch);
 
     const handleSearchChange = useCallback((val: string) => {
         setLocalSearch(val);
         setDiscoverSearchTerm?.(val);
     }, [setDiscoverSearchTerm]);
+
+    // Live search for matching users by username
+    useEffect(() => {
+        let isCurrent = true;
+        const cleanTerm = activeSearch.trim().replace(/^@/, '');
+        if (cleanTerm.length >= 2) {
+            searchUsersByUsername(cleanTerm, 6).then(users => {
+                if (isCurrent) setMatchingUsers(users);
+            }).catch(() => {
+                if (isCurrent) setMatchingUsers([]);
+            });
+        } else {
+            setMatchingUsers([]);
+        }
+        return () => { isCurrent = false; };
+    }, [activeSearch]);
 
     // Synchronize domain filter with URL search params safely
     useEffect(() => {
@@ -939,6 +959,44 @@ const ExplorePage = () => {
                     </button>
                 )}
             </div>
+
+            {/* Matching Users from exact or prefix username search */}
+            {matchingUsers.length > 0 && (
+                <div className="mb-5 p-3.5 bg-[#0c0c0e] border border-zinc-800 font-mono">
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-zinc-800">
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest block font-bold">
+                            // USERS_FOUND ({matchingUsers.length})
+                        </span>
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-wider">BY USERNAME</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {matchingUsers.map(user => (
+                            <div
+                                key={user.uid}
+                                onClick={() => navigate(`/profile/${user.username}`)}
+                                className="p-2.5 bg-black/60 border border-zinc-800 hover:border-zinc-600 transition-colors cursor-pointer flex items-center justify-between gap-3 group"
+                            >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="w-8 h-8 bg-zinc-900 border border-zinc-700 flex items-center justify-center shrink-0">
+                                        {user.photoURL ? (
+                                            <img src={user.photoURL} alt={user.displayName} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <span className="text-white text-xs font-bold">{user.displayName?.charAt(0) || 'U'}</span>
+                                        )}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold text-white truncate group-hover:text-zinc-200">{user.displayName}</p>
+                                        <p className="text-[11px] text-zinc-400 font-mono truncate">@{user.username}</p>
+                                    </div>
+                                </div>
+                                <span className="text-[10px] px-2 py-0.5 border border-zinc-700 bg-zinc-900 text-zinc-300 uppercase tracking-wider group-hover:border-zinc-500 group-hover:text-white shrink-0">
+                                    PROFILE ↗
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Main Tabs: Feeds/Discover */}
             <div className="flex border-b border-zinc-800 mb-5">

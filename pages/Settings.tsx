@@ -6,6 +6,15 @@ import { getFriendlyErrorMessage } from '../utils/errorHandler';
 import { uploadFile } from '../services/storageService';
 import { handleImageError } from '../components/utils/imageUtils';
 import { ProfileIcon } from '../components/ui/Icons';
+import {
+    normalizeUsername,
+    validateUsernameFormat,
+    isUsernameReserved,
+    checkUsernameAvailability,
+    suggestAlternativeUsernames,
+    claimUsername,
+    type UsernameValidationStatus,
+} from '../services/usernameService';
 
 /* ─── Profile Completion Calculator ──────────────────────────────────────── */
 
@@ -176,6 +185,13 @@ const SettingsPage = () => {
     const [personalLoading, setPersonalLoading] = useState(false);
     const [personalMessage, setPersonalMessage] = useState({ type: '', text: '' });
 
+    /* ── Username verification & suggestions states ── */
+    const [usernameStatus, setUsernameStatus] = useState<UsernameValidationStatus>('idle');
+    const [usernameStatusMessage, setUsernameStatusMessage] = useState('');
+    const [usernameSuggestions, setUsernameSuggestions] = useState<string[]>([]);
+    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+    const usernameCheckTimerRef = useRef<NodeJS.Timeout | null>(null);
+
     /* ── Professional fields ── */
     const [skills,       setSkills]       = useState<string[]>([]);
     const [interests,    setInterests]    = useState<string[]>([]);
@@ -221,7 +237,10 @@ const SettingsPage = () => {
         // Only pre-fill personal fields if the user has not started editing them
         if (!personalTouched.current) {
             setDisplayName(userProfile.displayName || '');
-            setUsername(userProfile.username || '');
+            const initialUsername = userProfile.username ? normalizeUsername(userProfile.username) : '';
+            setUsername(initialUsername);
+            setUsernameStatus(initialUsername ? 'unchanged' : 'idle');
+            setUsernameStatusMessage(initialUsername ? 'Current username' : '');
             setHeadline(userProfile.headline || '');
             setBio(userProfile.bio || '');
         }
@@ -262,22 +281,134 @@ const SettingsPage = () => {
 
     /* ── Handlers ── */
 
+    const loadSuggestions = async (baseName: string) => {
+        setLoadingSuggestions(true);
+        try {
+            const suggestions = await suggestAlternativeUsernames(baseName, 4);
+            setUsernameSuggestions(suggestions);
+        } catch (e) {
+            console.warn('[SUGGESTIONS_ERROR]', e);
+        } finally {
+            setLoadingSuggestions(false);
+        }
+    };
+
+    const handleUsernameChange = (val: string) => {
+        personalTouched.current = true;
+        setUsername(val);
+
+        const normalized = normalizeUsername(val);
+        const currentNormalized = userProfile?.username ? normalizeUsername(userProfile.username) : '';
+
+        if (usernameCheckTimerRef.current) {
+            clearTimeout(usernameCheckTimerRef.current);
+        }
+
+        if (!val.trim()) {
+            setUsernameStatus('invalid_format');
+            setUsernameStatusMessage('Username cannot be empty');
+            setUsernameSuggestions([]);
+            return;
+        }
+
+        if (normalized === currentNormalized) {
+            setUsernameStatus('unchanged');
+            setUsernameStatusMessage('Current username');
+            setUsernameSuggestions([]);
+            return;
+        }
+
+        // Pre-validate format on client
+        const formatCheck = validateUsernameFormat(normalized);
+        if (!formatCheck.isValid) {
+            setUsernameStatus('invalid_format');
+            setUsernameStatusMessage(formatCheck.error || 'Invalid username format');
+            setUsernameSuggestions([]);
+            return;
+        }
+
+        if (isUsernameReserved(normalized)) {
+            setUsernameStatus('reserved');
+            setUsernameStatusMessage('This username is reserved');
+            setUsernameSuggestions([]);
+            return;
+        }
+
+        setUsernameStatus('checking');
+        setUsernameStatusMessage('Checking availability...');
+        setUsernameSuggestions([]);
+
+        usernameCheckTimerRef.current = setTimeout(async () => {
+            try {
+                const res = await checkUsernameAvailability(val, currentUser?.uid, userProfile?.username);
+                setUsernameStatus(res.status);
+                setUsernameStatusMessage(res.message);
+
+                if (res.status === 'taken') {
+                    loadSuggestions(val);
+                } else {
+                    setUsernameSuggestions([]);
+                }
+            } catch (err) {
+                console.warn('[LIVE_USERNAME_CHECK_ERROR]', err);
+            }
+        }, 350);
+    };
+
+    const handleSelectSuggestion = (suggestion: string) => {
+        handleUsernameChange(suggestion);
+    };
+
     const handlePersonalSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!currentUser) return;
         setPersonalLoading(true);
         setPersonalMessage({ type: '', text: '' });
         try {
-            const payload = { displayName, username, headline, bio };
-            console.log(`[FIRESTORE_WRITE] Personal info — users/${currentUser.uid}:`, payload);
-            await updateDocument(COLLECTIONS.users, currentUser.uid, payload);
-            console.log(`[PROFILE_SAVE_SUCCESS] Personal info saved for users/${currentUser.uid}`);
+            const normalized = normalizeUsername(username);
+
+            // Client-side quick check
+            const formatCheck = validateUsernameFormat(normalized);
+            if (!formatCheck.isValid) {
+                throw new Error(formatCheck.error || 'Invalid username format.');
+            }
+            if (isUsernameReserved(normalized)) {
+                throw new Error(`The username '${normalized}' is reserved.`);
+            }
+
+            console.log(`[FIRESTORE_WRITE] Claiming username and personal info — users/${currentUser.uid}:`, {
+                username: normalized,
+                displayName,
+                headline,
+                bio,
+            });
+
+            // Authoritative uniqueness check and atomic claim via Firestore transaction
+            const claimResult = await claimUsername(currentUser.uid, normalized, {
+                displayName,
+                headline,
+                bio,
+            });
+
+            console.log(`[PROFILE_SAVE_SUCCESS] Personal info and username saved for users/${currentUser.uid}`, claimResult);
+            setUsername(claimResult.username);
+            setUsernameStatus('unchanged');
+            setUsernameStatusMessage('Current username');
+            setUsernameSuggestions([]);
+
             await persistCompletion({ displayName, headline, bio });
             setPersonalMessage({ type: 'success', text: 'Personal information updated successfully.' });
             personalTouched.current = false; // allow future context refreshes to sync
         } catch (err: any) {
             console.error(`[PROFILE_SAVE_ERROR] Personal info failed for users/${currentUser.uid}:`, err);
-            setPersonalMessage({ type: 'error', text: getFriendlyErrorMessage(err) });
+            const errorMsg = err?.message || getFriendlyErrorMessage(err);
+            setPersonalMessage({ type: 'error', text: errorMsg });
+
+            if (errorMsg.includes('already taken')) {
+                setUsernameStatus('taken');
+                setUsernameStatusMessage('Username already taken');
+                loadSuggestions(username);
+            }
         }
         setPersonalLoading(false);
     };
@@ -468,16 +599,111 @@ const SettingsPage = () => {
                                     />
                                 </FormField>
 
-                                <FormField label="Username Handle">
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-xs font-mono">@</span>
-                                        <input
-                                            type="text"
-                                            value={username}
-                                            onChange={e => setUsername(e.target.value)}
-                                            placeholder="handle"
-                                            className={`${inputClass} pl-7`}
-                                        />
+                                <FormField label="USERNAME">
+                                    <div className="space-y-2">
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-xs font-mono select-none">@</span>
+                                            <input
+                                                type="text"
+                                                value={username}
+                                                onChange={e => handleUsernameChange(e.target.value)}
+                                                placeholder="username"
+                                                autoCapitalize="none"
+                                                autoCorrect="off"
+                                                spellCheck="false"
+                                                className={`${inputClass} pl-7 ${
+                                                    usernameStatus === 'taken' || usernameStatus === 'reserved'
+                                                        ? 'border-rose-900 focus:border-rose-600'
+                                                        : usernameStatus === 'available'
+                                                        ? 'border-emerald-800 focus:border-emerald-500'
+                                                        : ''
+                                                }`}
+                                            />
+                                            {usernameStatus === 'checking' && (
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-zinc-500 text-[10px] font-mono">
+                                                    <span className="w-2.5 h-2.5 border border-zinc-500 border-t-transparent animate-spin inline-block"></span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Live Availability Feedback Status */}
+                                        {usernameStatus !== 'idle' && (
+                                            <div className="flex items-center gap-2 text-[11px] font-mono transition-all">
+                                                {usernameStatus === 'checking' && (
+                                                    <span className="text-zinc-400 animate-pulse">// Checking availability...</span>
+                                                )}
+                                                {usernameStatus === 'available' && (
+                                                    <span className="text-emerald-400 flex items-center gap-1.5">
+                                                        <span className="w-1.5 h-1.5 bg-emerald-500 inline-block"></span>
+                                                        // Username available
+                                                    </span>
+                                                )}
+                                                {usernameStatus === 'unchanged' && (
+                                                    <span className="text-zinc-500">// Current username</span>
+                                                )}
+                                                {usernameStatus === 'taken' && (
+                                                    <span className="text-rose-400 flex items-center gap-1.5">
+                                                        <span className="w-1.5 h-1.5 bg-rose-500 inline-block"></span>
+                                                        // Username already taken
+                                                    </span>
+                                                )}
+                                                {usernameStatus === 'reserved' && (
+                                                    <span className="text-rose-400 flex items-center gap-1.5">
+                                                        <span className="w-1.5 h-1.5 bg-rose-500 inline-block"></span>
+                                                        // This username is reserved
+                                                    </span>
+                                                )}
+                                                {usernameStatus === 'invalid_format' && (
+                                                    <span className="text-amber-400 flex items-center gap-1.5">
+                                                        <span className="w-1.5 h-1.5 bg-amber-500 inline-block"></span>
+                                                        // {usernameStatusMessage || 'Invalid username format'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Suggested alternatives when taken */}
+                                        {usernameStatus === 'taken' && (
+                                            <div className="p-3 bg-zinc-950 border border-zinc-800 font-mono space-y-2 mt-2">
+                                                <p className="text-xs text-zinc-300">
+                                                    This username is already taken. Try one of these instead:
+                                                </p>
+                                                <div>
+                                                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest block mb-1.5">
+                                                        // SUGGESTED USERNAMES
+                                                    </span>
+                                                    {loadingSuggestions ? (
+                                                        <div className="flex items-center gap-2 text-zinc-500 text-xs py-1">
+                                                            <span className="w-2.5 h-2.5 border border-zinc-500 border-t-transparent animate-spin inline-block"></span>
+                                                            <span>Generating verified alternatives...</span>
+                                                        </div>
+                                                    ) : usernameSuggestions.length > 0 ? (
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {usernameSuggestions.map(suggestion => (
+                                                                <button
+                                                                    key={suggestion}
+                                                                    type="button"
+                                                                    onClick={() => handleSelectSuggestion(suggestion)}
+                                                                    className="px-2.5 py-1 text-xs border border-zinc-750 bg-zinc-900 hover:bg-zinc-800 hover:border-zinc-500 text-zinc-200 hover:text-white transition-colors cursor-pointer flex items-center gap-1"
+                                                                    title={`Choose @${suggestion}`}
+                                                                >
+                                                                    <span className="text-zinc-500">@</span>
+                                                                    <span className="font-bold">{suggestion}</span>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-[11px] text-zinc-500">
+                                                            No verified alternatives available right now. Try adding a suffix or number.
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <p className="text-[10px] text-zinc-600 font-mono uppercase">
+                                            3–24 characters · Lowercase letters, numbers, and underscores · No leading/trailing underscores
+                                        </p>
                                     </div>
                                 </FormField>
 

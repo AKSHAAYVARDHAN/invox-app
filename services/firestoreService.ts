@@ -35,6 +35,7 @@ export const COLLECTIONS = {
     polls: 'polls',
     teams: 'teams',
     teamInvitations: 'teamInvitations',
+    usernames: 'usernames',
 } as const;
 
 export type CollectionName = typeof COLLECTIONS[keyof typeof COLLECTIONS];

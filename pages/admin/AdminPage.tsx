@@ -8,6 +8,7 @@ import {
     SectionStatus,
 } from '../../types';
 import { SECTION_KEYS, DEFAULT_SECTIONS_CONFIG } from '../../services/platformConfigService';
+import { migrateExistingUsernames } from '../../services/usernameService';
 
 type AdminTab = 'sections' | 'overview' | 'settings';
 
@@ -230,6 +231,23 @@ export const AdminPage: React.FC = () => {
             } finally {
                 setSaving(false);
             }
+        }
+    };
+
+    const [migratingUsernames, setMigratingUsernames] = useState(false);
+    const [migrationResult, setMigrationResult] = useState<{ scanned: number; mapped: number; errors: number } | null>(null);
+
+    const handleRunUsernameMigration = async () => {
+        setMigratingUsernames(true);
+        setStatusMessage('Scanning accounts and synchronizing username registry...');
+        try {
+            const res = await migrateExistingUsernames();
+            setMigrationResult(res);
+            setStatusMessage(`Username migration complete: ${res.mapped} mapped, ${res.scanned} scanned.`);
+        } catch (err: any) {
+            setStatusMessage(`Migration error: ${err.message}`);
+        } finally {
+            setMigratingUsernames(false);
         }
     };
 
@@ -818,6 +836,32 @@ export const AdminPage: React.FC = () => {
                                         </span>
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* Username Registry & Uniqueness Synchronization */}
+                            <div className="p-6 rounded-none bg-[#0c0c0e] border border-zinc-800 space-y-4">
+                                <div>
+                                    <h2 className="text-base font-semibold text-white">Username registry & uniqueness synchronization</h2>
+                                    <p className="text-sm text-zinc-400 mt-1 leading-relaxed">
+                                        Scan all existing user accounts in Firestore and safely initialize reverse lookup records in the dedicated <code className="text-zinc-300 font-mono">usernames/</code> collection. Preserves existing valid usernames and resolves any duplicate collisions.
+                                    </p>
+                                </div>
+                                {migrationResult && (
+                                    <div className="p-3 bg-zinc-950 border border-zinc-800 text-xs font-mono space-y-1">
+                                        <span className="text-emerald-400 font-bold block">// MIGRATION_COMPLETE</span>
+                                        <p className="text-zinc-300">Scanned user accounts: {migrationResult.scanned}</p>
+                                        <p className="text-zinc-300">Initialized username mappings: {migrationResult.mapped}</p>
+                                        <p className="text-zinc-300">Errors encountered: {migrationResult.errors}</p>
+                                    </div>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={handleRunUsernameMigration}
+                                    disabled={migratingUsernames}
+                                    className="px-4 py-2 text-xs font-bold rounded-none text-black bg-white hover:bg-zinc-200 transition-colors uppercase font-mono disabled:bg-zinc-800 disabled:text-zinc-600 cursor-pointer"
+                                >
+                                    {migratingUsernames ? 'SYNCHRONIZING...' : 'SYNCHRONIZE USERNAME REGISTRY'}
+                                </button>
                             </div>
 
                             {/* Security Architecture (Sharp) */}

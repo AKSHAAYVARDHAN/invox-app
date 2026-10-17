@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth } from '../firebase';
 import { ensureUserProfile, initializeAuthPersistence, subscribeUserProfile } from '../services/authService';
+import { ensureUserInvoxId } from '../services/invoxIdService';
 import type { InvoxUser, UserRole } from '../types';
 
 interface AuthContextType {
@@ -88,6 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                             displayName: profile.displayName,
                             headline: profile.headline,
                             bio: profile.bio,
+                            invoxId: profile.invoxId,
                             skills: profile.skills?.length ?? 0,
                             interests: profile.interests?.length ?? 0,
                             location: (profile as any).location,
@@ -97,6 +99,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                             coverPhotoURL: profile.coverPhotoURL,
                             profileCompletion: profile.profileCompletion,
                         });
+
+                        // Self-healing: if an existing profile lacks invoxId, backfill it in background
+                        if (!profile.invoxId) {
+                            console.log(`[PROFILE_UPDATE] Profile ${user.uid} missing invoxId. Triggering background allocation...`);
+                            ensureUserInvoxId(user.uid).catch(e =>
+                                console.warn('[PROFILE_UPDATE] Background invoxId allocation warning:', e)
+                            );
+                        }
                     } else {
                         // Document missing — attempt silent creation then re-subscribe
                         console.warn('[PROFILE_UPDATE] Snapshot returned null — document missing. Attempting creation…');

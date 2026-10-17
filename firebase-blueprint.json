@@ -223,9 +223,25 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["recipientId", "type", "title", "read", "createdAt"]
+    },
+    "UsernameMapping": {
+      "title": "UsernameMapping",
+      "description": "Globally unique normalized username to user UID canonical lookup mapping.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Canonical Firebase Auth UID of the username owner" },
+        "username": { "type": "string", "description": "Normalized unique username" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "username"]
     }
   },
   "firestore": {
+    "/usernames/{username}": {
+      "schema": "UsernameMapping",
+      "description": "Unique username registry and reverse lookup table."
+    },
     "/users/{userId}": {
       "schema": "User",
       "description": "User documents containing profile and system roles."

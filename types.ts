@@ -23,6 +23,7 @@ export interface ProfileLink {
 
 export interface InvoxUser extends User {
   username: string;
+  invoxId?: string;
   role: UserRole;
   emailVerified: boolean;
   headline: string;
@@ -45,6 +46,21 @@ export interface InvoxUser extends User {
   createdAt?: unknown;
   updatedAt?: unknown;
   lastSeenAt?: unknown;
+}
+
+export interface InvoxIdMapping {
+  invoxId: string;
+  uid: string;
+  createdAt?: unknown;
+}
+
+export interface InvoxIdLookupResult {
+  success: boolean;
+  invoxId?: string;
+  uid?: string;
+  user?: Partial<InvoxUser> & { uid: string; invoxId: string };
+  error?: 'INVALID_FORMAT' | 'NOT_FOUND' | 'ACCOUNT_UNAVAILABLE' | 'LOOKUP_FAILED';
+  message?: string;
 }
 
 export enum PostType {

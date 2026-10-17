@@ -1,7 +1,7 @@
 
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { Post } from '../../types';
 import { 
     SparklesIcon,
@@ -63,6 +63,7 @@ interface ThreadCardProps {
 export const ThreadCard: React.FC<ThreadCardProps> = ({ post, onCommentAdded, onPostUpdated, isMySpaceContext }) => {
     const { openModal } = useAIAssistant();
     const location = useLocation();
+    const navigate = useNavigate();
     const inMySpace = isMySpaceContext !== undefined ? isMySpaceContext : location.pathname.startsWith('/myspace');
     const [currentPost, setCurrentPost] = useState<Post>(post);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -265,17 +266,28 @@ export const ThreadCard: React.FC<ThreadCardProps> = ({ post, onCommentAdded, on
             <div className="bg-[#0c0c0e] border border-zinc-800/90 hover:border-zinc-700/80 p-4 mb-4 transition-all duration-150">
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">
-                    <div className="flex items-center gap-3">
+                    <div 
+                        onClick={() => {
+                            const profileKey = post.author.username || post.authorId;
+                            if (profileKey) navigate(`/profile/${profileKey}`);
+                        }}
+                        className="flex items-center gap-3 cursor-pointer group select-none"
+                    >
                         <img 
                             src={post.author.avatarUrl} 
                             onError={handleImageError} 
                             alt={post.author.name} 
-                            className="w-9 h-9 rounded-none object-cover border border-zinc-700" 
+                            className="w-9 h-9 rounded-none object-cover border border-zinc-700 group-hover:border-zinc-500 transition-colors" 
                         />
                         <div>
-                            <div className="flex items-center gap-1.5">
-                                <p className="font-mono text-xs font-bold text-white uppercase tracking-wider">{post.author.name}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className="font-mono text-xs font-bold text-white uppercase tracking-wider group-hover:text-zinc-200 transition-colors">{post.author.name}</p>
                                 {post.author.isVerified && <CheckBadgeIcon className="w-3.5 h-3.5 text-zinc-400" />}
+                                {post.author.username && (
+                                    <span className="text-[10px] font-mono text-zinc-500">
+                                        @{post.author.username}
+                                    </span>
+                                )}
                             </div>
                             <p className="text-[10px] font-mono text-zinc-500 mt-0.5">// TYPE: THREAD</p>
                         </div>
