@@ -46,7 +46,6 @@ import { handleImageError } from '../utils/imageUtils';
 import MyCommunityCardSkeleton from '../communities/MyCommunityCardSkeleton';
 import DomainFilter from '../ui/DomainFilter';
 import { useCollabDashboardData } from '../spotlight/useCollabDashboardData';
-import { FindByInvoxIdInlineBar } from '../ui/FindByInvoxIdModal';
 
 const trendingTopics = [
     { name: '#QuantumLeap', posts: '12.1K posts' },
@@ -254,16 +253,6 @@ const DiscoverSidebar: React.FC<Pick<RightSidebarProps, 'activityFilter' | 'setA
                         onChange={(e) => setDiscoverSearchTerm?.(e.target.value)}
                         className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
                     />
-                </div>
-
-                <div className="px-4">
-                    <div className="bg-[#0c0c0e] border border-zinc-800 p-3">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">// FIND_MEMBER_BY_ID</span>
-                            <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-1 py-0.2">ID-LOOKUP</span>
-                        </div>
-                        <FindByInvoxIdInlineBar placeholder="IVX-XXXXXX" />
-                    </div>
                 </div>
 
                 {isActivityView ? (
