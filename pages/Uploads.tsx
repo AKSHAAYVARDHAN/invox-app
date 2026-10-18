@@ -3,6 +3,7 @@ import * as ReactRouterDOM from 'react-router-dom';
 import { PlusIcon, SparklesIcon, HeartIcon, TrendingUpIcon, ChatBubbleBottomCenterTextIcon, TrashIcon, CloseIcon, PencilSquareIcon, EllipsisVerticalIcon } from '../components/ui/Icons';
 import CreateFeedModal from '../components/uploads/CreateFeedModal';
 import { CreateCollabModal } from '../components/uploads/CreateCollabModal';
+import { CreateShowcaseModal } from '../components/uploads/CreateShowcaseModal';
 import CreateChannelModal from '../components/uploads/CreateChannelModal';
 import { CreatePollModal } from '../components/uploads/CreatePollModal';
 import { PollCard } from '../components/feed/PollCard';
@@ -227,6 +228,8 @@ const UploadsPage = () => {
             let matchesCategory = false;
             if (targetCategory === 'collab') {
                 matchesCategory = postType === 'collab' || cat === 'collab' || Boolean(item.collabDetails);
+            } else if (targetCategory === 'showcase') {
+                matchesCategory = postType === 'showcase' || cat === 'showcase' || Boolean((item as any).isProject);
             } else if (targetCategory === 'feed') {
                 matchesCategory = cat === 'general' || cat === 'feed' || postType === 'feed';
             } else {
@@ -1382,6 +1385,11 @@ const UploadsPage = () => {
                                                     <div className="flex items-center justify-between mb-2">
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-[10px] font-bold text-white uppercase tracking-widest border border-zinc-700 px-1.5 py-0.5 bg-zinc-900/50">{item.category}</span>
+                                                            {item.status === 'draft' ? (
+                                                                <span className="text-[9px] font-bold text-amber-400 border border-amber-800/80 px-1.5 py-0.5 bg-amber-950/40 uppercase">DRAFT</span>
+                                                            ) : (
+                                                                <span className="text-[9px] font-bold text-emerald-400 border border-emerald-800/80 px-1.5 py-0.5 bg-emerald-950/40 uppercase">LIVE</span>
+                                                            )}
                                                             {item.channelName && (
                                                                 <span className="text-[10px] text-zinc-400">· // {item.channelName}</span>
                                                             )}
@@ -1417,7 +1425,7 @@ const UploadsPage = () => {
                                                                         <button
                                                                             onClick={() => {
                                                                                 setActiveMenuId(null);
-                                                                                handleDelete(item.id);
+                                                                                setPostToDelete({ id: item.id, title: item.title || item.oneLine || 'Broadcast' });
                                                                             }}
                                                                             disabled={deletingId === item.id}
                                                                             className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-red-950/30 hover:text-red-300 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1"
@@ -1430,8 +1438,43 @@ const UploadsPage = () => {
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <h4 className="text-sm font-bold text-white mb-2 leading-tight uppercase tracking-wider">{item.aiSummary || item.oneLine}</h4>
+                                                    {item.title && item.title !== item.oneLine && (
+                                                        <h3 className="text-base font-bold text-white mb-1 leading-snug uppercase tracking-wide">{item.title}</h3>
+                                                    )}
+                                                    <h4 className="text-xs font-semibold text-zinc-200 mb-2 leading-relaxed">"{item.oneLine || item.aiSummary}"</h4>
                                                     <p className="text-xs text-zinc-400 line-clamp-3 leading-relaxed">{item.content}</p>
+
+                                                    {/* External Links if present */}
+                                                    {(item.demoUrl || item.githubUrl || item.articleUrl) && (
+                                                        <div className="mt-3 pt-2.5 border-t border-zinc-800/80 flex flex-wrap gap-2 text-[10px] font-mono">
+                                                            {item.demoUrl && (
+                                                                <a href={item.demoUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 bg-emerald-950/40 border border-emerald-800/60 px-2 py-0.5">
+                                                                    <span>↗ Demo</span>
+                                                                </a>
+                                                            )}
+                                                            {item.githubUrl && (
+                                                                <a href={item.githubUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-700 px-2 py-0.5">
+                                                                    <span>// Code</span>
+                                                                </a>
+                                                            )}
+                                                            {item.articleUrl && (
+                                                                <a href={item.articleUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-cyan-400 hover:text-cyan-300 bg-cyan-950/40 border border-cyan-800/60 px-2 py-0.5">
+                                                                    <span>📄 Paper</span>
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Tags */}
+                                                    {Array.isArray(item.tags) && item.tags.length > 0 && (
+                                                        <div className="mt-2.5 flex flex-wrap gap-1">
+                                                            {item.tags.map(t => (
+                                                                <span key={t} className="text-[9px] bg-zinc-900 text-zinc-400 px-1.5 py-0.5 border border-zinc-800">
+                                                                    #{t}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div className="p-3 border-t border-zinc-800/80 flex items-center justify-around text-zinc-400 text-xs">
                                                     <div className="flex items-center gap-1.5"><HeartIcon className="w-3.5 h-3.5" /> <span>{item.stats.likes}</span></div>
@@ -1457,12 +1500,20 @@ const UploadsPage = () => {
                 }}
             />
 
-            {/* Create Feed / Post Modal or Collab Modal */}
+            {/* Create Feed / Post Modal or Collab Modal or Showcase Modal */}
             {currentContextName === 'Collab' ? (
                 <CreateCollabModal
                     isOpen={isModalOpen}
                     onClose={handleCloseModal}
                     onPublish={handlePublishCollab}
+                />
+            ) : currentContextName === 'Showcase' ? (
+                <CreateShowcaseModal
+                    isOpen={isModalOpen}
+                    onClose={handleCloseModal}
+                    onPublished={() => {
+                        handleCloseModal();
+                    }}
                 />
             ) : (
                 <CreateFeedModal 

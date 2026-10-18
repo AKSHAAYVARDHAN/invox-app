@@ -43,4 +43,5 @@ const ImageZoomModal: React.FC<ImageZoomModalProps> = ({ isOpen, onClose, imageU
   );
 };
 
+export { ImageZoomModal };
 export default ImageZoomModal;

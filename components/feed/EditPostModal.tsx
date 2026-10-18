@@ -39,13 +39,23 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
     const isCollab = postType === PostType.Collab || Boolean(post?.collabDetails);
     const isThread = postType === PostType.Thread;
     const isQuery = postType === PostType.Query;
-    const isFeed = !isCollab && !isThread && !isQuery;
+    const isShowcase = postType === PostType.Showcase || Boolean((post as any)?.isProject) || ((post?.category || '').toLowerCase() === 'showcase') || Boolean(post?.demoUrl) || Boolean(post?.githubUrl);
+    const isFeed = !isCollab && !isThread && !isQuery && !isShowcase;
 
     // Fields
+    const [title, setTitle] = useState('');
     const [oneLine, setOneLine] = useState('');
     const [content, setContent] = useState('');
     const [domain, setDomain] = useState('Technology');
     const [isDomainValid, setIsDomainValid] = useState(true);
+
+    // Showcase specific fields
+    const [demoUrl, setDemoUrl] = useState('');
+    const [githubUrl, setGithubUrl] = useState('');
+    const [articleUrl, setArticleUrl] = useState('');
+    const [tags, setTags] = useState<string[]>([]);
+    const [tagInput, setTagInput] = useState('');
+    const [status, setStatus] = useState<'published' | 'draft'>('published');
 
     // Channel (Feeds only)
     const [userChannels, setUserChannels] = useState<Channel[]>([]);
@@ -81,11 +91,19 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
     // Populate initial data when modal opens
     useEffect(() => {
         if (isOpen && post) {
+            setTitle(post.title || post.oneLine || post.aiSummary || '');
             setOneLine(post.oneLine || post.aiSummary || '');
             setContent(post.content || '');
             setDomain(post.domain || post.category || 'Technology');
             setSelectedChannelId(post.channelId || '');
             
+            // Showcase fields
+            setDemoUrl(post.demoUrl || '');
+            setGithubUrl(post.githubUrl || post.repoUrl || '');
+            setArticleUrl(post.articleUrl || '');
+            setTags(Array.isArray(post.tags) ? [...post.tags] : []);
+            setStatus(post.status === 'draft' ? 'draft' : 'published');
+
             setExistingMediaUrl(post.mediaUrl || null);
             setExistingMediaType(post.mediaType || null);
             setMediaFile(null);
@@ -324,6 +342,18 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
                 updatePayload.collabDetails = cleanedCollab;
             }
 
+            // Showcase Details
+            if (isShowcase) {
+                updatePayload.title = title.trim() || trimmedOneLine;
+                updatePayload.demoUrl = demoUrl.trim() || null;
+                updatePayload.githubUrl = githubUrl.trim() || null;
+                updatePayload.repoUrl = githubUrl.trim() || null;
+                updatePayload.articleUrl = articleUrl.trim() || null;
+                updatePayload.tags = tags;
+                updatePayload.status = status;
+                updatePayload.isPublished = status !== 'draft';
+            }
+
             const updated = await updatePost(post.id, updatePayload, (progress) => {
                 setUploadProgress(progress);
             });
@@ -347,6 +377,8 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
     let modalTitle = '// EDIT TRANSMISSION · FEED';
     if (isCollab) {
         modalTitle = '// EDIT TRANSMISSION · COLLAB';
+    } else if (isShowcase) {
+        modalTitle = '// EDIT TRANSMISSION · SHOWCASE';
     } else if (isThread) {
         modalTitle = '// EDIT TRANSMISSION · THREAD';
     } else if (isQuery) {
@@ -454,11 +486,32 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
                         />
                     ) : (
                         <>
+                            {/* Project Title (Showcase only) */}
+                            {isShowcase && (
+                                <div>
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <label className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider">
+                                            // PROJECT TITLE <span className="text-red-400">*</span>
+                                        </label>
+                                        <span className="text-[10px] text-zinc-500">{title.length}/100</span>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        maxLength={100}
+                                        value={title}
+                                        onChange={e => setTitle(e.target.value)}
+                                        placeholder="Enter project title..."
+                                        className="w-full bg-zinc-900/60 border border-zinc-800 text-white p-2.5 text-xs focus:border-white focus:outline-none transition-colors"
+                                        required={isShowcase}
+                                    />
+                                </div>
+                            )}
+
                             {/* Header / Hook */}
                             <div>
                                 <div className="flex items-center justify-between mb-1.5">
                                     <label className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider">
-                                        {isQuery ? '// QUERY HOOK · QUESTION' : '// TRANSMISSION HOOK · ONE-LINER'} <span className="text-red-400">*</span>
+                                        {isQuery ? '// QUERY HOOK · QUESTION' : isShowcase ? '// PROJECT SUMMARY · HOOK' : '// TRANSMISSION HOOK · ONE-LINER'} <span className="text-red-400">*</span>
                                     </label>
                                     <span className="text-[10px] text-zinc-500">{oneLine.length}/140</span>
                                 </div>
@@ -467,7 +520,7 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
                                     maxLength={140}
                                     value={oneLine}
                                     onChange={e => setOneLine(e.target.value)}
-                                    placeholder={isQuery ? "Ask an architectural or technical question..." : "Enter punchy transmission title / hook..."}
+                                    placeholder={isQuery ? "Ask an architectural or technical question..." : isShowcase ? "One-line project summary..." : "Enter punchy transmission title / hook..."}
                                     className="w-full bg-zinc-900/60 border border-zinc-800 text-white p-2.5 text-xs focus:border-white focus:outline-none transition-colors"
                                     required
                                 />
@@ -477,7 +530,7 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
                             <div>
                                 <div className="flex items-center justify-between mb-1.5">
                                     <label className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider">
-                                        {isQuery ? '// DETAILED EXPLANATION' : '// TRANSMISSION CONTENT'} <span className="text-red-400">*</span>
+                                        {isQuery ? '// DETAILED EXPLANATION' : isShowcase ? '// TECHNICAL DESCRIPTION & METHODOLOGY' : '// TRANSMISSION CONTENT'} <span className="text-red-400">*</span>
                                     </label>
                                     <span className="text-[10px] text-zinc-500">{content.length} chars</span>
                                 </div>
@@ -485,11 +538,115 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
                                     rows={5}
                                     value={content}
                                     onChange={e => setContent(e.target.value)}
-                                    placeholder="Write complete transmission details..."
+                                    placeholder={isShowcase ? "Technical breakdown, implementation details, features..." : "Write complete transmission details..."}
                                     className="w-full bg-zinc-900/60 border border-zinc-800 text-white p-2.5 text-xs focus:border-white focus:outline-none transition-colors resize-y"
                                     required
                                 />
                             </div>
+
+                            {/* External Links (Showcase only) */}
+                            {isShowcase && (
+                                <div className="space-y-2 p-3 bg-zinc-950 border border-zinc-800/80">
+                                    <label className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider block">
+                                        // EXTERNAL PROJECT LINKS
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={demoUrl}
+                                        onChange={e => setDemoUrl(e.target.value)}
+                                        placeholder="Live Demo URL (https://...)"
+                                        className="w-full bg-black border border-zinc-800 p-2 text-xs text-white placeholder-zinc-600 focus:border-white focus:outline-none"
+                                    />
+                                    <input
+                                        type="url"
+                                        value={githubUrl}
+                                        onChange={e => setGithubUrl(e.target.value)}
+                                        placeholder="Repository URL (https://github.com/...)"
+                                        className="w-full bg-black border border-zinc-800 p-2 text-xs text-white placeholder-zinc-600 focus:border-white focus:outline-none"
+                                    />
+                                    <input
+                                        type="url"
+                                        value={articleUrl}
+                                        onChange={e => setArticleUrl(e.target.value)}
+                                        placeholder="Article / Paper URL (https://...)"
+                                        className="w-full bg-black border border-zinc-800 p-2 text-xs text-white placeholder-zinc-600 focus:border-white focus:outline-none"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Tags (Showcase only) */}
+                            {isShowcase && (
+                                <div>
+                                    <label className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider block mb-1">
+                                        // PROJECT TAGS
+                                    </label>
+                                    <div className="flex gap-2 mb-2">
+                                        <input
+                                            type="text"
+                                            value={tagInput}
+                                            onChange={e => setTagInput(e.target.value)}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const trimmed = tagInput.trim().replace(/^#/, '');
+                                                    if (trimmed && !tags.includes(trimmed)) {
+                                                        setTags([...tags, trimmed]);
+                                                        setTagInput('');
+                                                    }
+                                                }
+                                            }}
+                                            placeholder="Type tag and press enter..."
+                                            className="flex-1 bg-black border border-zinc-800 p-2 text-xs text-white placeholder-zinc-600 focus:border-white focus:outline-none"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const trimmed = tagInput.trim().replace(/^#/, '');
+                                                if (trimmed && !tags.includes(trimmed)) {
+                                                    setTags([...tags, trimmed]);
+                                                    setTagInput('');
+                                                }
+                                            }}
+                                            className="px-3 bg-zinc-900 border border-zinc-700 text-zinc-300 hover:text-white text-xs uppercase"
+                                        >
+                                            Add
+                                        </button>
+                                    </div>
+                                    {tags.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {tags.map(t => (
+                                                <span key={t} className="bg-zinc-900 border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-300 flex items-center gap-1">
+                                                    #{t}
+                                                    <button type="button" onClick={() => setTags(tags.filter(x => x !== t))} className="text-zinc-500 hover:text-white">×</button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Status (Showcase only) */}
+                            {isShowcase && (
+                                <div className="flex items-center justify-between p-2.5 bg-zinc-950 border border-zinc-800">
+                                    <span className="text-xs font-bold text-zinc-300 uppercase">// PUBLICATION STATUS</span>
+                                    <div className="flex border border-zinc-800">
+                                        <button
+                                            type="button"
+                                            onClick={() => setStatus('published')}
+                                            className={`px-3 py-1 text-xs uppercase font-bold ${status === 'published' ? 'bg-white text-black' : 'text-zinc-500'}`}
+                                        >
+                                            Live
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setStatus('draft')}
+                                            className={`px-3 py-1 text-xs uppercase font-bold ${status === 'draft' ? 'bg-zinc-800 text-white' : 'text-zinc-500'}`}
+                                        >
+                                            Draft
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Channel Selection (Feeds only) */}
                             {isFeed && (

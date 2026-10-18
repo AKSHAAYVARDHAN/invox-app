@@ -69,6 +69,7 @@ export enum PostType {
   Query = 'Query',
   Poll = 'Poll',
   Collab = 'Collab',
+  Showcase = 'Showcase',
 }
 
 export interface Channel {
@@ -102,13 +103,22 @@ export interface Post {
     avatarUrl: string;
     username?: string;
     isVerified?: boolean;
+    id?: string;
+    uid?: string;
   };
+  title?: string;
   aiSummary: string;
   oneLine?: string;
   content: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'video';
   thumbnailUrl?: string;
+  demoUrl?: string;
+  githubUrl?: string;
+  repoUrl?: string;
+  articleUrl?: string;
+  status?: 'published' | 'draft';
+  isPublished?: boolean;
   stats: {
     likes: number;
     views: number;
@@ -128,6 +138,8 @@ export interface Post {
   updatedAt?: Date;
   userCommented?: boolean;
   userSharedInsight?: boolean;
+  userLiked?: boolean;
+  userSaved?: boolean;
   collabDetails?: CollabDetails;
 }
 
@@ -212,22 +224,41 @@ export interface Project {
     author: {
         name: string;
         avatarUrl: string;
+        username?: string;
         isVerified?: boolean;
+        id?: string;
+        uid?: string;
     };
+    title?: string;
+    name?: string;
     aiSummary: string;
     oneLine?: string;
     description: string;
     mediaUrl?: string;
     mediaType?: 'image' | 'video';
     thumbnailUrl?: string;
+    demoUrl?: string;
+    githubUrl?: string;
+    repoUrl?: string;
+    articleUrl?: string;
+    status?: 'published' | 'draft';
+    isPublished?: boolean;
+    tags?: string[];
     stats: {
         likes: number;
         views: number;
         comments: number;
     };
+    likeCount?: number;
+    viewCount?: number;
+    commentCount?: number;
+    saveCount?: number;
+    userLiked?: boolean;
+    userSaved?: boolean;
     category: string;
     domain?: string;
     createdAt: Date;
+    updatedAt?: Date;
     collabDetails?: CollabDetails;
 }
 

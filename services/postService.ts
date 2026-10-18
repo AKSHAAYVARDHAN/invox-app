@@ -27,12 +27,19 @@ export interface CreatePostInput {
     channelId?: string;
     channelName?: string;
     channelAvatarUrl?: string;
+    title?: string;
     oneLine: string;
     content: string;
     mediaFile?: File | null;
     mediaUrl?: string | null;
     mediaType?: 'image' | 'video';
     thumbnailUrl?: string;
+    demoUrl?: string;
+    githubUrl?: string;
+    repoUrl?: string;
+    articleUrl?: string;
+    status?: 'published' | 'draft';
+    isPublished?: boolean;
     type?: string;
     category?: string;
     domain?: string;
@@ -58,11 +65,19 @@ export interface PostDocumentData {
         username?: string;
         isVerified?: boolean;
     };
+    title?: string;
     aiSummary: string;
     oneLine?: string;
     content: string;
     mediaUrl?: string;
     mediaType?: 'image' | 'video';
+    thumbnailUrl?: string;
+    demoUrl?: string | null;
+    githubUrl?: string | null;
+    repoUrl?: string | null;
+    articleUrl?: string | null;
+    status?: 'published' | 'draft';
+    isPublished?: boolean;
     thumbnailUrl?: string;
     stats: {
         likes: number;
@@ -113,7 +128,9 @@ export const normalizeFirestorePost = (id: string, data: Record<string, any>): P
     const rawCat = (data.category || '').toString().toLowerCase();
     const rawDom = (data.domain || '').toString().toLowerCase();
 
-    if (rawType === 'thread') {
+    if (rawType === 'showcase' || rawCat === 'showcase' || rawDom === 'showcase' || Boolean(data.isProject)) {
+        postType = PostType.Showcase;
+    } else if (rawType === 'thread') {
         postType = PostType.Thread;
     } else if (rawType === 'query') {
         postType = PostType.Query;
@@ -136,13 +153,22 @@ export const normalizeFirestorePost = (id: string, data: Record<string, any>): P
             avatarUrl: data.author?.avatarUrl || `https://picsum.photos/seed/${data.authorId || id}/200`,
             username: data.author?.username || undefined,
             isVerified: Boolean(data.author?.isVerified),
+            id: data.author?.id || data.authorId || undefined,
+            uid: data.author?.uid || data.authorId || undefined,
         },
-        aiSummary: data.aiSummary || data.oneLine || '',
-        oneLine: data.oneLine || data.aiSummary || '',
-        content: data.content || '',
+        title: data.title || data.oneLine || data.aiSummary || '',
+        aiSummary: data.aiSummary || data.oneLine || data.title || '',
+        oneLine: data.oneLine || data.aiSummary || data.title || '',
+        content: data.content || data.description || '',
         mediaUrl: data.mediaUrl || undefined,
         mediaType: data.mediaType || (data.mediaUrl?.includes('.mp4') ? 'video' : data.mediaUrl ? 'image' : undefined),
         thumbnailUrl: data.thumbnailUrl || undefined,
+        demoUrl: data.demoUrl || undefined,
+        githubUrl: data.githubUrl || data.repoUrl || undefined,
+        repoUrl: data.repoUrl || data.githubUrl || undefined,
+        articleUrl: data.articleUrl || undefined,
+        status: data.status || 'published',
+        isPublished: data.isPublished !== undefined ? Boolean(data.isPublished) : (data.status !== 'draft'),
         stats: {
             likes: Number(data.stats?.likes ?? data.likeCount ?? 0),
             views: Number(data.stats?.views ?? data.viewCount ?? 0),
@@ -156,9 +182,10 @@ export const normalizeFirestorePost = (id: string, data: Record<string, any>): P
         postType: data.postType || postType,
         category: data.category || data.domain || 'General',
         domain: data.domain || data.category || 'General',
-        tags: data.tags || [],
+        tags: Array.isArray(data.tags) ? data.tags : [],
         visibility: data.visibility || 'public',
         createdAt: createdAtDate,
+        updatedAt: data.updatedAt ? (typeof data.updatedAt?.toDate === 'function' ? data.updatedAt.toDate() : new Date(data.updatedAt)) : undefined,
         collabDetails: data.collabDetails || undefined,
     };
 };
@@ -195,7 +222,9 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
 
     let resolvedPostType = PostType.Feed;
     const inputType = input.type?.toLowerCase();
-    if (inputType === 'thread' || inputType === 'discover') {
+    if (inputType === 'showcase' || inputType === 'project') {
+        resolvedPostType = PostType.Showcase;
+    } else if (inputType === 'thread' || inputType === 'discover') {
         resolvedPostType = PostType.Thread;
     } else if (inputType === 'query' || inputType === 'knack') {
         resolvedPostType = PostType.Query;
@@ -210,13 +239,14 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
         throw new Error('A Channel is required before publishing a Feed broadcast. Please select or create a channel.');
     }
 
-    // Collabs never use channel affiliations
+    // Collabs & Showcases never require channel affiliations
     const isCollab = resolvedPostType === PostType.Collab;
-    let finalChannelId = isCollab ? null : (input.channelId || null);
-    let finalChannelName = isCollab ? null : (input.channelName || null);
-    let finalChannelAvatar = isCollab ? null : (input.channelAvatarUrl || null);
+    const isShowcase = resolvedPostType === PostType.Showcase;
+    let finalChannelId = (isCollab || isShowcase) ? null : (input.channelId || null);
+    let finalChannelName = (isCollab || isShowcase) ? null : (input.channelName || null);
+    let finalChannelAvatar = (isCollab || isShowcase) ? null : (input.channelAvatarUrl || null);
 
-    if (!isCollab && input.channelId && (!finalChannelName || !finalChannelAvatar)) {
+    if (!isCollab && !isShowcase && input.channelId && (!finalChannelName || !finalChannelAvatar)) {
         try {
             const ch = await getChannelById(input.channelId);
             if (ch) {
@@ -266,12 +296,19 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
             username: input.authorProfile?.username || '',
             isVerified: input.authorProfile?.role === 'admin' || input.authorProfile?.role === 'moderator' || false,
         },
+        title: input.title?.trim() || input.oneLine.trim(),
         aiSummary: input.oneLine.trim(),
         oneLine: input.oneLine.trim(),
         content: input.content.trim(),
         mediaUrl: uploadedMediaUrl || null,
         mediaType: detectedMediaType || null,
         thumbnailUrl: input.thumbnailUrl || (detectedMediaType === 'video' ? uploadedMediaUrl : null),
+        demoUrl: input.demoUrl?.trim() || null,
+        githubUrl: (input.githubUrl || input.repoUrl)?.trim() || null,
+        repoUrl: (input.repoUrl || input.githubUrl)?.trim() || null,
+        articleUrl: input.articleUrl?.trim() || null,
+        status: input.status || 'published',
+        isPublished: input.status !== 'draft',
         stats: {
             likes: 0,
             views: 0,
@@ -283,11 +320,9 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
         saveCount: 0,
         type: resolvedPostType,
         postType: resolvedPostType,
-        status: 'published',
-        isPublished: true,
-        category: input.domain || input.category || (isCollab ? 'Collab' : 'General'),
-        domain: input.domain || input.category || (isCollab ? 'Collab' : 'General'),
-        tags: input.tags || [],
+        category: input.domain || input.category || (isCollab ? 'Collab' : isShowcase ? 'Showcase' : 'General'),
+        domain: input.domain || input.category || (isCollab ? 'Collab' : isShowcase ? 'Showcase' : 'General'),
+        tags: Array.isArray(input.tags) ? input.tags : [],
         visibility: input.visibility || 'public',
         collabDetails: cleanCollabDetails,
     };
@@ -354,9 +389,15 @@ export const updatePost = async (
         updatedAt: serverTimestamp(),
     };
 
+    if (updates.title !== undefined) {
+        updatePayload.title = updates.title.trim();
+    }
     if (updates.oneLine !== undefined) {
         updatePayload.oneLine = updates.oneLine.trim();
         updatePayload.aiSummary = updates.oneLine.trim();
+        if (updates.title === undefined && !existingData.title) {
+            updatePayload.title = updates.oneLine.trim();
+        }
     }
     if (updates.content !== undefined) {
         updatePayload.content = updates.content.trim();
@@ -367,6 +408,26 @@ export const updatePost = async (
     } else if (updates.domain !== undefined) {
         updatePayload.domain = updates.domain.trim();
         updatePayload.category = updates.domain.trim();
+    }
+
+    if (updates.tags !== undefined) {
+        updatePayload.tags = Array.isArray(updates.tags) ? updates.tags : [];
+    }
+
+    if (updates.demoUrl !== undefined) {
+        updatePayload.demoUrl = updates.demoUrl ? updates.demoUrl.trim() : null;
+    }
+    if (updates.githubUrl !== undefined || updates.repoUrl !== undefined) {
+        const link = (updates.githubUrl || updates.repoUrl)?.trim() || null;
+        updatePayload.githubUrl = link;
+        updatePayload.repoUrl = link;
+    }
+    if (updates.articleUrl !== undefined) {
+        updatePayload.articleUrl = updates.articleUrl ? updates.articleUrl.trim() : null;
+    }
+    if (updates.status !== undefined) {
+        updatePayload.status = updates.status;
+        updatePayload.isPublished = updates.status !== 'draft';
     }
 
     // Media update handling
@@ -763,18 +824,90 @@ export const getUserSavedPostIds = async (userId: string): Promise<Set<string>> 
     }
 };
 
+// ==========================================
+// Robust Post View Deduplication Policy
+// ==========================================
+const sessionViewedPostIds = new Set<string>();
+const VIEW_STORAGE_KEY = 'invox_viewed_posts_v1';
+const VIEW_WINDOW_MS = 12 * 60 * 60 * 1000; // 12-hour session deduplication window
+
 /**
- * Increments view count for a post.
+ * Checks whether the post has already been counted as viewed by this client/session.
  */
-export const incrementPostView = async (postId: string): Promise<void> => {
+export const isPostViewRecorded = (postId: string): boolean => {
+    if (!postId) return true;
+    if (sessionViewedPostIds.has(postId)) return true;
+
+    try {
+        const raw = sessionStorage.getItem(VIEW_STORAGE_KEY) || localStorage.getItem(VIEW_STORAGE_KEY);
+        if (raw) {
+            const data = JSON.parse(raw);
+            const timestamp = data[postId];
+            if (timestamp && Date.now() - timestamp < VIEW_WINDOW_MS) {
+                sessionViewedPostIds.add(postId);
+                return true;
+            }
+        }
+    } catch {
+        // Storage unreadable/disabled, rely on memory set
+    }
+    return false;
+};
+
+/**
+ * Persists the view marker in memory and storage to ensure idempotency.
+ */
+export const markPostViewRecorded = (postId: string): void => {
+    if (!postId) return;
+    sessionViewedPostIds.add(postId);
+    try {
+        const raw = localStorage.getItem(VIEW_STORAGE_KEY);
+        const data: Record<string, number> = raw ? JSON.parse(raw) : {};
+        data[postId] = Date.now();
+        
+        // Cap items in storage to avoid unbounded growth
+        const entries = Object.entries(data);
+        if (entries.length > 500) {
+            const trimmed = Object.fromEntries(entries.slice(entries.length - 400));
+            const serialized = JSON.stringify(trimmed);
+            localStorage.setItem(VIEW_STORAGE_KEY, serialized);
+            sessionStorage.setItem(VIEW_STORAGE_KEY, serialized);
+        } else {
+            const serialized = JSON.stringify(data);
+            localStorage.setItem(VIEW_STORAGE_KEY, serialized);
+            sessionStorage.setItem(VIEW_STORAGE_KEY, serialized);
+        }
+    } catch {
+        // Storage quota / private mode fallback
+    }
+};
+
+/**
+ * Increments view count for a post with strict deduplication.
+ * Returns true if a view was legitimately counted and recorded, or false if already counted.
+ */
+export const incrementPostView = async (postId: string): Promise<boolean> => {
+    if (!postId) return false;
+
+    // 1. Concurrency-safe deduplication check
+    if (isPostViewRecorded(postId)) {
+        return false;
+    }
+
+    // 2. Mark as recorded synchronously BEFORE async Firestore call to eliminate race conditions
+    markPostViewRecorded(postId);
+
+    // 3. Atomically update Firestore
     try {
         const postRef = doc(db, COLLECTIONS.posts, postId);
         await updateDoc(postRef, {
             'stats.views': increment(1),
             viewCount: increment(1),
         });
+        return true;
     } catch (e) {
-        // Non-critical, ignore silent error
+        // If Firestore write fails (e.g. offline, security rules), don't throw
+        return false;
     }
 };
 
@@ -895,5 +1028,379 @@ export const subscribeToCollabPosts = (
             onError?.(err);
         }
     );
+};
+
+/**
+ * Checks if a normalized post or raw Firestore post data represents a Showcase project.
+ */
+export const isShowcasePost = (post: Post, rawData?: any): boolean => {
+    const typeStr = (post.type || post.postType || rawData?.type || rawData?.postType || '').toString().toLowerCase();
+    const catStr = (post.category || rawData?.category || '').toString().toLowerCase();
+    const domStr = (post.domain || rawData?.domain || '').toString().toLowerCase();
+    return (
+        typeStr === 'showcase' ||
+        catStr === 'showcase' ||
+        domStr === 'showcase' ||
+        Boolean(post.demoUrl) ||
+        Boolean(post.githubUrl) ||
+        Boolean(rawData?.demoUrl) ||
+        Boolean(rawData?.githubUrl) ||
+        Boolean(rawData?.isProject)
+    );
+};
+
+/**
+ * Transforms a Post into a Project format for Spotlight Showcase.
+ */
+export const postToShowcaseProject = (post: Post): Project => {
+    return {
+        id: post.id,
+        authorId: post.authorId,
+        author: {
+            name: post.author?.name || 'Invox Member',
+            avatarUrl: post.author?.avatarUrl || `https://picsum.photos/seed/${post.authorId || post.id}/200`,
+            username: post.author?.username || undefined,
+            isVerified: Boolean(post.author?.isVerified),
+            id: post.author?.id || post.authorId,
+            uid: post.author?.uid || post.authorId,
+        },
+        title: post.title || post.oneLine || post.aiSummary || 'Untitled Project',
+        name: post.title || post.oneLine || post.aiSummary || 'Untitled Project',
+        aiSummary: post.oneLine || post.aiSummary || '',
+        oneLine: post.oneLine || post.aiSummary || '',
+        description: post.content || '',
+        mediaUrl: post.mediaUrl || undefined,
+        mediaType: post.mediaType || (post.mediaUrl ? (post.mediaUrl.match(/\.(mp4|webm|mov)$/i) ? 'video' : 'image') : undefined),
+        thumbnailUrl: post.thumbnailUrl || undefined,
+        demoUrl: post.demoUrl || undefined,
+        githubUrl: post.githubUrl || post.repoUrl || undefined,
+        repoUrl: post.repoUrl || post.githubUrl || undefined,
+        articleUrl: post.articleUrl || undefined,
+        status: post.status || 'published',
+        isPublished: post.isPublished !== undefined ? post.isPublished : (post.status !== 'draft'),
+        tags: Array.isArray(post.tags) ? post.tags : [],
+        stats: {
+            likes: Number(post.stats?.likes ?? post.likeCount ?? 0),
+            views: Number(post.stats?.views ?? post.viewCount ?? 0),
+            comments: Number(post.stats?.comments ?? post.commentCount ?? 0),
+        },
+        likeCount: Number(post.likeCount ?? post.stats?.likes ?? 0),
+        viewCount: Number(post.viewCount ?? post.stats?.views ?? 0),
+        commentCount: Number(post.commentCount ?? post.stats?.comments ?? 0),
+        saveCount: Number(post.saveCount ?? 0),
+        category: post.domain || post.category || 'Technology',
+        domain: post.domain || post.category || 'Technology',
+        createdAt: post.createdAt instanceof Date ? post.createdAt : new Date(post.createdAt || Date.now()),
+        updatedAt: post.updatedAt instanceof Date ? post.updatedAt : post.updatedAt ? new Date(post.updatedAt) : undefined,
+        collabDetails: post.collabDetails,
+    };
+};
+
+/**
+ * Transforms a Project back into a Post format for comments, modals, and updates.
+ */
+export const projectToPost = (proj: Project): Post => {
+    return {
+        id: proj.id,
+        authorId: proj.authorId || proj.author?.id || proj.author?.uid,
+        author: {
+            name: proj.author.name,
+            avatarUrl: proj.author.avatarUrl,
+            username: proj.author.username,
+            isVerified: proj.author.isVerified,
+            id: proj.author.id || proj.authorId,
+            uid: proj.author.uid || proj.authorId,
+        },
+        title: proj.title || proj.name || proj.aiSummary || 'Untitled Project',
+        aiSummary: proj.aiSummary || proj.oneLine || '',
+        oneLine: proj.oneLine || proj.aiSummary || '',
+        content: proj.description || '',
+        mediaUrl: proj.mediaUrl,
+        mediaType: proj.mediaType,
+        thumbnailUrl: proj.thumbnailUrl,
+        demoUrl: proj.demoUrl,
+        githubUrl: proj.githubUrl || proj.repoUrl,
+        repoUrl: proj.repoUrl || proj.githubUrl,
+        articleUrl: proj.articleUrl,
+        status: proj.status || 'published',
+        isPublished: proj.isPublished !== undefined ? proj.isPublished : (proj.status !== 'draft'),
+        stats: {
+            likes: Number(proj.stats?.likes ?? proj.likeCount ?? 0),
+            views: Number(proj.stats?.views ?? proj.viewCount ?? 0),
+            comments: Number(proj.stats?.comments ?? proj.commentCount ?? 0),
+        },
+        likeCount: Number(proj.likeCount ?? proj.stats?.likes ?? 0),
+        viewCount: Number(proj.viewCount ?? proj.stats?.views ?? 0),
+        commentCount: Number(proj.commentCount ?? proj.stats?.comments ?? 0),
+        saveCount: Number(proj.saveCount ?? 0),
+        type: PostType.Showcase,
+        postType: PostType.Showcase,
+        category: proj.category || 'Technology',
+        domain: proj.domain || proj.category || 'Technology',
+        tags: proj.tags || [],
+        visibility: 'public',
+        createdAt: proj.createdAt instanceof Date ? proj.createdAt : new Date(proj.createdAt || Date.now()),
+        updatedAt: proj.updatedAt,
+        collabDetails: proj.collabDetails,
+        userLiked: proj.userLiked,
+        userSaved: proj.userSaved,
+    };
+};
+
+/**
+ * Fetches Showcase posts from Firestore.
+ */
+export const getShowcasePosts = async (category?: string): Promise<Post[]> => {
+    try {
+        const q = query(
+            collection(db, COLLECTIONS.posts),
+            limit(100)
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs
+            .filter(docSnap => {
+                const data = docSnap.data();
+                const norm = normalizeFirestorePost(docSnap.id, data);
+                if (!isShowcasePost(norm, data)) return false;
+                if (norm.status === 'draft') {
+                    // Only show draft if author is current user
+                    const currentUid = auth.currentUser?.uid;
+                    if (!currentUid || norm.authorId !== currentUid) return false;
+                }
+                if (category && category !== 'All') {
+                    const catLower = category.toLowerCase();
+                    const postCat = (norm.category || norm.domain || '').toLowerCase();
+                    const postDom = (norm.domain || '').toLowerCase();
+                    return postCat.includes(catLower) || postDom.includes(catLower);
+                }
+                return true;
+            })
+            .map(docSnap => normalizeFirestorePost(docSnap.id, docSnap.data()))
+            .sort((a, b) => {
+                const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+                const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+                return dateB - dateA;
+            });
+    } catch (err) {
+        console.warn('[GET_SHOWCASE_POSTS_WARN]', err);
+        return [];
+    }
+};
+
+/**
+ * Subscribes to real-time Showcase posts across the network for Spotlight Showcase.
+ */
+export const subscribeToShowcasePosts = (
+    onPosts: (posts: Post[]) => void,
+    onError?: (error: Error) => void
+) => {
+    const q = query(
+        collection(db, COLLECTIONS.posts),
+        limit(100)
+    );
+
+    return onSnapshot(
+        q,
+        (snapshot) => {
+            const currentUid = auth.currentUser?.uid;
+            const posts = snapshot.docs
+                .filter(docSnap => {
+                    const data = docSnap.data();
+                    const norm = normalizeFirestorePost(docSnap.id, data);
+                    if (!isShowcasePost(norm, data)) return false;
+                    if (norm.status === 'draft') {
+                        // Drafts only visible to author
+                        if (!currentUid || norm.authorId !== currentUid) return false;
+                    }
+                    return true;
+                })
+                .map(docSnap => normalizeFirestorePost(docSnap.id, docSnap.data()))
+                .sort((a, b) => {
+                    const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+                    const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+                    return dateB - dateA;
+                });
+            console.log(`[SPOTLIGHT_SHOWCASE] Live Showcase update: found ${posts.length} posts`);
+            onPosts(posts);
+        },
+        (err) => {
+            console.error('[SHOWCASE_POSTS_SUBSCRIBE_ERROR]', err);
+            onError?.(err);
+        }
+    );
+};
+
+// Initial seed data to populate Firestore with real persistent projects if the collection is empty
+const INITIAL_SHOWCASE_SEEDS = [
+    {
+        title: 'Deepfake Sentinel Toolkit',
+        oneLine: 'Open-source toolkit for detecting deepfakes across audio and video.',
+        content: 'A powerful, accessible library for developers and researchers to detect and analyze manipulated media. Leveraging state-of-the-art vision transformers and spectrogram residual models, the toolkit provides high-accuracy anomaly scores for synthetic media detection in real-time pipelines.',
+        category: 'Cybersecurity',
+        domain: 'Cybersecurity',
+        tags: ['Cybersecurity', 'AI', 'DeepLearning', 'Python', 'OpenSource'],
+        mediaUrl: 'https://images.unsplash.com/photo-1504639725590-34d0984388bd?q=80&w=1974&auto=format&fit=crop',
+        mediaType: 'image' as const,
+        demoUrl: 'https://sentinel-deepfake.dev',
+        githubUrl: 'https://github.com/invox-network/deepfake-sentinel',
+        repoUrl: 'https://github.com/invox-network/deepfake-sentinel',
+        articleUrl: 'https://arxiv.org/abs/2401.09123',
+        author: {
+            name: 'Aisha Bello',
+            username: 'abello',
+            avatarUrl: 'https://picsum.photos/id/22/200/200',
+            isVerified: true,
+        },
+        stats: { likes: 132, views: 2450, comments: 24 },
+    },
+    {
+        title: 'NeuroLingua VR: Immersive Spatial Language Lab',
+        oneLine: 'Gamified language learning app using WebXR and reactive AI agents.',
+        content: 'An immersive virtual reality environment that makes mastering new languages feel like exploration. Users converse with conversational AI personas with speech phoneme evaluation, contextual visual cues, and spatial audio feedback.',
+        category: 'App Development',
+        domain: 'App Development',
+        tags: ['WebXR', 'React', 'Three.js', 'EdTech', 'LanguageAI'],
+        mediaUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
+        mediaType: 'video' as const,
+        thumbnailUrl: 'https://images.unsplash.com/photo-1535016120720-40c646be5580?q=80&w=1280&h=720&auto=format&fit=crop',
+        demoUrl: 'https://neurolingua.io',
+        githubUrl: 'https://github.com/invox-network/neurolingua-vr',
+        repoUrl: 'https://github.com/invox-network/neurolingua-vr',
+        author: {
+            name: 'Kenji Tanaka',
+            username: 'ktanaka',
+            avatarUrl: 'https://picsum.photos/id/21/200/200',
+            isVerified: true,
+        },
+        stats: { likes: 115, views: 3200, comments: 19 },
+    },
+    {
+        title: 'Aetheria Protocol: Decentralized Network with Ethical AI',
+        oneLine: 'A decentralized social substrate powered by transparent, verifiable AI.',
+        content: 'A novel protocol combining zero-knowledge identity proofs, decentralized storage, and client-side verifiable inference for content moderation. Users retain complete sovereignty over their data graphs while enjoying robust anti-sybil protections.',
+        category: 'Machine Learning',
+        domain: 'Machine Learning',
+        tags: ['Web3', 'EthicalAI', 'ZeroKnowledge', 'Decentralized', 'Cryptography'],
+        mediaUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
+        mediaType: 'video' as const,
+        thumbnailUrl: 'https://i.ytimg.com/vi/eRsGyueVLvQ/maxresdefault.jpg',
+        demoUrl: 'https://aetheria-network.eth.limo',
+        githubUrl: 'https://github.com/invox-network/aetheria-protocol',
+        repoUrl: 'https://github.com/invox-network/aetheria-protocol',
+        articleUrl: 'https://mirror.xyz/aetheria/whitepaper-v1',
+        author: {
+            name: 'Crash Adams',
+            username: 'cadams',
+            avatarUrl: 'https://picsum.photos/id/10/200/200',
+            isVerified: true,
+        },
+        stats: { likes: 87, views: 1890, comments: 11 },
+    },
+    {
+        title: 'Chronos Reactive Engine',
+        oneLine: 'Ultra-low overhead cross-platform reactive framework with sub-millisecond dispatch.',
+        content: 'Engineered from scratch in TypeScript with zero runtime dependencies. Features fine-grained reactivity, observable dependency trees, and ahead-of-time DOM graph compilation that outpaces standard virtual DOM approaches.',
+        category: 'App Development',
+        domain: 'App Development',
+        tags: ['TypeScript', 'Compiler', 'Reactive', 'Framework', 'Frontend'],
+        mediaUrl: 'https://images.unsplash.com/photo-1551650975-87deedd944c3?q=80&w=1974&auto=format&fit=crop',
+        mediaType: 'image' as const,
+        demoUrl: 'https://chronos-engine.dev',
+        githubUrl: 'https://github.com/invox-network/chronos-reactive',
+        repoUrl: 'https://github.com/invox-network/chronos-reactive',
+        author: {
+            name: 'Marco Rossi',
+            username: 'mrossi',
+            avatarUrl: 'https://picsum.photos/id/12/200/200',
+            isVerified: false,
+        },
+        stats: { likes: 72, views: 1420, comments: 8 },
+    },
+    {
+        title: 'Prism UI: Accessible Design Tokens & Micro-Interactions Engine',
+        oneLine: 'A resilient, WCAG AAA compliant design system for multi-tenant applications.',
+        content: 'An enterprise design system and token management library designed for rapid theming and high-density information interfaces. Includes audited keyboard navigation, contrast adaptors, and high-performance SVG animations.',
+        category: 'Design',
+        domain: 'Design',
+        tags: ['DesignSystem', 'UI/UX', 'Accessibility', 'Tokens', 'React'],
+        mediaUrl: 'https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?q=80&w=2070&auto=format&fit=crop',
+        mediaType: 'image' as const,
+        demoUrl: 'https://prism-design.system',
+        githubUrl: 'https://github.com/invox-network/prism-ui',
+        repoUrl: 'https://github.com/invox-network/prism-ui',
+        author: {
+            name: 'Chloe Bennet',
+            username: 'chloeb',
+            avatarUrl: 'https://picsum.photos/id/15/200/200',
+            isVerified: true,
+        },
+        stats: { likes: 89, views: 2100, comments: 16 },
+    }
+];
+
+let hasSeededShowcase = false;
+
+/**
+ * Seeds initial showcase projects into Firestore if none exist yet.
+ * Ensures the platform always has real, persistent, interactable showcase projects.
+ */
+export const seedInitialShowcasePostsIfEmpty = async (): Promise<void> => {
+    if (hasSeededShowcase) return;
+    hasSeededShowcase = true;
+
+    try {
+        const q = query(
+            collection(db, COLLECTIONS.posts),
+            limit(10)
+        );
+        const snap = await getDocs(q);
+        const existingShowcase = snap.docs.some(d => {
+            const data = d.data();
+            const norm = normalizeFirestorePost(d.id, data);
+            return isShowcasePost(norm, data);
+        });
+
+        if (existingShowcase) {
+            console.log('[SHOWCASE_SEED] Firestore already contains showcase projects.');
+            return;
+        }
+
+        console.log('[SHOWCASE_SEED] Seeding initial Showcase projects to Firestore...');
+        for (const item of INITIAL_SHOWCASE_SEEDS) {
+            const payload = {
+                title: item.title,
+                aiSummary: item.oneLine,
+                oneLine: item.oneLine,
+                content: item.content,
+                category: item.category,
+                domain: item.domain,
+                tags: item.tags,
+                mediaUrl: item.mediaUrl,
+                mediaType: item.mediaType,
+                thumbnailUrl: (item as any).thumbnailUrl || null,
+                demoUrl: item.demoUrl,
+                githubUrl: item.githubUrl,
+                repoUrl: item.repoUrl,
+                articleUrl: (item as any).articleUrl || null,
+                status: 'published',
+                isPublished: true,
+                type: PostType.Showcase,
+                postType: PostType.Showcase,
+                isProject: true,
+                authorId: `seed_${item.author.username}`,
+                author: item.author,
+                stats: item.stats,
+                likeCount: item.stats.likes,
+                viewCount: item.stats.views,
+                commentCount: item.stats.comments,
+                saveCount: 5,
+                createdAt: serverTimestamp(),
+            };
+            await createDocument(COLLECTIONS.posts, payload);
+        }
+        console.log('[SHOWCASE_SEED] Successfully seeded initial Showcase projects.');
+    } catch (seedErr) {
+        console.warn('[SHOWCASE_SEED_WARN] Could not seed showcase posts:', seedErr);
+    }
 };
 

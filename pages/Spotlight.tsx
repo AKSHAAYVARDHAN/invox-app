@@ -64,10 +64,22 @@ import GoForItOpportunityCard from '../components/spotlight/GoForItOpportunityCa
 import GoForItOpportunityCardSkeleton from '../components/spotlight/GoForItOpportunityCardSkeleton';
 import { useAIAssistant } from '../contexts/AIAssistantContext';
 import { useFilters } from '../contexts/AIAssistantContext';
-import { subscribeToCollabPosts, getCollabPosts, postToProject } from '../services/postService';
+import { 
+    subscribeToCollabPosts, 
+    getCollabPosts, 
+    postToProject,
+    subscribeToShowcasePosts,
+    getShowcasePosts,
+    seedInitialShowcasePostsIfEmpty,
+    postToShowcaseProject,
+    getUserLikedPostIds,
+    getUserSavedPostIds
+} from '../services/postService';
 import { CollabManagementHub } from '../components/spotlight/CollabManagementHub';
 import { CollabMessageBoardView } from '../components/spotlight/CollabMessageBoardView';
 import { CollabTeamsView } from '../components/spotlight/CollabTeamsView';
+import { ShowcaseCard } from '../components/spotlight/ShowcaseCard';
+import { CreateShowcaseModal } from '../components/uploads/CreateShowcaseModal';
 
 
 const formatNumber = (num: number) => {
@@ -1286,6 +1298,155 @@ const PinnedHighlightsView: React.FC<{ loading: boolean }> = ({ loading }) => {
     );
 };
 
+interface ShowcaseViewProps {
+    projects: Project[];
+    loading: boolean;
+    searchTerm: string;
+    onSearchChange: (term: string) => void;
+    sortOrder: 'recent' | 'popular';
+    onSortChange: (sort: 'recent' | 'popular') => void;
+    onOpenCreate: () => void;
+    userLikedIds: Set<string>;
+    userSavedIds: Set<string>;
+    onProjectDeleted: (id: string) => void;
+    onProjectUpdated: (proj: Project) => void;
+    onFilterByCategory: (cat: string) => void;
+}
+
+const ShowcaseView: React.FC<ShowcaseViewProps> = React.memo(({
+    projects,
+    loading,
+    searchTerm,
+    onSearchChange,
+    sortOrder,
+    onSortChange,
+    onOpenCreate,
+    userLikedIds,
+    userSavedIds,
+    onProjectDeleted,
+    onProjectUpdated,
+    onFilterByCategory,
+}) => {
+    return (
+        <div className="space-y-4">
+            {/* Top Discovery & Action Header */}
+            <div className="bg-[#0c0c0e] border border-zinc-800 p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex items-center gap-3 flex-grow max-w-xl">
+                    <div className="relative flex-grow">
+                        <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                        <input
+                            type="search"
+                            value={searchTerm}
+                            onChange={(e) => onSearchChange(e.target.value)}
+                            placeholder="Search showcase by title, summary, tech, or creator..."
+                            className="w-full bg-black border border-zinc-800 py-2 pl-9 pr-8 font-mono text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
+                        />
+                        {searchTerm && (
+                            <button
+                                onClick={() => onSearchChange('')}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white text-xs px-1"
+                                title="Clear search"
+                            >
+                                ✕
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
+                    {/* Sort Order Toggle */}
+                    <div className="flex items-center border border-zinc-800 bg-black p-0.5 font-mono text-[11px]">
+                        <button
+                            onClick={() => onSortChange('recent')}
+                            className={`px-3 py-1.5 uppercase tracking-wider transition-colors ${
+                                sortOrder === 'recent'
+                                    ? 'bg-zinc-800 text-white font-bold'
+                                    : 'text-zinc-500 hover:text-zinc-300'
+                            }`}
+                        >
+                            // RECENT
+                        </button>
+                        <button
+                            onClick={() => onSortChange('popular')}
+                            className={`px-3 py-1.5 uppercase tracking-wider transition-colors ${
+                                sortOrder === 'popular'
+                                    ? 'bg-zinc-800 text-white font-bold'
+                                    : 'text-zinc-500 hover:text-zinc-300'
+                            }`}
+                        >
+                            // POPULAR
+                        </button>
+                    </div>
+
+                    {/* Publish Showcase Action */}
+                    <button
+                        onClick={onOpenCreate}
+                        className="bg-white hover:bg-zinc-200 text-black px-4 py-1.5 font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-sm active:scale-[0.99]"
+                    >
+                        <SparklesIcon className="w-3.5 h-3.5 text-black" />
+                        <span>+ PUBLISH SHOWCASE</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* Sub-header status bar */}
+            <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500 px-1">
+                <span>
+                    // SHOWCASE_PORTFOLIO {projects.length > 0 ? `(${projects.length} PROJECTS)` : ''}
+                </span>
+                {searchTerm && (
+                    <span className="text-zinc-400">
+                        Query: "{searchTerm}"
+                    </span>
+                )}
+            </div>
+
+            {/* Projects List */}
+            {loading ? (
+                <>
+                    <ProjectCardSkeleton />
+                    <ProjectCardSkeleton />
+                </>
+            ) : projects.length > 0 ? (
+                projects.map(project => (
+                    <ShowcaseCard
+                        key={project.id}
+                        project={project}
+                        initialLiked={userLikedIds.has(project.id)}
+                        initialSaved={userSavedIds.has(project.id)}
+                        onDeleted={onProjectDeleted}
+                        onUpdated={onProjectUpdated}
+                        onFilterByCategory={onFilterByCategory}
+                    />
+                ))
+            ) : (
+                <div className="text-center py-16 text-zinc-400 font-mono text-xs border border-zinc-800 bg-[#0c0c0e] p-8 space-y-3">
+                    <p className="text-zinc-200 text-sm font-semibold tracking-wide">// NO_SHOWCASE_PROJECTS_FOUND</p>
+                    <p className="text-zinc-500 max-w-md mx-auto leading-relaxed">
+                        No projects match the selected category filters or search query. Publish a new portfolio project or clear your search filters to browse all projects.
+                    </p>
+                    <div className="flex items-center justify-center gap-3 pt-3">
+                        {searchTerm && (
+                            <button
+                                onClick={() => onSearchChange('')}
+                                className="px-4 py-2 border border-zinc-700 bg-zinc-900 text-white font-mono text-xs hover:bg-zinc-800 transition-colors"
+                            >
+                                Clear Search
+                            </button>
+                        )}
+                        <button
+                            onClick={onOpenCreate}
+                            className="px-4 py-2 bg-white text-black font-mono text-xs font-bold uppercase tracking-wider hover:bg-zinc-200 transition-colors"
+                        >
+                            + Publish New Showcase
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+});
+ShowcaseView.displayName = 'ShowcaseView';
 
 export const SpotlightPage = () => {
     const { openModal } = useAIAssistant();
@@ -1395,6 +1556,86 @@ export const SpotlightPage = () => {
                 console.warn('[SPOTLIGHT_COLLABS_FEED_WARN]', err);
             }
         );
+
+        return () => {
+            isMounted = false;
+            unsubscribe();
+        };
+    }, [currentUser?.uid, refreshKey]);
+
+    // Showcase Real-time Firestore State
+    const [liveShowcaseProjects, setLiveShowcaseProjects] = useState<Project[]>([]);
+    const [showcaseLoading, setShowcaseLoading] = useState(true);
+    const [isCreateShowcaseOpen, setIsCreateShowcaseOpen] = useState(false);
+    const [showcaseSortOrder, setShowcaseSortOrder] = useState<'recent' | 'popular'>('recent');
+    const [showcaseSearchTerm, setShowcaseSearchTerm] = useState('');
+    const [userLikedIds, setUserLikedIds] = useState<Set<string>>(new Set());
+    const [userSavedIds, setUserSavedIds] = useState<Set<string>>(new Set());
+
+    const handleShowcaseDeleted = React.useCallback((deletedId: string) => {
+        setLiveShowcaseProjects(prev => prev.filter(p => p.id !== deletedId));
+    }, []);
+
+    const handleShowcaseUpdated = React.useCallback((updatedProj: Project) => {
+        setLiveShowcaseProjects(prev => prev.map(p => p.id === updatedProj.id ? updatedProj : p));
+    }, []);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        // Seed initial showcase if empty
+        seedInitialShowcasePostsIfEmpty().catch(console.warn);
+
+        // Realtime live subscription (serves initial snapshot + live updates)
+        const unsubscribe = subscribeToShowcasePosts(
+            (posts) => {
+                if (!isMounted) return;
+                const nextProjects = posts.map(postToShowcaseProject);
+                setLiveShowcaseProjects(prev => {
+                    if (prev.length === nextProjects.length) {
+                        let hasChanges = false;
+                        const merged = nextProjects.map((next, idx) => {
+                            const current = prev[idx];
+                            if (!current || current.id !== next.id) {
+                                hasChanges = true;
+                                return next;
+                            }
+                            if (
+                                current.stats?.views !== next.stats?.views ||
+                                current.stats?.likes !== next.stats?.likes ||
+                                current.stats?.comments !== next.stats?.comments ||
+                                current.mediaUrl !== next.mediaUrl ||
+                                current.title !== next.title ||
+                                current.description !== next.description ||
+                                current.status !== next.status
+                            ) {
+                                hasChanges = true;
+                                return next;
+                            }
+                            return current;
+                        });
+                        return hasChanges ? merged : prev;
+                    }
+                    return nextProjects;
+                });
+                setShowcaseLoading(false);
+            },
+            (err) => {
+                console.warn('[SPOTLIGHT_SHOWCASE_FEED_WARN]', err);
+                if (isMounted) setShowcaseLoading(false);
+            }
+        );
+
+        // Fetch user likes and bookmarks if authenticated
+        if (currentUser?.uid) {
+            getUserLikedPostIds(currentUser.uid).then(ids => {
+                if (isMounted) setUserLikedIds(ids);
+            }).catch(console.warn);
+
+            getUserSavedPostIds(currentUser.uid).then(ids => {
+                if (isMounted) setUserSavedIds(ids);
+            }).catch(console.warn);
+        }
 
         return () => {
             isMounted = false;
@@ -1618,10 +1859,6 @@ export const SpotlightPage = () => {
         document.querySelector('main')?.scrollTo(0, 0);
     }, [activeTab, activeCategory, selectedOfferType, spotlightBrowseState, showPinnedHighlights, activeLeapTab]);
 
-    const filteredShowcaseProjects = mockProjects.filter(project =>
-        activeCategory === 'All' || project.category === activeCategory
-    );
-
     const matchesProjectCategoryOrDomain = (project: Project, targetFilter: string): boolean => {
         if (!targetFilter || targetFilter === 'All') return true;
         const tf = targetFilter.trim().toLowerCase();
@@ -1676,6 +1913,67 @@ export const SpotlightPage = () => {
         return false;
     };
 
+    const allShowcaseProjects = React.useMemo(() => {
+        const seen = new Set<string>();
+        const list: Project[] = [];
+        // First prioritize live showcase projects from Firestore
+        for (const p of liveShowcaseProjects) {
+            if (!seen.has(p.id)) {
+                seen.add(p.id);
+                list.push(p);
+            }
+        }
+        // Then mock projects as sample fallback showcases
+        for (const p of mockProjects) {
+            if (!seen.has(p.id)) {
+                seen.add(p.id);
+                list.push(p);
+            }
+        }
+        return list;
+    }, [liveShowcaseProjects]);
+
+    const filteredShowcaseProjects = React.useMemo(() => {
+        const selectedDomains = domainSelections[sectionKey] || [];
+        let result = allShowcaseProjects.filter(project => {
+            // Category filter
+            const matchesCat = activeCategory === 'All' || matchesProjectCategoryOrDomain(project, activeCategory);
+            if (!matchesCat) return false;
+
+            // Domain filter (if any domains explicitly selected)
+            if (selectedDomains.length > 0) {
+                const matchesDomain = selectedDomains.some(d => matchesProjectCategoryOrDomain(project, d));
+                if (!matchesDomain) return false;
+            }
+
+            // Search term filter
+            if (showcaseSearchTerm.trim()) {
+                const term = showcaseSearchTerm.toLowerCase();
+                const titleMatch = (project.title || project.name || '').toLowerCase().includes(term);
+                const summaryMatch = (project.aiSummary || project.oneLine || '').toLowerCase().includes(term);
+                const descMatch = (project.description || '').toLowerCase().includes(term);
+                const authorMatch = (project.author?.name || '').toLowerCase().includes(term);
+                const tagsMatch = Array.isArray(project.tags) && project.tags.some(t => t.toLowerCase().includes(term));
+                if (!titleMatch && !summaryMatch && !descMatch && !authorMatch && !tagsMatch) return false;
+            }
+
+            return true;
+        });
+
+        // Sort order
+        if (showcaseSortOrder === 'popular') {
+            result = [...result].sort((a, b) => (b.stats?.likes ?? 0) - (a.stats?.likes ?? 0));
+        } else {
+            result = [...result].sort((a, b) => {
+                const timeA = new Date(a.createdAt || 0).getTime();
+                const timeB = new Date(b.createdAt || 0).getTime();
+                return timeB - timeA;
+            });
+        }
+
+        return result;
+    }, [allShowcaseProjects, activeCategory, domainSelections, sectionKey, showcaseSearchTerm, showcaseSortOrder]);
+
     const allCollabProjects = React.useMemo(() => {
         const seen = new Set<string>();
         const list: Project[] = [];
@@ -1711,22 +2009,7 @@ export const SpotlightPage = () => {
         });
     }, [allCollabProjects, activeCategory, domainSelections, sectionKey]);
     
-    const Showcase = ({ projects }: { projects: Project[] }) => (
-        <div>
-            {loading ? (
-                <>
-                    <ProjectCardSkeleton />
-                    <ProjectCardSkeleton />
-                </>
-            ) : projects.length > 0 ? (
-                projects.map(project => <ProjectCard key={project.id} project={project} />)
-            ) : (
-                <div className="text-center py-16 text-gray-400">
-                    <p>No projects found for this category.</p>
-                </div>
-            )}
-        </div>
-    );
+
     
     const Collabs = () => (
         <div className="text-white space-y-4">
@@ -3116,9 +3399,20 @@ export const SpotlightPage = () => {
     
         if (activeTab === 'Showcase') {
             return (
-                <div>
-                    <Showcase projects={filteredShowcaseProjects} />
-                </div>
+                <ShowcaseView
+                    projects={filteredShowcaseProjects}
+                    loading={loading}
+                    searchTerm={showcaseSearchTerm}
+                    onSearchChange={setShowcaseSearchTerm}
+                    sortOrder={showcaseSortOrder}
+                    onSortChange={setShowcaseSortOrder}
+                    onOpenCreate={() => setIsCreateShowcaseOpen(true)}
+                    userLikedIds={userLikedIds}
+                    userSavedIds={userSavedIds}
+                    onProjectDeleted={handleShowcaseDeleted}
+                    onProjectUpdated={handleShowcaseUpdated}
+                    onFilterByCategory={setActiveCategory}
+                />
             );
         }
     
@@ -3247,6 +3541,15 @@ export const SpotlightPage = () => {
                     showViewButton={messagingOffer.type !== 'Invites' && messagingOffer.type !== 'Others'}
                 />
             )}
+
+            {/* Create Showcase Portfolio Modal */}
+            <CreateShowcaseModal
+                isOpen={isCreateShowcaseOpen}
+                onClose={() => setIsCreateShowcaseOpen(false)}
+                onPublished={() => {
+                    setIsCreateShowcaseOpen(false);
+                }}
+            />
         </div>
     );
 };
