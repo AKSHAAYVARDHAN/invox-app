@@ -824,6 +824,61 @@ export const getUserSavedPostIds = async (userId: string): Promise<Set<string>> 
     }
 };
 
+/**
+ * Real-time subscription to user saved / bookmarked post IDs.
+ * Ensures synchronized saved state across all Spotlight views and sessions.
+ */
+export const subscribeToUserSavedPostIds = (
+    userId: string,
+    onIds: (ids: Set<string>) => void,
+    onError?: (err: Error) => void
+) => {
+    if (!userId) {
+        onIds(new Set<string>());
+        return () => {};
+    }
+
+    const q = query(
+        collection(db, COLLECTIONS.bookmarks),
+        where('userId', '==', userId)
+    );
+
+    return onSnapshot(
+        q,
+        (snap) => {
+            const ids = new Set<string>();
+            snap.forEach(d => {
+                const data = d.data();
+                if (data.postId) ids.add(data.postId);
+            });
+            onIds(ids);
+        },
+        (err) => {
+            console.error('[SUBSCRIBE_USER_SAVED_POSTS_ERROR]', err);
+            onError?.(err);
+        }
+    );
+};
+
+/**
+ * Retrieves a single Showcase Project by ID directly from Firestore.
+ */
+export const getShowcaseProjectById = async (postId: string): Promise<Project | null> => {
+    if (!postId) return null;
+    try {
+        const postRef = doc(db, COLLECTIONS.posts, postId);
+        const snap = await getDoc(postRef);
+        if (snap.exists()) {
+            const data = snap.data();
+            const normalized = normalizeFirestorePost(snap.id, data);
+            return postToShowcaseProject(normalized);
+        }
+    } catch (e) {
+        console.warn(`[GET_PROJECT_BY_ID_WARN] Failed to fetch project ${postId}:`, e);
+    }
+    return null;
+};
+
 // ==========================================
 // Robust Post View Deduplication Policy
 // ==========================================

@@ -235,6 +235,17 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "username"]
+    },
+    "Bookmark": {
+      "title": "Bookmark",
+      "description": "User saved project or post bookmark reference.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "User UID who bookmarked the project" },
+        "postId": { "type": "string", "description": "Target post or project ID" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "postId"]
     }
   },
   "firestore": {
@@ -285,6 +296,10 @@
     "/notifications/{notificationId}": {
       "schema": "Notification",
       "description": "User notification documents."
+    },
+    "/bookmarks/{bookmarkId}": {
+      "schema": "Bookmark",
+      "description": "User bookmarked projects and posts collection."
     }
   }
 }

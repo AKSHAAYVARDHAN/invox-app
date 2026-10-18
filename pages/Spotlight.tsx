@@ -73,7 +73,9 @@ import {
     seedInitialShowcasePostsIfEmpty,
     postToShowcaseProject,
     getUserLikedPostIds,
-    getUserSavedPostIds
+    getUserSavedPostIds,
+    subscribeToUserSavedPostIds,
+    getShowcaseProjectById
 } from '../services/postService';
 import { CollabManagementHub } from '../components/spotlight/CollabManagementHub';
 import { CollabMessageBoardView } from '../components/spotlight/CollabMessageBoardView';
@@ -1257,41 +1259,334 @@ const ProjectCard: React.FC<{ project: Project }> = ({ project }) => {
     );
 }
 
-const PinnedHighlightsView: React.FC<{ loading: boolean }> = ({ loading }) => {
+interface PinnedHighlightsViewProps {
+    loading: boolean;
+    allProjects: Project[];
+    userSavedIds: Set<string>;
+    userLikedIds: Set<string>;
+    onBackToShowcase: () => void;
+    onBrowseShowcase: () => void;
+    onBookmarkToggle: (saved: boolean, projectId: string) => void;
+    onProjectDeleted: (id: string) => void;
+    onProjectUpdated: (proj: Project) => void;
+}
+
+const PinnedHighlightsView: React.FC<PinnedHighlightsViewProps> = ({
+    loading: initialLoading,
+    allProjects,
+    userSavedIds,
+    userLikedIds,
+    onBackToShowcase,
+    onBrowseShowcase,
+    onBookmarkToggle,
+    onProjectDeleted,
+    onProjectUpdated,
+}) => {
+    const { currentUser } = useAuth();
+    const navigate = ReactRouterDOM.useNavigate();
     const { domainSelections, setDomainSelection } = useFilters();
-    const highlightedProjects = mockProjects.filter(project =>
-        pinnedUserNames.includes(project.author.name)
-    );
+    const [searchTerm, setSearchTerm] = useState('');
+    const [activeCategory, setActiveCategory] = useState('All');
+    const [extraProjects, setExtraProjects] = useState<Record<string, Project>>({});
+    const [fetchError, setFetchError] = useState<string | null>(null);
+    const [isFetchingMissing, setIsFetchingMissing] = useState(false);
+    const [retryCount, setRetryCount] = useState(0);
+
+    const categoryFilters = [
+        'All',
+        'Design',
+        'App Development',
+        'Machine Learning',
+        'Cybersecurity',
+        'Web3',
+        'Hardware',
+        'Gaming',
+        'Fintech'
+    ];
+
+    // Asynchronously retrieve any saved project IDs that aren't yet in allProjects or extraProjects
+    useEffect(() => {
+        if (!currentUser?.uid || userSavedIds.size === 0) return;
+
+        let isMounted = true;
+        const missingIds = Array.from(userSavedIds).filter(
+            id => !allProjects.some(p => p.id === id) && !extraProjects[id]
+        );
+
+        if (missingIds.length === 0) {
+            setFetchError(null);
+            return;
+        }
+
+        setIsFetchingMissing(true);
+        setFetchError(null);
+
+        Promise.all(missingIds.map(id => getShowcaseProjectById(id)))
+            .then(fetched => {
+                if (!isMounted) return;
+                const newExtras: Record<string, Project> = {};
+                fetched.forEach(p => {
+                    if (p) newExtras[p.id] = p;
+                });
+                setExtraProjects(prev => ({ ...prev, ...newExtras }));
+                setIsFetchingMissing(false);
+            })
+            .catch(err => {
+                if (!isMounted) return;
+                console.error('[FETCH_SAVED_PROJECTS_ERROR]', err);
+                setFetchError('Unable to load saved projects from Firestore. Check your connection.');
+                setIsFetchingMissing(false);
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, [userSavedIds, allProjects, currentUser?.uid, retryCount]);
+
+    // Build array of all saved projects
+    const savedProjects = React.useMemo(() => {
+        if (!currentUser?.uid || userSavedIds.size === 0) return [];
+
+        const list: Project[] = [];
+        const seen = new Set<string>();
+
+        // Maintain order of userSavedIds
+        for (const id of userSavedIds) {
+            if (seen.has(id)) continue;
+            const fromAll = allProjects.find(p => p.id === id);
+            if (fromAll) {
+                seen.add(id);
+                list.push(fromAll);
+                continue;
+            }
+            const fromExtras = extraProjects[id];
+            if (fromExtras) {
+                seen.add(id);
+                list.push(fromExtras);
+            }
+        }
+        return list;
+    }, [userSavedIds, allProjects, extraProjects, currentUser?.uid]);
+
+    // Filter saved projects by search and category
+    const filteredSavedProjects = React.useMemo(() => {
+        const selectedDomains = domainSelections['spotlight-pinned'] || [];
+        return savedProjects.filter(project => {
+            // Category filter
+            if (activeCategory !== 'All') {
+                const catLower = activeCategory.toLowerCase();
+                const projCat = (project.category || '').toLowerCase();
+                const projDom = ((project as any).domain || '').toLowerCase();
+                if (!projCat.includes(catLower) && !projDom.includes(catLower)) {
+                    return false;
+                }
+            }
+
+            // Domain filter
+            if (selectedDomains.length > 0) {
+                const projCat = (project.category || '').toLowerCase();
+                const projDom = ((project as any).domain || '').toLowerCase();
+                const matchesDomain = selectedDomains.some(d => {
+                    const dl = d.toLowerCase();
+                    return projCat.includes(dl) || projDom.includes(dl);
+                });
+                if (!matchesDomain) return false;
+            }
+
+            // Search filter
+            if (searchTerm.trim()) {
+                const term = searchTerm.toLowerCase();
+                const title = (project.title || project.name || '').toLowerCase();
+                const summary = (project.aiSummary || project.oneLine || '').toLowerCase();
+                const desc = (project.description || '').toLowerCase();
+                const authorName = (project.author?.name || '').toLowerCase();
+                const tags = Array.isArray(project.tags) ? project.tags.join(' ').toLowerCase() : '';
+
+                return (
+                    title.includes(term) ||
+                    summary.includes(term) ||
+                    desc.includes(term) ||
+                    authorName.includes(term) ||
+                    tags.includes(term)
+                );
+            }
+
+            return true;
+        });
+    }, [savedProjects, activeCategory, domainSelections, searchTerm]);
+
+    const isLoading = initialLoading || (isFetchingMissing && savedProjects.length === 0);
+
     return (
-        <div>
-            <div className="relative mb-4">
-                <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                <input 
-                    type="search" 
-                    placeholder="Search Profiles You Follow" 
-                    className="w-full bg-black border border-zinc-800 p-2.5 pl-10 font-mono text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500" 
-                />
+        <div className="space-y-4">
+            {/* Header banner */}
+            <div className="bg-[#0c0c0e] border border-zinc-800 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <button
+                        onClick={onBackToShowcase}
+                        className="text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider flex items-center gap-1.5 transition-colors mb-2.5 cursor-pointer"
+                    >
+                        <ArrowLeftIcon className="w-3.5 h-3.5" />
+                        <span>// BACK TO SHOWCASE</span>
+                    </button>
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">// PINNED_FEED</span>
+                    <h2 className="text-xl font-bold font-mono text-white tracking-wide mt-0.5">PINNED_HIGHLIGHTS</h2>
+                    <p className="text-xs font-mono text-zinc-400 mt-1">Your saved projects, collected in one place for easy access.</p>
+                </div>
+                {currentUser && savedProjects.length > 0 && (
+                    <div className="sm:self-end">
+                        <span className="font-mono text-xs text-zinc-300 bg-black border border-zinc-800 px-3 py-1.5 inline-block">
+                            // {savedProjects.length} SAVED {savedProjects.length === 1 ? 'PROJECT' : 'PROJECTS'}
+                        </span>
+                    </div>
+                )}
             </div>
-            <DomainFilter 
-                domains={spotlightDomains}
-                selectedDomains={domainSelections['spotlight-pinned'] || []}
-                onSelectionChange={(domains) => setDomainSelection('spotlight-pinned', domains)}
-            />
-            <div className="my-4">
-                <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">// PINNED_FEED</span>
-                <h2 className="text-xl font-bold font-mono text-white">PINNED_HIGHLIGHTS</h2>
-                <p className="text-xs font-mono text-zinc-400 mt-1">Showing verified projects from profiles you track.</p>
-            </div>
-            {loading ? (
+
+            {/* Controls only shown if user is authenticated and has projects */}
+            {currentUser && (savedProjects.length > 0 || searchTerm || activeCategory !== 'All') && (
                 <>
-                    <ProjectCardSkeleton />
-                    <ProjectCardSkeleton />
+                    {/* Search Bar */}
+                    <div className="relative">
+                        <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                        <input
+                            type="search"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="SEARCH SAVED PROJECTS BY TITLE, TECH, OR CREATOR..."
+                            className="w-full bg-[#0c0c0e] border border-zinc-800 py-2.5 pl-10 pr-8 font-mono text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
+                        />
+                        {searchTerm && (
+                            <button
+                                onClick={() => setSearchTerm('')}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white text-xs px-1 cursor-pointer"
+                                title="Clear search"
+                            >
+                                ✕
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Category Filter Bar */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-2 no-scrollbar">
+                        {categoryFilters.map(category => (
+                            <button
+                                key={category}
+                                onClick={() => setActiveCategory(category)}
+                                className={`px-3 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider whitespace-nowrap transition-all duration-150 border cursor-pointer ${
+                                    activeCategory === category
+                                        ? 'bg-[#18181d] text-white border-zinc-700 font-bold'
+                                        : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
+                                }`}
+                            >
+                                {category}
+                            </button>
+                        ))}
+                    </div>
+
+                    <DomainFilter
+                        domains={spotlightDomains}
+                        selectedDomains={domainSelections['spotlight-pinned'] || []}
+                        onSelectionChange={(domains) => setDomainSelection('spotlight-pinned', domains)}
+                    />
                 </>
-            ) : highlightedProjects.length > 0 ? (
-                highlightedProjects.map(project => <ProjectCard key={project.id} project={project} />)
+            )}
+
+            {/* Content states */}
+            {!currentUser ? (
+                /* Unauthenticated state */
+                <div className="text-center py-16 text-zinc-400 font-mono text-xs border border-zinc-800 bg-[#0c0c0e] p-8 space-y-4">
+                    <p className="text-zinc-200 text-sm font-semibold tracking-wide">// AUTHENTICATION REQUIRED</p>
+                    <p className="text-zinc-500 max-w-md mx-auto leading-relaxed">
+                        Please sign in to view and manage your saved Showcase projects across sessions and devices.
+                    </p>
+                    <div className="pt-2">
+                        <button
+                            onClick={() => navigate('/login')}
+                            className="px-6 py-2.5 bg-white text-black font-mono text-xs font-bold uppercase tracking-wider hover:bg-zinc-200 transition-colors shadow-sm cursor-pointer"
+                        >
+                            SIGN IN
+                        </button>
+                    </div>
+                </div>
+            ) : fetchError && savedProjects.length === 0 ? (
+                /* Error state */
+                <div className="text-center py-16 text-zinc-400 font-mono text-xs border border-rose-900/60 bg-[#0c0c0e] p-8 space-y-4">
+                    <p className="text-rose-400 text-sm font-semibold tracking-wide">// ERROR LOADING SAVED PROJECTS</p>
+                    <p className="text-zinc-500 max-w-md mx-auto leading-relaxed">
+                        {fetchError}
+                    </p>
+                    <div className="pt-2">
+                        <button
+                            onClick={() => setRetryCount(prev => prev + 1)}
+                            className="px-6 py-2.5 bg-zinc-900 border border-zinc-700 text-white font-mono text-xs font-bold uppercase tracking-wider hover:bg-zinc-800 transition-colors cursor-pointer"
+                        >
+                            RETRY
+                        </button>
+                    </div>
+                </div>
+            ) : isLoading ? (
+                /* Loading state */
+                <div className="space-y-4">
+                    <ProjectCardSkeleton />
+                    <ProjectCardSkeleton />
+                </div>
+            ) : savedProjects.length === 0 ? (
+                /* Empty state: No projects saved yet */
+                <div className="text-center py-16 text-zinc-400 font-mono text-xs border border-zinc-800 bg-[#0c0c0e] p-8 space-y-3">
+                    <p className="text-zinc-200 text-sm font-semibold tracking-wide">// NO SAVED PROJECTS YET</p>
+                    <p className="text-zinc-500 max-w-md mx-auto leading-relaxed">
+                        Projects you bookmark in Showcase will appear here. Save projects you find interesting to build your personal collection.
+                    </p>
+                    <div className="pt-3">
+                        <button
+                            onClick={onBrowseShowcase}
+                            className="px-5 py-2.5 bg-white text-black font-mono text-xs font-bold uppercase tracking-wider hover:bg-zinc-200 transition-colors shadow-sm active:scale-[0.99] cursor-pointer"
+                        >
+                            BROWSE SHOWCASE
+                        </button>
+                    </div>
+                </div>
+            ) : filteredSavedProjects.length === 0 ? (
+                /* Empty state: Search / filter yielded 0 results */
+                <div className="text-center py-16 text-zinc-400 font-mono text-xs border border-zinc-800 bg-[#0c0c0e] p-8 space-y-3">
+                    <p className="text-zinc-200 text-sm font-semibold tracking-wide">// NO MATCHING SAVED PROJECTS</p>
+                    <p className="text-zinc-500 max-w-md mx-auto leading-relaxed">
+                        No saved projects match your search query or selected category filter.
+                    </p>
+                    <div className="flex items-center justify-center gap-3 pt-3">
+                        {searchTerm && (
+                            <button
+                                onClick={() => setSearchTerm('')}
+                                className="px-4 py-2 border border-zinc-700 bg-zinc-900 text-white font-mono text-xs hover:bg-zinc-800 transition-colors cursor-pointer"
+                            >
+                                Clear Search
+                            </button>
+                        )}
+                        {activeCategory !== 'All' && (
+                            <button
+                                onClick={() => setActiveCategory('All')}
+                                className="px-4 py-2 border border-zinc-700 bg-zinc-900 text-white font-mono text-xs hover:bg-zinc-800 transition-colors cursor-pointer"
+                            >
+                                Show All Categories
+                            </button>
+                        )}
+                    </div>
+                </div>
             ) : (
-                <div className="text-center py-16 text-zinc-500 font-mono text-xs border border-zinc-800 bg-[#0c0c0e]">
-                    <p>// NO_PROJECTS_FOUND_FROM_PINNED_PROFILES</p>
+                /* Populated list */
+                <div className="space-y-4">
+                    {filteredSavedProjects.map(project => (
+                        <ShowcaseCard
+                            key={project.id}
+                            project={project}
+                            initialLiked={userLikedIds.has(project.id)}
+                            initialSaved={true}
+                            onBookmarkToggle={onBookmarkToggle}
+                            onDeleted={onProjectDeleted}
+                            onUpdated={onProjectUpdated}
+                            onFilterByCategory={setActiveCategory}
+                        />
+                    ))}
                 </div>
             )}
         </div>
@@ -1311,6 +1606,7 @@ interface ShowcaseViewProps {
     onProjectDeleted: (id: string) => void;
     onProjectUpdated: (proj: Project) => void;
     onFilterByCategory: (cat: string) => void;
+    onBookmarkToggle?: (saved: boolean, projectId: string) => void;
 }
 
 const ShowcaseView: React.FC<ShowcaseViewProps> = React.memo(({
@@ -1326,6 +1622,7 @@ const ShowcaseView: React.FC<ShowcaseViewProps> = React.memo(({
     onProjectDeleted,
     onProjectUpdated,
     onFilterByCategory,
+    onBookmarkToggle,
 }) => {
     return (
         <div className="space-y-4">
@@ -1344,7 +1641,7 @@ const ShowcaseView: React.FC<ShowcaseViewProps> = React.memo(({
                         {searchTerm && (
                             <button
                                 onClick={() => onSearchChange('')}
-                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white text-xs px-1"
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white text-xs px-1 cursor-pointer"
                                 title="Clear search"
                             >
                                 ✕
@@ -1358,7 +1655,7 @@ const ShowcaseView: React.FC<ShowcaseViewProps> = React.memo(({
                     <div className="flex items-center border border-zinc-800 bg-black p-0.5 font-mono text-[11px]">
                         <button
                             onClick={() => onSortChange('recent')}
-                            className={`px-3 py-1.5 uppercase tracking-wider transition-colors ${
+                            className={`px-3 py-1.5 uppercase tracking-wider transition-colors cursor-pointer ${
                                 sortOrder === 'recent'
                                     ? 'bg-zinc-800 text-white font-bold'
                                     : 'text-zinc-500 hover:text-zinc-300'
@@ -1368,7 +1665,7 @@ const ShowcaseView: React.FC<ShowcaseViewProps> = React.memo(({
                         </button>
                         <button
                             onClick={() => onSortChange('popular')}
-                            className={`px-3 py-1.5 uppercase tracking-wider transition-colors ${
+                            className={`px-3 py-1.5 uppercase tracking-wider transition-colors cursor-pointer ${
                                 sortOrder === 'popular'
                                     ? 'bg-zinc-800 text-white font-bold'
                                     : 'text-zinc-500 hover:text-zinc-300'
@@ -1381,7 +1678,7 @@ const ShowcaseView: React.FC<ShowcaseViewProps> = React.memo(({
                     {/* Publish Showcase Action */}
                     <button
                         onClick={onOpenCreate}
-                        className="bg-white hover:bg-zinc-200 text-black px-4 py-1.5 font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-sm active:scale-[0.99]"
+                        className="bg-white hover:bg-zinc-200 text-black px-4 py-1.5 font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-sm active:scale-[0.99] cursor-pointer"
                     >
                         <SparklesIcon className="w-3.5 h-3.5 text-black" />
                         <span>+ PUBLISH SHOWCASE</span>
@@ -1417,6 +1714,7 @@ const ShowcaseView: React.FC<ShowcaseViewProps> = React.memo(({
                         onDeleted={onProjectDeleted}
                         onUpdated={onProjectUpdated}
                         onFilterByCategory={onFilterByCategory}
+                        onBookmarkToggle={onBookmarkToggle}
                     />
                 ))
             ) : (
@@ -1429,14 +1727,14 @@ const ShowcaseView: React.FC<ShowcaseViewProps> = React.memo(({
                         {searchTerm && (
                             <button
                                 onClick={() => onSearchChange('')}
-                                className="px-4 py-2 border border-zinc-700 bg-zinc-900 text-white font-mono text-xs hover:bg-zinc-800 transition-colors"
+                                className="px-4 py-2 border border-zinc-700 bg-zinc-900 text-white font-mono text-xs hover:bg-zinc-800 transition-colors cursor-pointer"
                             >
                                 Clear Search
                             </button>
                         )}
                         <button
                             onClick={onOpenCreate}
-                            className="px-4 py-2 bg-white text-black font-mono text-xs font-bold uppercase tracking-wider hover:bg-zinc-200 transition-colors"
+                            className="px-4 py-2 bg-white text-black font-mono text-xs font-bold uppercase tracking-wider hover:bg-zinc-200 transition-colors cursor-pointer"
                         >
                             + Publish New Showcase
                         </button>
@@ -1463,7 +1761,7 @@ export const SpotlightPage = () => {
         toggleSaveOffer: (offerId: string) => void;
     }>();
 
-    const { setRightSidebarVariant, spotlightBrowseState, setSpotlightBrowseState, showPinnedHighlights, goforitFilters, refreshKey, savedOfferIds = [], toggleSaveOffer } = outletContext || {};
+    const { setRightSidebarVariant, spotlightBrowseState, setSpotlightBrowseState, showPinnedHighlights, setShowPinnedHighlights, goforitFilters, refreshKey, savedOfferIds = [], toggleSaveOffer } = outletContext || {};
     const { domainSelections, setDomainSelection } = useFilters();
 
     const collabViewParam = searchParams.get('collabView');
@@ -1626,22 +1924,45 @@ export const SpotlightPage = () => {
             }
         );
 
-        // Fetch user likes and bookmarks if authenticated
+        // Real-time subscription for user saved bookmarks and initial fetch for likes
+        let unsubscribeSaved: (() => void) | undefined;
         if (currentUser?.uid) {
             getUserLikedPostIds(currentUser.uid).then(ids => {
                 if (isMounted) setUserLikedIds(ids);
             }).catch(console.warn);
 
-            getUserSavedPostIds(currentUser.uid).then(ids => {
-                if (isMounted) setUserSavedIds(ids);
-            }).catch(console.warn);
+            unsubscribeSaved = subscribeToUserSavedPostIds(
+                currentUser.uid,
+                (ids) => {
+                    if (isMounted) setUserSavedIds(ids);
+                },
+                (err) => {
+                    console.warn('[SPOTLIGHT_SAVED_POSTS_WARN]', err);
+                }
+            );
+        } else {
+            setUserLikedIds(new Set());
+            setUserSavedIds(new Set());
         }
 
         return () => {
             isMounted = false;
             unsubscribe();
+            unsubscribeSaved?.();
         };
     }, [currentUser?.uid, refreshKey]);
+
+    const handleBookmarkToggle = React.useCallback((saved: boolean, projectId: string) => {
+        setUserSavedIds(prev => {
+            const next = new Set(prev);
+            if (saved) {
+                next.add(projectId);
+            } else {
+                next.delete(projectId);
+            }
+            return next;
+        });
+    }, []);
 
     const OpportunityDetailModal: React.FC<{
         offer: Offer;
@@ -3366,7 +3687,24 @@ export const SpotlightPage = () => {
     };
 
     const renderContent = () => {
-        if (showPinnedHighlights) return <PinnedHighlightsView loading={loading} />;
+        if (showPinnedHighlights) {
+            return (
+                <PinnedHighlightsView
+                    loading={loading || showcaseLoading}
+                    allProjects={allShowcaseProjects}
+                    userSavedIds={userSavedIds}
+                    userLikedIds={userLikedIds}
+                    onBackToShowcase={() => setShowPinnedHighlights?.(false)}
+                    onBrowseShowcase={() => {
+                        setShowPinnedHighlights?.(false);
+                        handleTabChange('Showcase');
+                    }}
+                    onBookmarkToggle={handleBookmarkToggle}
+                    onProjectDeleted={handleShowcaseDeleted}
+                    onProjectUpdated={handleShowcaseUpdated}
+                />
+            );
+        }
         if (spotlightBrowseState === 'projects') return <BrowseProjectsView />;
         if (spotlightBrowseState === 'profiles') return <BrowseProfilesView />;
 
@@ -3412,6 +3750,7 @@ export const SpotlightPage = () => {
                     onProjectDeleted={handleShowcaseDeleted}
                     onProjectUpdated={handleShowcaseUpdated}
                     onFilterByCategory={setActiveCategory}
+                    onBookmarkToggle={handleBookmarkToggle}
                 />
             );
         }

@@ -49,6 +49,7 @@ interface ShowcaseCardProps {
     onUpdated?: (updated: Project) => void;
     onFilterByTag?: (tag: string) => void;
     onFilterByCategory?: (category: string) => void;
+    onBookmarkToggle?: (saved: boolean, projectId: string) => void;
 }
 
 const ShowcaseCardComponent: React.FC<ShowcaseCardProps> = ({
@@ -59,6 +60,7 @@ const ShowcaseCardComponent: React.FC<ShowcaseCardProps> = ({
     onUpdated,
     onFilterByTag,
     onFilterByCategory,
+    onBookmarkToggle,
 }) => {
     const { currentUser } = useAuth();
     const navigate = useNavigate();
@@ -197,6 +199,13 @@ const ShowcaseCardComponent: React.FC<ShowcaseCardProps> = ({
         }
     };
 
+    // Synchronize isSaved with incoming initialSaved prop
+    useEffect(() => {
+        setIsSaved(Boolean(initialSaved));
+    }, [initialSaved]);
+
+    const isBookmarkPendingRef = useRef(false);
+
     // Handle Bookmark toggle
     const handleBookmarkToggle = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -205,14 +214,21 @@ const ShowcaseCardComponent: React.FC<ShowcaseCardProps> = ({
             return;
         }
 
+        if (isBookmarkPendingRef.current) return;
+        isBookmarkPendingRef.current = true;
+
         const nextSaved = !isSaved;
         setIsSaved(nextSaved);
+        onBookmarkToggle?.(nextSaved, currentProject.id);
 
         try {
             await toggleBookmarkPost(currentProject.id);
         } catch (err) {
             setIsSaved(!nextSaved);
+            onBookmarkToggle?.(!nextSaved, currentProject.id);
             console.error('[BOOKMARK_POST_ERROR]', err);
+        } finally {
+            isBookmarkPendingRef.current = false;
         }
     };
 
