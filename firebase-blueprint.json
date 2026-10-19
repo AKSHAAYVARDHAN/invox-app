@@ -246,6 +246,21 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "postId"]
+    },
+    "Follow": {
+      "title": "Follow",
+      "description": "User follow and creator tracking relationship.",
+      "type": "object",
+      "properties": {
+        "followerId": { "type": "string", "description": "User UID of follower" },
+        "followingId": { "type": "string", "description": "User UID of followed creator" },
+        "followerUid": { "type": "string", "description": "Canonical follower UID" },
+        "followingUid": { "type": "string", "description": "Canonical following UID" },
+        "fromUserId": { "type": "string", "description": "Legacy follower identifier" },
+        "toUserId": { "type": "string", "description": "Legacy target identifier" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["followerId", "followingId", "followerUid", "followingUid"]
     }
   },
   "firestore": {
@@ -300,6 +315,10 @@
     "/bookmarks/{bookmarkId}": {
       "schema": "Bookmark",
       "description": "User bookmarked projects and posts collection."
+    },
+    "/follows/{followId}": {
+      "schema": "Follow",
+      "description": "User follow relationships."
     }
   }
 }

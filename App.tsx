@@ -133,6 +133,7 @@ const ProtectedLayout = () => {
     const [followedDomainsFilter, setFollowedDomainsFilter] = useState<string | null>(null);
     const [spotlightBrowseState, setSpotlightBrowseState] = useState<string | null>(null); // 'projects' or 'profiles'
     const [showPinnedHighlights, setShowPinnedHighlights] = useState(false);
+    const [showPinnedProfiles, setShowPinnedProfiles] = useState(false);
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [communityFilters, setCommunityFilters] = useState({ searchTerm: '', domains: [] as string[] });
     const [communityView, setCommunityView] = useState('leaderboard'); // 'leaderboard', 'my-communities', 'all'
@@ -229,6 +230,7 @@ const ProtectedLayout = () => {
         setActivityFilter(prev => prev === null ? prev : null);
         setFollowedDomainsFilter(prev => prev === null ? prev : null);
         setShowPinnedHighlights(prev => !prev ? prev : false);
+        setShowPinnedProfiles(prev => !prev ? prev : false);
         if (rightSidebarVariant !== 'spotlight') {
             setSpotlightBrowseState(prev => prev === null ? prev : null);
         }
@@ -244,6 +246,8 @@ const ProtectedLayout = () => {
         setSpotlightBrowseState, 
         showPinnedHighlights, 
         setShowPinnedHighlights, 
+        showPinnedProfiles,
+        setShowPinnedProfiles,
         goforitFilters, 
         setGoforitFilters, 
         refreshKey, 
@@ -275,6 +279,8 @@ const ProtectedLayout = () => {
         setSpotlightBrowseState, 
         showPinnedHighlights, 
         setShowPinnedHighlights, 
+        showPinnedProfiles,
+        setShowPinnedProfiles,
         goforitFilters, 
         setGoforitFilters, 
         refreshKey, 
@@ -326,6 +332,8 @@ const ProtectedLayout = () => {
                         setSpotlightBrowseState={setSpotlightBrowseState}
                         showPinnedHighlights={showPinnedHighlights}
                         setShowPinnedHighlights={setShowPinnedHighlights}
+                        showPinnedProfiles={showPinnedProfiles}
+                        setShowPinnedProfiles={setShowPinnedProfiles}
                         goforitFilters={goforitFilters}
                         setGoforitFilters={setGoforitFilters}
                         setIsFilterModalOpen={setIsFilterModalOpen}

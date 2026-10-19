@@ -559,3 +559,15 @@ export const ArrowUpRightIcon = ({ className = 'w-4 h-4' }: { className?: string
   </svg>
 );
 
+export const UserPlusIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} aria-hidden="true" focusable="false">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v6m3-3h-6m-1.5-3.75a3 3 0 11-6 0 3 3 0 016 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.765z" />
+  </svg>
+);
+
+export const UserMinusIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} aria-hidden="true" focusable="false">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M22 10.5h-6m-2.25-3.75a3 3 0 11-6 0 3 3 0 016 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.765z" />
+  </svg>
+);
+

@@ -29,8 +29,11 @@ import {
     CodeBracketIcon, 
     DocumentTextIcon, 
     SparklesIcon,
-    CloseIcon
+    CloseIcon,
+    UserPlusIcon,
+    UserMinusIcon
 } from '../ui/Icons';
+import { toggleFollowCreator, getProjectCreatorId } from '../../services/connectionService';
 import { AspectRatioBox } from '../ui/AspectRatioBox';
 import { ImageZoomModal } from '../ui/ImageZoomModal';
 import { CommentSection } from '../feed/CommentSection';
@@ -45,22 +48,26 @@ interface ShowcaseCardProps {
     project: Project;
     initialLiked?: boolean;
     initialSaved?: boolean;
+    initialFollowingCreator?: boolean;
     onDeleted?: (projectId: string) => void;
     onUpdated?: (updated: Project) => void;
     onFilterByTag?: (tag: string) => void;
     onFilterByCategory?: (category: string) => void;
     onBookmarkToggle?: (saved: boolean, projectId: string) => void;
+    onToggleFollowCreator?: (creatorId: string, willFollow: boolean) => Promise<void> | void;
 }
 
 const ShowcaseCardComponent: React.FC<ShowcaseCardProps> = ({
     project,
     initialLiked = false,
     initialSaved = false,
+    initialFollowingCreator = false,
     onDeleted,
     onUpdated,
     onFilterByTag,
     onFilterByCategory,
     onBookmarkToggle,
+    onToggleFollowCreator,
 }) => {
     const { currentUser } = useAuth();
     const navigate = useNavigate();
@@ -70,16 +77,35 @@ const ShowcaseCardComponent: React.FC<ShowcaseCardProps> = ({
     const [isLiked, setIsLiked] = useState(initialLiked);
     const [likeCount, setLikeCount] = useState(project.stats?.likes || 0);
     const [isSaved, setIsSaved] = useState(initialSaved);
+    const [isFollowingCreator, setIsFollowingCreator] = useState(initialFollowingCreator);
+    const [followFeedback, setFollowFeedback] = useState<string | null>(null);
     const [showMore, setShowMore] = useState(false);
 
     // Modals & Menu
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
     const [isCommentsOpen, setIsCommentsOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
     const [shareToast, setShareToast] = useState(false);
+
+    // Close menu when clicking outside
+    useEffect(() => {
+        if (!isMenuOpen) return;
+        const handleOutsideClick = (event: MouseEvent | TouchEvent) => {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setIsMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleOutsideClick);
+        document.addEventListener('touchstart', handleOutsideClick);
+        return () => {
+            document.removeEventListener('mousedown', handleOutsideClick);
+            document.removeEventListener('touchstart', handleOutsideClick);
+        };
+    }, [isMenuOpen]);
 
     // Video controls
     const mediaContainerRef = useRef<HTMLDivElement>(null);
@@ -99,7 +125,16 @@ const ShowcaseCardComponent: React.FC<ShowcaseCardProps> = ({
     const dwellTimerRef = useRef<NodeJS.Timeout | null>(null);
     const hasRecordedViewRef = useRef(false);
 
-    const isOwner = currentUser?.uid && currentProject.authorId === currentUser.uid;
+    const creatorId = getProjectCreatorId(currentProject);
+    const isOwner = Boolean(
+        currentUser?.uid && (
+            (creatorId && creatorId === currentUser.uid) ||
+            (currentProject.authorId && currentProject.authorId === currentUser.uid) ||
+            (currentProject.author?.uid && currentProject.author.uid === currentUser.uid) ||
+            (currentProject.author?.id && currentProject.author.id === currentUser.uid) ||
+            ((currentProject as any).userId && (currentProject as any).userId === currentUser.uid)
+        )
+    );
 
     // Synchronize props when parent updates without resetting media
     useEffect(() => {
@@ -232,6 +267,52 @@ const ShowcaseCardComponent: React.FC<ShowcaseCardProps> = ({
         }
     };
 
+    // Synchronize isFollowingCreator with incoming prop
+    useEffect(() => {
+        setIsFollowingCreator(Boolean(initialFollowingCreator));
+    }, [initialFollowingCreator]);
+
+    const isFollowPendingRef = useRef(false);
+
+    // Handle Follow / Unfollow Creator toggle
+    const handleToggleFollow = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!currentUser) {
+            navigate('/login');
+            return;
+        }
+
+        if (!creatorId || creatorId === currentUser.uid) return;
+        if (isFollowPendingRef.current) return;
+        isFollowPendingRef.current = true;
+
+        const willFollow = !isFollowingCreator;
+        setIsFollowingCreator(willFollow);
+        setIsMenuOpen(false);
+        const creatorName = currentProject.author?.name || 'CREATOR';
+        setFollowFeedback(willFollow ? `FOLLOWING ${creatorName.toUpperCase()}` : `UNFOLLOWED ${creatorName.toUpperCase()}`);
+        setTimeout(() => setFollowFeedback(null), 2500);
+
+        try {
+            if (onToggleFollowCreator) {
+                await onToggleFollowCreator(creatorId, willFollow);
+            } else {
+                await toggleFollowCreator({
+                    currentUser,
+                    currentUserProfile: null,
+                    targetCreatorId: creatorId,
+                });
+            }
+        } catch (err) {
+            console.error('[FOLLOW_TOGGLE_ERROR]', err);
+            setIsFollowingCreator(!willFollow);
+            setFollowFeedback('FAILED TO UPDATE FOLLOW');
+            setTimeout(() => setFollowFeedback(null), 2500);
+        } finally {
+            isFollowPendingRef.current = false;
+        }
+    };
+
     // Handle Share
     const handleShare = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -348,6 +429,11 @@ const ShowcaseCardComponent: React.FC<ShowcaseCardProps> = ({
 
     return (
         <div ref={cardRef} className="bg-[#0c0c0e] border border-zinc-800 p-5 mb-5 hover:border-zinc-700 transition-all font-mono relative">
+            {followFeedback && (
+                <div className="absolute top-2 right-12 z-20 bg-black/95 border border-zinc-700 px-2.5 py-1 text-[10px] font-mono text-zinc-200 tracking-wider shadow-xl animate-fade-in">
+                    // {followFeedback}
+                </div>
+            )}
             
             {/* Header: Author & Options */}
             <div className="flex items-center justify-between pb-3.5 border-b border-zinc-800/80">
@@ -407,46 +493,71 @@ const ShowcaseCardComponent: React.FC<ShowcaseCardProps> = ({
                         <ForwardIcon className="w-4 h-4" />
                     </button>
 
-                    <div className="relative">
+                    <div className="relative" ref={menuRef}>
                         <button 
-                            onClick={() => setIsMenuOpen(!isMenuOpen)}
-                            className="p-1.5 hover:text-white border border-transparent hover:border-zinc-800 transition-colors"
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setIsMenuOpen(!isMenuOpen);
+                            }}
+                            className="p-1.5 hover:text-white border border-transparent hover:border-zinc-800 transition-colors cursor-pointer"
                             title="More options"
                         >
                             <EllipsisVerticalIcon className="w-5 h-5" />
                         </button>
 
                         {isMenuOpen && (
-                            <div className="absolute right-0 mt-1 w-44 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono text-xs">
+                            <div className="absolute right-0 mt-1 w-48 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono text-xs">
                                 <button 
+                                    type="button"
                                     onClick={(e) => {
+                                        e.stopPropagation();
                                         setIsMenuOpen(false);
                                         handleShare(e);
                                     }}
-                                    className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-zinc-900 hover:text-white uppercase tracking-wider flex items-center gap-2"
+                                    className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-zinc-900 hover:text-white uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-colors"
                                 >
                                     <ForwardIcon className="w-3.5 h-3.5" />
                                     <span>Share Project</span>
                                 </button>
 
+                                {!isOwner && (
+                                    <button 
+                                        type="button"
+                                        onClick={handleToggleFollow}
+                                        className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-zinc-900 hover:text-white uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1 cursor-pointer transition-colors"
+                                    >
+                                        {isFollowingCreator ? (
+                                            <UserMinusIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                        ) : (
+                                            <UserPlusIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                        )}
+                                        <span>{isFollowingCreator ? 'Unfollow Creator' : 'Follow Creator'}</span>
+                                    </button>
+                                )}
+
                                 {isOwner && (
                                     <>
                                         <button 
-                                            onClick={() => {
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
                                                 setIsMenuOpen(false);
                                                 setIsEditModalOpen(true);
                                             }}
-                                            className="w-full text-left px-3 py-2 text-white hover:bg-zinc-900 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1"
+                                            className="w-full text-left px-3 py-2 text-white hover:bg-zinc-900 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1 cursor-pointer transition-colors"
                                         >
                                             <PencilSquareIcon className="w-3.5 h-3.5 text-zinc-400" />
                                             <span>// EDIT</span>
                                         </button>
                                         <button 
-                                            onClick={() => {
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
                                                 setIsMenuOpen(false);
                                                 setIsDeleteModalOpen(true);
                                             }}
-                                            className="w-full text-left px-3 py-2 text-red-400 hover:bg-red-950/40 hover:text-red-300 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1"
+                                            className="w-full text-left px-3 py-2 text-red-400 hover:bg-red-950/40 hover:text-red-300 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1 cursor-pointer transition-colors"
                                         >
                                             <TrashIcon className="w-3.5 h-3.5" />
                                             <span>// DELETE</span>

@@ -158,8 +158,20 @@ service cloud.firestore {
 
     match /follows/{followId} {
       allow read: if signedIn();
-      allow create: if owns('followerId');
-      allow delete: if existingOwner('followerId') || isModerator();
+      allow create: if signedIn()
+                    && (
+                      (('followerId' in request.resource.data) && request.resource.data.followerId == uid()) ||
+                      (('followerUid' in request.resource.data) && request.resource.data.followerUid == uid())
+                    )
+                    && (
+                      (!('followerId' in request.resource.data) || !('followingId' in request.resource.data) || request.resource.data.followerId != request.resource.data.followingId) &&
+                      (!('followerUid' in request.resource.data) || !('followingUid' in request.resource.data) || request.resource.data.followerUid != request.resource.data.followingUid)
+                    );
+      allow delete: if signedIn() && (
+                      (('followerId' in resource.data) && resource.data.followerId == uid()) ||
+                      (('followerUid' in resource.data) && resource.data.followerUid == uid()) ||
+                      isModerator()
+                    );
       allow update: if false;
     }
 

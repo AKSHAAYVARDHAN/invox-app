@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import type { Trend, MyCommunity, Conference, Event, HubConversation } from '../../types';
+import type { Trend, MyCommunity, Conference, Event, HubConversation, InvoxUser } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
+import { subscribeFollowedProfiles } from '../../services/connectionService';
 import GoForItFilterModal from '../spotlight/GoForItFilterModal';
 import { 
     MagnifyingGlassIcon, 
@@ -201,6 +203,8 @@ interface RightSidebarProps {
     setSpotlightBrowseState: (state: string | null) => void;
     showPinnedHighlights: boolean;
     setShowPinnedHighlights: (show: boolean) => void;
+    showPinnedProfiles?: boolean;
+    setShowPinnedProfiles?: (show: boolean) => void;
     goforitFilters: { company: string; skills: string; location: string; opportunityType: string; category: string; experienceLevel: string; searchTerm: string; };
     setGoforitFilters: (filters: { company: string; skills: string; location: string; opportunityType: string; category: string; experienceLevel: string; searchTerm: string; }) => void;
     setIsFilterModalOpen: (isOpen: boolean) => void;
@@ -497,19 +501,49 @@ const TrendzSidebar: React.FC<Pick<RightSidebarProps, 'followedDomainsFilter' | 
     );
 };
 
-const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' | 'setSpotlightBrowseState' | 'showPinnedHighlights' | 'setShowPinnedHighlights' | 'variant' | 'collabManagementView' | 'setCollabManagementView'>> = ({ 
+const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' | 'setSpotlightBrowseState' | 'showPinnedHighlights' | 'setShowPinnedHighlights' | 'showPinnedProfiles' | 'setShowPinnedProfiles' | 'variant' | 'collabManagementView' | 'setCollabManagementView'>> = ({ 
     spotlightBrowseState, 
     setSpotlightBrowseState, 
     showPinnedHighlights, 
     setShowPinnedHighlights, 
+    showPinnedProfiles,
+    setShowPinnedProfiles,
     variant,
     collabManagementView,
     setCollabManagementView
 }) => {
+    const { currentUser } = useAuth();
+    const navigate = ReactRouterDOM.useNavigate();
     const [searchParams, setSearchParams] = ReactRouterDOM.useSearchParams();
     const [isBrowsingView, setIsBrowsingView] = useState(false);
     const [isPinnedView, setIsPinnedView] = useState(false);
     const [pinnedViewMode, setPinnedViewMode] = useState<'options' | 'profiles'>('options');
+    const [followedProfiles, setFollowedProfiles] = useState<InvoxUser[]>([]);
+    const [isLoadingProfiles, setIsLoadingProfiles] = useState(false);
+
+    useEffect(() => {
+        if (!currentUser?.uid) {
+            setFollowedProfiles([]);
+            setIsLoadingProfiles(false);
+            return;
+        }
+
+        setIsLoadingProfiles(true);
+        const unsubscribe = subscribeFollowedProfiles(
+            currentUser.uid,
+            (profiles) => {
+                setFollowedProfiles(profiles);
+                setIsLoadingProfiles(false);
+            },
+            (err) => {
+                console.error('[SUBSCRIBE_FOLLOWED_PROFILES_ERROR]', err);
+                setIsLoadingProfiles(false);
+            }
+        );
+
+        return () => unsubscribe();
+    }, [currentUser?.uid]);
+
     const activeCollabView = collabManagementView !== undefined && collabManagementView !== null 
         ? collabManagementView 
         : (searchParams.get('collabView') === 'incoming' || searchParams.get('collabView') === 'active' || searchParams.get('collabView') === 'my_applications' || searchParams.get('collabView') === 'inbox' || searchParams.get('collabView') === 'teams'
@@ -526,7 +560,8 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
         setPinnedViewMode('options');
         setSpotlightBrowseState(null);
         setShowPinnedHighlights(false);
-    }, [variant, setSpotlightBrowseState, setShowPinnedHighlights]);
+        setShowPinnedProfiles?.(false);
+    }, [variant, setSpotlightBrowseState, setShowPinnedHighlights, setShowPinnedProfiles]);
 
     useEffect(() => {
         if (!isBrowsingView) {
@@ -537,16 +572,9 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
     useEffect(() => {
         if (!isPinnedView) {
             setPinnedViewMode('options');
+            setShowPinnedProfiles?.(false);
         }
-    }, [isPinnedView]);
-
-    const pinnedUsers = [
-        { name: 'Elon Musk', handle: '@elonmusk', avatarUrl: 'https://picsum.photos/seed/elon/200' },
-        { name: 'Satya Nadella', handle: '@satyanadella', avatarUrl: 'https://picsum.photos/seed/satya/200' },
-        { name: 'Ada Lovelace', handle: '@ada', avatarUrl: 'https://picsum.photos/seed/ada/200' },
-        { name: 'Crash Adams', handle: '@crashadams', avatarUrl: 'https://picsum.photos/id/10/200/200' },
-        { name: 'Marco Rossi', handle: '@marcorossi', avatarUrl: 'https://picsum.photos/id/12/200/200' },
-    ];
+    }, [isPinnedView, setShowPinnedProfiles]);
 
     const browseDescription = variant === 'spotlight-collabs' 
         ? "Explore collaboration opportunities and connect with builders."
@@ -597,7 +625,7 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                         {pinnedViewMode === 'options' ? (
                             <>
                                 <div className="flex items-center justify-between px-4">
-                                    <button onClick={() => { setIsPinnedView(false); setShowPinnedHighlights(false); }} className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors">
+                                    <button onClick={() => { setIsPinnedView(false); setShowPinnedHighlights(false); setShowPinnedProfiles?.(false); }} className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors cursor-pointer">
                                         <ArrowLeftIcon className="w-4 h-4" />
                                         <span>// PINNED</span>
                                     </button>
@@ -607,8 +635,11 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                     <p className="text-xs text-zinc-400 font-mono mb-4">Explore projects and profiles from creators you've pinned.</p>
                                     <div className="space-y-2">
                                         <button
-                                            onClick={() => setShowPinnedHighlights(true)}
-                                            className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${
+                                            onClick={() => {
+                                                setShowPinnedHighlights(true);
+                                                setShowPinnedProfiles?.(false);
+                                            }}
+                                            className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border cursor-pointer ${
                                                 showPinnedHighlights
                                                     ? 'bg-[#18181d] text-white border-zinc-700 font-bold'
                                                     : 'bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600'
@@ -618,8 +649,16 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                             <span>PINNED_HIGHLIGHTS</span>
                                         </button>
                                         <button
-                                            onClick={() => { setPinnedViewMode('profiles'); setShowPinnedHighlights(false); }}
-                                            className="w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600"
+                                            onClick={() => { 
+                                                setPinnedViewMode('profiles'); 
+                                                setShowPinnedHighlights(false); 
+                                                setShowPinnedProfiles?.(true); 
+                                            }}
+                                            className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border cursor-pointer ${
+                                                showPinnedProfiles
+                                                    ? 'bg-[#18181d] text-white border-zinc-700 font-bold'
+                                                    : 'bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600'
+                                            }`}
                                         >
                                             <ProfileIcon className="w-4 h-4" />
                                             <span>PINNED_PROFILES</span>
@@ -630,23 +669,91 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                         ) : (
                             <>
                                 <div className="flex items-center justify-between px-4">
-                                    <button onClick={() => setPinnedViewMode('options')} className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors">
+                                    <button onClick={() => { setPinnedViewMode('options'); setShowPinnedProfiles?.(false); }} className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors cursor-pointer">
                                         <ArrowLeftIcon className="w-4 h-4" />
                                         <span>// PINNED_PROFILES</span>
                                     </button>
+                                    {followedProfiles.length > 0 && (
+                                        <span className="font-mono text-[10px] text-zinc-400 border border-zinc-800 bg-black px-2 py-0.5">
+                                            // {followedProfiles.length} {followedProfiles.length === 1 ? 'CREATOR' : 'CREATORS'}
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="bg-[#0c0c0e] border border-zinc-800 p-4 mx-4">
-                                    <div className="space-y-3">
-                                        {pinnedUsers.map((user, index) => (
-                                            <div key={index} className="flex items-center justify-between border-b border-zinc-900 pb-2">
-                                                <div className="flex items-center gap-2.5">
-                                                    <img src={user.avatarUrl} onError={handleImageError} alt={user.name} className="w-7 h-7 object-cover border border-zinc-800" />
-                                                    <p className="font-mono text-xs text-white">{user.name}</p>
-                                                </div>
-                                                <button className="bg-zinc-900 text-zinc-300 border border-zinc-750 hover:border-zinc-500 px-2 py-0.5 font-mono text-[10px] uppercase hover:text-white transition-colors">VIEW</button>
+                                    {!currentUser ? (
+                                        <div className="py-6 text-center font-mono text-xs text-zinc-500 space-y-3">
+                                            <p className="text-zinc-300 font-bold text-xs">// SIGN IN REQUIRED</p>
+                                            <p className="text-zinc-500 text-[11px] leading-relaxed">Sign in to view and manage your followed creators.</p>
+                                            <button
+                                                onClick={() => navigate('/login')}
+                                                className="px-4 py-2 bg-white text-black font-bold uppercase text-xs hover:bg-zinc-200 transition-colors cursor-pointer"
+                                            >
+                                                SIGN IN
+                                            </button>
+                                        </div>
+                                    ) : isLoadingProfiles ? (
+                                        <div className="py-8 text-center font-mono text-xs text-zinc-500 space-y-2">
+                                            <div className="w-5 h-5 border border-zinc-600 border-t-white animate-spin mx-auto" />
+                                            <p className="text-[10px] uppercase tracking-widest text-zinc-500">// LOADING PROFILES...</p>
+                                        </div>
+                                    ) : followedProfiles.length === 0 ? (
+                                        <div className="py-6 text-center font-mono text-xs space-y-3">
+                                            <p className="text-zinc-300 font-bold text-xs">// NO FOLLOWED CREATORS</p>
+                                            <p className="text-zinc-400 text-xs leading-relaxed">
+                                                Your network starts here. Follow creators whose work interests you.
+                                            </p>
+                                            <div className="pt-2">
+                                                <button
+                                                    onClick={() => {
+                                                        setIsPinnedView(false);
+                                                        setShowPinnedProfiles?.(false);
+                                                        setShowPinnedHighlights(false);
+                                                        navigate('/spotlight?tab=Showcase');
+                                                    }}
+                                                    className="w-full py-2 bg-white text-black font-bold uppercase text-xs hover:bg-zinc-200 transition-colors shadow-sm cursor-pointer"
+                                                >
+                                                    BROWSE SHOWCASE
+                                                </button>
                                             </div>
-                                        ))}
-                                    </div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3 max-h-[60vh] overflow-y-auto no-scrollbar pr-0.5">
+                                            {followedProfiles.map((user) => {
+                                                const userDisplayName = user.displayName || user.username || 'Creator';
+                                                const userAvatar = user.photoURL || `https://picsum.photos/seed/${user.uid}/200`;
+                                                return (
+                                                    <div key={user.uid} className="flex items-center justify-between border-b border-zinc-900 pb-2.5 last:border-0 last:pb-0">
+                                                        <div 
+                                                            onClick={() => navigate(`/profile/${user.uid}`)}
+                                                            className="flex items-center gap-2.5 min-w-0 pr-2 cursor-pointer group"
+                                                        >
+                                                            <img 
+                                                                src={userAvatar} 
+                                                                onError={handleImageError} 
+                                                                alt={userDisplayName} 
+                                                                className="w-8 h-8 object-cover border border-zinc-800 flex-shrink-0 group-hover:border-zinc-500 transition-colors" 
+                                                            />
+                                                            <div className="min-w-0">
+                                                                <p className="font-mono text-xs text-white truncate font-medium group-hover:text-zinc-300 transition-colors">
+                                                                    {userDisplayName}
+                                                                </p>
+                                                                {user.username && (
+                                                                    <p className="font-mono text-[10px] text-zinc-500 truncate">@{user.username}</p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => navigate(`/profile/${user.uid}`)}
+                                                            className="bg-zinc-900 text-zinc-300 border border-zinc-750 hover:border-zinc-500 hover:text-white px-2.5 py-1 font-mono text-[10px] uppercase transition-colors flex-shrink-0 cursor-pointer"
+                                                            title={`View ${userDisplayName}'s profile`}
+                                                        >
+                                                            VIEW
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             </>
                         )}
@@ -676,8 +783,8 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                         ) : (
                             <div className="px-4 flex flex-col gap-2.5">
                                 <button
-                                    onClick={() => { setIsBrowsingView(true); setShowPinnedHighlights(false); }}
-                                    className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800/90 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors"
+                                    onClick={() => { setIsBrowsingView(true); setShowPinnedHighlights(false); setShowPinnedProfiles?.(false); }}
+                                    className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800/90 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors cursor-pointer"
                                 >
                                     <div className="flex items-center gap-2">
                                         <MagnifyingGlassIcon className="w-4 h-4 text-zinc-500" />
@@ -687,8 +794,8 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                 </button>
                                 {variant !== 'spotlight-collabs' && (
                                     <button
-                                        onClick={() => { setIsPinnedView(true); setShowPinnedHighlights(false); }}
-                                        className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800/90 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors"
+                                        onClick={() => { setIsPinnedView(true); setShowPinnedHighlights(false); setShowPinnedProfiles?.(false); }}
+                                        className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800/90 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors cursor-pointer"
                                     >
                                         <div className="flex items-center gap-2">
                                             <BookmarkIcon className="w-4 h-4 text-zinc-500" />
@@ -1703,6 +1810,8 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ variant, ...props }) => {
                     setSpotlightBrowseState={props.setSpotlightBrowseState} 
                     showPinnedHighlights={props.showPinnedHighlights} 
                     setShowPinnedHighlights={props.setShowPinnedHighlights} 
+                    showPinnedProfiles={props.showPinnedProfiles}
+                    setShowPinnedProfiles={props.setShowPinnedProfiles}
                     collabManagementView={props.collabManagementView}
                     setCollabManagementView={props.setCollabManagementView}
                  />;

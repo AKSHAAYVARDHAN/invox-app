@@ -77,12 +77,14 @@ import {
     subscribeToUserSavedPostIds,
     getShowcaseProjectById
 } from '../services/postService';
+import { subscribeFollowedUserIds, toggleFollowCreator, getProjectCreatorId } from '../services/connectionService';
 import { CollabManagementHub } from '../components/spotlight/CollabManagementHub';
 import { CollabMessageBoardView } from '../components/spotlight/CollabMessageBoardView';
 import { CollabTeamsView } from '../components/spotlight/CollabTeamsView';
 import { ShowcaseCard } from '../components/spotlight/ShowcaseCard';
 import { CreateShowcaseModal } from '../components/uploads/CreateShowcaseModal';
 
+export { getProjectCreatorId };
 
 const formatNumber = (num: number) => {
     if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
@@ -93,7 +95,8 @@ const formatNumber = (num: number) => {
 const mockProjects: Project[] = [
     {
         id: 'proj-new-4',
-        author: { name: 'Aisha Bello', avatarUrl: 'https://picsum.photos/id/22/200/200' },
+        authorId: 'seed_abello',
+        author: { name: 'Aisha Bello', username: 'abello', id: 'seed_abello', uid: 'seed_abello', avatarUrl: 'https://picsum.photos/id/22/200/200', isVerified: true },
         aiSummary: 'Open-source toolkit for detecting deepfakes.',
         description: 'A powerful and accessible library for developers and researchers to detect and analyze manipulated media. Using advanced deep learning models, our toolkit aims to combat misinformation by providing reliable deepfake detection capabilities.',
         mediaUrl: 'https://images.unsplash.com/photo-1504639725590-34d0984388bd?q=80&w=1974&auto=format&fit=crop',
@@ -104,7 +107,8 @@ const mockProjects: Project[] = [
     },
     {
         id: 'proj-new-3',
-        author: { name: 'Kenji Tanaka', avatarUrl: 'https://picsum.photos/id/21/200/200', isVerified: true },
+        authorId: 'seed_ktanaka',
+        author: { name: 'Kenji Tanaka', username: 'ktanaka', id: 'seed_ktanaka', uid: 'seed_ktanaka', avatarUrl: 'https://picsum.photos/id/21/200/200', isVerified: true },
         aiSummary: 'Gamified language learning app using VR.',
         description: 'An immersive virtual reality experience that makes learning a new language feel like playing a game. Users can explore virtual worlds, interact with AI-powered native speakers, and complete quests to master vocabulary and grammar.',
         mediaUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
@@ -116,7 +120,8 @@ const mockProjects: Project[] = [
     },
     {
         id: 'proj1',
-        author: { name: 'Crash Adams', avatarUrl: 'https://picsum.photos/id/10/200/200', isVerified: true },
+        authorId: 'seed_cadams',
+        author: { name: 'Crash Adams', username: 'cadams', id: 'seed_cadams', uid: 'seed_cadams', avatarUrl: 'https://picsum.photos/id/10/200/200', isVerified: true },
         aiSummary: 'A decentralised social network with ethical AI.',
         description: 'Building a next-gen social platform on Web3 principles, ensuring user data privacy and content moderation powered by a transparent, ethical AI framework.',
         mediaUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
@@ -128,7 +133,8 @@ const mockProjects: Project[] = [
     },
     {
         id: 'proj3',
-        author: { name: 'Marco Rossi', avatarUrl: 'https://picsum.photos/id/12/200/200' },
+        authorId: 'seed_mrossi',
+        author: { name: 'Marco Rossi', username: 'mrossi', id: 'seed_mrossi', uid: 'seed_mrossi', avatarUrl: 'https://picsum.photos/id/12/200/200' },
         aiSummary: 'Next-gen mobile app development framework.',
         description: 'A cross-platform framework designed for speed, performance, and a seamless developer experience. Build beautiful, native apps with a single codebase.',
         mediaUrl: 'https://images.unsplash.com/photo-1551650975-87deedd944c3?q=80&w=1974&auto=format&fit=crop',
@@ -139,7 +145,8 @@ const mockProjects: Project[] = [
     },
     {
         id: 'proj4',
-        author: { name: 'Dr. Evelyn Reed', avatarUrl: 'https://picsum.photos/id/13/200/200' },
+        authorId: 'seed_ereed',
+        author: { name: 'Dr. Evelyn Reed', username: 'ereed', id: 'seed_ereed', uid: 'seed_ereed', avatarUrl: 'https://picsum.photos/id/13/200/200' },
         aiSummary: 'Ethical AI: Bias Detection in Language Models.',
         description: 'This project introduces a novel framework for identifying and mitigating biases in large-scale language models, ensuring fairer and more equitable AI systems.',
         mediaUrl: 'https://images.unsplash.com/photo-1620712943543-95fc6ih-p962453a?q=80&w=2070&auto=format&fit=crop',
@@ -150,7 +157,8 @@ const mockProjects: Project[] = [
     },
     {
         id: 'proj6',
-        author: { name: 'Chloe Bennet', avatarUrl: 'https://picsum.photos/id/15/200/200', isVerified: true },
+        authorId: 'seed_chloeb',
+        author: { name: 'Chloe Bennet', username: 'chloeb', id: 'seed_chloeb', uid: 'seed_chloeb', avatarUrl: 'https://picsum.photos/id/15/200/200', isVerified: true },
         aiSummary: 'A dynamic design system for modern web apps.',
         description: 'An open-source design system built with accessibility and scalability in mind. It includes a comprehensive set of React components and design tokens.',
         mediaUrl: 'https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?q=80&w=2070&auto=format&fit=crop',
@@ -161,7 +169,8 @@ const mockProjects: Project[] = [
     },
     {
         id: 'proj7',
-        author: { name: 'Liam Johnson', avatarUrl: 'https://picsum.photos/id/16/200/200' },
+        authorId: 'seed_ljohnson',
+        author: { name: 'Liam Johnson', username: 'ljohnson', id: 'seed_ljohnson', uid: 'seed_ljohnson', avatarUrl: 'https://picsum.photos/id/16/200/200' },
         aiSummary: 'A real-time collaboration tool for developers.',
         description: 'A platform that allows developers to code, chat, and debug together in a shared environment, boosting productivity for remote teams.',
         mediaUrl: 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?q=80&w=2070&auto=format&fit=crop',
@@ -1264,8 +1273,10 @@ interface PinnedHighlightsViewProps {
     allProjects: Project[];
     userSavedIds: Set<string>;
     userLikedIds: Set<string>;
+    userFollowingIds?: Set<string>;
     onBackToShowcase: () => void;
     onBrowseShowcase: () => void;
+    onToggleFollowCreator?: (creatorId: string, willFollow: boolean) => Promise<void> | void;
     onBookmarkToggle: (saved: boolean, projectId: string) => void;
     onProjectDeleted: (id: string) => void;
     onProjectUpdated: (proj: Project) => void;
@@ -1276,8 +1287,10 @@ const PinnedHighlightsView: React.FC<PinnedHighlightsViewProps> = ({
     allProjects,
     userSavedIds,
     userLikedIds,
+    userFollowingIds = new Set(),
     onBackToShowcase,
     onBrowseShowcase,
+    onToggleFollowCreator,
     onBookmarkToggle,
     onProjectDeleted,
     onProjectUpdated,
@@ -1575,18 +1588,310 @@ const PinnedHighlightsView: React.FC<PinnedHighlightsViewProps> = ({
             ) : (
                 /* Populated list */
                 <div className="space-y-4">
-                    {filteredSavedProjects.map(project => (
-                        <ShowcaseCard
-                            key={project.id}
-                            project={project}
-                            initialLiked={userLikedIds.has(project.id)}
-                            initialSaved={true}
-                            onBookmarkToggle={onBookmarkToggle}
-                            onDeleted={onProjectDeleted}
-                            onUpdated={onProjectUpdated}
-                            onFilterByCategory={setActiveCategory}
+                    {filteredSavedProjects.map(project => {
+                        const creatorId = getProjectCreatorId(project);
+                        return (
+                            <ShowcaseCard
+                                key={project.id}
+                                project={project}
+                                initialLiked={userLikedIds.has(project.id)}
+                                initialSaved={true}
+                                initialFollowingCreator={creatorId ? userFollowingIds.has(creatorId) : false}
+                                onToggleFollowCreator={onToggleFollowCreator}
+                                onBookmarkToggle={onBookmarkToggle}
+                                onDeleted={onProjectDeleted}
+                                onUpdated={onProjectUpdated}
+                                onFilterByCategory={setActiveCategory}
+                            />
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};
+
+interface PinnedProfilesFeedViewProps {
+    loading: boolean;
+    allProjects: Project[];
+    userFollowingIds: Set<string>;
+    userLikedIds: Set<string>;
+    userSavedIds: Set<string>;
+    onBackToShowcase: () => void;
+    onBrowseShowcase: () => void;
+    onToggleFollowCreator: (creatorId: string, willFollow: boolean) => Promise<void> | void;
+    onBookmarkToggle: (saved: boolean, projectId: string) => void;
+    onProjectDeleted: (id: string) => void;
+    onProjectUpdated: (proj: Project) => void;
+}
+
+const PinnedProfilesFeedView: React.FC<PinnedProfilesFeedViewProps> = ({
+    loading: initialLoading,
+    allProjects,
+    userFollowingIds,
+    userLikedIds,
+    userSavedIds,
+    onBackToShowcase,
+    onBrowseShowcase,
+    onToggleFollowCreator,
+    onBookmarkToggle,
+    onProjectDeleted,
+    onProjectUpdated,
+}) => {
+    const { currentUser } = useAuth();
+    const navigate = ReactRouterDOM.useNavigate();
+    const { domainSelections, setDomainSelection } = useFilters();
+    const [searchTerm, setSearchTerm] = useState('');
+    const [activeCategory, setActiveCategory] = useState('All');
+
+    const categoryFilters = [
+        'All',
+        'Design',
+        'App Development',
+        'Machine Learning',
+        'Cybersecurity',
+        'Web3',
+        'Hardware',
+        'Gaming',
+        'Fintech'
+    ];
+
+    // Filter projects strictly authored by creators the current user follows
+    const followedProjects = React.useMemo(() => {
+        if (!currentUser?.uid || userFollowingIds.size === 0) return [];
+
+        return allProjects.filter(project => {
+            const creatorId = getProjectCreatorId(project);
+            return creatorId && userFollowingIds.has(creatorId);
+        }).sort((a, b) => {
+            const timeA = new Date(a.createdAt || 0).getTime();
+            const timeB = new Date(b.createdAt || 0).getTime();
+            return timeB - timeA;
+        });
+    }, [allProjects, userFollowingIds, currentUser?.uid]);
+
+    // Apply category, domain, and search filters
+    const filteredFollowedProjects = React.useMemo(() => {
+        const selectedDomains = domainSelections['spotlight-pinned-profiles'] || [];
+        return followedProjects.filter(project => {
+            // Category filter
+            if (activeCategory !== 'All') {
+                const catLower = activeCategory.toLowerCase();
+                const projCat = (project.category || '').toLowerCase();
+                const projDom = ((project as any).domain || '').toLowerCase();
+                if (!projCat.includes(catLower) && !projDom.includes(catLower)) {
+                    return false;
+                }
+            }
+
+            // Domain filter
+            if (selectedDomains.length > 0) {
+                const projCat = (project.category || '').toLowerCase();
+                const projDom = ((project as any).domain || '').toLowerCase();
+                const matchesDomain = selectedDomains.some(d => {
+                    const dl = d.toLowerCase();
+                    return projCat.includes(dl) || projDom.includes(dl);
+                });
+                if (!matchesDomain) return false;
+            }
+
+            // Search filter
+            if (searchTerm.trim()) {
+                const term = searchTerm.toLowerCase();
+                const title = (project.title || project.name || '').toLowerCase();
+                const summary = (project.aiSummary || project.oneLine || '').toLowerCase();
+                const desc = (project.description || '').toLowerCase();
+                const authorName = (project.author?.name || '').toLowerCase();
+                const tags = Array.isArray(project.tags) ? project.tags.join(' ').toLowerCase() : '';
+
+                return (
+                    title.includes(term) ||
+                    summary.includes(term) ||
+                    desc.includes(term) ||
+                    authorName.includes(term) ||
+                    tags.includes(term)
+                );
+            }
+
+            return true;
+        });
+    }, [followedProjects, activeCategory, domainSelections, searchTerm]);
+
+    return (
+        <div className="space-y-4">
+            {/* Header banner */}
+            <div className="bg-[#0c0c0e] border border-zinc-800 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <button
+                        onClick={onBackToShowcase}
+                        className="text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider flex items-center gap-1.5 transition-colors mb-2.5 cursor-pointer"
+                    >
+                        <ArrowLeftIcon className="w-3.5 h-3.5" />
+                        <span>// BACK TO SHOWCASE</span>
+                    </button>
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">// PINNED_FEED</span>
+                    <h2 className="text-xl font-bold font-mono text-white tracking-wide mt-0.5">PINNED_PROFILES</h2>
+                    <p className="text-xs font-mono text-zinc-400 mt-1">Showcase projects authored by creators you follow.</p>
+                </div>
+                {currentUser && userFollowingIds.size > 0 && (
+                    <div className="sm:self-end flex items-center gap-2">
+                        <span className="font-mono text-xs text-zinc-300 bg-black border border-zinc-800 px-3 py-1.5 inline-block">
+                            // FOLLOWING {userFollowingIds.size} {userFollowingIds.size === 1 ? 'CREATOR' : 'CREATORS'}
+                        </span>
+                    </div>
+                )}
+            </div>
+
+            {/* Controls only shown if user is authenticated and follows creators */}
+            {currentUser && userFollowingIds.size > 0 && (
+                <>
+                    {/* Search Bar */}
+                    <div className="relative">
+                        <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                        <input
+                            type="search"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="SEARCH PROJECTS FROM FOLLOWED CREATORS..."
+                            className="w-full bg-[#0c0c0e] border border-zinc-800 py-2.5 pl-10 pr-8 font-mono text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
                         />
-                    ))}
+                        {searchTerm && (
+                            <button
+                                onClick={() => setSearchTerm('')}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white text-xs px-1 cursor-pointer"
+                                title="Clear search"
+                            >
+                                ✕
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Category Filter Bar */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-2 no-scrollbar">
+                        {categoryFilters.map(category => (
+                            <button
+                                key={category}
+                                onClick={() => setActiveCategory(category)}
+                                className={`px-3 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider whitespace-nowrap transition-all duration-150 border cursor-pointer ${
+                                    activeCategory === category
+                                        ? 'bg-[#18181d] text-white border-zinc-700 font-bold'
+                                        : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
+                                }`}
+                            >
+                                {category}
+                            </button>
+                        ))}
+                    </div>
+
+                    <DomainFilter
+                        domains={spotlightDomains}
+                        selectedDomains={domainSelections['spotlight-pinned-profiles'] || []}
+                        onSelectionChange={(domains) => setDomainSelection('spotlight-pinned-profiles', domains)}
+                    />
+                </>
+            )}
+
+            {/* Content states */}
+            {!currentUser ? (
+                /* Unauthenticated state */
+                <div className="text-center py-16 text-zinc-400 font-mono text-xs border border-zinc-800 bg-[#0c0c0e] p-8 space-y-4">
+                    <p className="text-zinc-200 text-sm font-semibold tracking-wide">// AUTHENTICATION REQUIRED</p>
+                    <p className="text-zinc-500 max-w-md mx-auto leading-relaxed">
+                        Please sign in to view projects from creators you follow.
+                    </p>
+                    <div className="pt-2">
+                        <button
+                            onClick={() => navigate('/login')}
+                            className="px-6 py-2.5 bg-white text-black font-mono text-xs font-bold uppercase tracking-wider hover:bg-zinc-200 transition-colors shadow-sm cursor-pointer"
+                        >
+                            SIGN IN
+                        </button>
+                    </div>
+                </div>
+            ) : initialLoading ? (
+                /* Loading state */
+                <div className="space-y-4">
+                    <ProjectCardSkeleton />
+                    <ProjectCardSkeleton />
+                </div>
+            ) : userFollowingIds.size === 0 ? (
+                /* Empty state: User follows nobody */
+                <div className="text-center py-16 text-zinc-400 font-mono text-xs border border-zinc-800 bg-[#0c0c0e] p-8 space-y-3">
+                    <p className="text-zinc-200 text-sm font-semibold tracking-wide">// NO FOLLOWED CREATORS YET</p>
+                    <p className="text-zinc-400 max-w-md mx-auto leading-relaxed">
+                        Your network starts here. Follow creators whose work interests you.
+                    </p>
+                    <div className="pt-3">
+                        <button
+                            onClick={onBrowseShowcase}
+                            className="px-5 py-2.5 bg-white text-black font-mono text-xs font-bold uppercase tracking-wider hover:bg-zinc-200 transition-colors shadow-sm active:scale-[0.99] cursor-pointer"
+                        >
+                            BROWSE SHOWCASE
+                        </button>
+                    </div>
+                </div>
+            ) : followedProjects.length === 0 ? (
+                /* Empty state: Follows creators, but they haven't posted projects */
+                <div className="text-center py-16 text-zinc-400 font-mono text-xs border border-zinc-800 bg-[#0c0c0e] p-8 space-y-3">
+                    <p className="text-zinc-200 text-sm font-semibold tracking-wide">// NO PROJECTS FROM FOLLOWED CREATORS</p>
+                    <p className="text-zinc-500 max-w-md mx-auto leading-relaxed">
+                        None of the creators you follow have published Showcase projects yet. Explore Showcase to discover more creators.
+                    </p>
+                    <div className="pt-3">
+                        <button
+                            onClick={onBrowseShowcase}
+                            className="px-5 py-2.5 bg-white text-black font-mono text-xs font-bold uppercase tracking-wider hover:bg-zinc-200 transition-colors shadow-sm active:scale-[0.99] cursor-pointer"
+                        >
+                            BROWSE SHOWCASE
+                        </button>
+                    </div>
+                </div>
+            ) : filteredFollowedProjects.length === 0 ? (
+                /* Empty state: Search / Category yielded 0 results */
+                <div className="text-center py-16 text-zinc-400 font-mono text-xs border border-zinc-800 bg-[#0c0c0e] p-8 space-y-3">
+                    <p className="text-zinc-200 text-sm font-semibold tracking-wide">// NO MATCHING PROJECTS</p>
+                    <p className="text-zinc-500 max-w-md mx-auto leading-relaxed">
+                        No projects from followed creators match your search query or selected category.
+                    </p>
+                    <div className="flex items-center justify-center gap-3 pt-3">
+                        {searchTerm && (
+                            <button
+                                onClick={() => setSearchTerm('')}
+                                className="px-4 py-2 border border-zinc-700 bg-zinc-900 text-white font-mono text-xs hover:bg-zinc-800 transition-colors cursor-pointer"
+                            >
+                                Clear Search
+                            </button>
+                        )}
+                        {activeCategory !== 'All' && (
+                            <button
+                                onClick={() => setActiveCategory('All')}
+                                className="px-4 py-2 border border-zinc-700 bg-zinc-900 text-white font-mono text-xs hover:bg-zinc-800 transition-colors cursor-pointer"
+                            >
+                                Show All Categories
+                            </button>
+                        )}
+                    </div>
+                </div>
+            ) : (
+                /* Populated list */
+                <div className="space-y-4">
+                    {filteredFollowedProjects.map(project => {
+                        const creatorId = getProjectCreatorId(project);
+                        return (
+                            <ShowcaseCard
+                                key={project.id}
+                                project={project}
+                                initialLiked={userLikedIds.has(project.id)}
+                                initialSaved={userSavedIds.has(project.id)}
+                                initialFollowingCreator={creatorId ? userFollowingIds.has(creatorId) : true}
+                                onToggleFollowCreator={onToggleFollowCreator}
+                                onBookmarkToggle={onBookmarkToggle}
+                                onDeleted={onProjectDeleted}
+                                onUpdated={onProjectUpdated}
+                                onFilterByCategory={setActiveCategory}
+                            />
+                        );
+                    })}
                 </div>
             )}
         </div>
@@ -1603,6 +1908,8 @@ interface ShowcaseViewProps {
     onOpenCreate: () => void;
     userLikedIds: Set<string>;
     userSavedIds: Set<string>;
+    userFollowingIds?: Set<string>;
+    onToggleFollowCreator?: (creatorId: string, willFollow: boolean) => Promise<void> | void;
     onProjectDeleted: (id: string) => void;
     onProjectUpdated: (proj: Project) => void;
     onFilterByCategory: (cat: string) => void;
@@ -1619,6 +1926,8 @@ const ShowcaseView: React.FC<ShowcaseViewProps> = React.memo(({
     onOpenCreate,
     userLikedIds,
     userSavedIds,
+    userFollowingIds,
+    onToggleFollowCreator,
     onProjectDeleted,
     onProjectUpdated,
     onFilterByCategory,
@@ -1705,18 +2014,23 @@ const ShowcaseView: React.FC<ShowcaseViewProps> = React.memo(({
                     <ProjectCardSkeleton />
                 </>
             ) : projects.length > 0 ? (
-                projects.map(project => (
-                    <ShowcaseCard
-                        key={project.id}
-                        project={project}
-                        initialLiked={userLikedIds.has(project.id)}
-                        initialSaved={userSavedIds.has(project.id)}
-                        onDeleted={onProjectDeleted}
-                        onUpdated={onProjectUpdated}
-                        onFilterByCategory={onFilterByCategory}
-                        onBookmarkToggle={onBookmarkToggle}
-                    />
-                ))
+                projects.map(project => {
+                    const creatorId = getProjectCreatorId(project);
+                    return (
+                        <ShowcaseCard
+                            key={project.id}
+                            project={project}
+                            initialLiked={userLikedIds.has(project.id)}
+                            initialSaved={userSavedIds.has(project.id)}
+                            initialFollowingCreator={creatorId ? (userFollowingIds?.has(creatorId) ?? false) : false}
+                            onToggleFollowCreator={onToggleFollowCreator}
+                            onDeleted={onProjectDeleted}
+                            onUpdated={onProjectUpdated}
+                            onFilterByCategory={onFilterByCategory}
+                            onBookmarkToggle={onBookmarkToggle}
+                        />
+                    );
+                })
             ) : (
                 <div className="text-center py-16 text-zinc-400 font-mono text-xs border border-zinc-800 bg-[#0c0c0e] p-8 space-y-3">
                     <p className="text-zinc-200 text-sm font-semibold tracking-wide">// NO_SHOWCASE_PROJECTS_FOUND</p>
@@ -1755,13 +2069,27 @@ export const SpotlightPage = () => {
         setSpotlightBrowseState: (filter: string | null) => void;
         showPinnedHighlights: boolean;
         setShowPinnedHighlights: (show: boolean) => void;
+        showPinnedProfiles?: boolean;
+        setShowPinnedProfiles?: (show: boolean) => void;
         goforitFilters: { company: string, skills: string, location: string, opportunityType: string, category: string, experienceLevel: string, searchTerm: string };
         refreshKey: number;
         savedOfferIds: string[];
         toggleSaveOffer: (offerId: string) => void;
     }>();
 
-    const { setRightSidebarVariant, spotlightBrowseState, setSpotlightBrowseState, showPinnedHighlights, setShowPinnedHighlights, goforitFilters, refreshKey, savedOfferIds = [], toggleSaveOffer } = outletContext || {};
+    const {
+        setRightSidebarVariant,
+        spotlightBrowseState,
+        setSpotlightBrowseState,
+        showPinnedHighlights,
+        setShowPinnedHighlights,
+        showPinnedProfiles = false,
+        setShowPinnedProfiles,
+        goforitFilters,
+        refreshKey,
+        savedOfferIds = [],
+        toggleSaveOffer
+    } = outletContext || {};
     const { domainSelections, setDomainSelection } = useFilters();
 
     const collabViewParam = searchParams.get('collabView');
@@ -1869,6 +2197,7 @@ export const SpotlightPage = () => {
     const [showcaseSearchTerm, setShowcaseSearchTerm] = useState('');
     const [userLikedIds, setUserLikedIds] = useState<Set<string>>(new Set());
     const [userSavedIds, setUserSavedIds] = useState<Set<string>>(new Set());
+    const [userFollowingIds, setUserFollowingIds] = useState<Set<string>>(new Set());
 
     const handleShowcaseDeleted = React.useCallback((deletedId: string) => {
         setLiveShowcaseProjects(prev => prev.filter(p => p.id !== deletedId));
@@ -1924,8 +2253,9 @@ export const SpotlightPage = () => {
             }
         );
 
-        // Real-time subscription for user saved bookmarks and initial fetch for likes
+        // Real-time subscription for user saved bookmarks, likes, and followed creators
         let unsubscribeSaved: (() => void) | undefined;
+        let unsubscribeFollowing: (() => void) | undefined;
         if (currentUser?.uid) {
             getUserLikedPostIds(currentUser.uid).then(ids => {
                 if (isMounted) setUserLikedIds(ids);
@@ -1940,15 +2270,27 @@ export const SpotlightPage = () => {
                     console.warn('[SPOTLIGHT_SAVED_POSTS_WARN]', err);
                 }
             );
+
+            unsubscribeFollowing = subscribeFollowedUserIds(
+                currentUser.uid,
+                (ids) => {
+                    if (isMounted) setUserFollowingIds(ids);
+                },
+                (err) => {
+                    console.warn('[SPOTLIGHT_FOLLOWED_USERS_WARN]', err);
+                }
+            );
         } else {
             setUserLikedIds(new Set());
             setUserSavedIds(new Set());
+            setUserFollowingIds(new Set());
         }
 
         return () => {
             isMounted = false;
             unsubscribe();
             unsubscribeSaved?.();
+            unsubscribeFollowing?.();
         };
     }, [currentUser?.uid, refreshKey]);
 
@@ -1963,6 +2305,42 @@ export const SpotlightPage = () => {
             return next;
         });
     }, []);
+
+    const handleToggleFollowCreator = React.useCallback(async (creatorId: string, willFollow: boolean) => {
+        if (!currentUser?.uid || !creatorId || creatorId === currentUser.uid) return;
+
+        // Optimistic UI update across all showcase cards & pinned feeds
+        setUserFollowingIds(prev => {
+            const next = new Set(prev);
+            if (willFollow) {
+                next.add(creatorId);
+            } else {
+                next.delete(creatorId);
+            }
+            return next;
+        });
+
+        try {
+            await toggleFollowCreator({
+                currentUser,
+                currentUserProfile: null,
+                targetCreatorId: creatorId,
+            });
+        } catch (err) {
+            console.error('[TOGGLE_FOLLOW_CREATOR_ERROR]', err);
+            // Revert state on error
+            setUserFollowingIds(prev => {
+                const next = new Set(prev);
+                if (willFollow) {
+                    next.delete(creatorId);
+                } else {
+                    next.add(creatorId);
+                }
+                return next;
+            });
+            throw err;
+        }
+    }, [currentUser]);
 
     const OpportunityDetailModal: React.FC<{
         offer: Offer;
@@ -2173,12 +2551,12 @@ export const SpotlightPage = () => {
             setLoading(false);
         }, 1500);
         return () => clearTimeout(timer);
-    }, [activeTab, activeCategory, spotlightBrowseState, showPinnedHighlights, activeLeapTab, refreshKey]);
+    }, [activeTab, activeCategory, spotlightBrowseState, showPinnedHighlights, showPinnedProfiles, activeLeapTab, refreshKey]);
 
     useEffect(() => {
         // Scroll to top whenever tabs, filters, or view states change
         document.querySelector('main')?.scrollTo(0, 0);
-    }, [activeTab, activeCategory, selectedOfferType, spotlightBrowseState, showPinnedHighlights, activeLeapTab]);
+    }, [activeTab, activeCategory, selectedOfferType, spotlightBrowseState, showPinnedHighlights, showPinnedProfiles, activeLeapTab]);
 
     const matchesProjectCategoryOrDomain = (project: Project, targetFilter: string): boolean => {
         if (!targetFilter || targetFilter === 'All') return true;
@@ -3694,17 +4072,41 @@ export const SpotlightPage = () => {
                     allProjects={allShowcaseProjects}
                     userSavedIds={userSavedIds}
                     userLikedIds={userLikedIds}
+                    userFollowingIds={userFollowingIds}
                     onBackToShowcase={() => setShowPinnedHighlights?.(false)}
                     onBrowseShowcase={() => {
                         setShowPinnedHighlights?.(false);
                         handleTabChange('Showcase');
                     }}
+                    onToggleFollowCreator={handleToggleFollowCreator}
                     onBookmarkToggle={handleBookmarkToggle}
                     onProjectDeleted={handleShowcaseDeleted}
                     onProjectUpdated={handleShowcaseUpdated}
                 />
             );
         }
+
+        if (showPinnedProfiles) {
+            return (
+                <PinnedProfilesFeedView
+                    loading={loading || showcaseLoading}
+                    allProjects={allShowcaseProjects}
+                    userFollowingIds={userFollowingIds}
+                    userLikedIds={userLikedIds}
+                    userSavedIds={userSavedIds}
+                    onBackToShowcase={() => setShowPinnedProfiles?.(false)}
+                    onBrowseShowcase={() => {
+                        setShowPinnedProfiles?.(false);
+                        handleTabChange('Showcase');
+                    }}
+                    onToggleFollowCreator={handleToggleFollowCreator}
+                    onBookmarkToggle={handleBookmarkToggle}
+                    onProjectDeleted={handleShowcaseDeleted}
+                    onProjectUpdated={handleShowcaseUpdated}
+                />
+            );
+        }
+
         if (spotlightBrowseState === 'projects') return <BrowseProjectsView />;
         if (spotlightBrowseState === 'profiles') return <BrowseProfilesView />;
 
@@ -3747,6 +4149,8 @@ export const SpotlightPage = () => {
                     onOpenCreate={() => setIsCreateShowcaseOpen(true)}
                     userLikedIds={userLikedIds}
                     userSavedIds={userSavedIds}
+                    userFollowingIds={userFollowingIds}
+                    onToggleFollowCreator={handleToggleFollowCreator}
                     onProjectDeleted={handleShowcaseDeleted}
                     onProjectUpdated={handleShowcaseUpdated}
                     onFilterByCategory={setActiveCategory}
