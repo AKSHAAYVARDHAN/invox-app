@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams, useNavigate, Link, useOutletContext } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link, useOutletContext } from 'react-router-dom';
 import type { Project, PostComment, CollabRole, CollabApplication } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { 
@@ -67,18 +67,11 @@ export const ProjectDetailsPage: React.FC = () => {
     } | null>() ?? {};
     const { setRightSidebarVariant, setSpotlightBrowseState, setSpotlightIsBrowsing } = outletContext;
 
-    // Preserve Browse Projects sidebar panel while this page is mounted
-    useEffect(() => {
-        setRightSidebarVariant?.('spotlight');
-        setSpotlightBrowseState?.('projects');
-        setSpotlightIsBrowsing?.(true);
-        return () => {
-            setRightSidebarVariant?.('default');
-            setSpotlightBrowseState?.(null);
-            setSpotlightIsBrowsing?.(false);
-        };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    const location = useLocation();
+    const cameFromCollabs = useMemo(() => {
+        const search = new URLSearchParams(location.search);
+        return search.get('tab') === 'Collabs' || (location.state as any)?.fromTab === 'Collabs';
+    }, [location.search, location.state]);
 
 
     // Core data states
@@ -416,6 +409,19 @@ export const ProjectDetailsPage: React.FC = () => {
             (project as any).type === 'collab'
         );
     }, [project]);
+
+    // Preserve Browse Projects sidebar panel while this page is mounted, context-aware of Showcase vs Collabs
+    useEffect(() => {
+        const isCollabContext = cameFromCollabs || isCollab;
+        setRightSidebarVariant?.(isCollabContext ? 'spotlight-collabs' : 'spotlight-showcase');
+        setSpotlightBrowseState?.('projects');
+        setSpotlightIsBrowsing?.(true);
+        return () => {
+            setRightSidebarVariant?.('default');
+            setSpotlightBrowseState?.(null);
+            setSpotlightIsBrowsing?.(false);
+        };
+    }, [isCollab, cameFromCollabs, setRightSidebarVariant, setSpotlightBrowseState, setSpotlightIsBrowsing]);
 
     const projectTitle = useMemo(() => {
         if (!project) return 'Untitled Project';

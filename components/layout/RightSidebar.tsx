@@ -593,7 +593,9 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
         }
     }, [isPinnedView, setShowPinnedProfiles]);
 
-    const browseDescription = variant === 'spotlight-collabs' 
+    const isCollabs = variant === 'spotlight-collabs' || searchParams.get('tab') === 'Collabs';
+
+    const browseDescription = isCollabs 
         ? "Explore collaboration opportunities and connect with builders."
         : "Explore projects and profiles from creators across the platform.";
 
@@ -607,12 +609,13 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                             onClick={() => {
                                 setIsBrowsingView(false);
                                 setSpotlightIsBrowsing?.(false);
-                                if (isOnProjectDetail) navigate('/spotlight');
+                                setSpotlightBrowseState?.(null);
+                                navigate(isCollabs ? '/spotlight?tab=Collabs' : '/spotlight?tab=Showcase');
                             }}
-                            className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors"
+                            className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors cursor-pointer"
                         >
                                 <ArrowLeftIcon className="w-4 h-4" />
-                                <span>// BACK_TO_SPOTLIGHT</span>
+                                <span>{isCollabs ? '// BACK_TO_COLLABS' : '// BACK_TO_SHOWCASE'}</span>
                             </button>
                         </div>
                         <div className="bg-[#0c0c0e] border border-zinc-800 p-4 mx-4">
@@ -622,7 +625,7 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                 <button
                                     onClick={() => {
                                         if (isOnProjectDetail) {
-                                            navigate('/spotlight?browse=projects');
+                                            navigate(isCollabs ? '/spotlight?tab=Collabs&browse=projects' : '/spotlight?browse=projects');
                                         } else {
                                             setSpotlightBrowseState('projects');
                                         }
@@ -639,7 +642,7 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                 <button
                                      onClick={() => {
                                         if (isOnProjectDetail) {
-                                            navigate('/spotlight?browse=profiles');
+                                            navigate(isCollabs ? '/spotlight?tab=Collabs&browse=profiles' : '/spotlight?browse=profiles');
                                         } else {
                                             setSpotlightBrowseState('profiles');
                                         }
