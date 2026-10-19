@@ -19,6 +19,7 @@ import ApplicationStatusPage from './pages/ApplicationStatusPage';
 import SavedApplicationsPage from './pages/SavedApplicationsPage';
 import OnboardingPage from './pages/Onboarding';
 import SettingsPage from './pages/Settings';
+import ProjectDetailsPage from './pages/ProjectDetailsPage';
 import { LandingPage } from './pages/LandingPage';
 import AdminPage from './pages/admin/AdminPage';
 import AdminRoute from './components/admin/AdminRoute';
@@ -39,6 +40,7 @@ const pageTitles: { [key: string]: string } = {
     '/trendz': 'Trendz',
     '/explore': 'Explore',
     '/spotlight': 'Spotlight',
+    '/spotlight/project': 'Project Details',
     '/communities': 'Communities',
     '/hub': 'Hub',
     '/myspace': 'My Space',
@@ -220,8 +222,11 @@ const ProtectedLayout = () => {
         if (location.pathname.startsWith('/communities')) {
             return 'Communities';
         }
-         if (location.pathname.startsWith('/profile')) {
+        if (location.pathname.startsWith('/profile')) {
             return 'Profile';
+        }
+        if (location.pathname.startsWith('/spotlight/project')) {
+            return 'Project Details';
         }
         return pageTitles[location.pathname] || 'Invox';
     }, [location.pathname]);
@@ -231,7 +236,7 @@ const ProtectedLayout = () => {
         setFollowedDomainsFilter(prev => prev === null ? prev : null);
         setShowPinnedHighlights(prev => !prev ? prev : false);
         setShowPinnedProfiles(prev => !prev ? prev : false);
-        if (rightSidebarVariant !== 'spotlight') {
+        if (!rightSidebarVariant.startsWith('spotlight')) {
             setSpotlightBrowseState(prev => prev === null ? prev : null);
         }
     }, [rightSidebarVariant]);
@@ -446,6 +451,7 @@ const MainAppRoutes = () => (
             <ReactRouterDOM.Route path="/explore" element={<SectionRouteGuard sectionId="explore"><ExplorePage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/trendz" element={<SectionRouteGuard sectionId="trendz"><TrendzPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/spotlight" element={<SectionRouteGuard sectionId="spotlight"><SpotlightPage /></SectionRouteGuard>} />
+            <ReactRouterDOM.Route path="/spotlight/project/:projectId" element={<SectionRouteGuard sectionId="spotlight"><ProjectDetailsPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/communities" element={<SectionRouteGuard sectionId="communities"><CommunitiesPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/hub" element={<SectionRouteGuard sectionId="hub"><HubPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/myspace" element={<SectionRouteGuard sectionId="mySpace"><MySpacePage /></SectionRouteGuard>} />

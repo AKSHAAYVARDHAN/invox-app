@@ -109,6 +109,7 @@ export interface Post {
   title?: string;
   aiSummary: string;
   oneLine?: string;
+  hook?: string;
   content: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'video';
@@ -233,6 +234,7 @@ export interface Project {
     name?: string;
     aiSummary: string;
     oneLine?: string;
+    hook?: string;
     description: string;
     mediaUrl?: string;
     mediaType?: 'image' | 'video';

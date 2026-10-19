@@ -75,7 +75,8 @@ import {
     getUserLikedPostIds,
     getUserSavedPostIds,
     subscribeToUserSavedPostIds,
-    getShowcaseProjectById
+    getShowcaseProjectById,
+    isCollabSignal
 } from '../services/postService';
 import { subscribeFollowedUserIds, toggleFollowCreator, getProjectCreatorId } from '../services/connectionService';
 import { CollabManagementHub } from '../components/spotlight/CollabManagementHub';
@@ -83,6 +84,7 @@ import { CollabMessageBoardView } from '../components/spotlight/CollabMessageBoa
 import { CollabTeamsView } from '../components/spotlight/CollabTeamsView';
 import { ShowcaseCard } from '../components/spotlight/ShowcaseCard';
 import { CreateShowcaseModal } from '../components/uploads/CreateShowcaseModal';
+import { SuggestionCard } from '../components/spotlight/SuggestionCard';
 
 export { getProjectCreatorId };
 
@@ -92,12 +94,16 @@ const formatNumber = (num: number) => {
     return num;
 };
 
-const mockProjects: Project[] = [
+export const mockProjects: Project[] = [
     {
         id: 'proj-new-4',
         authorId: 'seed_abello',
         author: { name: 'Aisha Bello', username: 'abello', id: 'seed_abello', uid: 'seed_abello', avatarUrl: 'https://picsum.photos/id/22/200/200', isVerified: true },
+        title: 'Deepfake Sentinel',
+        name: 'Deepfake Sentinel',
         aiSummary: 'Open-source toolkit for detecting deepfakes.',
+        oneLine: 'Open-source toolkit for detecting deepfakes.',
+        hook: 'Open-source toolkit for detecting deepfakes.',
         description: 'A powerful and accessible library for developers and researchers to detect and analyze manipulated media. Using advanced deep learning models, our toolkit aims to combat misinformation by providing reliable deepfake detection capabilities.',
         mediaUrl: 'https://images.unsplash.com/photo-1504639725590-34d0984388bd?q=80&w=1974&auto=format&fit=crop',
         mediaType: 'image',
@@ -109,7 +115,11 @@ const mockProjects: Project[] = [
         id: 'proj-new-3',
         authorId: 'seed_ktanaka',
         author: { name: 'Kenji Tanaka', username: 'ktanaka', id: 'seed_ktanaka', uid: 'seed_ktanaka', avatarUrl: 'https://picsum.photos/id/21/200/200', isVerified: true },
+        title: 'VR Lingo Explorer',
+        name: 'VR Lingo Explorer',
         aiSummary: 'Gamified language learning app using VR.',
+        oneLine: 'Gamified language learning app using VR.',
+        hook: 'Gamified language learning app using VR.',
         description: 'An immersive virtual reality experience that makes learning a new language feel like playing a game. Users can explore virtual worlds, interact with AI-powered native speakers, and complete quests to master vocabulary and grammar.',
         mediaUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
         mediaType: 'video',
@@ -122,7 +132,11 @@ const mockProjects: Project[] = [
         id: 'proj1',
         authorId: 'seed_cadams',
         author: { name: 'Crash Adams', username: 'cadams', id: 'seed_cadams', uid: 'seed_cadams', avatarUrl: 'https://picsum.photos/id/10/200/200', isVerified: true },
+        title: 'Ethical Net',
+        name: 'Ethical Net',
         aiSummary: 'A decentralised social network with ethical AI.',
+        oneLine: 'A decentralised social network with ethical AI.',
+        hook: 'A decentralised social network with ethical AI.',
         description: 'Building a next-gen social platform on Web3 principles, ensuring user data privacy and content moderation powered by a transparent, ethical AI framework.',
         mediaUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
         mediaType: 'video',
@@ -135,7 +149,11 @@ const mockProjects: Project[] = [
         id: 'proj3',
         authorId: 'seed_mrossi',
         author: { name: 'Marco Rossi', username: 'mrossi', id: 'seed_mrossi', uid: 'seed_mrossi', avatarUrl: 'https://picsum.photos/id/12/200/200' },
+        title: 'NativeFlow Framework',
+        name: 'NativeFlow Framework',
         aiSummary: 'Next-gen mobile app development framework.',
+        oneLine: 'Next-gen mobile app development framework.',
+        hook: 'Next-gen mobile app development framework.',
         description: 'A cross-platform framework designed for speed, performance, and a seamless developer experience. Build beautiful, native apps with a single codebase.',
         mediaUrl: 'https://images.unsplash.com/photo-1551650975-87deedd944c3?q=80&w=1974&auto=format&fit=crop',
         mediaType: 'image',
@@ -147,7 +165,11 @@ const mockProjects: Project[] = [
         id: 'proj4',
         authorId: 'seed_ereed',
         author: { name: 'Dr. Evelyn Reed', username: 'ereed', id: 'seed_ereed', uid: 'seed_ereed', avatarUrl: 'https://picsum.photos/id/13/200/200' },
+        title: 'BiasLens AI',
+        name: 'BiasLens AI',
         aiSummary: 'Ethical AI: Bias Detection in Language Models.',
+        oneLine: 'Ethical AI: Bias Detection in Language Models.',
+        hook: 'Ethical AI: Bias Detection in Language Models.',
         description: 'This project introduces a novel framework for identifying and mitigating biases in large-scale language models, ensuring fairer and more equitable AI systems.',
         mediaUrl: 'https://images.unsplash.com/photo-1620712943543-95fc6ih-p962453a?q=80&w=2070&auto=format&fit=crop',
         mediaType: 'image',
@@ -159,7 +181,11 @@ const mockProjects: Project[] = [
         id: 'proj6',
         authorId: 'seed_chloeb',
         author: { name: 'Chloe Bennet', username: 'chloeb', id: 'seed_chloeb', uid: 'seed_chloeb', avatarUrl: 'https://picsum.photos/id/15/200/200', isVerified: true },
+        title: 'Aura Design System',
+        name: 'Aura Design System',
         aiSummary: 'A dynamic design system for modern web apps.',
+        oneLine: 'A dynamic design system for modern web apps.',
+        hook: 'A dynamic design system for modern web apps.',
         description: 'An open-source design system built with accessibility and scalability in mind. It includes a comprehensive set of React components and design tokens.',
         mediaUrl: 'https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?q=80&w=2070&auto=format&fit=crop',
         mediaType: 'image',
@@ -171,7 +197,11 @@ const mockProjects: Project[] = [
         id: 'proj7',
         authorId: 'seed_ljohnson',
         author: { name: 'Liam Johnson', username: 'ljohnson', id: 'seed_ljohnson', uid: 'seed_ljohnson', avatarUrl: 'https://picsum.photos/id/16/200/200' },
+        title: 'CodeSync Live',
+        name: 'CodeSync Live',
         aiSummary: 'A real-time collaboration tool for developers.',
+        oneLine: 'A real-time collaboration tool for developers.',
+        hook: 'A real-time collaboration tool for developers.',
         description: 'A platform that allows developers to code, chat, and debug together in a shared environment, boosting productivity for remote teams.',
         mediaUrl: 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?q=80&w=2070&auto=format&fit=crop',
         mediaType: 'image',
@@ -181,11 +211,15 @@ const mockProjects: Project[] = [
     }
 ];
 
-const mockForYouProjects: Project[] = [
+export const mockForYouProjects: Project[] = [
     {
         id: 'collab1',
         author: { name: 'Mc Benny', avatarUrl: 'https://picsum.photos/id/25/200/200', isVerified: true },
+        title: 'CollabFlow Studio',
+        name: 'CollabFlow Studio',
         aiSummary: 'Help design the future of collaborative workflows.',
+        oneLine: 'Help design the future of collaborative workflows.',
+        hook: 'Help design the future of collaborative workflows.',
         description: 'We are creating a new project management tool that integrates AI to streamline tasks and improve team communication. Seeking a senior product designer.',
         mediaUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
         mediaType: 'video',
@@ -219,7 +253,11 @@ const mockForYouProjects: Project[] = [
     {
         id: 'collab2',
         author: { name: 'Julia Chen', avatarUrl: 'https://picsum.photos/id/26/200/200', isVerified: true },
+        title: 'Decentralized Social Nexus',
+        name: 'Decentralized Social Nexus',
         aiSummary: 'Seeking a Backend Dev for a new Social App.',
+        oneLine: 'Seeking a Backend Dev for a new Social App.',
+        hook: 'Seeking a Backend Dev for a new Social App.',
         description: 'We are building a decentralized social media platform and need a skilled backend developer to help us with API design and database architecture. Join our mission to reshape social networking.',
         mediaUrl: 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?q=80&w=1974&auto=format&fit=crop',
         mediaType: 'image',
@@ -246,7 +284,11 @@ const mockForYouProjects: Project[] = [
     {
         id: 'collab3',
         author: { name: 'QuantumLeap AI', avatarUrl: 'https://picsum.photos/id/27/200/200', isVerified: true },
+        title: 'Quantum Alpha Predictor',
+        name: 'Quantum Alpha Predictor',
         aiSummary: 'Data Scientist needed for an ML project.',
+        oneLine: 'Data Scientist needed for an ML project.',
+        hook: 'Data Scientist needed for an ML project.',
         description: 'Join QuantumLeap AI to work on a cutting-edge project involving predictive modeling for financial markets. We are looking for an experienced data scientist with a passion for machine learning.',
         mediaUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
         mediaType: 'video',
@@ -274,7 +316,11 @@ const mockForYouProjects: Project[] = [
     {
         id: 'collab4',
         author: { name: 'Creative Studio', avatarUrl: 'https://picsum.photos/id/28/200/200' },
+        title: 'LuxeCart Commerce',
+        name: 'LuxeCart Commerce',
         aiSummary: 'UI/UX Designer for an exciting e-commerce platform.',
+        oneLine: 'UI/UX Designer for an exciting e-commerce platform.',
+        hook: 'UI/UX Designer for an exciting e-commerce platform.',
         description: 'We are looking for a creative UI/UX designer to revamp our e-commerce platform. You will be responsible for creating a visually appealing and user-friendly experience for millions of users.',
         mediaUrl: 'https://images.unsplash.com/photo-1487017159836-4e23ece2e4cf?q=80&w=2071&auto=format&fit=crop',
         mediaType: 'image',
@@ -347,7 +393,15 @@ interface Suggestion {
   author: {
     name: string;
     isVerified?: boolean;
+    avatarUrl?: string;
+    id?: string;
+    uid?: string;
+    username?: string;
   };
+  title?: string;
+  name?: string;
+  hook?: string;
+  oneLine?: string;
   description: string;
   imageUrl: string;
   upvotes: number;
@@ -365,6 +419,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'mux-1',
                 author: { name: 'Music Haze', isVerified: true },
+                title: 'Music Haze Streaming UI',
+                hook: 'A visually stunning and modern UI for next-generation music streaming.',
                 description: 'A visually stunning and modern UI for a music streaming app.',
                 imageUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=2070&auto=format&fit=crop',
                 upvotes: 15200,
@@ -372,6 +428,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'fin-1',
                 author: { name: 'Fintech Solutions' },
+                title: 'Apex Fintech Dashboard',
+                hook: 'Sleek and professional dashboard for a modern fintech platform.',
                 description: 'Sleek and professional dashboard for a new fintech platform.',
                 imageUrl: 'https://images.unsplash.com/photo-1642139425433-e38000413346?q=80&w=1974&auto=format&fit=crop',
                 upvotes: 12500,
@@ -379,6 +437,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'travel-1',
                 author: { name: 'Wanderlust UI', isVerified: true },
+                title: 'Wanderlust UI Explorer',
+                hook: 'An inviting and user-friendly interface design for global travel planning.',
                 description: 'An inviting and user-friendly design for a travel planning app.',
                 imageUrl: 'https://images.unsplash.com/photo-1522199755839-a2bacb67c546?q=80&w=2072&auto=format&fit=crop',
                 upvotes: 18900,
@@ -386,6 +446,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'health-1',
                 author: { name: 'FitTrack', isVerified: true },
+                title: 'FitTrack Pro Interface',
+                hook: 'A clean and motivating UI for health, biometric, and fitness tracking.',
                 description: 'A clean and motivating UI for a health and fitness tracking app.',
                 imageUrl: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?q=80&w=2070&auto=format&fit=crop',
                 upvotes: 16400,
@@ -393,6 +455,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'realestate-1',
                 author: { name: 'PropDash' },
+                title: 'PropDash Analytics',
+                hook: 'An intuitive dashboard for real estate analytics and property management.',
                 description: 'An intuitive dashboard for real estate analytics and property management.',
                 imageUrl: 'https://images.unsplash.com/photo-1560518883-ce09059ee41F?q=80&w=1973&auto=format&fit=crop',
                 upvotes: 11800,
@@ -405,6 +469,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'egd-1',
                 author: { name: 'Elegant Mind', isVerified: true },
+                title: 'Elegant Mind Surreal Series',
+                hook: 'A surreal and elegant digital artwork series exploring human perception.',
                 description: 'A surreal and elegant artwork for a project named Elegant Mind.',
                 imageUrl: 'https://images.unsplash.com/photo-1535378620166-273708d44e4c?q=80&w=1964&auto=format&fit=crop',
                 upvotes: 21000,
@@ -412,6 +478,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'brand-1',
                 author: { name: 'Urban Coffee Co.' },
+                title: 'Urban Coffee Identity System',
+                hook: 'A comprehensive branding identity system for a modern specialty coffee shop.',
                 description: 'A comprehensive branding identity for a modern coffee shop.',
                 imageUrl: 'https://images.unsplash.com/photo-1511920183234-52d34ba2d781?q=80&w=1974&auto=format&fit=crop',
                 upvotes: 9800,
@@ -419,6 +487,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'poster-1',
                 author: { name: 'Abstract Forms', isVerified: true },
+                title: 'Abstract Geometric Forms',
+                hook: 'Minimalist poster designs exploring geometric tension and negative space.',
                 description: 'A series of abstract and minimalist poster designs exploring geometric forms.',
                 imageUrl: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?q=80&w=2070&auto=format&fit=crop',
                 upvotes: 11300,
@@ -426,6 +496,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'album-1',
                 author: { name: 'Vinyl Dreams', isVerified: true },
+                title: 'Vinyl Dreams Album Art',
+                hook: 'Vibrant and retro-inspired album cover artwork for an indie music collective.',
                 description: 'Vibrant and retro-inspired album cover art for an indie band.',
                 imageUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1974&auto=format&fit=crop',
                 upvotes: 14500,
@@ -433,6 +505,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'book-1',
                 author: { name: 'Page Turner' },
+                title: 'Page Turner Fantasy Cover',
+                hook: 'A captivating and immersive book cover design for an epic fantasy novel.',
                 description: 'A captivating book cover design for a fantasy novel.',
                 imageUrl: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=1974&auto=format&fit=crop',
                 upvotes: 8900,
@@ -445,6 +519,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'scifi-1',
                 author: { name: 'Cyber Visions', isVerified: true },
+                title: 'Cyber Visions Cyborg Explorer',
+                hook: 'A highly detailed 3D sci-fi character model crafted with real-time shaders.',
                 description: 'A highly detailed 3D model of a sci-fi character, a cyborg explorer.',
                 imageUrl: 'https://images.unsplash.com/photo-1690575317136-234288b8e0a2?q=80&w=1964&auto=format&fit=crop',
                 upvotes: 25600,
@@ -452,6 +528,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'arch-1',
                 author: { name: 'Modern Structures' },
+                title: 'Modern Villa ArchViz',
+                hook: 'Photorealistic architectural visualization of a modern minimalist villa.',
                 description: 'A photorealistic architectural visualization of a modern house.',
                 imageUrl: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?q=80&w=1974&auto=format&fit=crop',
                 upvotes: 19400,
@@ -459,6 +537,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'fantasy-1',
                 author: { name: 'DreamScapes' },
+                title: 'Floating Isles of DreamScapes',
+                hook: 'An enchanting 3D procedural render of mythical floating island geography.',
                 description: 'An enchanting 3D render of a magical, floating island landscape.',
                 imageUrl: 'https://images.unsplash.com/photo-16179354493866-df529a6d4b29?q=80&w=2070&auto=format&fit=crop',
                 upvotes: 22300,
@@ -466,6 +546,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'product-1',
                 author: { name: 'Precision Renders', isVerified: true },
+                title: 'Chronos Luxury Timepiece',
+                hook: 'A luxury 3D product render showcasing precision horology and material physics.',
                 description: 'A stunning 3D product visualization of a luxury timepiece.',
                 imageUrl: 'https://images.unsplash.com/photo-1523170335258-f5ed11844a49?q=80&w=2080&auto=format&fit=crop',
                 upvotes: 18700,
@@ -473,6 +555,8 @@ const suggestionData: SuggestionCategory[] = [
              {
                 id: 'char-1',
                 author: { name: 'Creature Forge' },
+                title: 'Creature Forge Animated Hero',
+                hook: 'A whimsical 3D stylized character design created for an animated feature.',
                 description: 'A whimsical 3D character design for an animated short film.',
                 imageUrl: 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?q=80&w=1964&auto=format&fit=crop',
                 upvotes: 17200,
@@ -485,6 +569,8 @@ const suggestionData: SuggestionCategory[] = [
              {
                 id: 'ecom-1',
                 author: { name: 'SustainaWear', isVerified: true },
+                title: 'SustainaWear Fashion Store',
+                hook: 'A clean and sustainable fashion e-commerce storefront with fluid checkout.',
                 description: 'A clean website design for an e-commerce store selling sustainable fashion.',
                 imageUrl: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=2070&auto=format&fit=crop',
                 upvotes: 16700,
@@ -492,6 +578,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'portfolio-1',
                 author: { name: 'Digital Artist X' },
+                title: 'Digital Artist Spatial Portfolio',
+                hook: 'An interactive, WebGL-enhanced portfolio website for creative artists.',
                 description: 'An interactive and visually engaging portfolio website for a digital artist.',
                 imageUrl: 'https://images.unsplash.com/photo-1496171367470-9ed9a91ea931?q=80&w=2070&auto=format&fit=crop',
                 upvotes: 14200,
@@ -499,6 +587,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'blog-1',
                 author: { name: 'The Scribe' },
+                title: 'The Scribe Editorial Platform',
+                hook: 'A modern, distraction-free front-end for thoughtful long-form publishing.',
                 description: 'A modern, minimalist front-end for a new blogging platform.',
                 imageUrl: 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?q=80&w=2070&auto=format&fit=crop',
                 upvotes: 11500,
@@ -506,6 +596,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'saas-1',
                 author: { name: 'CloudFlow', isVerified: true },
+                title: 'CloudFlow Infrastructure Portal',
+                hook: 'A high-converting landing page and cloud orchestration interface.',
                 description: 'A compelling and high-converting landing page for a SaaS product.',
                 imageUrl: 'https://images.unsplash.com/photo-1559028006-44d08c21a488?q=80&w=1974&auto=format&fit=crop',
                 upvotes: 19800,
@@ -513,6 +605,8 @@ const suggestionData: SuggestionCategory[] = [
             {
                 id: 'corp-1',
                 author: { name: 'Innovate Corp' },
+                title: 'Innovate Corp Enterprise Web',
+                hook: 'A sleek corporate digital experience highlighting brand narrative.',
                 description: 'A professional and sleek corporate website with a focus on brand storytelling.',
                 imageUrl: 'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?q=80&w=2232&auto=format&fit=crop',
                 upvotes: 13500,
@@ -520,6 +614,42 @@ const suggestionData: SuggestionCategory[] = [
         ],
     },
 ];
+
+export const suggestionProjects: Project[] = suggestionData.flatMap(cat => 
+    cat.projects.map(p => ({
+        id: p.id,
+        authorId: `author_${p.id}`,
+        author: {
+            name: p.author.name,
+            avatarUrl: p.imageUrl || `https://picsum.photos/seed/${p.id}/200`,
+            isVerified: Boolean(p.author.isVerified),
+            id: `author_${p.id}`,
+            uid: `author_${p.id}`,
+            username: p.author.name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+        },
+        title: p.title || p.author.name,
+        name: p.title || p.author.name,
+        aiSummary: p.hook || p.description,
+        oneLine: p.hook || p.description,
+        hook: p.hook || p.description,
+        description: p.description,
+        mediaUrl: p.imageUrl,
+        mediaType: 'image' as const,
+        thumbnailUrl: p.imageUrl,
+        category: cat.category,
+        domain: cat.category,
+        tags: [cat.category.replace(/[^a-zA-Z0-9]/g, '')],
+        stats: {
+            likes: p.upvotes,
+            views: p.upvotes * 3,
+            comments: Math.round(p.upvotes * 0.05),
+        },
+        likeCount: p.upvotes,
+        viewCount: p.upvotes * 3,
+        commentCount: Math.round(p.upvotes * 0.05),
+        createdAt: new Date(),
+    }))
+);
 
 interface ProfileSuggestion {
   id: string;
@@ -2691,6 +2821,48 @@ export const SpotlightPage = () => {
         return list;
     }, [liveCollabProjects]);
 
+    const browseShowcaseProjects = React.useMemo(() => {
+        const seen = new Set<string>();
+        const list: Project[] = [];
+        for (const p of liveShowcaseProjects) {
+            if (!seen.has(p.id) && !p.collabDetails) {
+                seen.add(p.id);
+                list.push(p);
+            }
+        }
+        for (const p of mockProjects) {
+            if (!seen.has(p.id) && !p.collabDetails) {
+                seen.add(p.id);
+                list.push(p);
+            }
+        }
+        for (const p of suggestionProjects) {
+            if (!seen.has(p.id) && !p.collabDetails) {
+                seen.add(p.id);
+                list.push(p);
+            }
+        }
+        return list;
+    }, [liveShowcaseProjects]);
+
+    const browseCollabProjects = React.useMemo(() => {
+        const seen = new Set<string>();
+        const list: Project[] = [];
+        for (const p of liveCollabProjects) {
+            if (!seen.has(p.id)) {
+                seen.add(p.id);
+                list.push(p);
+            }
+        }
+        for (const p of mockForYouProjects) {
+            if (!seen.has(p.id)) {
+                seen.add(p.id);
+                list.push(p);
+            }
+        }
+        return list;
+    }, [liveCollabProjects]);
+
     const filteredCollabProjects = React.useMemo(() => {
         const selectedDomains = domainSelections[sectionKey] || [];
         return allCollabProjects.filter(project => {
@@ -2737,30 +2909,7 @@ export const SpotlightPage = () => {
         </div>
     );
     
-    const SuggestionCard: React.FC<{ project: Suggestion }> = ({ project }) => {
-      const [imageRef, isVisible] = useLazyLoad<HTMLImageElement>();
-      return (
-        <div className="bg-[#0c0c0e] p-4 border border-zinc-800 flex gap-4 min-h-48 hover:border-zinc-700 transition-colors">
-          <div className="flex-1 flex flex-col">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-zinc-900 flex items-center justify-center border border-zinc-800">
-                <ProfileIcon className="w-4 h-4 text-zinc-400" />
-              </div>
-              <p className="font-bold text-white font-mono text-sm">{project.author.name}</p>
-              {project.author.isVerified && <CheckBadgeIcon className="w-4 h-4 text-zinc-400" />}
-            </div>
-            <p className="text-xs font-mono text-zinc-400 mt-3 flex-grow leading-relaxed">{project.description}</p>
-            <div className="border-t border-zinc-800 my-3" />
-            <p className="text-xs font-mono text-zinc-400">
-              UPVOTES : <span className="text-white font-bold">{formatNumber(project.upvotes)}</span>
-            </p>
-          </div>
-          <div ref={imageRef} className="w-40 h-40 bg-zinc-900 border border-zinc-800 self-center flex-shrink-0">
-            {isVisible && <img src={project.imageUrl} onError={handleImageError} alt={project.author.name} className="w-full h-full object-cover" />}
-          </div>
-        </div>
-      );
-    };
+
     
     const ProfileSuggestionCard: React.FC<{ profile: ProfileSuggestion }> = ({ profile }) => (
         <div className="bg-[#0c0c0e] p-4 border border-zinc-800 flex flex-col min-h-48 hover:border-zinc-700 transition-colors">
@@ -3863,65 +4012,280 @@ export const SpotlightPage = () => {
         );
     };
     
-    const BrowseProjectsView = () => (
-        <div className="space-y-4">
-            <div className="relative">
-                <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                <input 
-                    type="search" 
-                    placeholder="SEARCH PROJECTS BY NAME, CATEGORY, OR CREATOR..." 
-                    className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-10 font-mono text-xs focus:border-zinc-500 focus:outline-none text-white placeholder:text-zinc-600" 
-                />
-            </div>
-            <div>
-                <div className="flex justify-between items-center mb-3">
-                    <span className="text-xs font-bold font-mono uppercase tracking-wide text-zinc-300">EXPLORE_SUGGESTIONS</span>
-                    <button className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-xs text-zinc-300 font-mono uppercase hover:text-white hover:border-zinc-600 transition-colors">
-                        <FilterIcon className="w-4 h-4 text-zinc-500" />
-                        <span>Filter by</span>
-                        <ChevronDownIcon className="w-4 h-4 text-zinc-500" />
-                    </button>
+    const BrowseProjectsView = () => {
+        const [browseSearchTerm, setBrowseSearchTerm] = useState('');
+        const [selectedCategory, setSelectedCategory] = useState('All');
+        const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+        const [visiblePerCategory, setVisiblePerCategory] = useState<Record<string, number>>({});
+        const filterDropdownRef = useRef<HTMLDivElement>(null);
+
+        // Close dropdown when clicking outside
+        useEffect(() => {
+            if (!isFilterDropdownOpen) return;
+            const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+                if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target as Node)) {
+                    setIsFilterDropdownOpen(false);
+                }
+            };
+            document.addEventListener('mousedown', handleOutsideClick);
+            document.addEventListener('touchstart', handleOutsideClick);
+            return () => {
+                document.removeEventListener('mousedown', handleOutsideClick);
+                document.removeEventListener('touchstart', handleOutsideClick);
+            };
+        }, [isFilterDropdownOpen]);
+
+        // Section isolation: Showcase vs Collabs
+        const sectionProjects = React.useMemo(() => {
+            if (activeTab === 'Collabs') {
+                return browseCollabProjects.filter(p => Boolean(p.collabDetails) || isCollabSignal(p as any));
+            } else {
+                return browseShowcaseProjects.filter(p => !p.collabDetails && !isCollabSignal(p as any));
+            }
+        }, [activeTab, browseCollabProjects, browseShowcaseProjects]);
+
+        // Available categories for the active section
+        const availableCategories = React.useMemo(() => {
+            const set = new Set<string>();
+            sectionProjects.forEach(p => {
+                const cat = p.category || p.domain;
+                if (cat && typeof cat === 'string' && cat.trim()) {
+                    set.add(cat.trim());
+                }
+            });
+            const sorted = Array.from(set).sort((a, b) => a.localeCompare(b));
+            return ['All', ...sorted];
+        }, [sectionProjects]);
+
+        // Reset category filter if selected category is not in the active section
+        useEffect(() => {
+            if (selectedCategory !== 'All' && !availableCategories.includes(selectedCategory)) {
+                setSelectedCategory('All');
+            }
+        }, [availableCategories, selectedCategory]);
+
+        // Filter projects by search and category
+        const filteredProjects = React.useMemo(() => {
+            const query = browseSearchTerm.trim().toLowerCase();
+            return sectionProjects.filter(project => {
+                // Category match
+                if (selectedCategory !== 'All') {
+                    const cat = (project.category || project.domain || '').toLowerCase().trim();
+                    const filter = selectedCategory.toLowerCase().trim();
+                    if (cat !== filter && !matchesProjectCategoryOrDomain(project, selectedCategory)) {
+                        return false;
+                    }
+                }
+
+                // Search match: name/title, category/domain, creator display name or username
+                if (query) {
+                    const title = (project.title || project.name || '').toLowerCase();
+                    const summary = (project.aiSummary || project.oneLine || '').toLowerCase();
+                    const hook = ((project as any).hook || '').toLowerCase();
+                    const description = (project.description || '').toLowerCase();
+                    const category = (project.category || '').toLowerCase();
+                    const domain = (project.domain || '').toLowerCase();
+                    const authorName = (project.author?.name || '').toLowerCase();
+                    const authorUsername = (project.author?.username || '').toLowerCase();
+                    const tags = Array.isArray(project.tags) ? project.tags.map(t => t.toLowerCase()).join(' ') : '';
+                    const roleTitles = project.collabDetails?.roles?.map(r => (r.title || '').toLowerCase()).join(' ') || '';
+
+                    const matches = 
+                        title.includes(query) ||
+                        hook.includes(query) ||
+                        summary.includes(query) ||
+                        description.includes(query) ||
+                        category.includes(query) ||
+                        domain.includes(query) ||
+                        authorName.includes(query) ||
+                        authorUsername.includes(query) ||
+                        tags.includes(query) ||
+                        roleTitles.includes(query);
+
+                    if (!matches) return false;
+                }
+
+                return true;
+            });
+        }, [sectionProjects, selectedCategory, browseSearchTerm]);
+
+        // Group into category buckets
+        const groupedCategories = React.useMemo(() => {
+            if (filteredProjects.length === 0) return [];
+
+            const map = new Map<string, Project[]>();
+            filteredProjects.forEach(proj => {
+                const cat = (proj.category || proj.domain || 'Technology').trim();
+                const list = map.get(cat) || [];
+                list.push(proj);
+                map.set(cat, list);
+            });
+
+            return Array.from(map.entries()).map(([category, projects]) => ({
+                category,
+                projects,
+            }));
+        }, [filteredProjects]);
+
+        const isSectionLoading = activeTab === 'Collabs' ? loading : showcaseLoading;
+
+        const handleLoadMore = (category: string) => {
+            setVisiblePerCategory(prev => ({
+                ...prev,
+                [category]: (prev[category] || 5) + 5,
+            }));
+        };
+
+        return (
+            <div className="space-y-4">
+                <div className="relative">
+                    <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                    <input 
+                        type="search" 
+                        value={browseSearchTerm}
+                        onChange={(e) => setBrowseSearchTerm(e.target.value)}
+                        placeholder="SEARCH PROJECTS BY NAME, CATEGORY, OR CREATOR..." 
+                        className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-10 pr-10 font-mono text-xs focus:border-zinc-500 focus:outline-none text-white placeholder:text-zinc-600 transition-colors" 
+                    />
+                    {browseSearchTerm && (
+                        <button
+                            type="button"
+                            onClick={() => setBrowseSearchTerm('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                            title="Clear search"
+                        >
+                            <CloseIcon className="w-4 h-4" />
+                        </button>
+                    )}
                 </div>
-                
                 <div>
-                  {loading ? (
-                    <div className="space-y-6">
-                        {[...Array(3)].map((_, index) => (
-                            <div key={index}>
-                                <div className="h-4 w-1/4 bg-zinc-800 mb-3 animate-pulse"></div>
-                                <div className="flex overflow-x-auto space-x-3 pb-2 no-scrollbar items-center">
-                                    <div className="w-96 flex-shrink-0"><SuggestionCardSkeleton /></div>
-                                    <div className="w-96 flex-shrink-0"><SuggestionCardSkeleton /></div>
-                                    <div className="flex-shrink-0 w-36 h-48 bg-[#0c0c0e] border border-zinc-800 flex flex-col items-center justify-center">
-                                        <div className="w-6 h-6 bg-zinc-800 mb-2"></div>
-                                        <div className="h-3 w-16 bg-zinc-800"></div>
+                    <div className="flex justify-between items-center mb-3">
+                        <span className="text-xs font-bold font-mono uppercase tracking-wide text-zinc-300">EXPLORE_SUGGESTIONS</span>
+                        <div className="relative" ref={filterDropdownRef}>
+                            <button 
+                                type="button"
+                                onClick={() => setIsFilterDropdownOpen(prev => !prev)}
+                                className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-xs text-zinc-300 font-mono uppercase hover:text-white hover:border-zinc-600 transition-colors cursor-pointer"
+                                aria-expanded={isFilterDropdownOpen}
+                            >
+                                <FilterIcon className="w-4 h-4 text-zinc-500" />
+                                <span>{selectedCategory === 'All' ? 'Filter by' : `Filter: ${selectedCategory}`}</span>
+                                <ChevronDownIcon className={`w-4 h-4 text-zinc-500 transition-transform duration-150 ${isFilterDropdownOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {isFilterDropdownOpen && (
+                                <div className="absolute right-0 mt-1.5 w-52 bg-[#0c0c0e] border border-zinc-800 shadow-2xl z-40 py-1 max-h-64 overflow-y-auto no-scrollbar">
+                                    <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-widest text-zinc-500 border-b border-zinc-800/80 mb-1">
+                                        // SELECT CATEGORY
+                                    </div>
+                                    {availableCategories.map(cat => {
+                                        const isSelected = selectedCategory === cat;
+                                        return (
+                                            <button
+                                                key={cat}
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedCategory(cat);
+                                                    setIsFilterDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left px-3 py-1.5 font-mono text-xs uppercase tracking-wider flex items-center justify-between transition-colors cursor-pointer ${
+                                                    isSelected 
+                                                        ? 'bg-[#18181d] text-white font-bold' 
+                                                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
+                                                }`}
+                                            >
+                                                <span>{cat}</span>
+                                                {isSelected && <span className="w-1.5 h-1.5 bg-white"></span>}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    
+                    <div>
+                      {isSectionLoading ? (
+                        <div className="space-y-6">
+                            {[...Array(3)].map((_, index) => (
+                                <div key={index}>
+                                    <div className="h-4 w-1/4 bg-zinc-800 mb-3 animate-pulse"></div>
+                                    <div className="flex overflow-x-auto space-x-3 pb-2 no-scrollbar items-center">
+                                        <div className="w-96 flex-shrink-0"><SuggestionCardSkeleton /></div>
+                                        <div className="w-96 flex-shrink-0"><SuggestionCardSkeleton /></div>
+                                        <div className="flex-shrink-0 w-36 h-48 bg-[#0c0c0e] border border-zinc-800 flex flex-col items-center justify-center">
+                                            <div className="w-6 h-6 bg-zinc-800 mb-2"></div>
+                                            <div className="h-3 w-16 bg-zinc-800"></div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                  ) : (
-                    suggestionData.map((categoryData, index) => (
-                      <div key={`${categoryData.category}-${index}`} className="mb-6">
-                        <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 mb-3 border-b border-zinc-800 pb-1.5">{categoryData.category}</h4>
-                        <div className="flex overflow-x-auto space-x-3 pb-2 no-scrollbar items-center">
-                          {categoryData.projects.map(project => (
-                            <div key={project.id} className="w-96 flex-shrink-0">
-                                <SuggestionCard project={project} />
-                            </div>
-                          ))}
-                           <button className="flex-shrink-0 w-36 h-48 bg-[#0c0c0e] border border-zinc-800 flex flex-col items-center justify-center text-zinc-400 hover:border-zinc-600 hover:text-white transition-colors">
-                              <ForwardIcon className="w-6 h-6 mb-2 text-zinc-500" />
-                              <span className="font-mono text-xs uppercase font-semibold">Load More</span>
-                          </button>
+                            ))}
                         </div>
-                      </div>
-                    ))
-                  )}
+                      ) : groupedCategories.length > 0 ? (
+                        groupedCategories.map((categoryData, index) => {
+                          const visibleLimit = visiblePerCategory[categoryData.category] || 5;
+                          const visibleProjects = categoryData.projects.slice(0, visibleLimit);
+                          const hasMore = categoryData.projects.length > visibleLimit;
+
+                          return (
+                            <div key={`${categoryData.category}-${index}`} className="mb-6">
+                              <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 mb-3 border-b border-zinc-800 pb-1.5">
+                                {categoryData.category}
+                              </h4>
+                              <div className="flex overflow-x-auto space-x-3 pb-2 no-scrollbar items-center">
+                                {visibleProjects.map(project => (
+                                  <div key={project.id} className="w-96 flex-shrink-0">
+                                      <SuggestionCard project={project} />
+                                  </div>
+                                ))}
+                                {hasMore && (
+                                  <button 
+                                      onClick={() => handleLoadMore(categoryData.category)}
+                                      className="flex-shrink-0 w-36 h-48 bg-[#0c0c0e] border border-zinc-800 flex flex-col items-center justify-center text-zinc-400 hover:border-zinc-600 hover:text-white transition-colors cursor-pointer"
+                                  >
+                                      <ForwardIcon className="w-6 h-6 mb-2 text-zinc-500" />
+                                      <span className="font-mono text-xs uppercase font-semibold">Load More</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="text-center py-16 text-zinc-400 font-mono text-xs border border-zinc-800 bg-[#0c0c0e] p-8 space-y-3">
+                            <p className="text-zinc-200 text-sm font-semibold tracking-wide">// NO_PROJECTS_FOUND</p>
+                            <p className="text-zinc-500 max-w-md mx-auto leading-relaxed">
+                                {browseSearchTerm 
+                                    ? `No ${activeTab.toLowerCase()} projects match "${browseSearchTerm}"${selectedCategory !== 'All' ? ` in ${selectedCategory}` : ''}.`
+                                    : `No ${activeTab.toLowerCase()} projects found${selectedCategory !== 'All' ? ` for category "${selectedCategory}"` : ''}.`}
+                            </p>
+                            {(browseSearchTerm || selectedCategory !== 'All') && (
+                                <div className="flex items-center justify-center gap-3 pt-3">
+                                    {browseSearchTerm && (
+                                        <button
+                                            onClick={() => setBrowseSearchTerm('')}
+                                            className="px-4 py-2 border border-zinc-700 bg-zinc-900 text-white font-mono text-xs hover:bg-zinc-800 transition-colors cursor-pointer uppercase tracking-wider"
+                                        >
+                                            Clear Search
+                                        </button>
+                                    )}
+                                    {selectedCategory !== 'All' && (
+                                        <button
+                                            onClick={() => setSelectedCategory('All')}
+                                            className="px-4 py-2 border border-zinc-700 bg-zinc-900 text-white font-mono text-xs hover:bg-zinc-800 transition-colors cursor-pointer uppercase tracking-wider"
+                                        >
+                                            Reset Category
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                      )}
+                    </div>
                 </div>
             </div>
-        </div>
-    );
+        );
+    };
     
     const BrowseProfilesView = () => (
         <div className="space-y-4">
