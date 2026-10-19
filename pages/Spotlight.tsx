@@ -2681,6 +2681,23 @@ export const SpotlightPage = () => {
         };
     }, [setRightSidebarVariant, setSpotlightBrowseState, setSpotlightIsBrowsing]);
 
+    // Handle ?browse=projects navigation from project detail page
+    useEffect(() => {
+        const browseParam = searchParams.get('browse');
+        if (browseParam === 'projects' || browseParam === 'profiles') {
+            if (setSpotlightBrowseState) setSpotlightBrowseState(browseParam);
+            if (setSpotlightIsBrowsing) setSpotlightIsBrowsing(true);
+            // Remove the param from the URL so it doesn't persist on refresh
+            setSearchParams(prev => {
+                const next = new URLSearchParams(prev);
+                next.delete('browse');
+                return next;
+            }, { replace: true });
+        }
+    // Only run on mount (searchParams identity may change, but we only want the initial value)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     useEffect(() => {
         setLoading(true);
         const timer = setTimeout(() => {

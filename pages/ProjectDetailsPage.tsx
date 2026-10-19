@@ -45,7 +45,6 @@ import {
     GlobeAltIcon, 
     CodeBracketIcon, 
     DocumentTextIcon, 
-    ArrowLeftIcon,
     ChatBubbleBottomCenterTextIcon,
     SparklesIcon,
     BriefcaseIcon,
@@ -489,43 +488,6 @@ export const ProjectDetailsPage: React.FC = () => {
 
     return (
         <div className="space-y-8 pb-16">
-            {/* Top Navigation & Breadcrumbs */}
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
-                <div className="flex items-center gap-2 text-xs font-mono">
-                    <button
-                        onClick={() => {
-                            if (window.history.length > 1) {
-                                navigate(-1);
-                            } else {
-                                navigate('/spotlight');
-                            }
-                        }}
-                        className="text-zinc-400 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer group"
-                    >
-                        <ArrowLeftIcon className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-                        <span>BACK</span>
-                    </button>
-                    <span className="text-zinc-600">/</span>
-                    <Link to="/spotlight" className="text-zinc-500 hover:text-zinc-300 transition-colors">
-                        SPOTLIGHT
-                    </Link>
-                    <span className="text-zinc-600">/</span>
-                    <span className="text-zinc-500">{isCollab ? 'COLLABS' : 'SHOWCASE'}</span>
-                    <span className="text-zinc-600">/</span>
-                    <span className="text-white truncate max-w-[200px] md:max-w-md font-semibold">{projectTitle}</span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <span className={`text-[10px] font-mono uppercase px-2.5 py-1 border font-semibold tracking-wider ${
-                        isCollab 
-                            ? 'bg-purple-950/40 border-purple-800/80 text-purple-300' 
-                            : 'bg-emerald-950/40 border-emerald-800/80 text-emerald-300'
-                    }`}>
-                        {isCollab ? '// COLLAB_SIGNAL' : '// SHOWCASE_PROJECT'}
-                    </span>
-                </div>
-            </div>
-
             {/* Main Project Details Card */}
             <article className="bg-[#0c0c0e] border border-zinc-800 p-6 md:p-8 space-y-8">
                 {/* Header: Title + Hook + Creator Profile */}

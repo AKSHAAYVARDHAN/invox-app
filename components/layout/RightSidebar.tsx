@@ -518,6 +518,8 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
 }) => {
     const { currentUser } = useAuth();
     const navigate = ReactRouterDOM.useNavigate();
+    const location = ReactRouterDOM.useLocation();
+    const isOnProjectDetail = location.pathname.startsWith('/spotlight/project/');
     const [searchParams, setSearchParams] = ReactRouterDOM.useSearchParams();
     const [isBrowsingView, setIsBrowsingView] = useState(false);
     const [isPinnedView, setIsPinnedView] = useState(false);
@@ -601,7 +603,14 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                 {isBrowsingView ? (
                     <>
                         <div className="flex items-center justify-between px-4">
-                            <button onClick={() => { setIsBrowsingView(false); setSpotlightIsBrowsing?.(false); }} className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors">
+                            <button
+                            onClick={() => {
+                                setIsBrowsingView(false);
+                                setSpotlightIsBrowsing?.(false);
+                                if (isOnProjectDetail) navigate('/spotlight');
+                            }}
+                            className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors"
+                        >
                                 <ArrowLeftIcon className="w-4 h-4" />
                                 <span>// BACK_TO_SPOTLIGHT</span>
                             </button>
@@ -611,7 +620,13 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                             <p className="text-xs text-zinc-400 font-mono mb-4">{browseDescription}</p>
                             <div className="space-y-2">
                                 <button
-                                    onClick={() => setSpotlightBrowseState('projects')}
+                                    onClick={() => {
+                                        if (isOnProjectDetail) {
+                                            navigate('/spotlight?browse=projects');
+                                        } else {
+                                            setSpotlightBrowseState('projects');
+                                        }
+                                    }}
                                     className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${
                                         spotlightBrowseState === 'projects' 
                                             ? 'bg-[#18181d] text-white border-zinc-700 font-bold' 
@@ -622,7 +637,13 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                     <span>BROWSE_PROJECTS</span>
                                 </button>
                                 <button
-                                     onClick={() => setSpotlightBrowseState('profiles')}
+                                     onClick={() => {
+                                        if (isOnProjectDetail) {
+                                            navigate('/spotlight?browse=profiles');
+                                        } else {
+                                            setSpotlightBrowseState('profiles');
+                                        }
+                                     }}
                                      className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${
                                         spotlightBrowseState === 'profiles' 
                                             ? 'bg-[#18181d] text-white border-zinc-700 font-bold' 
