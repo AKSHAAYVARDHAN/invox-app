@@ -224,6 +224,8 @@ interface RightSidebarProps {
     setDiscoverSearchTerm?: (term: string) => void;
     collabManagementView?: 'incoming' | 'active' | 'my_applications' | 'inbox' | 'teams' | null;
     setCollabManagementView?: (view: 'incoming' | 'active' | 'my_applications' | 'inbox' | 'teams' | null) => void;
+    spotlightIsBrowsing?: boolean;
+    setSpotlightIsBrowsing?: (value: boolean) => void;
 }
 
 const DiscoverSidebar: React.FC<Pick<RightSidebarProps, 'activityFilter' | 'setActivityFilter' | 'discoverSearchTerm' | 'setDiscoverSearchTerm'>> = ({ 
@@ -501,7 +503,7 @@ const TrendzSidebar: React.FC<Pick<RightSidebarProps, 'followedDomainsFilter' | 
     );
 };
 
-const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' | 'setSpotlightBrowseState' | 'showPinnedHighlights' | 'setShowPinnedHighlights' | 'showPinnedProfiles' | 'setShowPinnedProfiles' | 'variant' | 'collabManagementView' | 'setCollabManagementView'>> = ({ 
+const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' | 'setSpotlightBrowseState' | 'showPinnedHighlights' | 'setShowPinnedHighlights' | 'showPinnedProfiles' | 'setShowPinnedProfiles' | 'variant' | 'collabManagementView' | 'setCollabManagementView' | 'spotlightIsBrowsing' | 'setSpotlightIsBrowsing'>> = ({ 
     spotlightBrowseState, 
     setSpotlightBrowseState, 
     showPinnedHighlights, 
@@ -510,7 +512,9 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
     setShowPinnedProfiles,
     variant,
     collabManagementView,
-    setCollabManagementView
+    setCollabManagementView,
+    spotlightIsBrowsing,
+    setSpotlightIsBrowsing,
 }) => {
     const { currentUser } = useAuth();
     const navigate = ReactRouterDOM.useNavigate();
@@ -555,13 +559,24 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
     const collabData = useCollabDashboardData(activeConvId, activeTeamConvId);
 
     useEffect(() => {
+        // When navigating between spotlight sub-variants (e.g. showcase → collabs), reset local view state.
+        // Skip the reset if we are restoring the browse state (e.g. coming from ProjectDetailsPage).
+        if (spotlightIsBrowsing) return;
         setIsBrowsingView(false);
         setIsPinnedView(false);
         setPinnedViewMode('options');
         setSpotlightBrowseState(null);
         setShowPinnedHighlights(false);
         setShowPinnedProfiles?.(false);
-    }, [variant, setSpotlightBrowseState, setShowPinnedHighlights, setShowPinnedProfiles]);
+    }, [variant, setSpotlightBrowseState, setShowPinnedHighlights, setShowPinnedProfiles, spotlightIsBrowsing]);
+
+
+    // Sync isBrowsingView from external prop (e.g., when ProjectDetailsPage preserves browse state)
+    useEffect(() => {
+        if (spotlightIsBrowsing) {
+            setIsBrowsingView(true);
+        }
+    }, [spotlightIsBrowsing]);
 
     useEffect(() => {
         if (!isBrowsingView) {
@@ -586,7 +601,7 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                 {isBrowsingView ? (
                     <>
                         <div className="flex items-center justify-between px-4">
-                            <button onClick={() => setIsBrowsingView(false)} className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors">
+                            <button onClick={() => { setIsBrowsingView(false); setSpotlightIsBrowsing?.(false); }} className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors">
                                 <ArrowLeftIcon className="w-4 h-4" />
                                 <span>// BACK_TO_SPOTLIGHT</span>
                             </button>
@@ -783,7 +798,7 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                         ) : (
                             <div className="px-4 flex flex-col gap-2.5">
                                 <button
-                                    onClick={() => { setIsBrowsingView(true); setShowPinnedHighlights(false); setShowPinnedProfiles?.(false); }}
+                                    onClick={() => { setIsBrowsingView(true); setShowPinnedHighlights(false); setShowPinnedProfiles?.(false); setSpotlightIsBrowsing?.(true); }}
                                     className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800/90 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors cursor-pointer"
                                 >
                                     <div className="flex items-center gap-2">
@@ -1814,6 +1829,8 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ variant, ...props }) => {
                     setShowPinnedProfiles={props.setShowPinnedProfiles}
                     collabManagementView={props.collabManagementView}
                     setCollabManagementView={props.setCollabManagementView}
+                    spotlightIsBrowsing={props.spotlightIsBrowsing}
+                    setSpotlightIsBrowsing={props.setSpotlightIsBrowsing}
                  />;
             case 'goforit':
                 return <GoForItSidebar filters={props.goforitFilters} setFilters={props.setGoforitFilters} setIsFilterModalOpen={props.setIsFilterModalOpen}/>

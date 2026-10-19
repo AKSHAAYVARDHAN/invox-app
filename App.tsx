@@ -134,6 +134,7 @@ const ProtectedLayout = () => {
     const [activityFilter, setActivityFilter] = useState<string | null>(null);
     const [followedDomainsFilter, setFollowedDomainsFilter] = useState<string | null>(null);
     const [spotlightBrowseState, setSpotlightBrowseState] = useState<string | null>(null); // 'projects' or 'profiles'
+    const [spotlightIsBrowsing, setSpotlightIsBrowsing] = useState(false); // whether the browse directory panel is open in the spotlight sidebar
     const [showPinnedHighlights, setShowPinnedHighlights] = useState(false);
     const [showPinnedProfiles, setShowPinnedProfiles] = useState(false);
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -249,6 +250,8 @@ const ProtectedLayout = () => {
         setFollowedDomainsFilter, 
         spotlightBrowseState, 
         setSpotlightBrowseState, 
+        spotlightIsBrowsing,
+        setSpotlightIsBrowsing,
         showPinnedHighlights, 
         setShowPinnedHighlights, 
         showPinnedProfiles,
@@ -282,6 +285,8 @@ const ProtectedLayout = () => {
         setFollowedDomainsFilter, 
         spotlightBrowseState, 
         setSpotlightBrowseState, 
+        spotlightIsBrowsing,
+        setSpotlightIsBrowsing,
         showPinnedHighlights, 
         setShowPinnedHighlights, 
         showPinnedProfiles,
@@ -335,6 +340,8 @@ const ProtectedLayout = () => {
                         setFollowedDomainsFilter={setFollowedDomainsFilter}
                         spotlightBrowseState={spotlightBrowseState}
                         setSpotlightBrowseState={setSpotlightBrowseState}
+                        spotlightIsBrowsing={spotlightIsBrowsing}
+                        setSpotlightIsBrowsing={setSpotlightIsBrowsing}
                         showPinnedHighlights={showPinnedHighlights}
                         setShowPinnedHighlights={setShowPinnedHighlights}
                         showPinnedProfiles={showPinnedProfiles}

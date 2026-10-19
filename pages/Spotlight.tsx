@@ -2197,6 +2197,8 @@ export const SpotlightPage = () => {
         setRightSidebarVariant: (variant: string) => void;
         spotlightBrowseState: string | null;
         setSpotlightBrowseState: (filter: string | null) => void;
+        spotlightIsBrowsing?: boolean;
+        setSpotlightIsBrowsing?: (value: boolean) => void;
         showPinnedHighlights: boolean;
         setShowPinnedHighlights: (show: boolean) => void;
         showPinnedProfiles?: boolean;
@@ -2211,6 +2213,7 @@ export const SpotlightPage = () => {
         setRightSidebarVariant,
         spotlightBrowseState,
         setSpotlightBrowseState,
+        setSpotlightIsBrowsing,
         showPinnedHighlights,
         setShowPinnedHighlights,
         showPinnedProfiles = false,
@@ -2672,8 +2675,11 @@ export const SpotlightPage = () => {
             if (setSpotlightBrowseState) {
                 setSpotlightBrowseState(null);
             }
+            if (setSpotlightIsBrowsing) {
+                setSpotlightIsBrowsing(false);
+            }
         };
-    }, [setRightSidebarVariant, setSpotlightBrowseState]);
+    }, [setRightSidebarVariant, setSpotlightBrowseState, setSpotlightIsBrowsing]);
 
     useEffect(() => {
         setLoading(true);

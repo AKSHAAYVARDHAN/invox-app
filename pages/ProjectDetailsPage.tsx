@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useOutletContext } from 'react-router-dom';
 import type { Project, PostComment, CollabRole, CollabApplication } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { 
@@ -59,6 +59,28 @@ export const ProjectDetailsPage: React.FC = () => {
     const { projectId } = useParams<{ projectId: string }>();
     const navigate = useNavigate();
     const { currentUser, userProfile } = useAuth();
+
+    // Outlet context — may be undefined if accessed outside the protected layout
+    const outletContext = useOutletContext<{
+        setRightSidebarVariant?: (variant: string) => void;
+        setSpotlightBrowseState?: (state: string | null) => void;
+        setSpotlightIsBrowsing?: (value: boolean) => void;
+    } | null>() ?? {};
+    const { setRightSidebarVariant, setSpotlightBrowseState, setSpotlightIsBrowsing } = outletContext;
+
+    // Preserve Browse Projects sidebar panel while this page is mounted
+    useEffect(() => {
+        setRightSidebarVariant?.('spotlight');
+        setSpotlightBrowseState?.('projects');
+        setSpotlightIsBrowsing?.(true);
+        return () => {
+            setRightSidebarVariant?.('default');
+            setSpotlightBrowseState?.(null);
+            setSpotlightIsBrowsing?.(false);
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
 
     // Core data states
     const [project, setProject] = useState<Project | null>(null);
