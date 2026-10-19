@@ -1008,7 +1008,7 @@ export const ProjectDetailsPage: React.FC = () => {
                             <SuggestionCard 
                                 key={relProj.id} 
                                 project={relProj} 
-                                openInNewTab={true}
+                                openInNewTab={false}
                             />
                         ))}
                     </div>

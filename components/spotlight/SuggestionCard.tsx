@@ -11,11 +11,11 @@ export interface SuggestionCardProps {
   project: Project | any;
   /**
    * Optional custom click handler if parent wants to override.
-   * By default, opens #/spotlight/project/:projectId in a new browser tab.
+   * By default, navigates to /spotlight/project/:projectId within the app.
    */
   onClick?: (project: Project, e: React.MouseEvent) => void;
   /**
-   * Whether to force opening in a new tab (defaults to true).
+   * Whether to open in a new tab. Defaults to false (in-app navigation).
    */
   openInNewTab?: boolean;
 }
@@ -23,7 +23,7 @@ export interface SuggestionCardProps {
 export const SuggestionCard: React.FC<SuggestionCardProps> = ({ 
   project, 
   onClick,
-  openInNewTab = true 
+  openInNewTab = false 
 }) => {
   const [imageRef, isVisible] = useLazyLoad<HTMLImageElement>();
   const navigate = useNavigate();
@@ -78,6 +78,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
   const categoryLabel = proj.category || proj.domain || (project as any).category || (project as any).domain;
 
   const projectDetailHref = `#/spotlight/project/${encodeURIComponent(project.id)}`;
+  const inAppPath = `/spotlight/project/${encodeURIComponent(project.id)}`;
 
   const handleCardClick = (e: React.MouseEvent) => {
     if (onClick) {
@@ -88,6 +89,9 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
     if (openInNewTab) {
       e.preventDefault();
       window.open(projectDetailHref, '_blank', 'noopener,noreferrer');
+    } else {
+      e.preventDefault();
+      navigate(inAppPath);
     }
   };
 
@@ -101,7 +105,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({
 
   return (
     <a 
-      href={projectDetailHref}
+      href={openInNewTab ? projectDetailHref : inAppPath}
       target={openInNewTab ? '_blank' : undefined}
       rel={openInNewTab ? 'noopener noreferrer' : undefined}
       onClick={handleCardClick}
