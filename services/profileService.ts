@@ -15,6 +15,8 @@ export interface DiscoverableProfile {
         uid?: string;
         username?: string;
     };
+    headline?: string;
+    bio?: string;
     description: string;
     category: string;
     domain?: string;
@@ -47,6 +49,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_cadams',
             uid: 'seed_cadams',
         },
+        headline: 'Decentralized AI Pioneer // Web3 Architect',
+        bio: 'Building verifiable ethical AI and zero-knowledge inference frameworks.',
         description: 'Decentralized social networking pioneer building verifiable ethical AI and zero-knowledge inference frameworks.',
         category: 'Machine Learning & AI',
         domain: 'Machine Learning',
@@ -67,6 +71,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_ereed',
             uid: 'seed_ereed',
         },
+        headline: 'AI Ethicist & Research Scientist',
+        bio: 'Specializing in algorithmic bias detection, fairness, and transparency in large language models.',
         description: 'AI Ethicist and researcher focusing on algorithmic bias detection, fairness, and transparency in large language models.',
         category: 'Machine Learning & AI',
         domain: 'Machine Learning',
@@ -87,6 +93,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_sarahlee',
             uid: 'seed_sarahlee',
         },
+        headline: 'Fair ML & Explainability Researcher',
+        bio: 'Focused on building fair, interpretable, and transparent machine learning models.',
         description: 'AI Ethicist & Researcher. Focused on building fair, interpretable, and transparent machine learning models.',
         category: 'Machine Learning & AI',
         domain: 'Machine Learning',
@@ -107,6 +115,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_davidchen',
             uid: 'seed_davidchen',
         },
+        headline: 'Data Scientist // NLP & Open-Source LLMs',
+        bio: 'Specializing in NLP and large language models. Always learning and open-sourcing benchmarks.',
         description: 'Data Scientist specializing in NLP and large language models. Always learning and open-sourcing benchmarks.',
         category: 'Machine Learning & AI',
         domain: 'Machine Learning',
@@ -127,6 +137,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_maria_rodriguez',
             uid: 'seed_maria_rodriguez',
         },
+        headline: 'MLOps Architect & Cloud Infrastructure Lead',
+        bio: 'Streamlining automated deployment and observability of machine learning models at scale.',
         description: 'MLOps expert, streamlining automated deployment and observability of machine learning models at scale.',
         category: 'Machine Learning & AI',
         domain: 'Machine Learning',
@@ -149,6 +161,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_ktanaka',
             uid: 'seed_ktanaka',
         },
+        headline: 'Creative Frontend Developer & WebXR Architect',
+        bio: 'Crafting interactive 3D spatial language learning environments and WebXR experiences.',
         description: 'Creative frontend developer and WebXR enthusiast crafting interactive 3D spatial language learning environments.',
         category: 'Web Development',
         domain: 'App Development',
@@ -169,6 +183,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_mrossi',
             uid: 'seed_mrossi',
         },
+        headline: 'Systems Engineer // High-Throughput APIs',
+        bio: 'Building ultra-fast reactive engines, cross-platform native frameworks, and high-throughput APIs.',
         description: 'Systems engineer building ultra-fast reactive engines, cross-platform native frameworks, and high-throughput APIs.',
         category: 'Web Development',
         domain: 'App Development',
@@ -189,6 +205,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_ljohnson',
             uid: 'seed_ljohnson',
         },
+        headline: 'Full-Stack Software Architect // Real-Time Tools',
+        bio: 'Specializing in real-time developer collaboration, WebSockets, and distributed tooling.',
         description: 'Full-stack software architect specializing in real-time developer collaboration, WebSockets, and distributed tooling.',
         category: 'Web Development',
         domain: 'App Development',
@@ -209,6 +227,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_jessica_wang',
             uid: 'seed_jessica_wang',
         },
+        headline: 'Full-Stack Developer // Design Tokens Lead',
+        bio: 'Creating accessible, high-performance web applications and scalable design tokens.',
         description: 'Full-stack developer with a passion for creating accessible, high-performance web applications and design tokens.',
         category: 'Web Development',
         domain: 'App Development',
@@ -229,6 +249,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_tom_smith',
             uid: 'seed_tom_smith',
         },
+        headline: 'Frontend Wizard // Component Performance',
+        bio: 'React, Vue, and Svelte enthusiast. Making the web faster and more responsive, one component at a time.',
         description: 'Frontend wizard. React, Vue, and Svelte enthusiast. Making the web faster and more responsive, one component at a time.',
         category: 'Web Development',
         domain: 'App Development',
@@ -251,6 +273,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_chloeb',
             uid: 'seed_chloeb',
         },
+        headline: 'Design Systems Architect // Accessibility Lead',
+        bio: 'Creating WCAG AAA compliant design tokens, fluid UI libraries, and multi-tenant architectures.',
         description: 'Design Systems Architect creating WCAG AAA compliant design tokens, fluid UI libraries, and multi-tenant architectures.',
         category: 'Design & UI',
         domain: 'Design',
@@ -271,6 +295,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_mcbenny',
             uid: 'seed_mcbenny',
         },
+        headline: 'Product Designer // Interactive Canvases',
+        bio: 'Reimagining the future of real-time collaborative workflows, canvas rendering, and developer tooling.',
         description: 'Product Designer reimagining the future of real-time collaborative workflows, canvas rendering, and developer tooling.',
         category: 'Design & UI',
         domain: 'Design',
@@ -291,6 +317,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_musichaze',
             uid: 'seed_musichaze',
         },
+        headline: 'Interaction Designer // Sonic Interfaces',
+        bio: 'Specializing in high-contrast sonic streaming visualizers and dynamic responsive audio interfaces.',
         description: 'Interaction designer specializing in high-contrast sonic streaming visualizers and dynamic responsive audio interfaces.',
         category: 'Design & UI',
         domain: 'Design',
@@ -311,6 +339,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_emily_carter',
             uid: 'seed_emily_carter',
         },
+        headline: 'Product Designer // User Research & Ergonomics',
+        bio: 'Focused on user-centered research, intuitive digital ergonomics, and micro-interactions.',
         description: 'Product Designer focused on user-centered research, intuitive digital ergonomics, and micro-interactions.',
         category: 'Design & UI',
         domain: 'Design',
@@ -331,6 +361,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_ben_adams',
             uid: 'seed_ben_adams',
         },
+        headline: 'UI/UX Designer // Dark-Mode Systems',
+        bio: 'Crafting pixel-perfect interfaces, dark-mode design systems, and seamless checkout flows.',
         description: 'UI/UX Designer who loves crafting pixel-perfect interfaces, dark-mode design systems, and seamless checkout flows.',
         category: 'Design & UI',
         domain: 'Design',
@@ -353,6 +385,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_abello',
             uid: 'seed_abello',
         },
+        headline: 'Security Researcher // Vision Transformers Lead',
+        bio: 'Building vision transformer toolkits for synthetic and deepfake media detection.',
         description: 'Security researcher and open-source engineer building vision transformer toolkits for synthetic and deepfake media detection.',
         category: 'Cybersecurity',
         domain: 'Cybersecurity',
@@ -373,6 +407,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_robert_moore',
             uid: 'seed_robert_moore',
         },
+        headline: 'Ethical Hacker & Protocol Security Analyst',
+        bio: 'Protecting decentralized protocols, digital assets, and infrastructure from zero-day threats.',
         description: 'Ethical hacker and security analyst protecting decentralized protocols, digital assets, and infrastructure from zero-day threats.',
         category: 'Cybersecurity',
         domain: 'Cybersecurity',
@@ -393,6 +429,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_william_hill',
             uid: 'seed_william_hill',
         },
+        headline: 'Cloud Security Architect // Zero-Trust IAM',
+        bio: 'Securing multi-cloud infrastructure and zero-trust IAM frameworks across AWS, Azure, and GCP.',
         description: 'Cloud Security Architect. Securing multi-cloud infrastructure and zero-trust IAM frameworks across AWS, Azure, and GCP.',
         category: 'Cybersecurity',
         domain: 'Cybersecurity',
@@ -413,6 +451,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_charles_clark',
             uid: 'seed_charles_clark',
         },
+        headline: 'AppSec & CI/CD DevSecOps Engineer',
+        bio: 'Finding and patching software vulnerabilities in automated CI/CD continuous delivery pipelines.',
         description: 'Application security engineer finding and patching software vulnerabilities in automated CI/CD continuous delivery pipelines.',
         category: 'Cybersecurity',
         domain: 'Cybersecurity',
@@ -435,6 +475,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_fintechsolutions',
             uid: 'seed_fintechsolutions',
         },
+        headline: 'Institutional FX Terminals & Market Dashboards',
+        bio: 'Engineering high-density institutional dashboards, automated FX treasury pipelines, and market data terminals.',
         description: 'Engineering high-density institutional dashboards, automated FX treasury pipelines, and algorithmic market data terminals.',
         category: 'Fintech',
         domain: 'Fintech',
@@ -455,6 +497,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_nancy_lewis',
             uid: 'seed_nancy_lewis',
         },
+        headline: 'DeFi Protocol Engineer // Smart Contract Guarantees',
+        bio: 'Building the next evolution of decentralized finance protocols with automated liquidity mechanisms.',
         description: 'Building the next evolution of decentralized finance protocols with automated liquidity mechanisms and smart contract guarantees.',
         category: 'Fintech',
         domain: 'Fintech',
@@ -475,6 +519,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_karen_allen',
             uid: 'seed_karen_allen',
         },
+        headline: 'Product Leader // Enterprise Digital Banking',
+        bio: 'Driving secure transaction infrastructure and consumer payments UX for digital banking platforms.',
         description: 'Product Leader for enterprise digital banking platforms, driving secure transaction infrastructure and consumer payments UX.',
         category: 'Fintech',
         domain: 'Fintech',
@@ -495,6 +541,8 @@ export const BASE_DISCOVERABLE_PROFILES: DiscoverableProfile[] = [
             id: 'seed_mark_young',
             uid: 'seed_mark_young',
         },
+        headline: 'Payment Settlement Architect // Distributed Concurrency',
+        bio: 'Developing resilient, fault-tolerant payment gateway settlement engines with high transactional concurrency.',
         description: 'Developing resilient, fault-tolerant payment gateway settlement engines with high transactional concurrency.',
         category: 'Fintech',
         domain: 'Fintech',
@@ -602,6 +650,9 @@ export const fetchDiscoverableProfiles = async (allProjects: Project[] = []): Pr
                 allProjects
             );
 
+            const userHeadline = (data.headline || existing?.headline || '').trim() || undefined;
+            const userBio = (data.bio || existing?.bio || '').trim() || undefined;
+
             const mergedProfile: DiscoverableProfile = {
                 id: d.id,
                 username: normalized || d.id,
@@ -613,7 +664,9 @@ export const fetchDiscoverableProfiles = async (allProjects: Project[] = []): Pr
                     id: d.id,
                     uid: d.id,
                 },
-                description: data.headline || data.bio || existing?.description || (data.skills?.length ? `Specializing in ${data.skills.slice(0, 3).join(', ')}` : 'Invox platform builder'),
+                headline: userHeadline,
+                bio: userBio,
+                description: userHeadline || userBio || existing?.description || (data.skills?.length ? `Specializing in ${data.skills.slice(0, 3).join(', ')}` : 'Invox platform builder'),
                 category,
                 domain: category,
                 skills: data.skills || existing?.skills || [],
@@ -657,8 +710,8 @@ export const getFallbackUserProfile = (identifier: string): InvoxUser | null => 
         coverPhotoURL: null,
         role: match.author.isVerified ? 'admin' : 'user',
         emailVerified: Boolean(match.author.isVerified),
-        headline: match.description,
-        bio: match.description,
+        headline: match.headline || match.description,
+        bio: match.bio || match.description,
         skills: match.skills || [],
         interests: [match.category],
         links: [
@@ -684,3 +737,130 @@ export const getFallbackUserProfile = (identifier: string): InvoxUser | null => 
         createdAt: new Date('2024-01-15'),
     };
 };
+
+/**
+ * Computes similar profiles for a given user profile, scoring candidates on:
+ * - Shared skills (direct & partial matches)
+ * - Matching domain or category
+ * - Relevant headline / bio keyword overlap
+ * Strictly excludes the profile currently viewed and deduplicates results.
+ * Falls back to other high-activity discoverable profiles if not enough direct matches.
+ */
+export const getSimilarProfiles = (
+    currentProfile: InvoxUser | null,
+    allProfiles: DiscoverableProfile[],
+    currentIdentifier?: string,
+    maxResults = 3
+): DiscoverableProfile[] => {
+    if (!allProfiles || allProfiles.length === 0) return [];
+
+    const targetUid = (currentProfile?.uid || '').toLowerCase().trim();
+    const targetUsername = (currentProfile?.username || '').toLowerCase().trim();
+    const targetName = (currentProfile?.displayName || '').toLowerCase().trim();
+    const targetClean = (currentIdentifier || '').toLowerCase().replace(/^seed_/, '').replace(/^@/, '').trim();
+
+    // 1. Exclude the current profile being viewed
+    const candidates = allProfiles.filter(p => {
+        const pId = (p.id || '').toLowerCase().replace(/^seed_/, '');
+        const pUsername = (p.username || '').toLowerCase().replace(/^seed_/, '').replace(/^@/, '');
+        const pAuthorUid = ((p.author as any)?.uid || (p.author as any)?.id || '').toLowerCase().replace(/^seed_/, '');
+        const pAuthorName = (p.author?.name || '').toLowerCase();
+
+        if (targetUid && (pId === targetUid || pAuthorUid === targetUid)) return false;
+        if (targetUsername && (pUsername === targetUsername || pId === targetUsername)) return false;
+        if (targetClean && (pId === targetClean || pUsername === targetClean || pAuthorUid === targetClean)) return false;
+        if (targetName && pAuthorName === targetName) return false;
+
+        return true;
+    });
+
+    if (candidates.length === 0) return [];
+
+    // 2. Prepare target keywords and tags
+    const targetSkills = (currentProfile?.skills || []).map(s => s.toLowerCase().trim());
+    const targetInterests = (currentProfile?.interests || []).map(s => s.toLowerCase().trim());
+    const targetHeadline = (currentProfile?.headline || '').toLowerCase();
+    const targetBio = (currentProfile?.bio || '').toLowerCase();
+    const targetCategory = targetInterests[0] || (currentProfile as any)?.category || (currentProfile as any)?.domain || '';
+
+    // Extract notable technical tokens from headline/bio
+    const techKeywords = [
+        'ai', 'machine learning', 'nlp', 'vision', 'react', 'typescript', 'frontend', 'backend',
+        'full-stack', 'security', 'cyber', 'design', 'ui', 'ux', 'figma', 'fintech', 'defi',
+        'web3', 'rust', 'go', 'python', 'cloud', 'systems', 'architect'
+    ];
+    const activeKeywords = techKeywords.filter(k =>
+        targetHeadline.includes(k) ||
+        targetBio.includes(k) ||
+        targetSkills.some(s => s.includes(k)) ||
+        targetInterests.some(i => i.includes(k))
+    );
+
+    // 3. Score each candidate
+    const scored = candidates.map(candidate => {
+        let score = 0;
+        const candidateSkills = (candidate.skills || []).map(s => s.toLowerCase().trim());
+        const candidateCategory = (candidate.category || '').toLowerCase();
+        const candidateDomain = (candidate.domain || '').toLowerCase();
+        const candidateHeadline = (candidate.headline || '').toLowerCase();
+        const candidateBio = (candidate.bio || '').toLowerCase();
+
+        // Skill overlap
+        for (const skill of targetSkills) {
+            if (candidateSkills.includes(skill)) {
+                score += 15;
+            } else if (candidateSkills.some(cs => cs.includes(skill) || skill.includes(cs))) {
+                score += 7;
+            }
+        }
+
+        // Category & domain match
+        if (targetCategory) {
+            const cat = targetCategory.toLowerCase();
+            if (candidateCategory.includes(cat) || cat.includes(candidateCategory)) {
+                score += 12;
+            }
+            if (candidateDomain && (candidateDomain.includes(cat) || cat.includes(candidateDomain))) {
+                score += 10;
+            }
+        }
+
+        // Shared interest match
+        for (const interest of targetInterests) {
+            if (candidateCategory.includes(interest) || candidateDomain.includes(interest)) {
+                score += 10;
+            }
+        }
+
+        // Keyword overlap across headline/bio
+        for (const kw of activeKeywords) {
+            if (candidateHeadline.includes(kw)) score += 6;
+            if (candidateBio.includes(kw)) score += 4;
+            if (candidateSkills.some(cs => cs.includes(kw))) score += 5;
+        }
+
+        // Baseline score to maintain high quality order for fallback
+        score += (candidate.stats.projects || 0) * 0.2 + (candidate.stats.links || 0) * 0.1;
+
+        return { candidate, score };
+    });
+
+    // 4. Sort descending by score
+    scored.sort((a, b) => b.score - a.score);
+
+    // 5. Deduplicate and collect top results up to maxResults
+    const seen = new Set<string>();
+    const results: DiscoverableProfile[] = [];
+
+    for (const item of scored) {
+        const key = item.candidate.username.toLowerCase().trim() || item.candidate.id.toLowerCase().trim();
+        if (!seen.has(key)) {
+            seen.add(key);
+            results.push(item.candidate);
+            if (results.length >= maxResults) break;
+        }
+    }
+
+    return results;
+};
+

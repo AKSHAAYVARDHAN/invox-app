@@ -85,6 +85,7 @@ import { CollabTeamsView } from '../components/spotlight/CollabTeamsView';
 import { ShowcaseCard } from '../components/spotlight/ShowcaseCard';
 import { CreateShowcaseModal } from '../components/uploads/CreateShowcaseModal';
 import { SuggestionCard } from '../components/spotlight/SuggestionCard';
+import { ProfileSuggestionCard } from '../components/spotlight/ProfileSuggestionCard';
 import { DiscoverableProfile, fetchDiscoverableProfiles } from '../services/profileService';
 
 export { getProjectCreatorId };
@@ -2935,60 +2936,6 @@ export const SpotlightPage = () => {
     
 
     
-    const ProfileSuggestionCard: React.FC<{ profile: DiscoverableProfile | ProfileSuggestion }> = ({ profile }) => {
-        const navigate = ReactRouterDOM.useNavigate();
-        const profileTarget = (profile as any).username || (profile as any).author?.username || (profile as any).author?.uid || profile.id;
-
-        const handleOpenProfile = (e: React.MouseEvent) => {
-            e.stopPropagation();
-            if (profileTarget) {
-                navigate(`/profile/${encodeURIComponent(profileTarget)}`);
-            }
-        };
-
-        return (
-            <div className="bg-[#0c0c0e] p-4 border border-zinc-800 flex flex-col min-h-48 hover:border-zinc-700 transition-colors">
-                <div className="flex justify-between items-start mb-3">
-                    <div
-                        onClick={handleOpenProfile}
-                        className="flex items-center gap-3 cursor-pointer group/creator"
-                        title={`View ${profile.author.name}'s profile`}
-                    >
-                        <img
-                            src={profile.author.avatarUrl}
-                            onError={handleImageError}
-                            alt={profile.author.name}
-                            className="w-10 h-10 border border-zinc-700 object-cover group-hover/creator:border-zinc-500 transition-colors"
-                        />
-                        <div className="flex items-center gap-1.5 min-w-0">
-                            <p className="font-bold text-white font-mono text-sm truncate group-hover/creator:text-zinc-300 transition-colors">{profile.author.name}</p>
-                            {profile.author.isVerified && <CheckBadgeIcon className="w-4 h-4 text-zinc-400 flex-shrink-0" />}
-                        </div>
-                    </div>
-                    <button
-                        onClick={handleOpenProfile}
-                        className="bg-zinc-900 border border-zinc-800 text-white px-4 py-1.5 font-mono text-xs uppercase font-bold hover:bg-zinc-800 hover:border-zinc-600 transition-colors cursor-pointer flex-shrink-0"
-                    >
-                        View
-                    </button>
-                </div>
-                <div className="flex-grow">
-                    <p className="text-xs font-mono text-zinc-400 line-clamp-3 leading-relaxed">{profile.description}</p>
-                </div>
-                <div className="mt-auto">
-                    <div className="border-t border-zinc-800 my-3" />
-                    <div className="flex justify-between items-center font-mono text-xs">
-                        <p className="text-zinc-400">
-                            PROJECTS : <span className="text-white font-bold">{profile.stats.projects}</span>
-                        </p>
-                        <p className="text-zinc-400">
-                            LINKS : <span className="text-white font-bold">{formatNumber(profile.stats.links)}</span>
-                        </p>
-                    </div>
-                </div>
-            </div>
-        );
-    };
     
     const CollaborationCard: React.FC<{ project: Project }> = ({ project }) => {
         const { currentUser } = useAuth();
@@ -4433,6 +4380,8 @@ export const SpotlightPage = () => {
                     const name = (profile.author.name || '').toLowerCase();
                     const username = (profile.username || profile.author.username || '').toLowerCase();
                     const desc = (profile.description || '').toLowerCase();
+                    const headline = ((profile as any).headline || '').toLowerCase();
+                    const bio = ((profile as any).bio || '').toLowerCase();
                     const category = (profile.category || '').toLowerCase();
                     const domain = (profile.domain || '').toLowerCase();
                     const skills = Array.isArray(profile.skills) ? profile.skills.map(s => s.toLowerCase()).join(' ') : '';
@@ -4441,6 +4390,8 @@ export const SpotlightPage = () => {
                         name.includes(query) ||
                         username.includes(query) ||
                         desc.includes(query) ||
+                        headline.includes(query) ||
+                        bio.includes(query) ||
                         category.includes(query) ||
                         domain.includes(query) ||
                         skills.includes(query);

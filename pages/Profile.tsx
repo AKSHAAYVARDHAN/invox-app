@@ -14,7 +14,8 @@ import { computeProfileCompletion } from './Settings';
 import type { InvoxUser } from '../types';
 
 import { resolveUsernameToUid, normalizeUsername } from '../services/usernameService';
-import { getFallbackUserProfile } from '../services/profileService';
+import { getFallbackUserProfile, fetchDiscoverableProfiles, getSimilarProfiles, type DiscoverableProfile } from '../services/profileService';
+import { ProfileSuggestionCard } from '../components/spotlight/ProfileSuggestionCard';
 
 /* ─── helpers ─────────────────────────────────────────────────────────────── */
 
@@ -81,6 +82,11 @@ const ProfilePage = () => {
     const [isConnected, setIsConnected] = useState(false);
     const [isConnecting, setIsConnecting] = useState(false);
 
+    // Similar Profiles state
+    const [allDiscoverableProfiles, setAllDiscoverableProfiles] = useState<DiscoverableProfile[]>([]);
+    const [similarProfiles, setSimilarProfiles] = useState<DiscoverableProfile[]>([]);
+    const [similarLoading, setSimilarLoading] = useState<boolean>(true);
+
     // Resolve username to UID if param is not already own profile
     useEffect(() => {
         let isMounted = true;
@@ -122,6 +128,44 @@ const ProfilePage = () => {
             unsub();
         };
     }, [isOwnProfile, resolvedUid, currentUser?.uid]);
+
+    // Fetch all discoverable profiles
+    useEffect(() => {
+        let isMounted = true;
+        fetchDiscoverableProfiles()
+            .then(profiles => {
+                if (isMounted) {
+                    setAllDiscoverableProfiles(profiles);
+                }
+            })
+            .catch(err => {
+                console.warn('[SIMILAR_PROFILES_LOAD_WARN]', err);
+                if (isMounted) setSimilarLoading(false);
+            });
+        return () => { isMounted = false; };
+    }, []);
+
+    // Recompute similar profiles whenever the active profile or target user changes
+    useEffect(() => {
+        if (allDiscoverableProfiles.length === 0) return;
+        setSimilarLoading(true);
+
+        const currentActive = isOwnProfile ? userProfile : targetProfile;
+        const recommendations = getSimilarProfiles(
+            currentActive,
+            allDiscoverableProfiles,
+            userId || resolvedUid || undefined,
+            3
+        );
+
+        setSimilarProfiles(recommendations);
+        setSimilarLoading(false);
+    }, [isOwnProfile, userProfile, targetProfile, allDiscoverableProfiles, userId, resolvedUid]);
+
+    // Scroll to top on navigation to a new profile
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [userId]);
 
     const handleToggleConnect = async () => {
         const effectiveTargetUid = resolvedUid || targetProfile?.uid;
@@ -678,6 +722,55 @@ const ProfilePage = () => {
                         )}
                     </p>
                 </div>
+            </div>
+
+            {/* ── Similar Profiles Section ─────────────────────────────────── */}
+            <div className="mt-8 pt-6 border-t border-zinc-800/90 font-mono">
+                <div className="mb-4">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest block leading-none mb-1">
+                        // DISCOVER_CREATORS
+                    </span>
+                    <h2 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
+                        // SIMILAR_PROFILES
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-1 font-mono">
+                        Discover more people with similar interests and skills.
+                    </p>
+                </div>
+
+                {similarLoading ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {[...Array(3)].map((_, i) => (
+                            <div key={i} className="bg-[#0c0c0e] border border-zinc-800 p-4 min-h-48 animate-pulse flex flex-col justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-zinc-800 flex-shrink-0" />
+                                    <div className="space-y-1.5 flex-1 min-w-0">
+                                        <div className="h-4 bg-zinc-800 w-1/2" />
+                                        <div className="h-3 bg-zinc-800 w-1/3" />
+                                    </div>
+                                </div>
+                                <div className="space-y-1.5 my-3">
+                                    <div className="h-3 bg-zinc-800 w-3/4" />
+                                    <div className="h-3 bg-zinc-800 w-1/2" />
+                                </div>
+                                <div className="border-t border-zinc-800 pt-3 flex justify-between">
+                                    <div className="h-3 bg-zinc-800 w-16" />
+                                    <div className="h-3 bg-zinc-800 w-16" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : similarProfiles.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {similarProfiles.map(p => (
+                            <ProfileSuggestionCard key={p.id} profile={p} />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="bg-[#0c0c0e] border border-zinc-800 p-8 text-center text-zinc-500 text-xs">
+                        // NO_SIMILAR_PROFILES_FOUND
+                    </div>
+                )}
             </div>
 
             <ImageZoomModal

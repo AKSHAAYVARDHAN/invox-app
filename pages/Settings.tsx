@@ -711,10 +711,12 @@ const SettingsPage = () => {
                                     <input
                                         type="text"
                                         value={headline}
-                                        onChange={e => setHeadline(e.target.value)}
+                                        onChange={e => setHeadline(e.target.value.slice(0, 120))}
+                                        maxLength={120}
                                         placeholder="e.g. Full-Stack Developer // Systems Architect"
                                         className={inputClass}
                                     />
+                                    <p className="mt-1 text-[10px] text-zinc-600 font-mono uppercase">{headline.length} / 120 CHARACTERS</p>
                                 </FormField>
 
                                 <FormField label="Bio / Dossier">
