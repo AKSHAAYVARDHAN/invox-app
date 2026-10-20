@@ -14,6 +14,7 @@ import { computeProfileCompletion } from './Settings';
 import type { InvoxUser } from '../types';
 
 import { resolveUsernameToUid, normalizeUsername } from '../services/usernameService';
+import { getFallbackUserProfile } from '../services/profileService';
 
 /* ─── helpers ─────────────────────────────────────────────────────────────── */
 
@@ -163,14 +164,26 @@ const ProfilePage = () => {
                     setTargetProfile(profile);
                     setTargetError(null);
                 } else {
-                    setTargetProfile(null);
-                    setTargetError('The requested INVOX profile does not exist.');
+                    const fallback = getFallbackUserProfile(resolvedUid) || (userId ? getFallbackUserProfile(userId) : null);
+                    if (fallback) {
+                        setTargetProfile(fallback);
+                        setTargetError(null);
+                    } else {
+                        setTargetProfile(null);
+                        setTargetError('The requested INVOX profile does not exist.');
+                    }
                 }
                 setTargetLoading(false);
             },
             (err) => {
                 console.error('[PROFILE_SUBSCRIBE_ERROR] Failed to load user profile:', err);
-                setTargetError('Unable to load user profile.');
+                const fallback = getFallbackUserProfile(resolvedUid) || (userId ? getFallbackUserProfile(userId) : null);
+                if (fallback) {
+                    setTargetProfile(fallback);
+                    setTargetError(null);
+                } else {
+                    setTargetError('Unable to load user profile.');
+                }
                 setTargetLoading(false);
             }
         );
@@ -178,7 +191,7 @@ const ProfilePage = () => {
         return () => {
             unsubscribe();
         };
-    }, [resolvedUid, isOwnProfile]);
+    }, [resolvedUid, isOwnProfile, userId]);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'profile' | 'cover') => {
         if (!e.target.files || !e.target.files[0] || !currentUser || !isOwnProfile) return;

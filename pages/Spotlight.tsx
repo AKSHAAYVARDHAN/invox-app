@@ -85,6 +85,7 @@ import { CollabTeamsView } from '../components/spotlight/CollabTeamsView';
 import { ShowcaseCard } from '../components/spotlight/ShowcaseCard';
 import { CreateShowcaseModal } from '../components/uploads/CreateShowcaseModal';
 import { SuggestionCard } from '../components/spotlight/SuggestionCard';
+import { DiscoverableProfile, fetchDiscoverableProfiles } from '../services/profileService';
 
 export { getProjectCreatorId };
 
@@ -2934,36 +2935,60 @@ export const SpotlightPage = () => {
     
 
     
-    const ProfileSuggestionCard: React.FC<{ profile: ProfileSuggestion }> = ({ profile }) => (
-        <div className="bg-[#0c0c0e] p-4 border border-zinc-800 flex flex-col min-h-48 hover:border-zinc-700 transition-colors">
-            <div className="flex justify-between items-start mb-3">
-                <div className="flex items-center gap-3">
-                    <img src={profile.author.avatarUrl} onError={handleImageError} alt={profile.author.name} className="w-10 h-10 border border-zinc-700 object-cover" />
-                    <div className="flex items-center gap-1.5">
-                        <p className="font-bold text-white font-mono text-sm">{profile.author.name}</p>
-                        {profile.author.isVerified && <CheckBadgeIcon className="w-4 h-4 text-zinc-400" />}
+    const ProfileSuggestionCard: React.FC<{ profile: DiscoverableProfile | ProfileSuggestion }> = ({ profile }) => {
+        const navigate = ReactRouterDOM.useNavigate();
+        const profileTarget = (profile as any).username || (profile as any).author?.username || (profile as any).author?.uid || profile.id;
+
+        const handleOpenProfile = (e: React.MouseEvent) => {
+            e.stopPropagation();
+            if (profileTarget) {
+                navigate(`/profile/${encodeURIComponent(profileTarget)}`);
+            }
+        };
+
+        return (
+            <div className="bg-[#0c0c0e] p-4 border border-zinc-800 flex flex-col min-h-48 hover:border-zinc-700 transition-colors">
+                <div className="flex justify-between items-start mb-3">
+                    <div
+                        onClick={handleOpenProfile}
+                        className="flex items-center gap-3 cursor-pointer group/creator"
+                        title={`View ${profile.author.name}'s profile`}
+                    >
+                        <img
+                            src={profile.author.avatarUrl}
+                            onError={handleImageError}
+                            alt={profile.author.name}
+                            className="w-10 h-10 border border-zinc-700 object-cover group-hover/creator:border-zinc-500 transition-colors"
+                        />
+                        <div className="flex items-center gap-1.5 min-w-0">
+                            <p className="font-bold text-white font-mono text-sm truncate group-hover/creator:text-zinc-300 transition-colors">{profile.author.name}</p>
+                            {profile.author.isVerified && <CheckBadgeIcon className="w-4 h-4 text-zinc-400 flex-shrink-0" />}
+                        </div>
+                    </div>
+                    <button
+                        onClick={handleOpenProfile}
+                        className="bg-zinc-900 border border-zinc-800 text-white px-4 py-1.5 font-mono text-xs uppercase font-bold hover:bg-zinc-800 hover:border-zinc-600 transition-colors cursor-pointer flex-shrink-0"
+                    >
+                        View
+                    </button>
+                </div>
+                <div className="flex-grow">
+                    <p className="text-xs font-mono text-zinc-400 line-clamp-3 leading-relaxed">{profile.description}</p>
+                </div>
+                <div className="mt-auto">
+                    <div className="border-t border-zinc-800 my-3" />
+                    <div className="flex justify-between items-center font-mono text-xs">
+                        <p className="text-zinc-400">
+                            PROJECTS : <span className="text-white font-bold">{profile.stats.projects}</span>
+                        </p>
+                        <p className="text-zinc-400">
+                            LINKS : <span className="text-white font-bold">{formatNumber(profile.stats.links)}</span>
+                        </p>
                     </div>
                 </div>
-                <button className="bg-zinc-900 border border-zinc-800 text-white px-4 py-1.5 font-mono text-xs uppercase font-bold hover:bg-zinc-800 transition-colors">
-                    View
-                </button>
             </div>
-            <div className="flex-grow">
-                <p className="text-xs font-mono text-zinc-400 line-clamp-3 leading-relaxed">{profile.description}</p>
-            </div>
-            <div className="mt-auto">
-                <div className="border-t border-zinc-800 my-3" />
-                <div className="flex justify-between items-center font-mono text-xs">
-                    <p className="text-zinc-400">
-                        PROJECTS : <span className="text-white font-bold">{profile.stats.projects}</span>
-                    </p>
-                    <p className="text-zinc-400">
-                        LINKS : <span className="text-white font-bold">{formatNumber(profile.stats.links)}</span>
-                    </p>
-                </div>
-            </div>
-        </div>
-    );
+        );
+    };
     
     const CollaborationCard: React.FC<{ project: Project }> = ({ project }) => {
         const { currentUser } = useAuth();
@@ -4310,65 +4335,312 @@ export const SpotlightPage = () => {
         );
     };
     
-    const BrowseProfilesView = () => (
-        <div className="space-y-4">
-            <div className="relative">
-                <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                <input 
-                    type="search" 
-                    placeholder="SEARCH PROFILES BY NAME OR DOMAIN..." 
-                    className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-10 font-mono text-xs focus:border-zinc-500 focus:outline-none text-white placeholder:text-zinc-600" 
-                />
-            </div>
-            <div>
-                <div className="flex justify-between items-center mb-3">
-                    <span className="text-xs font-bold font-mono uppercase tracking-wide text-zinc-300">EXPLORE_PROFILES</span>
-                    <button className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-xs text-zinc-300 font-mono uppercase hover:text-white hover:border-zinc-600 transition-colors">
-                        <FilterIcon className="w-4 h-4 text-zinc-500" />
-                        <span>Filter by</span>
-                        <ChevronDownIcon className="w-4 h-4 text-zinc-500" />
-                    </button>
+    const BrowseProfilesView = () => {
+        const [browseSearchTerm, setBrowseSearchTerm] = useState('');
+        const [selectedCategory, setSelectedCategory] = useState('All');
+        const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+        const [visiblePerCategory, setVisiblePerCategory] = useState<Record<string, number>>({});
+        const filterDropdownRef = useRef<HTMLDivElement>(null);
+
+        const [discoverableProfiles, setDiscoverableProfiles] = useState<DiscoverableProfile[]>([]);
+        const [profilesLoading, setProfilesLoading] = useState(true);
+
+        const combinedProjects = React.useMemo(() => {
+            return [...allShowcaseProjects, ...allCollabProjects];
+        }, []);
+
+        useEffect(() => {
+            let isMounted = true;
+            setProfilesLoading(true);
+
+            fetchDiscoverableProfiles(combinedProjects)
+                .then(profiles => {
+                    if (isMounted) {
+                        setDiscoverableProfiles(profiles);
+                        setProfilesLoading(false);
+                    }
+                })
+                .catch(err => {
+                    console.warn('[FETCH_DISCOVERABLE_PROFILES_WARN]', err);
+                    if (isMounted) setProfilesLoading(false);
+                });
+
+            return () => {
+                isMounted = false;
+            };
+        }, [combinedProjects]);
+
+        // Close dropdown when clicking outside
+        useEffect(() => {
+            if (!isFilterDropdownOpen) return;
+            const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+                if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target as Node)) {
+                    setIsFilterDropdownOpen(false);
+                }
+            };
+            document.addEventListener('mousedown', handleOutsideClick);
+            document.addEventListener('touchstart', handleOutsideClick);
+            return () => {
+                document.removeEventListener('mousedown', handleOutsideClick);
+                document.removeEventListener('touchstart', handleOutsideClick);
+            };
+        }, [isFilterDropdownOpen]);
+
+        // Available categories dynamically computed from discoverable profiles
+        const availableCategories = React.useMemo(() => {
+            const set = new Set<string>();
+            discoverableProfiles.forEach(p => {
+                if (p.category && p.category.trim()) {
+                    set.add(p.category.trim());
+                }
+            });
+            // Priority order for known groups
+            const priority = ['Machine Learning & AI', 'Web Development', 'Design & UI', 'Cybersecurity', 'Fintech'];
+            const sorted = Array.from(set).sort((a, b) => {
+                const idxA = priority.indexOf(a);
+                const idxB = priority.indexOf(b);
+                if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                if (idxA !== -1) return -1;
+                if (idxB !== -1) return 1;
+                return a.localeCompare(b);
+            });
+            return ['All', ...sorted];
+        }, [discoverableProfiles]);
+
+        // Reset category filter if selected category is not in available categories
+        useEffect(() => {
+            if (selectedCategory !== 'All' && !availableCategories.includes(selectedCategory)) {
+                setSelectedCategory('All');
+            }
+        }, [availableCategories, selectedCategory]);
+
+        // Filter profiles by search term and category
+        const filteredProfiles = React.useMemo(() => {
+            const query = browseSearchTerm.trim().toLowerCase();
+
+            return discoverableProfiles.filter(profile => {
+                // Category match
+                if (selectedCategory !== 'All') {
+                    const cat = (profile.category || profile.domain || '').toLowerCase().trim();
+                    const filter = selectedCategory.toLowerCase().trim();
+                    if (cat !== filter && !cat.includes(filter) && !filter.includes(cat)) {
+                        return false;
+                    }
+                }
+
+                // Search match: name, username, description/bio, category/domain, skills
+                if (query) {
+                    const name = (profile.author.name || '').toLowerCase();
+                    const username = (profile.username || profile.author.username || '').toLowerCase();
+                    const desc = (profile.description || '').toLowerCase();
+                    const category = (profile.category || '').toLowerCase();
+                    const domain = (profile.domain || '').toLowerCase();
+                    const skills = Array.isArray(profile.skills) ? profile.skills.map(s => s.toLowerCase()).join(' ') : '';
+
+                    const matches =
+                        name.includes(query) ||
+                        username.includes(query) ||
+                        desc.includes(query) ||
+                        category.includes(query) ||
+                        domain.includes(query) ||
+                        skills.includes(query);
+
+                    if (!matches) return false;
+                }
+
+                return true;
+            });
+        }, [discoverableProfiles, selectedCategory, browseSearchTerm]);
+
+        // Group into category buckets
+        const groupedCategories = React.useMemo(() => {
+            if (filteredProfiles.length === 0) return [];
+
+            const map = new Map<string, DiscoverableProfile[]>();
+            filteredProfiles.forEach(profile => {
+                const cat = (profile.category || 'Web Development').trim();
+                const list = map.get(cat) || [];
+                list.push(profile);
+                map.set(cat, list);
+            });
+
+            // Maintain standard order
+            const priority = ['Machine Learning & AI', 'Web Development', 'Design & UI', 'Cybersecurity', 'Fintech'];
+            const entries = Array.from(map.entries()).sort(([a], [b]) => {
+                const idxA = priority.indexOf(a);
+                const idxB = priority.indexOf(b);
+                if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                if (idxA !== -1) return -1;
+                if (idxB !== -1) return 1;
+                return a.localeCompare(b);
+            });
+
+            return entries.map(([category, profiles]) => ({
+                category,
+                profiles,
+            }));
+        }, [filteredProfiles]);
+
+        const handleLoadMore = (category: string) => {
+            setVisiblePerCategory(prev => ({
+                ...prev,
+                [category]: (prev[category] || 5) + 5,
+            }));
+        };
+
+        return (
+            <div className="space-y-4">
+                {/* Search Bar */}
+                <div className="relative">
+                    <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                    <input 
+                        type="search" 
+                        value={browseSearchTerm}
+                        onChange={(e) => setBrowseSearchTerm(e.target.value)}
+                        placeholder="SEARCH PROFILES BY NAME OR DOMAIN..." 
+                        className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-10 pr-10 font-mono text-xs focus:border-zinc-500 focus:outline-none text-white placeholder:text-zinc-600 transition-colors" 
+                    />
+                    {browseSearchTerm && (
+                        <button
+                            type="button"
+                            onClick={() => setBrowseSearchTerm('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                            title="Clear search"
+                        >
+                            <CloseIcon className="w-4 h-4" />
+                        </button>
+                    )}
                 </div>
-                
+
                 <div>
-                  {loading ? (
-                    <div className="space-y-6">
-                        {[...Array(2)].map((_, index) => (
-                            <div key={index}>
-                                <div className="h-4 w-1/4 bg-zinc-800 mb-3 animate-pulse"></div>
-                                <div className="flex overflow-x-auto space-x-3 pb-2 no-scrollbar items-center">
-                                    <div className="w-96 flex-shrink-0"><ProfileSuggestionCardSkeleton /></div>
-                                    <div className="w-96 flex-shrink-0"><ProfileSuggestionCardSkeleton /></div>
-                                    <div className="flex-shrink-0 w-36 h-48 bg-[#0c0c0e] border border-zinc-800 flex flex-col items-center justify-center">
-                                        <div className="w-6 h-6 bg-zinc-800 mb-2"></div>
-                                        <div className="h-3 w-16 bg-zinc-800"></div>
+                    {/* Header + Filter by Dropdown */}
+                    <div className="flex justify-between items-center mb-3">
+                        <span className="text-xs font-bold font-mono uppercase tracking-wide text-zinc-300">EXPLORE_PROFILES</span>
+                        <div className="relative" ref={filterDropdownRef}>
+                            <button 
+                                type="button"
+                                onClick={() => setIsFilterDropdownOpen(prev => !prev)}
+                                className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-xs text-zinc-300 font-mono uppercase hover:text-white hover:border-zinc-600 transition-colors cursor-pointer"
+                                aria-expanded={isFilterDropdownOpen}
+                            >
+                                <FilterIcon className="w-4 h-4 text-zinc-500" />
+                                <span>{selectedCategory === 'All' ? 'Filter by' : `Filter: ${selectedCategory}`}</span>
+                                <ChevronDownIcon className={`w-4 h-4 text-zinc-500 transition-transform duration-150 ${isFilterDropdownOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {isFilterDropdownOpen && (
+                                <div className="absolute right-0 mt-1.5 w-56 bg-[#0c0c0e] border border-zinc-800 shadow-2xl z-40 py-1 max-h-64 overflow-y-auto no-scrollbar">
+                                    <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-widest text-zinc-500 border-b border-zinc-800/80 mb-1">
+                                        // SELECT CATEGORY
                                     </div>
+                                    {availableCategories.map(cat => {
+                                        const isSelected = selectedCategory === cat;
+                                        return (
+                                            <button
+                                                key={cat}
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedCategory(cat);
+                                                    setIsFilterDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left px-3 py-1.5 font-mono text-xs uppercase tracking-wider flex items-center justify-between transition-colors cursor-pointer ${
+                                                    isSelected 
+                                                        ? 'bg-[#18181d] text-white font-bold' 
+                                                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
+                                                }`}
+                                            >
+                                                <span>{cat}</span>
+                                                {isSelected && <span className="w-1.5 h-1.5 bg-white"></span>}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                  ) : (
-                    profileSuggestionData.map((categoryData, index) => (
-                      <div key={`${categoryData.category}-${index}`} className="mb-6">
-                        <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 mb-3 border-b border-zinc-800 pb-1.5">{categoryData.category}</h4>
-                        <div className="flex overflow-x-auto space-x-3 pb-2 no-scrollbar items-center">
-                          {categoryData.profiles.map(profile => (
-                            <div key={profile.id} className="w-96 flex-shrink-0">
-                                <ProfileSuggestionCard profile={profile} />
-                            </div>
-                          ))}
-                          <button className="flex-shrink-0 w-36 h-48 bg-[#0c0c0e] border border-zinc-800 flex flex-col items-center justify-center text-zinc-400 hover:border-zinc-600 hover:text-white transition-colors">
-                              <ForwardIcon className="w-6 h-6 mb-2 text-zinc-500" />
-                              <span className="font-mono text-xs uppercase font-semibold">Load More</span>
-                          </button>
+                            )}
                         </div>
-                      </div>
-                    ))
-                  )}
+                    </div>
+                    
+                    <div>
+                        {profilesLoading ? (
+                            <div className="space-y-6">
+                                {[...Array(2)].map((_, index) => (
+                                    <div key={index}>
+                                        <div className="h-4 w-1/4 bg-zinc-800 mb-3 animate-pulse"></div>
+                                        <div className="flex overflow-x-auto space-x-3 pb-2 no-scrollbar items-center">
+                                            <div className="w-96 flex-shrink-0"><ProfileSuggestionCardSkeleton /></div>
+                                            <div className="w-96 flex-shrink-0"><ProfileSuggestionCardSkeleton /></div>
+                                            <div className="flex-shrink-0 w-36 h-48 bg-[#0c0c0e] border border-zinc-800 flex flex-col items-center justify-center">
+                                                <div className="w-6 h-6 bg-zinc-800 mb-2"></div>
+                                                <div className="h-3 w-16 bg-zinc-800"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : groupedCategories.length > 0 ? (
+                            groupedCategories.map((categoryData, index) => {
+                                const visibleLimit = visiblePerCategory[categoryData.category] || 5;
+                                const visibleProfiles = categoryData.profiles.slice(0, visibleLimit);
+                                const hasMore = categoryData.profiles.length > visibleLimit;
+
+                                return (
+                                    <div key={`${categoryData.category}-${index}`} className="mb-6">
+                                        <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 mb-3 border-b border-zinc-800 pb-1.5">
+                                            {categoryData.category}
+                                        </h4>
+                                        <div className="flex overflow-x-auto space-x-3 pb-2 no-scrollbar items-center">
+                                            {visibleProfiles.map(profile => (
+                                                <div key={profile.id} className="w-96 flex-shrink-0">
+                                                    <ProfileSuggestionCard profile={profile} />
+                                                </div>
+                                            ))}
+                                            {hasMore && (
+                                                <button 
+                                                    onClick={() => handleLoadMore(categoryData.category)}
+                                                    className="flex-shrink-0 w-36 h-48 bg-[#0c0c0e] border border-zinc-800 flex flex-col items-center justify-center text-zinc-400 hover:border-zinc-600 hover:text-white transition-colors cursor-pointer"
+                                                >
+                                                    <ForwardIcon className="w-6 h-6 mb-2 text-zinc-500" />
+                                                    <span className="font-mono text-xs uppercase font-semibold">Load More</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className="text-center py-16 text-zinc-400 font-mono text-xs border border-zinc-800 bg-[#0c0c0e] p-8 space-y-3">
+                                <p className="text-zinc-200 text-sm font-semibold tracking-wide">// NO_PROFILES_FOUND</p>
+                                <p className="text-zinc-500 max-w-md mx-auto leading-relaxed">
+                                    {browseSearchTerm 
+                                        ? `No profiles match "${browseSearchTerm}"${selectedCategory !== 'All' ? ` in ${selectedCategory}` : ''}.`
+                                        : `No profiles found${selectedCategory !== 'All' ? ` for category "${selectedCategory}"` : ''}.`}
+                                </p>
+                                {(browseSearchTerm || selectedCategory !== 'All') && (
+                                    <div className="flex items-center justify-center gap-3 pt-3">
+                                        {browseSearchTerm && (
+                                            <button
+                                                onClick={() => setBrowseSearchTerm('')}
+                                                className="px-4 py-2 border border-zinc-700 bg-zinc-900 text-white font-mono text-xs hover:bg-zinc-800 transition-colors cursor-pointer uppercase tracking-wider"
+                                            >
+                                                Clear Search
+                                            </button>
+                                        )}
+                                        {selectedCategory !== 'All' && (
+                                            <button
+                                                onClick={() => setSelectedCategory('All')}
+                                                className="px-4 py-2 border border-zinc-700 bg-zinc-900 text-white font-mono text-xs hover:bg-zinc-800 transition-colors cursor-pointer uppercase tracking-wider"
+                                            >
+                                                Reset Category
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     const GoForItView: React.FC<{ goforitFilters: { company: string, skills: string, location: string, opportunityType: string, category: string, experienceLevel: string, searchTerm: string } }> = ({ goforitFilters }) => {
         const [loading, setLoading] = useState(true);
