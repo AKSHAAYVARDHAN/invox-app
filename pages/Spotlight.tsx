@@ -2683,7 +2683,7 @@ export const SpotlightPage = () => {
         };
     }, [setRightSidebarVariant, setSpotlightBrowseState, setSpotlightIsBrowsing]);
 
-    // Handle ?browse=projects navigation from project detail page
+    // Handle ?browse=projects or ?browse=profiles navigation from detail pages
     useEffect(() => {
         const browseParam = searchParams.get('browse');
         if (browseParam === 'projects' || browseParam === 'profiles') {
@@ -2696,9 +2696,7 @@ export const SpotlightPage = () => {
                 return next;
             }, { replace: true });
         }
-    // Only run on mount (searchParams identity may change, but we only want the initial value)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [searchParams, setSearchParams, setSpotlightBrowseState, setSpotlightIsBrowsing]);
 
     useEffect(() => {
         setLoading(true);
@@ -4541,7 +4539,11 @@ export const SpotlightPage = () => {
                                         <div className="flex overflow-x-auto space-x-3 pb-2 no-scrollbar items-center">
                                             {visibleProfiles.map(profile => (
                                                 <div key={profile.id} className="w-96 flex-shrink-0">
-                                                    <ProfileSuggestionCard profile={profile} />
+                                                    <ProfileSuggestionCard 
+                                                        profile={profile} 
+                                                        fromTab={activeTab}
+                                                        fromBrowse="profiles"
+                                                    />
                                                 </div>
                                             ))}
                                             {hasMore && (

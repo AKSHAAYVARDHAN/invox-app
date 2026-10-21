@@ -520,6 +520,8 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
     const navigate = ReactRouterDOM.useNavigate();
     const location = ReactRouterDOM.useLocation();
     const isOnProjectDetail = location.pathname.startsWith('/spotlight/project/');
+    const isOnProfileDetail = location.pathname.startsWith('/profile') || location.pathname.startsWith('/id/');
+    const isExternalToSpotlight = isOnProjectDetail || isOnProfileDetail;
     const [searchParams, setSearchParams] = ReactRouterDOM.useSearchParams();
     const [isBrowsingView, setIsBrowsingView] = useState(false);
     const [isPinnedView, setIsPinnedView] = useState(false);
@@ -560,25 +562,27 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
     const activeTeamConvId = activeCollabView === 'teams' ? (searchParams.get('teamId') || searchParams.get('conversationId')) : null;
     const collabData = useCollabDashboardData(activeConvId, activeTeamConvId);
 
+    const hasBrowseParam = searchParams.get('browse') === 'projects' || searchParams.get('browse') === 'profiles';
+
     useEffect(() => {
         // When navigating between spotlight sub-variants (e.g. showcase → collabs), reset local view state.
-        // Skip the reset if we are restoring the browse state (e.g. coming from ProjectDetailsPage).
-        if (spotlightIsBrowsing) return;
+        // Skip the reset if we are restoring the browse state (e.g. coming from ProjectDetailsPage or ProfilePage).
+        if (spotlightIsBrowsing || hasBrowseParam) return;
         setIsBrowsingView(false);
         setIsPinnedView(false);
         setPinnedViewMode('options');
         setSpotlightBrowseState(null);
         setShowPinnedHighlights(false);
         setShowPinnedProfiles?.(false);
-    }, [variant, setSpotlightBrowseState, setShowPinnedHighlights, setShowPinnedProfiles, spotlightIsBrowsing]);
+    }, [variant, setSpotlightBrowseState, setShowPinnedHighlights, setShowPinnedProfiles, spotlightIsBrowsing, hasBrowseParam]);
 
 
-    // Sync isBrowsingView from external prop (e.g., when ProjectDetailsPage preserves browse state)
+    // Sync isBrowsingView from external prop (e.g., when ProjectDetailsPage or ProfilePage preserves browse state)
     useEffect(() => {
-        if (spotlightIsBrowsing) {
+        if (spotlightIsBrowsing || hasBrowseParam) {
             setIsBrowsingView(true);
         }
-    }, [spotlightIsBrowsing]);
+    }, [spotlightIsBrowsing, hasBrowseParam]);
 
     useEffect(() => {
         if (!isBrowsingView) {
@@ -624,7 +628,7 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                             <div className="space-y-2">
                                 <button
                                     onClick={() => {
-                                        if (isOnProjectDetail) {
+                                        if (isExternalToSpotlight) {
                                             navigate(isCollabs ? '/spotlight?tab=Collabs&browse=projects' : '/spotlight?browse=projects');
                                         } else {
                                             setSpotlightBrowseState('projects');
@@ -641,7 +645,7 @@ const SpotlightSidebar: React.FC<Pick<RightSidebarProps, 'spotlightBrowseState' 
                                 </button>
                                 <button
                                      onClick={() => {
-                                        if (isOnProjectDetail) {
+                                        if (isExternalToSpotlight) {
                                             navigate(isCollabs ? '/spotlight?tab=Collabs&browse=profiles' : '/spotlight?browse=profiles');
                                         } else {
                                             setSpotlightBrowseState('profiles');

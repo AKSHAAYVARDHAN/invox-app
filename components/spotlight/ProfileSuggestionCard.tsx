@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckBadgeIcon } from '../ui/Icons';
 import { handleImageError } from '../utils/imageUtils';
 import { formatNumber } from '../../utils/formatters';
@@ -28,10 +28,18 @@ export interface ProfileSuggestion {
 export interface ProfileSuggestionCardProps {
     profile: DiscoverableProfile | ProfileSuggestion;
     className?: string;
+    fromTab?: string;
+    fromBrowse?: string;
 }
 
-export const ProfileSuggestionCard: React.FC<ProfileSuggestionCardProps> = ({ profile, className = '' }) => {
+export const ProfileSuggestionCard: React.FC<ProfileSuggestionCardProps> = ({ 
+    profile, 
+    className = '',
+    fromTab,
+    fromBrowse
+}) => {
     const navigate = useNavigate();
+    const location = useLocation();
     const profileTarget =
         (profile as any).username ||
         (profile as any).author?.username ||
@@ -41,7 +49,31 @@ export const ProfileSuggestionCard: React.FC<ProfileSuggestionCardProps> = ({ pr
     const handleOpenProfile = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (profileTarget) {
-            navigate(`/profile/${encodeURIComponent(profileTarget)}`);
+            const currentSearch = new URLSearchParams(location.search);
+            const resolvedFromBrowse = fromBrowse || 
+                (location.pathname.startsWith('/spotlight') ? 'profiles' : undefined) ||
+                (currentSearch.get('browse') === 'profiles' ? 'profiles' : undefined) ||
+                (location.state as any)?.fromBrowse;
+
+            const resolvedFromTab = fromTab || 
+                (currentSearch.get('tab') === 'Collabs' ? 'Collabs' : (location.state as any)?.fromTab) ||
+                (location.pathname.startsWith('/spotlight') && currentSearch.get('tab') !== 'Collabs' ? 'Showcase' : undefined);
+
+            const search = new URLSearchParams();
+            if (resolvedFromTab) {
+                search.set('tab', resolvedFromTab);
+            }
+            if (resolvedFromBrowse) {
+                search.set('browse', resolvedFromBrowse);
+            }
+            const searchStr = search.toString() ? `?${search.toString()}` : '';
+
+            navigate(`/profile/${encodeURIComponent(profileTarget)}${searchStr}`, {
+                state: {
+                    fromTab: resolvedFromTab,
+                    fromBrowse: resolvedFromBrowse,
+                }
+            });
         }
     };
 

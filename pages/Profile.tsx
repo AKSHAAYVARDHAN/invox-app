@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ProfileIcon, PencilIcon, GlobeAltIcon, CometIcon } from '../components/ui/Icons';
 import ProfileSkeleton from '../components/profile/ProfileSkeleton';
 import { handleImageError } from '../components/utils/imageUtils';
 import ImageZoomModal from '../components/ui/ImageZoomModal';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation, useOutletContext } from 'react-router-dom';
 import { uploadFile } from '../services/storageService';
 import { COLLECTIONS, updateDocument } from '../services/firestoreService';
 import { getFriendlyErrorMessage } from '../utils/errorHandler';
@@ -52,8 +52,43 @@ const Chip: React.FC<ChipProps> = ({ label, color = 'default' }) => (
 const ProfilePage = () => {
     const { currentUser, userProfile, loading } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     const { userId } = useParams<{ userId?: string }>();
     
+    // Outlet context for preserving Spotlight Browse Profiles sidebar
+    const outletContext = useOutletContext<{
+        setRightSidebarVariant?: (variant: string) => void;
+        setSpotlightBrowseState?: (state: string | null) => void;
+        setSpotlightIsBrowsing?: (value: boolean) => void;
+    } | null>() ?? {};
+    const { setRightSidebarVariant, setSpotlightBrowseState, setSpotlightIsBrowsing } = outletContext;
+
+    const isFromBrowseProfiles = useMemo(() => {
+        const search = new URLSearchParams(location.search);
+        return search.get('browse') === 'profiles' || 
+               search.get('from') === 'browse-profiles' || 
+               (location.state as any)?.fromBrowse === 'profiles';
+    }, [location.search, location.state]);
+
+    const cameFromCollabs = useMemo(() => {
+        const search = new URLSearchParams(location.search);
+        return search.get('tab') === 'Collabs' || (location.state as any)?.fromTab === 'Collabs';
+    }, [location.search, location.state]);
+
+    // Preserve Browse Profiles sidebar panel while this page is mounted, context-aware of Showcase vs Collabs
+    useEffect(() => {
+        if (!isFromBrowseProfiles) return;
+        const isCollabContext = cameFromCollabs;
+        setRightSidebarVariant?.(isCollabContext ? 'spotlight-collabs' : 'spotlight-showcase');
+        setSpotlightBrowseState?.('profiles');
+        setSpotlightIsBrowsing?.(true);
+        return () => {
+            setRightSidebarVariant?.('default');
+            setSpotlightBrowseState?.(null);
+            setSpotlightIsBrowsing?.(false);
+        };
+    }, [isFromBrowseProfiles, cameFromCollabs, setRightSidebarVariant, setSpotlightBrowseState, setSpotlightIsBrowsing]);
+
     const [resolvedUid, setResolvedUid] = useState<string | null>(null);
 
     // Check if the param points to the logged-in user either by UID, raw username, or resolved UID
@@ -375,7 +410,13 @@ const ProfilePage = () => {
             {!isOwnProfile && (
                 <div className="flex items-center justify-between mb-3">
                     <button
-                        onClick={() => navigate(-1)}
+                        onClick={() => {
+                            if (isFromBrowseProfiles) {
+                                navigate(cameFromCollabs ? '/spotlight?tab=Collabs&browse=profiles' : '/spotlight?browse=profiles');
+                            } else {
+                                navigate(-1);
+                            }
+                        }}
                         className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#0c0c0e] hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors"
                     >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -763,7 +804,12 @@ const ProfilePage = () => {
                 ) : similarProfiles.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {similarProfiles.map(p => (
-                            <ProfileSuggestionCard key={p.id} profile={p} />
+                            <ProfileSuggestionCard 
+                                key={p.id} 
+                                profile={p} 
+                                fromTab={isFromBrowseProfiles ? (cameFromCollabs ? 'Collabs' : 'Showcase') : undefined}
+                                fromBrowse={isFromBrowseProfiles ? 'profiles' : undefined}
+                            />
                         ))}
                     </div>
                 ) : (
