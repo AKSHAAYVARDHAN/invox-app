@@ -408,22 +408,18 @@ const ProfilePage = () => {
     return (
         <div className="font-mono text-zinc-300">
             {!isOwnProfile && (
-                <div className="flex items-center justify-between mb-3">
-                    <button
-                        onClick={() => {
-                            if (isFromBrowseProfiles) {
-                                navigate(cameFromCollabs ? '/spotlight?tab=Collabs&browse=profiles' : '/spotlight?browse=profiles');
-                            } else {
-                                navigate(-1);
-                            }
-                        }}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#0c0c0e] hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors"
-                    >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                        </svg>
-                        <span>// BACK</span>
-                    </button>
+                <div className={`flex items-center ${isFromBrowseProfiles ? 'justify-end' : 'justify-between'} mb-3`}>
+                    {!isFromBrowseProfiles && (
+                        <button
+                            onClick={() => navigate(-1)}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#0c0c0e] hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                            <span>// BACK</span>
+                        </button>
+                    )}
                     <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest border border-zinc-800/80 px-2.5 py-1 bg-black">
                         // INVOX_MEMBER_PROFILE
                     </span>
