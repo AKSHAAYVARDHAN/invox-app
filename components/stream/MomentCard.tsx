@@ -4,7 +4,7 @@ import { PostType } from '../../types';
 import { 
     HeartIcon, 
     TrendingUpIcon, 
-    ChatBubbleBottomCenterTextIcon, 
+    ChatBubbleBottomCenterTextIcon,
     ForwardIcon, 
     BookmarkIcon, 
     EllipsisVerticalIcon,
@@ -122,7 +122,12 @@ const MomentCard: React.FC<MomentCardProps> = ({ moment, userLiked = false, user
     const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
     const [mediaContainerRef, isVisible] = useLazyLoad<HTMLDivElement>();
     
-    const captionText = moment.caption || moment.content || '';
+    const hookLine = useMemo(() => {
+        const val = moment.hook || moment.title || (moment as any).oneLine || "";
+        return typeof val === "string" ? val.trim() : "";
+    }, [moment.hook, moment.title, (moment as any).oneLine]);
+
+    const captionText = moment.caption || moment.content || "";
     const isLongContent = captionText.length > 150;
 
     const togglePlayPause = (e?: React.MouseEvent) => {
@@ -368,11 +373,12 @@ const MomentCard: React.FC<MomentCardProps> = ({ moment, userLiked = false, user
                     </div>
                 </div>
 
-                {/* AI Summary - only if real summary exists */}
-                {moment.aiSummary && moment.aiSummary.trim().length > 0 && (
-                    <div className="mt-3 bg-zinc-950 border border-zinc-800/80 p-2.5">
-                        <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-500 block mb-1">// AI_SUMMARY</span>
-                        <p className="text-xs font-mono text-zinc-300">"{moment.aiSummary}"</p>
+                {/* Hook Line */}
+                {hookLine && (
+                    <div className="mt-3.5">
+                        <p className="text-base font-semibold font-mono text-white tracking-tight">
+                            {hookLine}
+                        </p>
                     </div>
                 )}
 
@@ -513,56 +519,59 @@ const MomentCard: React.FC<MomentCardProps> = ({ moment, userLiked = false, user
                 )}
                 
                 {/* Action Bar */}
-                <div className="mt-3 border-t border-zinc-800/80 pt-3 flex justify-between items-center text-zinc-400 font-mono text-xs">
-                    <div className="flex items-center space-x-4">
-                        <button 
-                            onClick={handleLike}
-                            className={`flex items-center space-x-1.5 transition-colors ${
-                                isLiked ? 'text-red-500 hover:text-red-400' : 'hover:text-white'
-                            }`}
-                            title={isLiked ? 'Unlike' : 'Like'}
-                        >
-                            <HeartIcon className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
-                            <span>{formatNumber(likesCount)}</span>
-                        </button>
-                        <div className="flex items-center space-x-1.5 text-zinc-500" title="Total Views">
-                            <TrendingUpIcon className="w-4 h-4" />
-                            <span>{formatNumber(viewsCount)}</span>
-                        </div>
-                        <button 
-                            onClick={() => setShowComments(!showComments)}
-                            className={`flex items-center space-x-1.5 transition-colors ${
-                                showComments ? 'text-white' : 'hover:text-white'
-                            }`}
-                            title="Comments"
-                        >
-                            <ChatBubbleBottomCenterTextIcon className="w-4 h-4" />
-                            <span>{formatNumber(commentsCount)}</span>
-                        </button>
+                <div className="mt-4 border-t border-zinc-800/80 pt-3 flex justify-between items-center font-mono text-xs text-zinc-400">
+                    <button 
+                        onClick={handleLike}
+                        className={`flex items-center gap-1.5 px-2 py-1 border border-transparent hover:border-zinc-800 transition-colors ${
+                            isLiked ? 'text-rose-500 font-bold border-zinc-800 bg-zinc-900/60' : 'hover:text-white'
+                        }`}
+                        title={isLiked ? 'Unlike' : 'Like'}
+                    >
+                        <HeartIcon className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
+                        <span>{formatNumber(likesCount)}</span>
+                    </button>
+                    <div className="flex items-center gap-1.5 px-2 py-1 text-zinc-500" title="Total Views">
+                        <TrendingUpIcon className="w-4 h-4" />
+                        <span>{formatNumber(viewsCount)}</span>
                     </div>
-                    <div className="flex items-center space-x-2">
-                        <button 
-                            onClick={handleShare}
-                            className="hover:text-white transition-colors p-1"
-                            title="Share Link"
-                        >
-                            <ForwardIcon className="w-4 h-4" />
-                        </button>
-                        <button 
-                            onClick={handleBookmark}
-                            className={`transition-colors p-1 ${
-                                isSaved ? 'text-amber-400 hover:text-amber-300' : 'hover:text-white'
-                            }`}
-                            title={isSaved ? 'Remove Bookmark' : 'Bookmark Moment'}
-                        >
-                            <BookmarkIcon className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
-                        </button>
-                    </div>
+                    <button 
+                        onClick={() => setShowComments(!showComments)}
+                        className={`flex items-center gap-1.5 px-2 py-1 border border-transparent hover:border-zinc-800 transition-colors ${
+                            showComments ? 'text-white border-zinc-800 bg-zinc-900/60' : 'hover:text-white'
+                        }`}
+                        title="Comments"
+                    >
+                        <ChatBubbleBottomCenterTextIcon className="w-4 h-4" />
+                        <span>{formatNumber(commentsCount)}</span>
+                    </button>
+                    <button 
+                        onClick={handleShare}
+                        className={`p-1 border border-transparent hover:border-zinc-800 transition-colors relative ${
+                            shareFeedback ? 'text-emerald-400 border-zinc-800 bg-zinc-900' : 'hover:text-white'
+                        }`}
+                        title={shareFeedback ? 'Copied to clipboard!' : 'Share Moment'}
+                    >
+                        <ForwardIcon className="w-4 h-4" />
+                        {shareFeedback && (
+                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black border border-emerald-500 text-emerald-400 text-[9px] px-1 py-0.5 uppercase font-mono whitespace-nowrap z-20">
+                                Copied
+                            </span>
+                        )}
+                    </button>
+                    <button 
+                        onClick={handleBookmark}
+                        className={`p-1 border border-transparent hover:border-zinc-800 transition-colors ${
+                            isSaved ? 'text-white border-zinc-700 bg-zinc-800' : 'hover:text-white'
+                        }`}
+                        title={isSaved ? 'Remove Bookmark' : 'Save to My Space'}
+                    >
+                        <BookmarkIcon className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
+                    </button>
                 </div>
 
                 {/* Content / Caption */}
                 {captionText && (
-                    <div className="mt-3">
+                    <div className="mt-2.5">
                         <p className="text-zinc-300 font-mono text-xs leading-relaxed whitespace-pre-wrap">
                             {isLongContent ? (
                                 <>
@@ -571,7 +580,7 @@ const MomentCard: React.FC<MomentCardProps> = ({ moment, userLiked = false, user
                                         onClick={() => setShowMore(!showMore)} 
                                         className="text-white underline font-bold ml-1.5 hover:text-zinc-300"
                                     >
-                                        {showMore ? 'LESS' : 'MORE'}
+                                        {showMore ? "LESS" : "MORE"}
                                     </button>
                                 </>
                             ) : (

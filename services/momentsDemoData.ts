@@ -59,6 +59,8 @@ export const MOCK_MOMENTS: StreamMoment[] = [
     // 1. Stills #1: Multi-image Architectural brutalism study (Carousel test)
     {
         id: 'demo-moment-still-1',
+        title: 'The Architecture of Monolithic Concrete // Spatial Volumetrics',
+        hook: 'The Architecture of Monolithic Concrete // Spatial Volumetrics',
         authorId: 'demo-user-elena',
         author: {
             name: 'Elena Rostova',
@@ -92,6 +94,8 @@ export const MOCK_MOMENTS: StreamMoment[] = [
     // 2. Still #2: Mountain Expedition / Alpine Photography
     {
         id: 'demo-moment-still-2',
+        title: 'Alpine Summit Ridge at Blue Hour // Tre Cime Ascent',
+        hook: 'Alpine Summit Ridge at Blue Hour // Tre Cime Ascent',
         authorId: 'demo-user-marcus',
         author: {
             name: 'Marcus Vance',
@@ -123,6 +127,8 @@ export const MOCK_MOMENTS: StreamMoment[] = [
     // 3. Tape #1: High-Speed Cinematic Nightscape (Video)
     {
         id: 'demo-moment-tape-1',
+        title: 'Shinjuku Neon Drift Protocol // High-Speed Anamorphic Motion',
+        hook: 'Shinjuku Neon Drift Protocol // High-Speed Anamorphic Motion',
         authorId: 'demo-user-kaito',
         author: {
             name: 'Kaito Tanaka',
@@ -155,6 +161,8 @@ export const MOCK_MOMENTS: StreamMoment[] = [
     // 4. Tape #2: Fluid VFX & Particle Dynamics (Video)
     {
         id: 'demo-moment-tape-2',
+        title: 'Real-Time Compute Shader Pass // Fluid Collision Mesh',
+        hook: 'Real-Time Compute Shader Pass // Fluid Collision Mesh',
         authorId: 'demo-user-aria',
         author: {
             name: 'Aria Chen',
@@ -187,6 +195,8 @@ export const MOCK_MOMENTS: StreamMoment[] = [
     // 5. Knack #1: Modular Synthesizer Live Session (Video / Talent Showcase)
     {
         id: 'demo-moment-knack-1',
+        title: 'Clock-Divided Eurorack Drone // Analog Stereo Harmonic Study',
+        hook: 'Clock-Divided Eurorack Drone // Analog Stereo Harmonic Study',
         authorId: 'demo-user-soren',
         author: {
             name: 'Soren Lindqvist',
@@ -219,6 +229,8 @@ export const MOCK_MOMENTS: StreamMoment[] = [
     // 6. Knack #2: Multi-step 3D Illustration Breakdown (Carousel test)
     {
         id: 'demo-moment-knack-2',
+        title: 'Neo-Babylon Orbital Habitat // 3-Stage Isometric Vector Breakdown',
+        hook: 'Neo-Babylon Orbital Habitat // 3-Stage Isometric Vector Breakdown',
         authorId: 'demo-user-zainab',
         author: {
             name: 'Zainab Al-Mansoor',
@@ -252,6 +264,8 @@ export const MOCK_MOMENTS: StreamMoment[] = [
     // 7. Still #3: Dual-photo Street Photography Study (Carousel test)
     {
         id: 'demo-moment-still-3',
+        title: 'Kyoto Gion District at 02:00 // Lantern Ambient vs 35mm Prime',
+        hook: 'Kyoto Gion District at 02:00 // Lantern Ambient vs 35mm Prime',
         authorId: 'demo-user-leo',
         author: {
             name: 'Leo Mercer',
@@ -284,6 +298,8 @@ export const MOCK_MOMENTS: StreamMoment[] = [
     // 8. Knack #3: Ceramic Artisan Wheel Demonstration
     {
         id: 'demo-moment-knack-3',
+        title: 'Centering 4kg Stoneware on Wheel // Upward Elevation & Wall Draw',
+        hook: 'Centering 4kg Stoneware on Wheel // Upward Elevation & Wall Draw',
         authorId: 'demo-user-mira',
         author: {
             name: 'Mira Patel',

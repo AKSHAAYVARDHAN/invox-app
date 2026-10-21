@@ -411,13 +411,17 @@ export interface StreamMoment {
     authorId?: string;
     author: {
         name: string;
-        avatarUrl: string;
+        avatarUrl?: string;
+        avatar?: string;
+        handle?: string;
         username?: string;
         isVerified?: boolean;
         id?: string;
         uid?: string;
     };
-    aiSummary: string;
+    title?: string;
+    hook?: string;
+    aiSummary?: string;
     content: string;
     mediaUrl: string;
     mediaUrls?: string[];
@@ -426,11 +430,15 @@ export interface StreamMoment {
     type: 'Stills' | 'Tapes' | 'Knacks';
     category?: string;
     domain?: string;
-    stats: {
+    stats?: {
         likes: number;
         views: number;
         comments: number;
     };
+    caption?: string;
+    likes?: number;
+    views?: number;
+    comments?: number;
     userLiked?: boolean;
     userSaved?: boolean;
     createdAt?: Date | any;
