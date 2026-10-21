@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Project, Post } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAIAssistant } from '../../contexts/AIAssistantContext';
 import { 
     toggleLikePost, 
     toggleBookmarkPost, 
@@ -70,6 +71,7 @@ const ShowcaseCardComponent: React.FC<ShowcaseCardProps> = ({
     onToggleFollowCreator,
 }) => {
     const { currentUser } = useAuth();
+    const { openModal } = useAIAssistant();
     const navigate = useNavigate();
 
     // Local reactive project state
@@ -341,6 +343,17 @@ const ShowcaseCardComponent: React.FC<ShowcaseCardProps> = ({
         }
     };
 
+    // Handle Spark AI assistant
+    const handleSparkAIClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        openModal({
+            id: currentProject.id,
+            title: currentProject.title || currentProject.aiSummary || currentProject.name || currentProject.oneLine || 'Project',
+            content: currentProject.description || currentProject.aiSummary || currentProject.oneLine || '',
+            author: currentProject.author?.name || 'Creator',
+        });
+    };
+
     // Handle Deletion
     const handleConfirmDelete = async () => {
         if (!isOwner) return;
@@ -486,11 +499,13 @@ const ShowcaseCardComponent: React.FC<ShowcaseCardProps> = ({
                 {/* Top Actions */}
                 <div className="flex items-center gap-1 text-zinc-400">
                     <button
-                        onClick={handleShare}
-                        className="p-1.5 hover:text-white border border-transparent hover:border-zinc-800 transition-colors"
-                        title="Share Project"
+                        type="button"
+                        onClick={handleSparkAIClick}
+                        className="p-1.5 hover:text-white border border-transparent hover:border-zinc-800 transition-colors cursor-pointer"
+                        title="Spark AI Assistant"
+                        aria-label="Spark AI Assistant"
                     >
-                        <ForwardIcon className="w-4 h-4" />
+                        <SparklesIcon className="w-4 h-4" />
                     </button>
 
                     <div className="relative" ref={menuRef}>
