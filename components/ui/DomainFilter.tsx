@@ -21,6 +21,8 @@ interface DomainFilterProps {
     className?: string;
     isTrending?: boolean;
     onToggleTrending?: () => void;
+    mode?: 'ALL' | 'READ' | 'LISTEN';
+    onModeChange?: (mode: 'ALL' | 'READ' | 'LISTEN') => void;
 }
 
 const DomainFilter: React.FC<DomainFilterProps> = ({ 
@@ -30,7 +32,9 @@ const DomainFilter: React.FC<DomainFilterProps> = ({
     buttonText = 'DOMAINS',
     className = '',
     isTrending = false,
-    onToggleTrending
+    onToggleTrending,
+    mode,
+    onModeChange
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -154,7 +158,61 @@ const DomainFilter: React.FC<DomainFilterProps> = ({
                             CLEAR
                         </button>
                     )}
-                    {onToggleTrending ? (
+                    {mode && onModeChange ? (
+                        <div 
+                            className="inline-flex items-center border border-zinc-800 bg-[#09090b] p-0.5" 
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onModeChange('ALL');
+                                }}
+                                className={`px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase font-semibold transition-all ${
+                                    mode === 'ALL'
+                                        ? 'bg-white text-black font-bold shadow-sm'
+                                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
+                                }`}
+                                aria-pressed={mode === 'ALL'}
+                                title="ALL mode: All content (articles, podcasts, videos, discussions)"
+                            >
+                                ALL
+                            </button>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onModeChange('READ');
+                                }}
+                                className={`px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase font-semibold transition-all ${
+                                    mode === 'READ'
+                                        ? 'bg-white text-black font-bold shadow-sm'
+                                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
+                                }`}
+                                aria-pressed={mode === 'READ'}
+                                title="READ mode: Articles, text posts, summaries, insights"
+                            >
+                                READ
+                            </button>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onModeChange('LISTEN');
+                                }}
+                                className={`px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase font-semibold transition-all ${
+                                    mode === 'LISTEN'
+                                        ? 'bg-white text-black font-bold shadow-sm'
+                                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
+                                }`}
+                                aria-pressed={mode === 'LISTEN'}
+                                title="LISTEN mode: Podcasts, audio recordings, videos, interviews"
+                            >
+                                LISTEN
+                            </button>
+                        </div>
+                    ) : onToggleTrending ? (
                         <button
                             type="button"
                             onClick={(e) => {
