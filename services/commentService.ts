@@ -249,12 +249,15 @@ export async function createPostComment(params: {
 
     let newDocId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-    try {
-        newDocId = await createDocument(COLLECTIONS.comments, commentData);
-        console.log(`[COMMENT_CREATED] Document ${newDocId} saved to ${COLLECTIONS.comments}`);
-    } catch (err: any) {
-        console.error('[FIRESTORE_COMMENT_ERROR]', err);
-        // If Firestore fails due to network, still record locally
+    // Do NOT write demo/mock comments to Firestore
+    if (!params.postId.startsWith('demo-')) {
+        try {
+            newDocId = await createDocument(COLLECTIONS.comments, commentData);
+            console.log(`[COMMENT_CREATED] Document ${newDocId} saved to ${COLLECTIONS.comments}`);
+        } catch (err: any) {
+            console.error('[FIRESTORE_COMMENT_ERROR]', err);
+            // If Firestore fails due to network, still record locally
+        }
     }
 
     const createdComment: PostComment = {
@@ -277,15 +280,17 @@ export async function createPostComment(params: {
     // Record user activity locally for instantaneous Explore filter tracking
     markUserInteraction(currentUser.uid, params.postId, params.type);
 
-    // Increment comment count on the post in Firestore (if post exists)
-    try {
-        const postRef = doc(db, COLLECTIONS.posts, params.postId);
-        await updateDoc(postRef, {
-            'stats.comments': increment(1),
-            commentCount: increment(1),
-        });
-    } catch {
-        // Non-critical, ignored if post is local mock or user doesn't have edit permission
+    // Increment comment count on the post in Firestore (if real post exists)
+    if (!params.postId.startsWith('demo-')) {
+        try {
+            const postRef = doc(db, COLLECTIONS.posts, params.postId);
+            await updateDoc(postRef, {
+                'stats.comments': increment(1),
+                commentCount: increment(1),
+            });
+        } catch {
+            // Non-critical, ignored if post is local mock or user doesn't have edit permission
+        }
     }
 
     return createdComment;

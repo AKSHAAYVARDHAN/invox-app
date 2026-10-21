@@ -24,6 +24,8 @@ interface CreateFeedModalProps {
         description: string; 
         previewUrl: string | null; 
         mediaFile?: File | null; 
+        mediaFiles?: File[] | null;
+        mediaUrls?: string[];
         type: string;
         channelId?: string;
         channelName?: string;
@@ -40,12 +42,20 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
     const [oneLine, setOneLine] = useState('');
     const [description, setDescription] = useState('');
     const [media, setMedia] = useState<File | null>(null);
+    const [mediaFiles, setMediaFiles] = useState<File[]>([]);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+    const [selectedPreviewIndex, setSelectedPreviewIndex] = useState(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isDragging, setIsDragging] = useState(false);
     const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+    const isStill = contextName.toLowerCase() === 'still' || contextName.toLowerCase() === 'stills';
+    const isTape = contextName.toLowerCase() === 'tape' || contextName.toLowerCase() === 'tapes';
+    const isKnack = contextName.toLowerCase() === 'knack' || contextName.toLowerCase() === 'knacks';
+    const isMomentContext = isStill || isTape || isKnack || contextName.toLowerCase() === 'moment';
 
     // Target domain state
     const [targetDomain, setTargetDomain] = useState('Technology');
@@ -156,9 +166,33 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
         onClose();
     };
 
-    const handleFileChange = (file: File) => {
-        setMedia(file);
-        setPreviewUrl(URL.createObjectURL(file));
+    const handleFilesChange = (filesList: FileList | File[] | null) => {
+        if (!filesList || (filesList as any).length === 0) return;
+        const incoming = Array.from(filesList as any) as File[];
+
+        // Validation for Moment categories
+        for (const file of incoming) {
+            if (isStill && file.type.startsWith('video')) {
+                setErrorMsg('Stills only support photo and image media (JPG, PNG, WEBP).');
+                return;
+            }
+            if (isTape && file.type.startsWith('image')) {
+                setErrorMsg('Tapes only support video media (MP4, WEBM, MOV).');
+                return;
+            }
+        }
+        setErrorMsg(null);
+
+        const newFiles = [...mediaFiles, ...incoming];
+        setMediaFiles(newFiles);
+        setMedia(newFiles[0] || null);
+
+        const newUrls = incoming.map(f => URL.createObjectURL(f));
+        const allUrls = [...previewUrls, ...newUrls];
+        setPreviewUrls(allUrls);
+        setPreviewUrl(allUrls[0] || null);
+        setSelectedPreviewIndex(0);
+
         setUploadProgress(0);
         const interval = setInterval(() => {
             setUploadProgress(prev => {
@@ -166,9 +200,9 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
                     clearInterval(interval);
                     return 100;
                 }
-                return prev + 20;
+                return prev + 25;
             });
-        }, 150);
+        }, 120);
     };
 
     const handleSaveDraft = () => {
@@ -268,8 +302,9 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
             await onPublish({
                 oneLine: oneLine.trim(),
                 description: description.trim(),
-                previewUrl,
-                mediaFile: media,
+                previewUrl: previewUrls[0] || previewUrl,
+                mediaFile: mediaFiles[0] || media,
+                mediaFiles: mediaFiles.length > 0 ? mediaFiles : (media ? [media] : []),
                 type: contextName,
                 channelId: finalChannelId || undefined,
                 channelName: finalChannelName || undefined,
@@ -294,7 +329,10 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
         setTargetDomain('Technology');
         setIsTargetDomainValid(true);
         setMedia(null);
+        setMediaFiles([]);
         setPreviewUrl(null);
+        setPreviewUrls([]);
+        setSelectedPreviewIndex(0);
         setUploadProgress(0);
         setShowDiscardConfirm(false);
         setErrorMsg(null);
@@ -505,42 +543,90 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
 
                     {/* Asset Upload */}
                     <div className="space-y-1.5">
-                        <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">// VISUAL_ATTACHMENT</label>
+                        <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
+                            // VISUAL_ATTACHMENT {isMomentContext && `[${contextName.toUpperCase()}]`}
+                        </label>
                         <div 
                             className={`relative border border-dashed transition-all duration-200 ${isDragging ? 'border-white bg-zinc-900/50' : 'border-zinc-700 hover:border-zinc-500'} bg-zinc-950`}
                             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                             onDragLeave={() => setIsDragging(false)}
-                            onDrop={(e) => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files?.[0]) handleFileChange(e.dataTransfer.files[0]); }}
+                            onDrop={(e) => { 
+                                e.preventDefault(); 
+                                setIsDragging(false); 
+                                if (e.dataTransfer.files) handleFilesChange(e.dataTransfer.files); 
+                            }}
                         >
-                            {!previewUrl ? (
+                            {!previewUrl && previewUrls.length === 0 ? (
                                 <button onClick={() => fileInputRef.current?.click()} className="w-full h-32 flex flex-col items-center justify-center gap-2 group">
                                     <div className="p-2.5 bg-zinc-900 group-hover:bg-zinc-800 transition-colors border border-zinc-800">
                                         <ArrowUpTrayIcon className="w-5 h-5 text-zinc-400 group-hover:text-white" />
                                     </div>
                                     <div className="text-center">
-                                        <p className="text-xs font-mono text-zinc-300 group-hover:text-white transition-colors">Select media asset</p>
-                                        <p className="text-[10px] text-zinc-500 font-mono tracking-widest mt-0.5">// MP4 / JPG / PNG</p>
+                                        <p className="text-xs font-mono text-zinc-300 group-hover:text-white transition-colors">
+                                            {isStill ? 'Select photo / image assets' : isTape ? 'Select video asset' : 'Select media asset(s)'}
+                                        </p>
+                                        <p className="text-[10px] text-zinc-500 font-mono tracking-widest mt-0.5">
+                                            {isStill ? '// JPG / PNG / WEBP' : isTape ? '// MP4 / WEBM / MOV' : '// MP4 / JPG / PNG'}
+                                        </p>
                                     </div>
                                 </button>
                             ) : (
                                 <div className="p-3 flex flex-col gap-3">
                                     <div className="relative aspect-video bg-black overflow-hidden flex items-center justify-center border border-zinc-800">
-                                        {media?.type.startsWith('video') ? (
-                                            <video src={previewUrl} className="max-h-full" controls />
+                                        {(mediaFiles[selectedPreviewIndex]?.type.startsWith('video') || (previewUrls[selectedPreviewIndex] || previewUrl || '').match(/\.(mp4|webm|mov)/i)) ? (
+                                            <video src={previewUrls[selectedPreviewIndex] || previewUrl || ''} className="max-h-full" controls />
                                         ) : (
-                                            <img src={previewUrl} onError={handleImageError} className="max-h-full object-contain" alt="Media preview" />
+                                            <img src={previewUrls[selectedPreviewIndex] || previewUrl || ''} onError={handleImageError} className="max-h-full object-contain" alt="Media preview" />
                                         )}
                                         <button 
-                                            onClick={() => { setPreviewUrl(null); setMedia(null); }} 
-                                            className="absolute top-2 right-2 bg-black/80 p-1.5 hover:bg-zinc-800 transition-all border border-zinc-700"
+                                            onClick={() => { 
+                                                setPreviewUrl(null); 
+                                                setPreviewUrls([]);
+                                                setMedia(null); 
+                                                setMediaFiles([]);
+                                            }} 
+                                            className="absolute top-2 right-2 bg-black/80 p-1.5 hover:bg-zinc-800 transition-all border border-zinc-700 z-10"
+                                            title="Clear attachments"
                                         >
                                             <CloseIcon className="w-3.5 h-3.5 text-white" />
                                         </button>
                                     </div>
+
+                                    {/* Multiple Media Thumbnails Carousel Bar */}
+                                    {previewUrls.length > 1 && (
+                                        <div className="flex items-center gap-2 overflow-x-auto py-1">
+                                            {previewUrls.map((url, idx) => (
+                                                <button
+                                                    key={idx}
+                                                    type="button"
+                                                    onClick={() => setSelectedPreviewIndex(idx)}
+                                                    className={`relative w-12 h-12 flex-shrink-0 border overflow-hidden ${
+                                                        idx === selectedPreviewIndex ? 'border-white ring-1 ring-white' : 'border-zinc-800 opacity-60 hover:opacity-100'
+                                                    }`}
+                                                >
+                                                    <img src={url} alt={`Thumb ${idx + 1}`} className="w-full h-full object-cover" onError={handleImageError} />
+                                                    <span className="absolute bottom-0 right-0 bg-black/80 text-[8px] font-mono text-zinc-300 px-1">
+                                                        {idx + 1}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                            <button
+                                                type="button"
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className="w-12 h-12 flex-shrink-0 border border-dashed border-zinc-700 hover:border-white flex items-center justify-center text-zinc-400 hover:text-white text-xs font-mono bg-zinc-900/50"
+                                                title="Add more media"
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    )}
+
                                     <div className="flex items-center justify-between px-1">
                                         <div className="flex items-center gap-2 overflow-hidden">
                                             <DocumentTextIcon className="w-4 h-4 text-white" />
-                                            <span className="text-[10px] font-mono text-zinc-400 truncate max-w-[240px]">{media?.name}</span>
+                                            <span className="text-[10px] font-mono text-zinc-400 truncate max-w-[240px]">
+                                                {mediaFiles.length > 1 ? `${mediaFiles.length} media files selected` : (media?.name || 'attachment')}
+                                            </span>
                                         </div>
                                         <span className="text-[10px] font-mono text-zinc-500">
                                             {uploadProgress < 100 ? `SYNC: ${uploadProgress}%` : '// ATTACHED'}
@@ -553,8 +639,9 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
                             type="file" 
                             ref={fileInputRef} 
                             className="hidden" 
-                            accept="image/*,video/*" 
-                            onChange={(e) => e.target.files?.[0] && handleFileChange(e.target.files[0])} 
+                            accept={isStill ? "image/*" : isTape ? "video/*" : "image/*,video/*"} 
+                            multiple={!isTape}
+                            onChange={(e) => e.target.files && handleFilesChange(e.target.files)} 
                         />
                     </div>
                 </div>

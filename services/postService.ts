@@ -21,7 +21,9 @@ import { db, auth } from '../firebase';
 import { COLLECTIONS, createDocument, deleteDocument, FirestoreRecord, getDocument, listDocuments, updateDocument } from './firestoreService';
 import { uploadFile, getStoragePath } from './storageService';
 import { incrementChannelPostCount, decrementChannelPostCount, getChannelById } from './channelService';
-import { Post, PostType, CollabDetails, Project } from '../types';
+import { Post, PostType, CollabDetails, Project, StreamMoment } from '../types';
+import { generateSummary } from './geminiService';
+import { isMomentsDemoModeEnabled, getFilteredMockMoments } from './momentsDemoData';
 
 export interface CreatePostInput {
     channelId?: string;
@@ -31,7 +33,9 @@ export interface CreatePostInput {
     oneLine: string;
     content: string;
     mediaFile?: File | null;
+    mediaFiles?: File[] | null;
     mediaUrl?: string | null;
+    mediaUrls?: string[];
     mediaType?: 'image' | 'video';
     thumbnailUrl?: string;
     demoUrl?: string;
@@ -41,6 +45,7 @@ export interface CreatePostInput {
     status?: 'published' | 'draft';
     isPublished?: boolean;
     type?: string;
+    momentType?: 'Stills' | 'Tapes' | 'Knacks';
     category?: string;
     domain?: string;
     tags?: string[];
@@ -90,6 +95,8 @@ export interface PostDocumentData {
     saveCount?: number;
     type: PostType;
     postType?: string;
+    momentType?: 'Stills' | 'Tapes' | 'Knacks';
+    mediaUrls?: string[];
     category: string;
     domain?: string;
     tags?: string[];
@@ -128,7 +135,23 @@ export const normalizeFirestorePost = (id: string, data: Record<string, any>): P
     const rawCat = (data.category || '').toString().toLowerCase();
     const rawDom = (data.domain || '').toString().toLowerCase();
 
-    if (rawType === 'showcase' || rawCat === 'showcase' || rawDom === 'showcase' || Boolean(data.isProject)) {
+    let momentType: 'Stills' | 'Tapes' | 'Knacks' | undefined = data.momentType;
+    if (!momentType) {
+        if (rawCat === 'stills' || rawCat === 'still' || rawType === 'still') {
+            momentType = 'Stills';
+        } else if (rawCat === 'tapes' || rawCat === 'tape' || rawType === 'tape') {
+            momentType = 'Tapes';
+        } else if (rawCat === 'knacks' || rawCat === 'knack' || rawType === 'knack') {
+            momentType = 'Knacks';
+        }
+    }
+
+    if (rawType === 'moment' || rawType === 'still' || rawType === 'tape' || rawType === 'knack' || rawCat === 'stills' || rawCat === 'tapes' || rawCat === 'knacks' || Boolean(data.momentType)) {
+        postType = PostType.Moment;
+        if (!momentType) {
+            momentType = (data.mediaType === 'video' || data.mediaUrl?.includes('.mp4')) ? 'Tapes' : 'Stills';
+        }
+    } else if (rawType === 'showcase' || rawCat === 'showcase' || rawDom === 'showcase' || Boolean(data.isProject)) {
         postType = PostType.Showcase;
     } else if (rawType === 'thread') {
         postType = PostType.Thread;
@@ -141,6 +164,10 @@ export const normalizeFirestorePost = (id: string, data: Record<string, any>): P
     } else {
         postType = PostType.Feed;
     }
+
+    const mediaUrls = Array.isArray(data.mediaUrls) && data.mediaUrls.length > 0
+        ? data.mediaUrls
+        : (data.mediaUrl ? [data.mediaUrl] : []);
 
     return {
         id,
@@ -161,7 +188,8 @@ export const normalizeFirestorePost = (id: string, data: Record<string, any>): P
         oneLine: data.oneLine || data.aiSummary || data.title || '',
         hook: data.hook || data.oneLine || data.aiSummary || '',
         content: data.content || data.description || '',
-        mediaUrl: data.mediaUrl || undefined,
+        mediaUrl: data.mediaUrl || (mediaUrls.length > 0 ? mediaUrls[0] : undefined),
+        mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
         mediaType: data.mediaType || (data.mediaUrl?.includes('.mp4') ? 'video' : data.mediaUrl ? 'image' : undefined),
         thumbnailUrl: data.thumbnailUrl || undefined,
         demoUrl: data.demoUrl || undefined,
@@ -181,7 +209,8 @@ export const normalizeFirestorePost = (id: string, data: Record<string, any>): P
         saveCount: Number(data.saveCount ?? 0),
         type: postType,
         postType: data.postType || postType,
-        category: data.category || data.domain || 'General',
+        momentType,
+        category: data.category || (momentType || (data.domain || 'General')),
         domain: data.domain || data.category || 'General',
         tags: Array.isArray(data.tags) ? data.tags : [],
         visibility: data.visibility || 'public',
@@ -200,18 +229,22 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
         throw new Error('You must be authenticated to create a post.');
     }
 
+    const uploadedUrls: string[] = Array.isArray(input.mediaUrls) ? [...input.mediaUrls] : [];
     let uploadedMediaUrl: string | undefined = input.mediaUrl || undefined;
     let detectedMediaType: 'image' | 'video' | undefined = input.mediaType;
 
-    // Handle media file upload if provided
+    // Handle single media file upload if provided
     if (input.mediaFile) {
         try {
             const file = input.mediaFile;
-            const storagePath = getStoragePath('postMedia', currentUser.uid, file.name);
+            const storagePath = getStoragePath('postMedia', currentUser.uid, `${Date.now()}_${file.name}`);
             const uploaded = await uploadFile(storagePath, file, {
                 onProgress: (progress) => onUploadProgress?.(progress),
             });
             uploadedMediaUrl = uploaded.url;
+            if (!uploadedUrls.includes(uploaded.url)) {
+                uploadedUrls.push(uploaded.url);
+            }
             detectedMediaType = file.type.startsWith('video') ? 'video' : 'image';
         } catch (uploadErr) {
             console.warn('[POST_MEDIA_UPLOAD_WARN] Storage upload failed, falling back to preview URL if available:', uploadErr);
@@ -221,13 +254,59 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
         }
     }
 
+    // Handle multiple media files upload if provided
+    if (Array.isArray(input.mediaFiles) && input.mediaFiles.length > 0) {
+        const totalFiles = input.mediaFiles.length;
+        let completed = 0;
+        for (const file of input.mediaFiles) {
+            try {
+                const storagePath = getStoragePath('postMedia', currentUser.uid, `${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${file.name}`);
+                const uploaded = await uploadFile(storagePath, file, {
+                    onProgress: (fileProgress) => {
+                        const overall = Math.round(((completed + (fileProgress / 100)) / totalFiles) * 100);
+                        onUploadProgress?.(overall);
+                    }
+                });
+                if (!uploadedUrls.includes(uploaded.url)) {
+                    uploadedUrls.push(uploaded.url);
+                }
+                if (!uploadedMediaUrl) {
+                    uploadedMediaUrl = uploaded.url;
+                }
+                if (!detectedMediaType) {
+                    detectedMediaType = file.type.startsWith('video') ? 'video' : 'image';
+                }
+            } catch (err) {
+                console.warn('[MULTI_MEDIA_UPLOAD_WARN] Failed to upload media file:', file.name, err);
+            }
+            completed++;
+        }
+    }
+
+    if (uploadedMediaUrl && !uploadedUrls.includes(uploadedMediaUrl)) {
+        uploadedUrls.unshift(uploadedMediaUrl);
+    }
+    if (!uploadedMediaUrl && uploadedUrls.length > 0) {
+        uploadedMediaUrl = uploadedUrls[0];
+    }
+
     let resolvedPostType = PostType.Feed;
     const inputType = input.type?.toLowerCase();
-    if (inputType === 'showcase' || inputType === 'project') {
+    const isMomentInput = (
+        inputType === 'moment' ||
+        inputType === 'stills' ||
+        inputType === 'tapes' ||
+        inputType === 'knacks' ||
+        Boolean(input.momentType)
+    );
+
+    if (isMomentInput) {
+        resolvedPostType = PostType.Moment;
+    } else if (inputType === 'showcase' || inputType === 'project') {
         resolvedPostType = PostType.Showcase;
     } else if (inputType === 'thread' || inputType === 'discover') {
         resolvedPostType = PostType.Thread;
-    } else if (inputType === 'query' || inputType === 'knack') {
+    } else if (inputType === 'query') {
         resolvedPostType = PostType.Query;
     } else if (inputType === 'collab' || Boolean(input.collabDetails)) {
         resolvedPostType = PostType.Collab;
@@ -235,19 +314,32 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
         resolvedPostType = PostType.Feed;
     }
 
+    // Resolve moment category if applicable
+    let resolvedMomentType: 'Stills' | 'Tapes' | 'Knacks' | undefined = input.momentType;
+    if (resolvedPostType === PostType.Moment && !resolvedMomentType) {
+        if (inputType === 'tapes' || detectedMediaType === 'video') {
+            resolvedMomentType = 'Tapes';
+        } else if (inputType === 'knacks') {
+            resolvedMomentType = 'Knacks';
+        } else {
+            resolvedMomentType = 'Stills';
+        }
+    }
+
     // Enforce channel requirement ONLY for actual Feed posts
     if (resolvedPostType === PostType.Feed && inputType === 'feed' && !input.channelId) {
         throw new Error('A Channel is required before publishing a Feed broadcast. Please select or create a channel.');
     }
 
-    // Collabs & Showcases never require channel affiliations
+    // Moments, Collabs & Showcases never require channel affiliations
     const isCollab = resolvedPostType === PostType.Collab;
     const isShowcase = resolvedPostType === PostType.Showcase;
-    let finalChannelId = (isCollab || isShowcase) ? null : (input.channelId || null);
-    let finalChannelName = (isCollab || isShowcase) ? null : (input.channelName || null);
-    let finalChannelAvatar = (isCollab || isShowcase) ? null : (input.channelAvatarUrl || null);
+    const isMoment = resolvedPostType === PostType.Moment;
+    let finalChannelId = (isCollab || isShowcase || isMoment) ? null : (input.channelId || null);
+    let finalChannelName = (isCollab || isShowcase || isMoment) ? null : (input.channelName || null);
+    let finalChannelAvatar = (isCollab || isShowcase || isMoment) ? null : (input.channelAvatarUrl || null);
 
-    if (!isCollab && !isShowcase && input.channelId && (!finalChannelName || !finalChannelAvatar)) {
+    if (!isCollab && !isShowcase && !isMoment && input.channelId && (!finalChannelName || !finalChannelAvatar)) {
         try {
             const ch = await getChannelById(input.channelId);
             if (ch) {
@@ -286,6 +378,19 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
         if (input.collabDetails.projectStatus?.trim()) cleanCollabDetails.projectStatus = input.collabDetails.projectStatus.trim();
     }
 
+    // Generate real AI summary if there is descriptive content and no explicit summary yet
+    let aiSummaryText = (input.oneLine || '').trim();
+    if (!aiSummaryText && input.content && input.content.trim().length > 40) {
+        try {
+            const generated = await generateSummary(input.content.trim());
+            if (generated && generated.trim().length > 0) {
+                aiSummaryText = generated.trim();
+            }
+        } catch (summaryErr) {
+            console.warn('[AI_SUMMARY_GEN_WARN]', summaryErr);
+        }
+    }
+
     const postPayload = {
         channelId: finalChannelId,
         channelName: finalChannelName,
@@ -297,11 +402,12 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
             username: input.authorProfile?.username || '',
             isVerified: input.authorProfile?.role === 'admin' || input.authorProfile?.role === 'moderator' || false,
         },
-        title: input.title?.trim() || input.oneLine.trim(),
-        aiSummary: input.oneLine.trim(),
-        oneLine: input.oneLine.trim(),
-        content: input.content.trim(),
+        title: input.title?.trim() || aiSummaryText || (input.content ? input.content.slice(0, 40) : 'Moment'),
+        aiSummary: aiSummaryText || null,
+        oneLine: aiSummaryText || null,
+        content: (input.content || '').trim(),
         mediaUrl: uploadedMediaUrl || null,
+        mediaUrls: uploadedUrls.length > 0 ? uploadedUrls : (uploadedMediaUrl ? [uploadedMediaUrl] : []),
         mediaType: detectedMediaType || null,
         thumbnailUrl: input.thumbnailUrl || (detectedMediaType === 'video' ? uploadedMediaUrl : null),
         demoUrl: input.demoUrl?.trim() || null,
@@ -321,15 +427,16 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
         saveCount: 0,
         type: resolvedPostType,
         postType: resolvedPostType,
-        category: input.domain || input.category || (isCollab ? 'Collab' : isShowcase ? 'Showcase' : 'General'),
-        domain: input.domain || input.category || (isCollab ? 'Collab' : isShowcase ? 'Showcase' : 'General'),
+        momentType: resolvedMomentType || null,
+        category: resolvedMomentType || input.domain || input.category || (isCollab ? 'Collab' : isShowcase ? 'Showcase' : isMoment ? 'Stills' : 'General'),
+        domain: input.domain || input.category || resolvedMomentType || (isCollab ? 'Collab' : isShowcase ? 'Showcase' : isMoment ? 'Stills' : 'General'),
         tags: Array.isArray(input.tags) ? input.tags : [],
         visibility: input.visibility || 'public',
         collabDetails: cleanCollabDetails,
     };
 
     const newDocId = await createDocument(COLLECTIONS.posts, postPayload);
-    console.log(`[POST_CREATED] Successfully created post ${newDocId}`);
+    console.log(`[POST_CREATED] Successfully created post ${newDocId} (type=${resolvedPostType}, momentType=${resolvedMomentType})`);
 
     // If channelId is present, increment channel post count
     if (finalChannelId) {
@@ -719,11 +826,63 @@ export const getUserPosts = async (userId: string): Promise<Post[]> => {
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 };
 
+// ==========================================
+// Demo Data Session State Helpers
+// ==========================================
+const getDemoLikes = (userId?: string): Set<string> => {
+    try {
+        const raw = sessionStorage.getItem(`invox_demo_likes_${userId || 'anon'}`);
+        return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch {
+        return new Set();
+    }
+};
+
+const saveDemoLikes = (set: Set<string>, userId?: string) => {
+    try {
+        sessionStorage.setItem(`invox_demo_likes_${userId || 'anon'}`, JSON.stringify(Array.from(set)));
+    } catch {}
+};
+
+const getDemoBookmarks = (userId?: string): Set<string> => {
+    try {
+        const raw = sessionStorage.getItem(`invox_demo_bookmarks_${userId || 'anon'}`);
+        return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch {
+        return new Set();
+    }
+};
+
+const saveDemoBookmarks = (set: Set<string>, userId?: string) => {
+    try {
+        sessionStorage.setItem(`invox_demo_bookmarks_${userId || 'anon'}`, JSON.stringify(Array.from(set)));
+    } catch {}
+};
+
 /**
  * Toggles like on a post.
  * Uses deterministic document ID `${userId}_${postId}` in the 'likes' collection.
+ * Purely isolates mock/demo posts from touching Firestore.
  */
 export const toggleLikePost = async (postId: string): Promise<{ liked: boolean; newCount: number }> => {
+    if (postId.startsWith('demo-')) {
+        const userId = auth.currentUser?.uid || 'anon';
+        const demoLikes = getDemoLikes(userId);
+        let liked = false;
+        let newCount = 0;
+        if (demoLikes.has(postId)) {
+            demoLikes.delete(postId);
+            liked = false;
+            newCount = -1;
+        } else {
+            demoLikes.add(postId);
+            liked = true;
+            newCount = 1;
+        }
+        saveDemoLikes(demoLikes, userId);
+        return { liked, newCount };
+    }
+
     const currentUser = auth.currentUser;
     if (!currentUser) throw new Error('Must be signed in to like posts');
 
@@ -758,8 +917,25 @@ export const toggleLikePost = async (postId: string): Promise<{ liked: boolean; 
 /**
  * Toggles bookmark / save on a post.
  * Uses deterministic document ID `${userId}_${postId}` in the 'bookmarks' collection.
+ * Purely isolates mock/demo posts from touching Firestore.
  */
 export const toggleBookmarkPost = async (postId: string): Promise<{ saved: boolean }> => {
+    if (postId.startsWith('demo-')) {
+        const userId = auth.currentUser?.uid || 'anon';
+        const demoBookmarks = getDemoBookmarks(userId);
+        let saved = false;
+        if (demoBookmarks.has(postId)) {
+            demoBookmarks.delete(postId);
+            saved = false;
+        } else {
+            demoBookmarks.add(postId);
+            saved = true;
+        }
+        saveDemoBookmarks(demoBookmarks, userId);
+        window.dispatchEvent(new CustomEvent('invox_demo_bookmark_changed'));
+        return { saved };
+    }
+
     const currentUser = auth.currentUser;
     if (!currentUser) throw new Error('Must be signed in to bookmark posts');
 
@@ -788,13 +964,18 @@ export const toggleBookmarkPost = async (postId: string): Promise<{ saved: boole
 };
 
 /**
- * Fetches all liked post IDs for the current user.
+ * Fetches all liked post IDs for the current user (including isolated demo likes).
  */
 export const getUserLikedPostIds = async (userId: string): Promise<Set<string>> => {
+    const ids = new Set<string>();
+    const demoLikes = getDemoLikes(userId);
+    demoLikes.forEach(id => ids.add(id));
+
+    if (!userId) return ids;
+
     try {
         const q = query(collection(db, COLLECTIONS.likes), where('userId', '==', userId));
         const snap = await getDocs(q);
-        const ids = new Set<string>();
         snap.forEach(d => {
             const data = d.data();
             if (data.postId) ids.add(data.postId);
@@ -802,18 +983,23 @@ export const getUserLikedPostIds = async (userId: string): Promise<Set<string>> 
         return ids;
     } catch (e) {
         console.warn('Failed to fetch user likes:', e);
-        return new Set<string>();
+        return ids;
     }
 };
 
 /**
- * Fetches all saved / bookmarked post IDs for the current user.
+ * Fetches all saved / bookmarked post IDs for the current user (including isolated demo bookmarks).
  */
 export const getUserSavedPostIds = async (userId: string): Promise<Set<string>> => {
+    const ids = new Set<string>();
+    const demoBookmarks = getDemoBookmarks(userId);
+    demoBookmarks.forEach(id => ids.add(id));
+
+    if (!userId) return ids;
+
     try {
         const q = query(collection(db, COLLECTIONS.bookmarks), where('userId', '==', userId));
         const snap = await getDocs(q);
-        const ids = new Set<string>();
         snap.forEach(d => {
             const data = d.data();
             if (data.postId) ids.add(data.postId);
@@ -821,22 +1007,41 @@ export const getUserSavedPostIds = async (userId: string): Promise<Set<string>> 
         return ids;
     } catch (e) {
         console.warn('Failed to fetch user bookmarks:', e);
-        return new Set<string>();
+        return ids;
     }
 };
 
 /**
  * Real-time subscription to user saved / bookmarked post IDs.
- * Ensures synchronized saved state across all Spotlight views and sessions.
+ * Ensures synchronized saved state across all Spotlight views and sessions,
+ * while safely supporting demo bookmarks without writing mock IDs to Firestore.
  */
 export const subscribeToUserSavedPostIds = (
     userId: string,
     onIds: (ids: Set<string>) => void,
     onError?: (err: Error) => void
 ) => {
+    let firestoreIds = new Set<string>();
+
+    const emitSaved = () => {
+        const combined = new Set<string>(firestoreIds);
+        const demoBookmarks = getDemoBookmarks(userId);
+        demoBookmarks.forEach(id => combined.add(id));
+        onIds(combined);
+    };
+
+    const handleDemoBookmark = () => {
+        emitSaved();
+    };
+    window.addEventListener('invox_demo_bookmark_changed', handleDemoBookmark);
+
+    // Initial emission
+    emitSaved();
+
     if (!userId) {
-        onIds(new Set<string>());
-        return () => {};
+        return () => {
+            window.removeEventListener('invox_demo_bookmark_changed', handleDemoBookmark);
+        };
     }
 
     const q = query(
@@ -844,21 +1049,26 @@ export const subscribeToUserSavedPostIds = (
         where('userId', '==', userId)
     );
 
-    return onSnapshot(
+    const unsubscribe = onSnapshot(
         q,
         (snap) => {
-            const ids = new Set<string>();
+            firestoreIds = new Set<string>();
             snap.forEach(d => {
                 const data = d.data();
-                if (data.postId) ids.add(data.postId);
+                if (data.postId) firestoreIds.add(data.postId);
             });
-            onIds(ids);
+            emitSaved();
         },
         (err) => {
             console.error('[SUBSCRIBE_USER_SAVED_POSTS_ERROR]', err);
             onError?.(err);
         }
     );
+
+    return () => {
+        window.removeEventListener('invox_demo_bookmark_changed', handleDemoBookmark);
+        unsubscribe();
+    };
 };
 
 /**
@@ -953,7 +1163,12 @@ export const incrementPostView = async (postId: string): Promise<boolean> => {
     // 2. Mark as recorded synchronously BEFORE async Firestore call to eliminate race conditions
     markPostViewRecorded(postId);
 
-    // 3. Atomically update Firestore
+    // 3. Demo / Mock posts are isolated from Firestore
+    if (postId.startsWith('demo-')) {
+        return true;
+    }
+
+    // 4. Atomically update Firestore for real posts
     try {
         const postRef = doc(db, COLLECTIONS.posts, postId);
         await updateDoc(postRef, {
@@ -1539,4 +1754,210 @@ export const seedInitialShowcasePostsIfEmpty = async (): Promise<void> => {
         console.warn('[SHOWCASE_SEED_WARN] Could not seed showcase posts:', seedErr);
     }
 };
+
+// ==========================================
+// Moments (Hub -> Stream -> Moments)
+// ==========================================
+
+/**
+ * Checks if a normalized post or raw Firestore post data represents a Moment.
+ */
+export const isMomentPost = (post: Post, rawData?: any): boolean => {
+    const typeStr = (post.type || post.postType || rawData?.type || rawData?.postType || '').toString().toLowerCase();
+    const catStr = (post.category || rawData?.category || '').toString().toLowerCase();
+    const momentTypeStr = (post.momentType || rawData?.momentType || '').toString().toLowerCase();
+    return (
+        typeStr === 'moment' ||
+        typeStr === 'still' ||
+        typeStr === 'tape' ||
+        typeStr === 'knack' ||
+        catStr === 'stills' ||
+        catStr === 'tapes' ||
+        catStr === 'knacks' ||
+        Boolean(post.momentType) ||
+        Boolean(rawData?.momentType) ||
+        momentTypeStr === 'stills' ||
+        momentTypeStr === 'tapes' ||
+        momentTypeStr === 'knacks'
+    );
+};
+
+/**
+ * Transforms a Post into a StreamMoment format for the Moments feed.
+ */
+export const postToMoment = (post: Post): StreamMoment => {
+    const mediaList = (post.mediaUrls && post.mediaUrls.length > 0)
+        ? post.mediaUrls
+        : (post.mediaUrl ? [post.mediaUrl] : []);
+
+    // Determine category: Stills, Tapes, Knacks
+    let category: 'Stills' | 'Tapes' | 'Knacks' = 'Stills';
+    const rawCat = (post.momentType || post.category || post.domain || '').toString().toLowerCase();
+    if (rawCat.includes('tape') || post.mediaType === 'video' || (mediaList[0] && mediaList[0].match(/\.(mp4|webm|mov)$/i))) {
+        category = 'Tapes';
+    } else if (rawCat.includes('knack')) {
+        category = 'Knacks';
+    } else {
+        category = 'Stills';
+    }
+
+    return {
+        id: post.id,
+        authorId: post.authorId || post.author?.id || post.author?.uid,
+        author: {
+            name: post.author?.name || 'Invox Member',
+            avatar: post.author?.avatarUrl || `https://picsum.photos/seed/${post.authorId || post.id}/200`,
+            handle: post.author?.username ? `@${post.author.username.replace(/^@/, '')}` : (post.author?.name ? `@${post.author.name.toLowerCase().replace(/\s+/g, '')}` : '@member'),
+            username: post.author?.username || undefined,
+            isVerified: Boolean(post.author?.isVerified),
+            uid: post.author?.uid || post.authorId,
+        },
+        category,
+        domain: post.domain || post.category || category,
+        aiSummary: post.aiSummary || undefined,
+        mediaUrl: post.mediaUrl || (mediaList.length > 0 ? mediaList[0] : ''),
+        mediaUrls: mediaList,
+        caption: post.content || post.description || post.title || '',
+        likes: Number(post.stats?.likes ?? post.likeCount ?? 0),
+        views: Number(post.stats?.views ?? post.viewCount ?? 0),
+        comments: Number(post.stats?.comments ?? post.commentCount ?? 0),
+        userLiked: Boolean(post.userLiked),
+        userSaved: Boolean(post.userSaved),
+        createdAt: post.createdAt instanceof Date ? post.createdAt : new Date(post.createdAt || Date.now()),
+        type: post.mediaType || (category === 'Tapes' ? 'video' : 'image'),
+    };
+};
+
+/**
+ * Fetches Moments posts from Firestore.
+ */
+export const getMomentsPosts = async (categoryFilter?: string): Promise<StreamMoment[]> => {
+    try {
+        const q = query(
+            collection(db, COLLECTIONS.posts),
+            limit(100)
+        );
+        const snapshot = await getDocs(q);
+        const currentUid = auth.currentUser?.uid;
+
+        const realMoments = snapshot.docs
+            .filter(docSnap => {
+                const data = docSnap.data();
+                const norm = normalizeFirestorePost(docSnap.id, data);
+                if (!isMomentPost(norm, data)) return false;
+                // Only published moments are public; drafts visible only to author
+                if (norm.status === 'draft') {
+                    if (!currentUid || norm.authorId !== currentUid) return false;
+                }
+                const moment = postToMoment(norm);
+                if (categoryFilter && categoryFilter.toLowerCase() !== 'all') {
+                    return moment.category.toLowerCase() === categoryFilter.toLowerCase();
+                }
+                return true;
+            })
+            .map(docSnap => postToMoment(normalizeFirestorePost(docSnap.id, docSnap.data())))
+            .sort((a, b) => {
+                const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+                const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+                return dateB - dateA;
+            });
+
+        if (isMomentsDemoModeEnabled()) {
+            const mockMoments = getFilteredMockMoments(categoryFilter);
+            const realIds = new Set(realMoments.map(m => m.id));
+            const nonDuplicateMocks = mockMoments.filter(m => !realIds.has(m.id));
+            return [...realMoments, ...nonDuplicateMocks];
+        }
+        return realMoments;
+    } catch (err) {
+        console.warn('[GET_MOMENTS_POSTS_WARN]', err);
+        if (isMomentsDemoModeEnabled()) {
+            return getFilteredMockMoments(categoryFilter);
+        }
+        return [];
+    }
+};
+
+/**
+ * Real-time subscription to Moments posts across the network for Hub -> Stream -> Moments.
+ * Respects demo mode: when demo mode is enabled, delivers high-fidelity mock Moments merged
+ * with real user broadcasts. When disabled, displays purely real broadcasts from Firestore.
+ */
+export const subscribeToMomentsPosts = (
+    onMoments: (moments: StreamMoment[]) => void,
+    categoryFilter?: string,
+    onError?: (error: Error) => void
+) => {
+    let latestRealMoments: StreamMoment[] = [];
+
+    const emitMoments = () => {
+        if (isMomentsDemoModeEnabled()) {
+            const mockMoments = getFilteredMockMoments(categoryFilter);
+            const realIds = new Set(latestRealMoments.map(m => m.id));
+            const nonDuplicateMocks = mockMoments.filter(m => !realIds.has(m.id));
+            onMoments([...latestRealMoments, ...nonDuplicateMocks]);
+        } else {
+            onMoments([...latestRealMoments]);
+        }
+    };
+
+    // Listen for demo mode toggles
+    const handleDemoChange = () => {
+        emitMoments();
+    };
+    window.addEventListener('invox_moments_demo_changed', handleDemoChange);
+
+    // Initial instant emission for smooth responsiveness
+    emitMoments();
+
+    const q = query(
+        collection(db, COLLECTIONS.posts),
+        limit(100)
+    );
+
+    const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+            const currentUid = auth.currentUser?.uid;
+            latestRealMoments = snapshot.docs
+                .filter(docSnap => {
+                    const data = docSnap.data();
+                    const norm = normalizeFirestorePost(docSnap.id, data);
+                    if (!isMomentPost(norm, data)) return false;
+                    // Drafts only visible to author
+                    if (norm.status === 'draft') {
+                        if (!currentUid || norm.authorId !== currentUid) return false;
+                    }
+                    const moment = postToMoment(norm);
+                    if (categoryFilter && categoryFilter.toLowerCase() !== 'all') {
+                        return moment.category.toLowerCase() === categoryFilter.toLowerCase();
+                    }
+                    return true;
+                })
+                .map(docSnap => postToMoment(normalizeFirestorePost(docSnap.id, docSnap.data())))
+                .sort((a, b) => {
+                    const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+                    const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+                    return dateB - dateA;
+                });
+
+            console.log(`[HUB_STREAM_MOMENTS] Live Moments update: found ${latestRealMoments.length} real moments`);
+            emitMoments();
+        },
+        (err) => {
+            console.warn('[MOMENTS_POSTS_SUBSCRIBE_WARN]', err);
+            if (isMomentsDemoModeEnabled()) {
+                emitMoments();
+            } else {
+                onError?.(err);
+            }
+        }
+    );
+
+    return () => {
+        window.removeEventListener('invox_moments_demo_changed', handleDemoChange);
+        unsubscribe();
+    };
+};
+
 

@@ -70,6 +70,7 @@ export enum PostType {
   Poll = 'Poll',
   Collab = 'Collab',
   Showcase = 'Showcase',
+  Moment = 'Moment',
 }
 
 export interface Channel {
@@ -112,6 +113,7 @@ export interface Post {
   hook?: string;
   content: string;
   mediaUrl?: string;
+  mediaUrls?: string[];
   mediaType?: 'image' | 'video';
   thumbnailUrl?: string;
   demoUrl?: string;
@@ -131,6 +133,7 @@ export interface Post {
   saveCount?: number;
   type: PostType;
   postType?: string;
+  momentType?: 'Stills' | 'Tapes' | 'Knacks';
   category: string;
   domain?: string;
   tags?: string[];
@@ -405,22 +408,32 @@ export interface Event {
 
 export interface StreamMoment {
     id: string;
+    authorId?: string;
     author: {
         name: string;
         avatarUrl: string;
+        username?: string;
         isVerified?: boolean;
+        id?: string;
+        uid?: string;
     };
     aiSummary: string;
     content: string;
     mediaUrl: string;
+    mediaUrls?: string[];
     mediaType: 'image' | 'video';
     thumbnailUrl?: string;
     type: 'Stills' | 'Tapes' | 'Knacks';
+    category?: string;
+    domain?: string;
     stats: {
         likes: number;
         views: number;
         comments: number;
     };
+    userLiked?: boolean;
+    userSaved?: boolean;
+    createdAt?: Date | any;
 }
 
 export interface StreamLoop {

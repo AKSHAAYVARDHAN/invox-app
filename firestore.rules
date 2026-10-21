@@ -92,8 +92,12 @@ service cloud.firestore {
                && exists(/databases/$(database)/documents/channels/$(request.resource.data.channelId))
                && get(/databases/$(database)/documents/channels/$(request.resource.data.channelId)).data.ownerId == uid())
             : true
-        );
-      allow update, delete: if signedIn() && (('authorId' in resource.data && resource.data.authorId == uid()) || isModerator());
+      allow update: if signedIn() && (
+        (('authorId' in resource.data) && resource.data.authorId == uid())
+        || isModerator()
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stats', 'likeCount', 'viewCount', 'commentCount', 'saveCount', 'updatedAt'])
+      );
+      allow delete: if signedIn() && ((('authorId' in resource.data) && resource.data.authorId == uid()) || isModerator());
     }
 
     match /polls/{pollId} {

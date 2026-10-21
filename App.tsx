@@ -208,8 +208,14 @@ const ProtectedLayout = () => {
             setHubView('welcome');
             setHubRightSidebarView('main');
             setSelectedHubConversation(null);
+        } else {
+            const params = new URLSearchParams(location.search);
+            const tabParam = params.get('tab') || params.get('view');
+            if (tabParam === 'stream') {
+                setHubView('stream');
+            }
         }
-    }, [location.pathname]);
+    }, [location.pathname, location.search]);
 
     const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);
 
@@ -461,6 +467,7 @@ const MainAppRoutes = () => (
             <ReactRouterDOM.Route path="/spotlight/project/:projectId" element={<SectionRouteGuard sectionId="spotlight"><ProjectDetailsPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/communities" element={<SectionRouteGuard sectionId="communities"><CommunitiesPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/hub" element={<SectionRouteGuard sectionId="hub"><HubPage /></SectionRouteGuard>} />
+            <ReactRouterDOM.Route path="/stream" element={<ReactRouterDOM.Navigate to="/hub?tab=stream" replace />} />
             <ReactRouterDOM.Route path="/myspace" element={<SectionRouteGuard sectionId="mySpace"><MySpacePage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/myspace/uploads" element={<SectionRouteGuard sectionId="mySpace"><UploadsPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/profile" element={<ProfilePage />} />

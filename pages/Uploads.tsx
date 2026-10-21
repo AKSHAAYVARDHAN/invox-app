@@ -232,6 +232,12 @@ const UploadsPage = () => {
                 matchesCategory = postType === 'showcase' || cat === 'showcase' || Boolean((item as any).isProject);
             } else if (targetCategory === 'feed') {
                 matchesCategory = cat === 'general' || cat === 'feed' || postType === 'feed';
+            } else if (targetCategory === 'still' || targetCategory === 'stills') {
+                matchesCategory = (item.momentType === 'Stills') || postType === 'still' || postType === 'stills' || cat === 'stills' || cat === 'still' || (postType === 'moment' && item.mediaType !== 'video');
+            } else if (targetCategory === 'tape' || targetCategory === 'tapes') {
+                matchesCategory = (item.momentType === 'Tapes') || postType === 'tape' || postType === 'tapes' || cat === 'tapes' || cat === 'tape' || (postType === 'moment' && item.mediaType === 'video');
+            } else if (targetCategory === 'knack' || targetCategory === 'knacks') {
+                matchesCategory = (item.momentType === 'Knacks') || postType === 'knack' || postType === 'knacks' || cat === 'knacks' || cat === 'knack';
             } else {
                 matchesCategory = cat === targetCategory || postType === targetCategory;
             }
@@ -350,6 +356,8 @@ const UploadsPage = () => {
         description: string;
         previewUrl: string | null;
         mediaFile?: File | null;
+        mediaFiles?: File[] | null;
+        mediaUrls?: string[];
         type: string;
         channelId?: string;
         channelName?: string;
@@ -359,17 +367,26 @@ const UploadsPage = () => {
     }) => {
         if (!currentUser) return;
 
+        const typeLower = (data.type || '').toLowerCase();
+        const isMoment = typeLower === 'still' || typeLower === 'tape' || typeLower === 'knack' || typeLower === 'moment';
+        const momentType: 'Stills' | 'Tapes' | 'Knacks' | undefined = isMoment
+            ? (typeLower === 'tape' ? 'Tapes' : typeLower === 'knack' ? 'Knacks' : 'Stills')
+            : undefined;
+
         await createPost({
-            channelId: data.channelId,
-            channelName: data.channelName,
-            channelAvatarUrl: data.channelAvatarUrl,
+            channelId: isMoment ? undefined : data.channelId,
+            channelName: isMoment ? undefined : data.channelName,
+            channelAvatarUrl: isMoment ? undefined : data.channelAvatarUrl,
             oneLine: data.oneLine,
             content: data.description,
             mediaFile: data.mediaFile,
+            mediaFiles: data.mediaFiles,
             mediaUrl: data.previewUrl,
-            type: data.type,
-            category: data.domain || data.category || data.type,
-            domain: data.domain || data.category || 'Technology',
+            mediaUrls: data.mediaUrls,
+            type: isMoment ? PostType.Moment : data.type,
+            momentType,
+            category: momentType || data.domain || data.category || data.type,
+            domain: data.domain || momentType || data.category || 'Technology',
             authorProfile: userProfile ? {
                 displayName: userProfile.displayName || currentUser.displayName || undefined,
                 username: userProfile.username || undefined,
@@ -381,6 +398,8 @@ const UploadsPage = () => {
         setIsModalOpen(false);
         setOverrideContextName(null);
         setSelectedChannelForFeed(undefined);
+        setActionSuccess(isMoment ? 'Moment broadcasted successfully.' : 'Broadcast published successfully.');
+        setTimeout(() => setActionSuccess(null), 4000);
     };
 
     const handleDelete = (postId: string) => {
