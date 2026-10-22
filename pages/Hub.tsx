@@ -397,50 +397,6 @@ const HubPage = () => {
 
         return (
             <div className="space-y-4">
-                {/* Header title */}
-                <div className="flex items-center justify-between pb-1">
-                    <div>
-                        <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">// STREAM_CHANNELS</span>
-                        <h1 className="text-sm font-bold font-mono uppercase tracking-wider text-white">Hub Broadcast Stream</h1>
-                    </div>
-                    <div className="flex items-center gap-2 sm:gap-3">
-                        {/* Demo Mode Toggle Button */}
-                        <button
-                            type="button"
-                            onClick={() => toggleMomentsDemoMode()}
-                            title={demoMode ? "Demo Mode is ON: displaying realistic test moments. Click to view real data only." : "Demo Mode is OFF: displaying only real published moments. Click to view demo moments."}
-                            className={`flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider px-2.5 py-1 border transition-colors ${
-                                demoMode 
-                                    ? 'bg-amber-950/40 text-amber-300 border-amber-800/80 hover:bg-amber-900/60' 
-                                    : 'bg-[#0c0c0e] text-zinc-500 border-zinc-800 hover:text-zinc-300 hover:border-zinc-700'
-                            }`}
-                        >
-                            <span className={`w-1.5 h-1.5 rounded-full ${demoMode ? 'bg-amber-400' : 'bg-zinc-600'}`} />
-                            <span className="hidden xs:inline">DEMO:</span>
-                            <span className="font-bold">{demoMode ? 'ON' : 'OFF'}</span>
-                        </button>
-
-                        <button
-                            onClick={() => {
-                                if (activeStreamTab === 'Loops') {
-                                    setEditingLoop(null);
-                                    setIsCreateLoopModalOpen(true);
-                                } else {
-                                    navigate('/myspace/uploads?tab=Hub&sub=Stills');
-                                }
-                            }}
-                            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-zinc-200 text-black font-mono text-xs font-bold uppercase tracking-wider transition-colors border border-white"
-                        >
-                            <PlusIcon className="w-3.5 h-3.5 text-black" />
-                            <span>{activeStreamTab === 'Loops' ? '+ Broadcast Loop' : 'Broadcast Moment'}</span>
-                        </button>
-                        <div className="flex items-center gap-1.5 font-mono text-[10px] text-zinc-400 bg-[#0c0c0e] border border-zinc-800 px-2.5 py-1">
-                            <RadioIcon className="w-3.5 h-3.5 text-green-400 animate-pulse" />
-                            <span>LIVE_FEED</span>
-                        </div>
-                    </div>
-                </div>
-
                 {/* Main Tabs: Moments/Loops */}
                 <div className="flex border-b border-zinc-800">
                     {(['Moments', 'Loops'] as const).map(tab => (
