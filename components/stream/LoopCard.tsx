@@ -3,7 +3,6 @@ import type { StreamLoop, Post } from '../../types';
 import { PostType } from '../../types';
 import { 
     EllipsisVerticalIcon, 
-    PencilSwooshIcon, 
     HeartIcon, 
     TrendingUpIcon, 
     ChatBubbleBottomCenterTextIcon, 
@@ -388,7 +387,7 @@ const LoopCard: React.FC<LoopCardProps> = ({
                         )}
                     </div>
 
-                    {/* Media Display + Strike Button */}
+                    {/* Media Display */}
                     {mediaSource && (
                         <div className="relative mt-2 border border-zinc-800 bg-black overflow-hidden group">
                             <img 
@@ -398,24 +397,6 @@ const LoopCard: React.FC<LoopCardProps> = ({
                                 className="w-full h-44 object-cover cursor-zoom-in group-hover:scale-[1.01] transition-transform duration-300"
                                 onClick={() => setZoomedImageUrl(mediaSource)}
                             />
-
-                            {/* Strike Action Button (PencilSwoosh) */}
-                            <button 
-                                onClick={handleStrike}
-                                className={`absolute bottom-2.5 right-2.5 p-2 border transition-all duration-150 flex items-center gap-1.5 shadow-xl ${
-                                    isStruck
-                                        ? 'bg-amber-400 text-black border-amber-300 font-bold scale-105'
-                                        : 'bg-white hover:bg-zinc-200 text-black border-white'
-                                } ${strikeAnimation ? 'animate-bounce' : ''}`}
-                                title={isStruck ? 'Struck! Click to undo strike' : 'Strike this Loop (Resonate / Amplify Signal)'}
-                            >
-                                <PencilSwooshIcon className="w-4 h-4" />
-                                {strikesCount > 0 && (
-                                    <span className="text-[10px] font-bold tabular-nums pr-0.5">
-                                        {formatNumber(strikesCount)}
-                                    </span>
-                                )}
-                            </button>
                         </div>
                     )}
                 </div>
