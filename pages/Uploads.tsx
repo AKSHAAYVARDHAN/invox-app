@@ -27,10 +27,13 @@ const UploadsPage = () => {
     const [activeTab, setActiveTab] = useState<MainTab>('Explore');
     const [exploreSubTab, setExploreSubTab] = useState<'Channels' | 'Feeds' | 'Discover'>('Channels');
     const [spotlightSubTab, setSpotlightSubTab] = useState<'Showcase' | 'Collabs'>('Showcase');
-    const [hubSubTab, setHubSubTab] = useState<'Loops' | 'Stills' | 'Tapes' | 'Knacks'>('Loops');
     
-    // Loops management state (My Space -> Hub -> Loops)
+    // Hub two-level hierarchy: Primary tabs (Moments | Loops) and secondary category filters
+    const [hubPrimaryTab, setHubPrimaryTab] = useState<'Moments' | 'Loops'>('Moments');
+    const [mySpaceMomentFilter, setMySpaceMomentFilter] = useState<'All' | 'Stills' | 'Tapes' | 'Knacks'>('All');
     const [mySpaceLoopFilter, setMySpaceLoopFilter] = useState<'All' | 'Zaps' | 'Thoughts' | 'Music' | 'Mood'>('All');
+    
+    // Loops modal state
     const [isCreateLoopModalOpen, setIsCreateLoopModalOpen] = useState(false);
     const [editingLoop, setEditingLoop] = useState<StreamLoop | null>(null);
     const [loopToDelete, setLoopToDelete] = useState<StreamLoop | null>(null);
@@ -176,8 +179,13 @@ const UploadsPage = () => {
         const subParam = searchParams.get('sub');
         if (tabParam === 'Hub') {
             setActiveTab('Hub');
-            if (subParam === 'Loops' || subParam === 'Stills' || subParam === 'Tapes' || subParam === 'Knacks') {
-                setHubSubTab(subParam as any);
+            if (subParam === 'Loops') {
+                setHubPrimaryTab('Loops');
+            } else if (subParam === 'Moments') {
+                setHubPrimaryTab('Moments');
+            } else if (subParam === 'Stills' || subParam === 'Tapes' || subParam === 'Knacks') {
+                setHubPrimaryTab('Moments');
+                setMySpaceMomentFilter(subParam as any);
             }
         } else if (tabParam === 'Spotlight') {
             setActiveTab('Spotlight');
@@ -201,9 +209,18 @@ const UploadsPage = () => {
                 setIsCreateChannelModalOpen(true);
             } else if (uploadTriggerTarget === 'Loop') {
                 setActiveTab('Hub');
-                setHubSubTab('Loops');
+                setHubPrimaryTab('Loops');
                 setEditingLoop(null);
                 setIsCreateLoopModalOpen(true);
+            } else if (['Moment', 'Still', 'Tape', 'Knack'].includes(uploadTriggerTarget)) {
+                setActiveTab('Hub');
+                setHubPrimaryTab('Moments');
+                if (uploadTriggerTarget === 'Still') setMySpaceMomentFilter('Stills');
+                else if (uploadTriggerTarget === 'Tape') setMySpaceMomentFilter('Tapes');
+                else if (uploadTriggerTarget === 'Knack') setMySpaceMomentFilter('Knacks');
+                else setMySpaceMomentFilter('All');
+                setOverrideContextName(uploadTriggerTarget === 'Moment' ? 'Still' : uploadTriggerTarget);
+                setIsModalOpen(true);
             } else {
                 if (uploadTriggerTarget === 'Feed') {
                     setActiveTab('Explore');
@@ -214,9 +231,6 @@ const UploadsPage = () => {
                 } else if (uploadTriggerTarget === 'Showcase' || uploadTriggerTarget === 'Collab') {
                     setActiveTab('Spotlight');
                     setSpotlightSubTab(uploadTriggerTarget === 'Showcase' ? 'Showcase' : 'Collabs');
-                } else if (['Still', 'Tape', 'Knack'].includes(uploadTriggerTarget)) {
-                    setActiveTab('Hub');
-                    setHubSubTab(uploadTriggerTarget === 'Still' ? 'Stills' : uploadTriggerTarget === 'Tape' ? 'Tapes' : 'Knacks');
                 }
                 setOverrideContextName(uploadTriggerTarget);
                 setIsModalOpen(true);
@@ -238,13 +252,80 @@ const UploadsPage = () => {
         } else if (activeTab === 'Spotlight') {
             name = spotlightSubTab === 'Showcase' ? 'Showcase' : 'Collab';
         } else if (activeTab === 'Hub') {
-            if (hubSubTab === 'Loops') name = 'Loop';
-            else if (hubSubTab === 'Stills') name = 'Still';
-            else if (hubSubTab === 'Tapes') name = 'Tape';
-            else name = 'Knack';
+            if (hubPrimaryTab === 'Loops') {
+                name = 'Loop';
+            } else {
+                if (mySpaceMomentFilter === 'Tapes') name = 'Tape';
+                else if (mySpaceMomentFilter === 'Knacks') name = 'Knack';
+                else name = 'Still';
+            }
         }
         return { name, section };
     };
+
+    // Helper to identify Moments posts
+    const isMomentPost = (item: Post) => {
+        if (!item) return false;
+        if (isLoopPost(item, item)) return false;
+        const postType = (item.type || '').toLowerCase();
+        const cat = (item.category || '').toLowerCase();
+        return (
+            item.type === PostType.Moment ||
+            Boolean(item.momentType) ||
+            postType === 'moment' ||
+            postType === 'still' ||
+            postType === 'stills' ||
+            postType === 'tape' ||
+            postType === 'tapes' ||
+            postType === 'knack' ||
+            postType === 'knacks' ||
+            cat === 'stills' ||
+            cat === 'still' ||
+            cat === 'tapes' ||
+            cat === 'tape' ||
+            cat === 'knacks' ||
+            cat === 'knack'
+        );
+    };
+
+    const getMomentCategory = (item: Post): 'Stills' | 'Tapes' | 'Knacks' => {
+        if (item.momentType) return item.momentType;
+        const postType = (item.type || '').toLowerCase();
+        const cat = (item.category || '').toLowerCase();
+        if (postType === 'tape' || postType === 'tapes' || cat === 'tape' || cat === 'tapes' || (postType === 'moment' && item.mediaType === 'video')) {
+            return 'Tapes';
+        }
+        if (postType === 'knack' || postType === 'knacks' || cat === 'knack' || cat === 'knacks') {
+            return 'Knacks';
+        }
+        return 'Stills';
+    };
+
+    // User's Moments published to Hub
+    const userMoments = useMemo(() => {
+        const seen = new Set<string>();
+        return userPosts
+            .filter(p => isMomentPost(p))
+            .filter(p => {
+                if (!p.id || seen.has(p.id)) return false;
+                seen.add(p.id);
+                return true;
+            })
+            .sort((a, b) => {
+                const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+                const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+                return dateB - dateA;
+            });
+    }, [userPosts]);
+
+    const filteredUserMoments = useMemo(() => {
+        if (mySpaceMomentFilter === 'All') return userMoments;
+        return userMoments.filter(m => getMomentCategory(m) === mySpaceMomentFilter);
+    }, [userMoments, mySpaceMomentFilter]);
+
+    const stillsCount = useMemo(() => userMoments.filter(m => getMomentCategory(m) === 'Stills').length, [userMoments]);
+    const tapesCount = useMemo(() => userMoments.filter(m => getMomentCategory(m) === 'Tapes').length, [userMoments]);
+    const knacksCount = useMemo(() => userMoments.filter(m => getMomentCategory(m) === 'Knacks').length, [userMoments]);
 
     // User's Loops published to Hub
     const userLoops: StreamLoop[] = useMemo(() => {
@@ -611,7 +692,8 @@ const UploadsPage = () => {
     const isChannelsView = activeTab === 'Explore' && exploreSubTab === 'Channels';
     const isDiscoverView = activeTab === 'Explore' && exploreSubTab === 'Discover';
     const isCollabView = activeTab === 'Spotlight' && spotlightSubTab === 'Collabs';
-    const isLoopsView = activeTab === 'Hub' && hubSubTab === 'Loops';
+    const isHubMomentsView = activeTab === 'Hub' && hubPrimaryTab === 'Moments';
+    const isHubLoopsView = activeTab === 'Hub' && hubPrimaryTab === 'Loops';
 
     return (
         <div className="space-y-4">
@@ -712,51 +794,38 @@ const UploadsPage = () => {
                     {activeTab === 'Hub' && (
                         <>
                             <button 
-                                onClick={() => setHubSubTab('Loops')} 
-                                className={`w-1/4 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
-                                    hubSubTab === 'Loops' 
+                                onClick={() => setHubPrimaryTab('Moments')} 
+                                className={`w-1/2 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                    hubPrimaryTab === 'Moments' 
+                                        ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/30' 
+                                        : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                                }`}
+                            >
+                                <span>// Moments</span>
+                                <span className={`text-[10px] px-1.5 py-0.2 border transition-colors ${
+                                    hubPrimaryTab === 'Moments'
+                                        ? 'bg-zinc-800 text-zinc-200 border-zinc-600'
+                                        : 'bg-zinc-900/60 text-zinc-500 border-zinc-800'
+                                }`}>
+                                    {userMoments.length}
+                                </span>
+                            </button>
+                            <button 
+                                onClick={() => setHubPrimaryTab('Loops')} 
+                                className={`w-1/2 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                    hubPrimaryTab === 'Loops' 
                                         ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/30' 
                                         : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
                                 }`}
                             >
                                 <span>// Loops</span>
                                 <span className={`text-[10px] px-1.5 py-0.2 border transition-colors ${
-                                    hubSubTab === 'Loops'
+                                    hubPrimaryTab === 'Loops'
                                         ? 'bg-zinc-800 text-zinc-200 border-zinc-600'
                                         : 'bg-zinc-900/60 text-zinc-500 border-zinc-800'
                                 }`}>
                                     {userLoops.length}
                                 </span>
-                            </button>
-                            <button 
-                                onClick={() => setHubSubTab('Stills')} 
-                                className={`w-1/4 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
-                                    hubSubTab === 'Stills' 
-                                        ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/30' 
-                                        : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
-                                }`}
-                            >
-                                <span>// Stills</span>
-                            </button>
-                            <button 
-                                onClick={() => setHubSubTab('Tapes')} 
-                                className={`w-1/4 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
-                                    hubSubTab === 'Tapes' 
-                                        ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/30' 
-                                        : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
-                                }`}
-                            >
-                                <span>// Tapes</span>
-                            </button>
-                            <button 
-                                onClick={() => setHubSubTab('Knacks')} 
-                                className={`w-1/4 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
-                                    hubSubTab === 'Knacks' 
-                                        ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/30' 
-                                        : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
-                                }`}
-                            >
-                                <span>// Knacks</span>
                             </button>
                         </>
                     )}
@@ -1184,7 +1253,198 @@ const UploadsPage = () => {
                         }
                     }}
                 />
-            ) : isLoopsView ? (
+            ) : isHubMomentsView ? (
+                /* DEDICATED MY SPACE MOMENTS WORKSPACE (MY SPACE -> HUB -> MOMENTS) */
+                <div className="space-y-4 font-mono">
+                    {/* Header bar: Telemetry & Actions */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-[#0c0c0e] border border-zinc-800 p-3.5">
+                        <div>
+                            <span className="text-zinc-500 uppercase tracking-widest text-[10px] block">// YOUR MOMENTS BROADCASTS</span>
+                            <div className="text-white font-bold tracking-wider mt-1 flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
+                                <span>ALL <span className="text-zinc-400 font-normal">{userMoments.length}</span></span>
+                                <span className="text-zinc-700">|</span>
+                                <span>STILLS <span className="text-zinc-400 font-normal">{stillsCount}</span></span>
+                                <span className="text-zinc-700">|</span>
+                                <span>TAPES <span className="text-zinc-400 font-normal">{tapesCount}</span></span>
+                                <span className="text-zinc-700">|</span>
+                                <span>KNACKS <span className="text-zinc-400 font-normal">{knacksCount}</span></span>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => {
+                                    setSelectedChannelForFeed(undefined);
+                                    setOverrideContextName(
+                                        mySpaceMomentFilter === 'Tapes' ? 'Tape' :
+                                        mySpaceMomentFilter === 'Knacks' ? 'Knack' : 'Still'
+                                    );
+                                    setIsModalOpen(true);
+                                }}
+                                className="flex items-center gap-1.5 bg-white text-black hover:bg-zinc-200 px-4 py-2 text-xs uppercase font-bold tracking-wider transition-all"
+                            >
+                                <PlusIcon className="w-3.5 h-3.5 text-black" />
+                                <span>+ BROADCAST MOMENT</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Secondary Navigation Bar: ALL / STILLS / TAPES / KNACKS */}
+                    <div className="flex space-x-1 border border-zinc-800 bg-[#0c0c0e] p-1">
+                        {(['All', 'Stills', 'Tapes', 'Knacks'] as const).map(filter => (
+                            <button
+                                key={filter}
+                                onClick={() => setMySpaceMomentFilter(filter)}
+                                className={`flex-1 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider transition-all duration-150 ${
+                                    mySpaceMomentFilter === filter
+                                        ? 'bg-zinc-800 text-white font-bold border border-zinc-700'
+                                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent'
+                                }`}
+                            >
+                                {filter}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Moments List or Empty State */}
+                    {loading ? (
+                        <div className="py-20 flex justify-center items-center">
+                            <div className="w-8 h-8 border-2 border-zinc-500 border-t-white rounded-full animate-spin"></div>
+                        </div>
+                    ) : filteredUserMoments.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 px-4 bg-[#0c0c0e] border border-zinc-800 font-mono text-center">
+                            <div className="max-w-md w-full">
+                                <span className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-2">// MOMENTS_INITIALIZER</span>
+                                <h2 className="text-base font-bold text-white mb-2 tracking-wider uppercase">
+                                    No {mySpaceMomentFilter !== 'All' ? mySpaceMomentFilter : 'Moment'} Broadcasts Yet
+                                </h2>
+                                <p className="text-zinc-400 text-xs mb-6 leading-relaxed">
+                                    {mySpaceMomentFilter === 'Stills' ? 'Broadcast curated photos, visuals, and high-resolution still frames.' :
+                                     mySpaceMomentFilter === 'Tapes' ? 'Stream short-form video recordings and captured network clips.' :
+                                     mySpaceMomentFilter === 'Knacks' ? 'Demonstrate specialized creative talents, engineering crafts, and technical knacks.' :
+                                     'Moments are rich visual transmissions (Stills, Tapes, and Knacks) broadcasting to the Hub stream.'}
+                                </p>
+                                <button
+                                    onClick={() => {
+                                        setSelectedChannelForFeed(undefined);
+                                        setOverrideContextName(
+                                            mySpaceMomentFilter === 'Tapes' ? 'Tape' :
+                                            mySpaceMomentFilter === 'Knacks' ? 'Knack' : 'Still'
+                                        );
+                                        setIsModalOpen(true);
+                                    }}
+                                    className="inline-flex items-center gap-2 bg-white text-black hover:bg-zinc-200 px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-all"
+                                >
+                                    <PlusIcon className="w-4 h-4 text-black" />
+                                    <span>+ Broadcast Your First Moment</span>
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-10">
+                            {filteredUserMoments.map(item => {
+                                const momentCat = getMomentCategory(item);
+                                return (
+                                    <div key={`moment-item-${item.id}`} className="bg-[#0c0c0e] border border-zinc-800 flex flex-col group hover:border-zinc-700 transition-all relative">
+                                        {/* Media Preview */}
+                                        {item.mediaUrl && (
+                                            <div className="aspect-video bg-black overflow-hidden relative border-b border-zinc-800">
+                                                {item.mediaType === 'video' ? (
+                                                    <video src={item.mediaUrl} className="w-full h-full object-cover" controls />
+                                                ) : (
+                                                    <img src={item.mediaUrl} className="w-full h-full object-cover" onError={handleImageError} alt="Media" />
+                                                )}
+                                            </div>
+                                        )}
+                                        <div className="p-4 flex-grow">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] font-bold text-white uppercase tracking-widest border border-zinc-700 px-1.5 py-0.5 bg-zinc-900/50">
+                                                        // {momentCat.toUpperCase()}
+                                                    </span>
+                                                    {item.status === 'draft' ? (
+                                                        <span className="text-[9px] font-bold text-amber-400 border border-amber-800/80 px-1.5 py-0.5 bg-amber-950/40 uppercase">DRAFT</span>
+                                                    ) : (
+                                                        <span className="text-[9px] font-bold text-emerald-400 border border-emerald-800/80 px-1.5 py-0.5 bg-emerald-950/40 uppercase">LIVE</span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] text-zinc-500">{new Date(item.createdAt).toLocaleDateString()}</span>
+                                                    <div className="relative">
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setActiveMenuId(activeMenuId === item.id ? null : item.id);
+                                                            }}
+                                                            className="text-zinc-500 hover:text-white p-1 transition-colors border border-transparent hover:border-zinc-800"
+                                                            title="Options"
+                                                        >
+                                                            <EllipsisVerticalIcon className="w-4 h-4" />
+                                                        </button>
+                                                        {activeMenuId === item.id && (
+                                                            <div 
+                                                                onClick={(e) => e.stopPropagation()} 
+                                                                className="absolute right-0 mt-1 w-36 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono"
+                                                            >
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setActiveMenuId(null);
+                                                                        setEditingPost(item);
+                                                                    }}
+                                                                    className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-zinc-900 uppercase tracking-wider flex items-center gap-2"
+                                                                >
+                                                                    <PencilSquareIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                                    <span>// EDIT</span>
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setActiveMenuId(null);
+                                                                        handleDelete(item.id);
+                                                                    }}
+                                                                    disabled={deletingId === item.id}
+                                                                    className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-red-950/30 hover:text-red-300 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1"
+                                                                >
+                                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                                    <span>// DELETE</span>
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Hook */}
+                                            <h4 className="text-sm font-bold text-white uppercase tracking-wider mb-1 line-clamp-2">
+                                                "{item.aiSummary || item.oneLine}"
+                                            </h4>
+
+                                            {/* Content */}
+                                            <p className="text-xs text-zinc-400 line-clamp-3 leading-relaxed mb-3">
+                                                {item.content}
+                                            </p>
+                                        </div>
+
+                                        {/* Footer Stats & Hub Link */}
+                                        <div className="p-3 border-t border-zinc-800/80 flex items-center justify-between text-zinc-400 text-xs font-mono">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-1.5"><HeartIcon className="w-3.5 h-3.5" /> <span>{item.stats?.likes || 0}</span></div>
+                                                <div className="flex items-center gap-1.5"><TrendingUpIcon className="w-3.5 h-3.5" /> <span>{item.stats?.views || 0}</span></div>
+                                                <div className="flex items-center gap-1.5"><ChatBubbleBottomCenterTextIcon className="w-3.5 h-3.5" /> <span>{item.stats?.comments || 0}</span></div>
+                                            </div>
+                                            <ReactRouterDOM.Link 
+                                                to="/hub?view=stream"
+                                                className="text-[10px] text-zinc-500 hover:text-white uppercase tracking-wider transition-colors"
+                                            >
+                                                // HUB_STREAM →
+                                            </ReactRouterDOM.Link>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            ) : isHubLoopsView ? (
                 /* DEDICATED MY SPACE LOOPS WORKSPACE (MY SPACE -> HUB -> LOOPS) */
                 <div className="space-y-4 font-mono">
                     {/* Header bar: Telemetry & Actions */}

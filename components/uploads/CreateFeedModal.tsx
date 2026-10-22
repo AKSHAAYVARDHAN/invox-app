@@ -52,10 +52,26 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
     const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-    const isStill = contextName.toLowerCase() === 'still' || contextName.toLowerCase() === 'stills';
-    const isTape = contextName.toLowerCase() === 'tape' || contextName.toLowerCase() === 'tapes';
-    const isKnack = contextName.toLowerCase() === 'knack' || contextName.toLowerCase() === 'knacks';
-    const isMomentContext = isStill || isTape || isKnack || contextName.toLowerCase() === 'moment';
+    const isInitialStill = contextName.toLowerCase() === 'still' || contextName.toLowerCase() === 'stills';
+    const isInitialTape = contextName.toLowerCase() === 'tape' || contextName.toLowerCase() === 'tapes';
+    const isInitialKnack = contextName.toLowerCase() === 'knack' || contextName.toLowerCase() === 'knacks';
+    const isMomentContext = isInitialStill || isInitialTape || isInitialKnack || contextName.toLowerCase() === 'moment';
+
+    const [selectedMomentType, setSelectedMomentType] = useState<'Still' | 'Tape' | 'Knack'>(() => {
+        if (isInitialTape) return 'Tape';
+        if (isInitialKnack) return 'Knack';
+        return 'Still';
+    });
+
+    useEffect(() => {
+        if (isInitialTape) setSelectedMomentType('Tape');
+        else if (isInitialKnack) setSelectedMomentType('Knack');
+        else if (isInitialStill) setSelectedMomentType('Still');
+    }, [contextName, isInitialTape, isInitialKnack, isInitialStill]);
+
+    const isStill = isMomentContext ? selectedMomentType === 'Still' : isInitialStill;
+    const isTape = isMomentContext ? selectedMomentType === 'Tape' : isInitialTape;
+    const isKnack = isMomentContext ? selectedMomentType === 'Knack' : isInitialKnack;
 
     // Target domain state
     const [targetDomain, setTargetDomain] = useState('Technology');
@@ -305,7 +321,7 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
                 previewUrl: previewUrls[0] || previewUrl,
                 mediaFile: mediaFiles[0] || media,
                 mediaFiles: mediaFiles.length > 0 ? mediaFiles : (media ? [media] : []),
-                type: contextName,
+                type: isMomentContext ? selectedMomentType : contextName,
                 channelId: finalChannelId || undefined,
                 channelName: finalChannelName || undefined,
                 channelAvatarUrl: finalChannelAvatar || undefined,
@@ -358,7 +374,9 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
                 <div className="flex items-center justify-between p-4 border-b border-zinc-800 flex-shrink-0 bg-zinc-950">
                     <div>
                         <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest block">// TRANSMISSION_CREATOR</span>
-                        <h2 className="text-sm font-bold font-mono text-white tracking-wider uppercase leading-none mt-1">New {contextName} Signal</h2>
+                        <h2 className="text-sm font-bold font-mono text-white tracking-wider uppercase leading-none mt-1">
+                            New {isMomentContext ? `${selectedMomentType} (Moment)` : contextName} Signal
+                        </h2>
                     </div>
                     <button 
                         onClick={handleCloseWithConfirm} 
@@ -371,6 +389,39 @@ const CreateFeedModal: React.FC<CreateFeedModalProps> = ({ isOpen, onClose, onPu
 
                 {/* Content Body */}
                 <div className="p-5 space-y-4 flex-grow overflow-y-auto no-scrollbar relative">
+                    {/* Moment Type Selector (When in Moments context) */}
+                    {isMomentContext && (
+                        <div className="bg-zinc-950 border border-zinc-800 p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">// MOMENT_CONTENT_TYPE</span>
+                                <span className="text-[10px] font-mono text-zinc-300 font-bold uppercase">{selectedMomentType}</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                                {(['Still', 'Tape', 'Knack'] as const).map((mType) => {
+                                    const isActive = selectedMomentType === mType;
+                                    return (
+                                        <button
+                                            key={mType}
+                                            type="button"
+                                            onClick={() => setSelectedMomentType(mType)}
+                                            className={`py-2 px-2 text-center font-mono text-xs uppercase tracking-wider transition-all border ${
+                                                isActive
+                                                    ? 'bg-white text-black font-bold border-white shadow-sm'
+                                                    : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
+                                            }`}
+                                        >
+                                            {mType === 'Still' ? '// STILLS' : mType === 'Tape' ? '// TAPES' : '// KNACKS'}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <p className="text-[10px] font-mono text-zinc-500 leading-normal">
+                                {selectedMomentType === 'Still' && 'High-resolution still imagery, photography, and visual captures.'}
+                                {selectedMomentType === 'Tape' && 'Short-form motion recordings, video transmissions, and network clips.'}
+                                {selectedMomentType === 'Knack' && 'Demonstrations of technical crafts, specialized skillsets, and creative talents.'}
+                            </p>
+                        </div>
+                    )}
                     {errorMsg && (
                         <div className="p-3 bg-red-950/40 border border-red-800 text-red-300 text-xs font-mono flex items-center justify-between">
                             <span>{errorMsg}</span>
