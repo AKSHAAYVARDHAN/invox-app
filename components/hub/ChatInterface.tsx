@@ -3,6 +3,8 @@ import type { HubConversation, Message } from '../../types';
 import { handleImageError } from '../utils/imageUtils';
 import { generateChatSummary } from '../../services/geminiService';
 import { ClickableMessageText } from '../ui/ClickableMessageText';
+import { useAuth } from '../../contexts/AuthContext';
+import { isUserAcceptedConnection } from '../../services/connectionService';
 import { 
     EllipsisVerticalIcon, 
     ArrowLeftIcon,
@@ -37,6 +39,7 @@ import {
     PlusIcon,
     CalendarDaysIcon,
     ClockIcon,
+    ShieldCheckIcon,
 } from '../ui/Icons';
 
 const cannedResponses = [ 
@@ -852,6 +855,64 @@ const ChatInterface: React.FC<{
     const [currentResultIndex, setCurrentResultIndex] = useState(-1);
 
     const [userStatus, setUserStatus] = useState<{ text: string; color: string } | null>(null);
+    const { currentUser } = useAuth();
+    const [isRestricted, setIsRestricted] = useState(false);
+    const [restrictionReason, setRestrictionReason] = useState<string | null>(null);
+
+    useEffect(() => {
+        let isCancelled = false;
+        const checkAccess = async () => {
+            if (!currentUser) {
+                setIsRestricted(true);
+                setRestrictionReason('Authentication required to access Hub transmissions.');
+                return;
+            }
+
+            // Crew / Group conversation: validate explicit member authorization
+            if (conversation.isGroup || conversation.category === 'group') {
+                const memberList = conversation.memberIds || conversation.participantIds;
+                if (memberList && memberList.length > 0 && !memberList.includes(currentUser.uid)) {
+                    if (!isCancelled) {
+                        setIsRestricted(true);
+                        setRestrictionReason('Crew Access Restricted: You are not an authorized member of this group conversation.');
+                    }
+                    return;
+                }
+                if (!isCancelled) {
+                    setIsRestricted(false);
+                    setRestrictionReason(null);
+                }
+                return;
+            }
+
+            // Comrade (one-on-one) conversation: validate mutual accepted connection
+            const otherUserId = conversation.userId 
+                || (conversation.participantIds && conversation.participantIds.find(id => id !== currentUser.uid));
+
+            if (otherUserId && otherUserId !== currentUser.uid && !otherUserId.startsWith('seed_') && !otherUserId.startsWith('convo_')) {
+                const isAccepted = await isUserAcceptedConnection(currentUser.uid, otherUserId);
+                if (!isCancelled) {
+                    if (!isAccepted) {
+                        setIsRestricted(true);
+                        setRestrictionReason('Communication Link Inactive: Comrade transmissions require an accepted mutual connection between nodes.');
+                    } else {
+                        setIsRestricted(false);
+                        setRestrictionReason(null);
+                    }
+                }
+            } else {
+                if (!isCancelled) {
+                    setIsRestricted(false);
+                    setRestrictionReason(null);
+                }
+            }
+        };
+
+        checkAccess();
+        return () => {
+            isCancelled = true;
+        };
+    }, [conversation.id, conversation.userId, conversation.memberIds, conversation.participantIds, conversation.isGroup, currentUser?.uid]);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -993,6 +1054,11 @@ const ChatInterface: React.FC<{
     };
 
     const sendMessage = (messageData: Omit<Message, 'id' | 'sender' | 'timestamp' | 'date'>) => {
+        if (isRestricted) {
+            console.warn('[TRANSMISSION_BLOCKED] Attempted to send transmission while connection or membership is inactive.');
+            return;
+        }
+
         const fullMessage: Message = {
             ...messageData,
             id: Date.now().toString(),
@@ -1125,20 +1191,32 @@ const ChatInterface: React.FC<{
                     </div>
                 )}
             </div>
-            <InputBar 
-                newMessage={newMessage} 
-                setNewMessage={setNewMessage} 
-                handleSend={handleSendText}
-                isRecording={isRecording}
-                toggleRecording={toggleRecording}
-                recordingTime={recordingTime}
-                fileInputRef={fileInputRef}
-                handleFileSelect={handleFileSelect}
-                emojiPickerRef={emojiPickerRef}
-                isEmojiPickerOpen={isEmojiPickerOpen}
-                setIsEmojiPickerOpen={setIsEmojiPickerOpen}
-                textareaRef={textareaRef}
-            />
+            {isRestricted ? (
+                <div className="p-4 border-t border-zinc-800 bg-[#0c0c0e] font-mono text-center">
+                    <div className="inline-flex items-center gap-2 text-red-400 text-xs font-bold uppercase tracking-wider mb-1">
+                        <ShieldCheckIcon className="w-4 h-4" />
+                        <span>// TRANSMISSION_TERMINATED // PERMISSION_REQUIRED</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 max-w-md mx-auto">
+                        {restrictionReason || 'Comrade transmissions require an active, accepted mutual connection. Input buffer is locked.'}
+                    </p>
+                </div>
+            ) : (
+                <InputBar 
+                    newMessage={newMessage} 
+                    setNewMessage={setNewMessage} 
+                    handleSend={handleSendText}
+                    isRecording={isRecording}
+                    toggleRecording={toggleRecording}
+                    recordingTime={recordingTime}
+                    fileInputRef={fileInputRef}
+                    handleFileSelect={handleFileSelect}
+                    emojiPickerRef={emojiPickerRef}
+                    isEmojiPickerOpen={isEmojiPickerOpen}
+                    setIsEmojiPickerOpen={setIsEmojiPickerOpen}
+                    textareaRef={textareaRef}
+                />
+            )}
             <SummaryModal
                 isOpen={isSummaryModalOpen}
                 onClose={() => setIsSummaryModalOpen(false)}

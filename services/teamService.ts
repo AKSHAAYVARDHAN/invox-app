@@ -2125,3 +2125,135 @@ export const rejectTeamJoinRequest = async ({
     }).catch((err) => console.warn('[REJECT_JOIN_REQUEST_NOTIF_WARN]', err));
 };
 
+/**
+ * Creates a standalone Crew group for multi-participant Hub messaging.
+ * Automatically provisions the creator as owner and registers any selected initial members.
+ */
+export const createCrewGroup = async ({
+    name,
+    description,
+    user,
+    userProfile,
+    initialMemberIds = [],
+    initialMembers = [],
+}: {
+    name: string;
+    description?: string;
+    user: User;
+    userProfile?: InvoxUser | null;
+    initialMemberIds?: string[];
+    initialMembers?: Array<{ uid: string; displayName?: string; photoURL?: string | null; username?: string }>;
+}): Promise<Team> => {
+    if (!user?.uid) {
+        throw new Error('Authentication required to create a crew');
+    }
+    const cleanName = name.trim();
+    if (!cleanName) {
+        throw new Error('Crew name is required');
+    }
+
+    const uniqueMemberIds = Array.from(new Set([user.uid, ...(initialMemberIds || [])]));
+    const teamRef = doc(collection(db, COLLECTIONS.teams));
+    const teamId = teamRef.id;
+
+    const creatorName = userProfile?.displayName || user.displayName || 'Crew Lead';
+    const creatorAvatar = userProfile?.photoURL || user.photoURL || null;
+
+    const teamData: Omit<Team, 'id'> = {
+        name: cleanName,
+        description: (description || '').trim(),
+        projectId: 'hub_crew',
+        projectTitle: 'Hub Crew',
+        projectDomain: 'Hub Collective',
+        ownerId: user.uid,
+        ownerName: creatorName,
+        ownerAvatar: creatorAvatar,
+        memberCount: uniqueMemberIds.length,
+        memberIds: uniqueMemberIds,
+        joinPolicy: 'open',
+        lastMessage: 'Crew transmission initialized.',
+        lastMessageSenderId: user.uid,
+        lastMessageSenderName: creatorName,
+        lastMessageTimestamp: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+    };
+
+    await setDoc(teamRef, sanitizeForFirestore(teamData));
+
+    // Register creator as owner in subcollection
+    const ownerMemberRef = doc(db, COLLECTIONS.teams, teamId, 'members', user.uid);
+    await setDoc(ownerMemberRef, sanitizeForFirestore({
+        teamId,
+        userId: user.uid,
+        displayName: creatorName,
+        username: userProfile?.username || user.email?.split('@')[0] || '',
+        photoURL: creatorAvatar,
+        role: 'owner',
+        projectRole: 'Crew Lead',
+        joinedAt: serverTimestamp(),
+        lastReadAt: serverTimestamp(),
+    }));
+
+    // Register initial members in subcollection
+    for (const mem of initialMembers) {
+        if (!mem.uid || mem.uid === user.uid) continue;
+        const memRef = doc(db, COLLECTIONS.teams, teamId, 'members', mem.uid);
+        await setDoc(memRef, sanitizeForFirestore({
+            teamId,
+            userId: mem.uid,
+            displayName: mem.displayName || 'Crew Member',
+            username: mem.username || '',
+            photoURL: mem.photoURL || null,
+            role: 'member',
+            projectRole: 'Crew Member',
+            joinedAt: serverTimestamp(),
+            lastReadAt: null,
+        })).catch(() => {});
+    }
+
+    return {
+        id: teamId,
+        ...teamData,
+    };
+};
+
+/**
+ * Adds an existing connection as a member to a Crew group.
+ */
+export const addMemberToCrew = async ({
+    teamId,
+    newMember,
+    user,
+}: {
+    teamId: string;
+    newMember: { uid: string; displayName?: string; photoURL?: string | null; username?: string };
+    user: User;
+}): Promise<void> => {
+    if (!teamId || !newMember?.uid) return;
+    const teamRef = doc(db, COLLECTIONS.teams, teamId);
+    const teamSnap = await getDoc(teamRef);
+    if (!teamSnap.exists()) return;
+
+    const teamData = teamSnap.data() as Team;
+    if (teamData.memberIds?.includes(newMember.uid)) return;
+
+    const memRef = doc(db, COLLECTIONS.teams, teamId, 'members', newMember.uid);
+    await setDoc(memRef, sanitizeForFirestore({
+        teamId,
+        userId: newMember.uid,
+        displayName: newMember.displayName || 'Crew Member',
+        username: newMember.username || '',
+        photoURL: newMember.photoURL || null,
+        role: 'member',
+        projectRole: 'Crew Member',
+        joinedAt: serverTimestamp(),
+    }));
+
+    await updateDoc(teamRef, {
+        memberIds: arrayUnion(newMember.uid),
+        memberCount: increment(1),
+        updatedAt: serverTimestamp(),
+    });
+};
+

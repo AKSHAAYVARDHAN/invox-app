@@ -263,6 +263,47 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["followerId", "followingId", "followerUid", "followingUid"]
+    },
+    "HubConversation": {
+      "title": "HubConversation",
+      "description": "Hub communication channel. For Comrades (one-to-one), access is restricted to accepted mutual connections. For Crew (groups), access is restricted to explicit group members.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "category": { "type": "string", "enum": ["comrade", "group", "explore", "spotlight"] },
+        "isGroup": { "type": "boolean" },
+        "participantIds": { "type": "array", "description": "User UIDs participating in Comrade conversation" },
+        "memberIds": { "type": "array", "description": "Explicit member UIDs for Crew group" },
+        "ownerId": { "type": "string" },
+        "lastMessage": { "type": "string" },
+        "lastSenderId": { "type": "string" },
+        "unreadCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "category", "createdAt"]
+    },
+    "HubMessage": {
+      "title": "HubMessage",
+      "description": "Messages sent within a Hub Conversation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "conversationId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderAvatar": { "type": "string" },
+        "text": { "type": "string" },
+        "type": { "type": "string", "enum": ["text", "image", "file", "voice"] },
+        "mediaUrl": { "type": "string" },
+        "fileInfo": { "type": "object" },
+        "voiceDuration": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["conversationId", "senderId", "type", "createdAt"]
     }
   },
   "firestore": {
@@ -321,6 +362,14 @@
     "/follows/{followId}": {
       "schema": "Follow",
       "description": "User follow relationships."
+    },
+    "/hubConversations/{conversationId}": {
+      "schema": "HubConversation",
+      "description": "Hub conversation channels with connection-restricted Comrades and membership-based Crew groups."
+    },
+    "/hubConversations/{conversationId}/messages/{messageId}": {
+      "schema": "HubMessage",
+      "description": "Messages sent within Hub conversations."
     }
   }
 }

@@ -36,6 +36,7 @@ export const COLLECTIONS = {
     teams: 'teams',
     teamInvitations: 'teamInvitations',
     usernames: 'usernames',
+    hubConversations: 'hubConversations',
 } as const;
 
 export type CollectionName = typeof COLLECTIONS[keyof typeof COLLECTIONS];

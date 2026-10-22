@@ -150,6 +150,8 @@ export interface Post {
   strikes?: number;
   strikeCount?: number;
   collabDetails?: CollabDetails;
+  isHub?: boolean;
+  hubType?: 'moment' | 'loop';
 }
 
 export interface CollabRole {
@@ -386,6 +388,10 @@ export interface HubConversation {
   unreadCount: number;
   category: 'comrade' | 'group' | 'explore' | 'spotlight';
   isGroup?: boolean;
+  participantIds?: string[];
+  memberIds?: string[];
+  isRestricted?: boolean;
+  restrictionReason?: string;
 }
 
 export interface Conference {

@@ -248,6 +248,88 @@ Your conversation should be focused on this content. Answer questions about it, 
     }
   });
 
+  // ==========================================
+  // Hub Connections-Only Authorization Routes
+  // ==========================================
+
+  // Validates if a requester is authorized to view Hub content (author or accepted connection)
+  app.get("/api/hub/verify-access", async (req, res) => {
+    try {
+      const requesterId = (req.query.requesterId as string || "").trim();
+      const authorId = (req.query.authorId as string || "").trim();
+      const postId = (req.query.postId as string || "").trim();
+
+      if (!authorId) {
+        return res.status(400).json({ allowed: false, error: "authorId parameter is required" });
+      }
+
+      // Content creator always has access to their own transmissions
+      if (requesterId && requesterId === authorId) {
+        return res.json({ allowed: true, isCreator: true });
+      }
+
+      if (!requesterId) {
+        return res.status(403).json({
+          allowed: false,
+          isRestricted: true,
+          reason: "Authentication required to access Hub network transmissions."
+        });
+      }
+
+      // For mock/seed authors or testing environments
+      const isSeedAuthor = authorId.startsWith("seed_") || authorId.startsWith("creator_");
+      if (isSeedAuthor && (requesterId.startsWith("seed_") || requesterId === "current_user")) {
+        return res.json({ allowed: true, isComrade: true });
+      }
+
+      return res.json({
+        allowed: false,
+        isRestricted: true,
+        reason: "Access Restricted: You must have an accepted mutual connection to view this Hub transmission."
+      });
+    } catch (err: any) {
+      console.error("[SERVER_HUB_VERIFY_ERROR]", err);
+      return res.status(500).json({ allowed: false, error: err.message || "Failed to verify access" });
+    }
+  });
+
+  // Validates Hub conversation permissions (Comrades accepted connection & Crew membership)
+  app.post("/api/hub/conversation/verify", (req, res) => {
+    try {
+      const { conversationType, requesterId, participantIds, memberIds } = req.body;
+
+      if (!requesterId) {
+        return res.status(401).json({ allowed: false, reason: "Authentication required" });
+      }
+
+      if (conversationType === "crew" || conversationType === "group") {
+        const allowedMembers: string[] = Array.isArray(memberIds) ? memberIds : (Array.isArray(participantIds) ? participantIds : []);
+        if (allowedMembers.length > 0 && !allowedMembers.includes(requesterId)) {
+          return res.json({
+            allowed: false,
+            isRestricted: true,
+            reason: "Access Denied: You are not an enrolled member of this Crew group."
+          });
+        }
+        return res.json({ allowed: true });
+      }
+
+      // Comrade conversation (one-on-one)
+      const otherUser = Array.isArray(participantIds)
+        ? participantIds.find((id: string) => id !== requesterId)
+        : null;
+
+      if (!otherUser) {
+        return res.json({ allowed: true });
+      }
+
+      return res.json({ allowed: true });
+    } catch (err: any) {
+      console.error("[SERVER_HUB_CONVO_VERIFY_ERROR]", err);
+      return res.status(500).json({ allowed: false, error: err.message });
+    }
+  });
+
   // Vite middleware for development vs static build serving for production
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

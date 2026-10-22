@@ -439,3 +439,134 @@ export const subscribeFollowedProfiles = (
         onError
     );
 };
+
+/**
+ * Checks whether userA and userB have an accepted (mutual) connection in INVOX.
+ * In INVOX, an accepted connection requires both follows/userA_userB AND follows/userB_userA to exist.
+ */
+export const isUserAcceptedConnection = async (
+    userAId: string,
+    userBId: string
+): Promise<boolean> => {
+    if (!userAId || !userBId || userAId === userBId) return false;
+    try {
+        const docAB = doc(db, COLLECTIONS.follows, `${userAId}_${userBId}`);
+        const docBA = doc(db, COLLECTIONS.follows, `${userBId}_${userAId}`);
+        const [snapAB, snapBA] = await Promise.all([
+            getDoc(docAB),
+            getDoc(docBA),
+        ]);
+        return snapAB.exists() && snapBA.exists();
+    } catch (e) {
+        console.warn('[IS_USER_ACCEPTED_CONNECTION_WARN]', e);
+        return false;
+    }
+};
+
+/**
+ * Fetches the Set of user IDs with which the current user has an accepted (mutual) connection.
+ */
+export const getAcceptedConnectionUserIds = async (currentUserId: string): Promise<Set<string>> => {
+    if (!currentUserId) return new Set<string>();
+
+    try {
+        const [followingSnap, followersSnap] = await Promise.all([
+            getDocs(query(collection(db, COLLECTIONS.follows), where('followerId', '==', currentUserId))),
+            getDocs(query(collection(db, COLLECTIONS.follows), where('followingId', '==', currentUserId))),
+        ]);
+
+        const followingSet = new Set<string>();
+        followingSnap.forEach(d => {
+            const data = d.data();
+            const id = data.followingId || data.followingUid || data.toUserId;
+            if (id && id !== currentUserId) followingSet.add(id);
+        });
+
+        const acceptedSet = new Set<string>();
+        followersSnap.forEach(d => {
+            const data = d.data();
+            const id = data.followerId || data.followerUid || data.fromUserId;
+            if (id && followingSet.has(id)) {
+                acceptedSet.add(id);
+            }
+        });
+
+        return acceptedSet;
+    } catch (e) {
+        console.warn('[GET_ACCEPTED_CONNECTIONS_WARN]', e);
+        return new Set<string>();
+    }
+};
+
+/**
+ * Subscribes in real-time to the current user's accepted connection IDs.
+ * Immediately invokes onIds whenever a connection request is accepted (mutual follow established)
+ * or disconnected/removed (access revoked).
+ */
+export const subscribeAcceptedConnectionUserIds = (
+    currentUserId: string,
+    onIds: (ids: Set<string>) => void,
+    onError?: (err: Error) => void
+): (() => void) => {
+    if (!currentUserId) {
+        onIds(new Set<string>());
+        return () => {};
+    }
+
+    let followingIds = new Set<string>();
+    let followerIds = new Set<string>();
+
+    const recompute = () => {
+        const accepted = new Set<string>();
+        followingIds.forEach(id => {
+            if (followerIds.has(id)) {
+                accepted.add(id);
+            }
+        });
+        onIds(accepted);
+    };
+
+    const qFollowing = query(collection(db, COLLECTIONS.follows), where('followerId', '==', currentUserId));
+    const qFollowers = query(collection(db, COLLECTIONS.follows), where('followingId', '==', currentUserId));
+
+    const unsubFollowing = onSnapshot(
+        qFollowing,
+        (snap) => {
+            const ids = new Set<string>();
+            snap.forEach(d => {
+                const data = d.data();
+                const id = data.followingId || data.followingUid || data.toUserId;
+                if (id && id !== currentUserId) ids.add(id);
+            });
+            followingIds = ids;
+            recompute();
+        },
+        (err) => {
+            console.error('[SUBSCRIBE_FOLLOWING_ERROR]', err);
+            onError?.(err);
+        }
+    );
+
+    const unsubFollowers = onSnapshot(
+        qFollowers,
+        (snap) => {
+            const ids = new Set<string>();
+            snap.forEach(d => {
+                const data = d.data();
+                const id = data.followerId || data.followerUid || data.fromUserId;
+                if (id && id !== currentUserId) ids.add(id);
+            });
+            followerIds = ids;
+            recompute();
+        },
+        (err) => {
+            console.error('[SUBSCRIBE_FOLLOWERS_ERROR]', err);
+            onError?.(err);
+        }
+    );
+
+    return () => {
+        unsubFollowing();
+        unsubFollowers();
+    };
+};

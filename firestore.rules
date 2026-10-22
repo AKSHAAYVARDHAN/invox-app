@@ -41,6 +41,24 @@ service cloud.firestore {
       return signedIn() && resource.data[field] == uid();
     }
 
+    // Canonical accepted (mutual) connection check between current user and target user
+    function isAcceptedConnection(targetUserId) {
+      return signedIn() && (
+        targetUserId == uid() ||
+        (exists(/databases/$(database)/documents/follows/$(uid())_$(targetUserId))
+         && exists(/databases/$(database)/documents/follows/$(targetUserId)_$(uid())))
+      );
+    }
+
+    // Identifies whether post document is Hub content (Moments or Loops)
+    function isHubPostData(data) {
+      return ('isHub' in data && data.isHub == true)
+        || ('type' in data && (data.type == 'Moment' || data.type == 'Loop' || data.type == 'still' || data.type == 'tape' || data.type == 'knack'))
+        || ('postType' in data && (data.postType == 'Moment' || data.postType == 'Loop'))
+        || ('momentType' in data && data.momentType != null)
+        || ('isLoop' in data && data.isLoop == true);
+    }
+
     function protectedUserFieldsChanged() {
       return request.resource.data.diff(resource.data).affectedKeys().hasAny([
         'uid',
@@ -83,7 +101,17 @@ service cloud.firestore {
     }
 
     match /posts/{postId} {
-      allow read: if true;
+      // Hub content (Moments & Loops) is strictly private to author and accepted connections
+      allow get: if !isHubPostData(resource.data)
+        || (signedIn() && (resource.data.authorId == uid() || isAcceptedConnection(resource.data.authorId) || isModerator()));
+
+      allow list: if signedIn() && (
+        (!isHubPostData(resource.data))
+        || (resource.data.authorId == uid())
+        || (isAcceptedConnection(resource.data.authorId))
+        || isModerator()
+      );
+
       allow create: if signedIn()
         && request.resource.data.authorId == uid()
         && (
@@ -92,10 +120,16 @@ service cloud.firestore {
                && exists(/databases/$(database)/documents/channels/$(request.resource.data.channelId))
                && get(/databases/$(database)/documents/channels/$(request.resource.data.channelId)).data.ownerId == uid())
             : true
+        );
+
       allow update: if signedIn() && (
         (('authorId' in resource.data) && resource.data.authorId == uid())
         || isModerator()
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stats', 'likeCount', 'viewCount', 'commentCount', 'saveCount', 'updatedAt'])
+        || (
+          // Stat/reaction updates on Hub posts require accepted connection
+          (!isHubPostData(resource.data) || isAcceptedConnection(resource.data.authorId))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stats', 'likeCount', 'viewCount', 'commentCount', 'saveCount', 'strikeCount', 'strikes', 'updatedAt'])
+        )
       );
       allow delete: if signedIn() && ((('authorId' in resource.data) && resource.data.authorId == uid()) || isModerator());
     }
@@ -141,8 +175,16 @@ service cloud.firestore {
     }
 
     match /comments/{commentId} {
-      allow read: if signedIn();
-      allow create: if owns('authorId');
+      function canAccessCommentTarget(postId) {
+        return !exists(/databases/$(database)/documents/posts/$(postId))
+          || !isHubPostData(get(/databases/$(database)/documents/posts/$(postId)).data)
+          || isAcceptedConnection(get(/databases/$(database)/documents/posts/$(postId)).data.authorId)
+          || isModerator();
+      }
+
+      allow get: if signedIn() && (!('postId' in resource.data) || canAccessCommentTarget(resource.data.postId));
+      allow list: if signedIn();
+      allow create: if owns('authorId') && (!('postId' in request.resource.data) || canAccessCommentTarget(request.resource.data.postId));
       allow update, delete: if existingOwner('authorId') || isModerator();
     }
 
@@ -227,6 +269,76 @@ service cloud.firestore {
               || isModerator());
         allow delete: if signedIn()
           && (resource.data.senderId == uid() || isModerator());
+      }
+    }
+
+    match /hubConversations/{conversationId} {
+      function isComrade() {
+        return resource.data.category == 'comrade';
+      }
+      function isGroup() {
+        return resource.data.category == 'group' || ('isGroup' in resource.data && resource.data.isGroup == true);
+      }
+      function otherComradeId(participants) {
+        return participants[0] == uid() ? participants[1] : participants[0];
+      }
+
+      allow read: if signedIn() && (
+        (isComrade() && uid() in resource.data.participantIds && isAcceptedConnection(otherComradeId(resource.data.participantIds)))
+        || (isGroup() && uid() in resource.data.memberIds)
+        || isModerator()
+      );
+
+      allow create: if signedIn() && (
+        (request.resource.data.category == 'comrade'
+         && uid() in request.resource.data.participantIds
+         && isAcceptedConnection(otherComradeId(request.resource.data.participantIds)))
+        || (request.resource.data.category == 'group' && uid() in request.resource.data.memberIds)
+        || isModerator()
+      );
+
+      allow update: if signedIn() && (
+        (isComrade() && uid() in resource.data.participantIds && isAcceptedConnection(otherComradeId(resource.data.participantIds)))
+        || (isGroup() && uid() in resource.data.memberIds)
+        || isModerator()
+      );
+
+      allow delete: if signedIn() && (
+        (isComrade() && uid() in resource.data.participantIds)
+        || (isGroup() && resource.data.ownerId == uid())
+        || isModerator()
+      );
+
+      match /messages/{messageId} {
+        function parentHubConvo() {
+          return get(/databases/$(database)/documents/hubConversations/$(conversationId)).data;
+        }
+
+        function otherParentComrade() {
+          return parentHubConvo().participantIds[0] == uid() ? parentHubConvo().participantIds[1] : parentHubConvo().participantIds[0];
+        }
+
+        allow read: if signedIn() && (
+          (parentHubConvo().category == 'comrade'
+           && uid() in parentHubConvo().participantIds
+           && isAcceptedConnection(otherParentComrade()))
+          || (parentHubConvo().category == 'group' && uid() in parentHubConvo().memberIds)
+          || isModerator()
+        );
+
+        allow create: if signedIn()
+          && request.resource.data.senderId == uid()
+          && (
+            (parentHubConvo().category == 'comrade'
+             && uid() in parentHubConvo().participantIds
+             && isAcceptedConnection(otherParentComrade()))
+            || (parentHubConvo().category == 'group' && uid() in parentHubConvo().memberIds)
+            || isModerator()
+          );
+
+        allow update, delete: if signedIn() && (
+          resource.data.senderId == uid() || isModerator()
+        );
       }
     }
 

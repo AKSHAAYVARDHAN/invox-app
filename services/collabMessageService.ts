@@ -154,6 +154,87 @@ export const getOrCreateCollabConversation = async ({
 };
 
 /**
+ * Gets or creates a deterministic direct 1-on-1 conversation between two users (comrades).
+ * Uses ID format `direct_${min(uid1, uid2)}_${max(uid1, uid2)}`.
+ */
+export const getOrCreateDirectConversation = async ({
+    currentUser,
+    userProfile,
+    targetUser,
+}: {
+    currentUser: User;
+    userProfile?: InvoxUser | null;
+    targetUser: {
+        uid: string;
+        displayName?: string;
+        username?: string;
+        photoURL?: string | null;
+        headline?: string;
+    };
+}): Promise<string> => {
+    if (!currentUser?.uid || !targetUser?.uid) {
+        throw new Error('Both users must be valid to start a conversation');
+    }
+    if (currentUser.uid === targetUser.uid) {
+        throw new Error('Cannot start a direct conversation with yourself');
+    }
+
+    const sortedIds = [currentUser.uid, targetUser.uid].sort();
+    const conversationId = `direct_${sortedIds[0]}_${sortedIds[1]}`;
+    const convRef = doc(db, COLLECTIONS.messages, conversationId);
+
+    const snapshot = await getDoc(convRef);
+    if (snapshot.exists()) {
+        return conversationId;
+    }
+
+    const currentParticipant: CollabConversationParticipant = {
+        uid: currentUser.uid,
+        displayName: userProfile?.displayName || currentUser.displayName || 'Comrade',
+        username: userProfile?.username || currentUser.email?.split('@')[0] || 'user',
+        photoURL: userProfile?.photoURL || currentUser.photoURL || null,
+        headline: userProfile?.headline || '',
+    };
+
+    const targetParticipant: CollabConversationParticipant = {
+        uid: targetUser.uid,
+        displayName: targetUser.displayName || 'Comrade',
+        username: targetUser.username || '',
+        photoURL: targetUser.photoURL || null,
+        headline: targetUser.headline || '',
+    };
+
+    const newConversation: Omit<CollabConversation, 'id'> = {
+        applicationId: '',
+        collabId: '',
+        roleId: '',
+        roleTitle: 'Comrade',
+        collabTitle: targetParticipant.displayName,
+        collabHook: targetParticipant.username ? `@${targetParticipant.username}` : '',
+        ownerId: currentUser.uid,
+        applicantId: targetUser.uid,
+        participants: [currentUser.uid, targetUser.uid],
+        applicantDetails: targetParticipant,
+        ownerDetails: currentParticipant,
+        lastMessage: '',
+        lastSenderId: '',
+        unreadCount: 0,
+        unreadBy: [],
+        unreadCounts: {
+            [currentUser.uid]: 0,
+            [targetUser.uid]: 0,
+        },
+        isTeam: false,
+        type: 'direct',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+    };
+
+    await setDoc(convRef, sanitizeForFirestore(newConversation));
+    return conversationId;
+};
+
+/**
  * Subscribes to all conversations where the user is a participant.
  */
 export const subscribeToUserConversations = (

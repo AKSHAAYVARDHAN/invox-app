@@ -8,14 +8,15 @@ import LoopCardSkeleton from '../components/stream/LoopCardSkeleton';
 import CreateLoopModal from '../components/loops/CreateLoopModal';
 import ChatInterface from '../components/hub/ChatInterface';
 import InteractiveGlobe from '../components/hub/InteractiveGlobe';
-import { CubeIcon, ChatBubbleBottomCenterTextIcon, SparklesIcon, RadioIcon, PlusIcon } from '../components/ui/Icons';
+import { CubeIcon, ChatBubbleBottomCenterTextIcon, SparklesIcon, RadioIcon, PlusIcon, ShieldCheckIcon } from '../components/ui/Icons';
 import { 
     subscribeToMomentsPosts, 
     subscribeToLoopsPosts,
     subscribeToUserSavedPostIds, 
     getUserLikedPostIds,
     getUserStruckLoopIds,
-    deleteLoopPost
+    deleteLoopPost,
+    getHubPostById
 } from '../services/postService';
 import { isMomentsDemoModeEnabled, toggleMomentsDemoMode } from '../services/momentsDemoData';
 import { useAuth } from '../contexts/AuthContext';
@@ -77,6 +78,45 @@ const HubPage = () => {
             window.removeEventListener('invox_moments_demo_changed', handleDemoChange);
         };
     }, []);
+
+    // Direct link authorization validation for ?momentId= or ?loopId=
+    const directMomentId = searchParams.get('momentId');
+    const directLoopId = searchParams.get('loopId');
+    const [directItemRestricted, setDirectItemRestricted] = useState<{ isRestricted: boolean; reason?: string } | null>(null);
+
+    useEffect(() => {
+        const targetId = directMomentId || directLoopId;
+        if (!targetId) {
+            setDirectItemRestricted(null);
+            return;
+        }
+
+        let isCancelled = false;
+        getHubPostById(targetId, currentUser?.uid).then(result => {
+            if (isCancelled) return;
+            if (result.isRestricted) {
+                setDirectItemRestricted({
+                    isRestricted: true,
+                    reason: result.restrictionReason || 'This Hub content is private to accepted connections of the creator.',
+                });
+            } else if (result.post) {
+                setDirectItemRestricted(null);
+                if (directLoopId) {
+                    setActiveStreamTab('Loops');
+                } else if (directMomentId) {
+                    setActiveStreamTab('Moments');
+                }
+            }
+        }).catch(err => {
+            if (!isCancelled) {
+                console.warn('[DIRECT_HUB_ITEM_ACCESS_ERROR]', err);
+            }
+        });
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [directMomentId, directLoopId, currentUser?.uid]);
 
     useEffect(() => {
         if (setRightSidebarVariant) {
@@ -182,6 +222,46 @@ const HubPage = () => {
         }
     };
     
+    const renderRestrictedModal = () => {
+        if (!directItemRestricted?.isRestricted) return null;
+        return (
+            <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+                <div className="bg-[#0c0c0e] border border-red-500/50 p-6 max-w-md w-full shadow-2xl font-mono text-center">
+                    <div className="w-12 h-12 bg-red-950/40 border border-red-500/50 flex items-center justify-center mx-auto mb-4 text-red-400">
+                        <ShieldCheckIcon className="w-6 h-6" />
+                    </div>
+                    <span className="text-[10px] uppercase tracking-widest text-red-400 font-bold block mb-1">
+                        // ACCESS_RESTRICTED // PRIVATE_NODE
+                    </span>
+                    <h3 className="text-base font-bold text-white uppercase tracking-wider mb-2">
+                        Connections-Only Transmission
+                    </h3>
+                    <p className="text-xs text-zinc-400 leading-relaxed mb-6">
+                        {directItemRestricted.reason || 'This Hub content is private to accepted connections of the creator. An accepted mutual connection is required to decrypt this transmission.'}
+                    </p>
+                    <div className="flex gap-3 justify-center">
+                        <button
+                            onClick={() => {
+                                setDirectItemRestricted(null);
+                                const newParams = new URLSearchParams(searchParams);
+                                newParams.delete('momentId');
+                                newParams.delete('loopId');
+                                setSearchParams(newParams);
+                            }}
+                            className="px-4 py-2 bg-white text-black text-xs font-bold uppercase tracking-wider hover:bg-zinc-200 transition-colors"
+                        >
+                            Return to Hub
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    if (directItemRestricted?.isRestricted) {
+        return renderRestrictedModal();
+    }
+
     if (selectedHubConversation && setSelectedHubConversation) {
         return (
             <div className="-mx-4 sm:-mx-6 lg:-mx-8 -mt-4 md:-mt-6 -mb-4 md:-mb-10 h-[calc(100vh-4rem)] md:h-screen transition-all duration-300 overflow-hidden">

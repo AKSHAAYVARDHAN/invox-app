@@ -25,6 +25,11 @@ import { Post, PostType, CollabDetails, Project, StreamMoment, StreamLoop, LoopC
 import { generateSummary } from './geminiService';
 import { isMomentsDemoModeEnabled, getFilteredMockMoments } from './momentsDemoData';
 import { getFilteredMockLoops } from './loopsDemoData';
+import { 
+    isUserAcceptedConnection, 
+    getAcceptedConnectionUserIds, 
+    subscribeAcceptedConnectionUserIds 
+} from './connectionService';
 
 export interface CreatePostInput {
     channelId?: string;
@@ -435,6 +440,8 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
         type: resolvedPostType,
         postType: resolvedPostType,
         momentType: resolvedMomentType || null,
+        isHub: isMoment,
+        hubType: isMoment ? 'moment' : null,
         category: resolvedMomentType || input.domain || input.category || (isCollab ? 'Collab' : isShowcase ? 'Showcase' : isMoment ? 'Stills' : 'General'),
         domain: input.domain || input.category || resolvedMomentType || (isCollab ? 'Collab' : isShowcase ? 'Showcase' : isMoment ? 'Stills' : 'General'),
         tags: Array.isArray(input.tags) ? input.tags : [],
@@ -1839,26 +1846,35 @@ export const postToMoment = (post: Post): StreamMoment => {
 };
 
 /**
- * Fetches Moments posts from Firestore.
+ * Fetches Moments posts from Firestore enforcing connections-only visibility architecture.
+ * Only moments authored by the user or their accepted connections are fetched.
  */
 export const getMomentsPosts = async (categoryFilter?: string): Promise<StreamMoment[]> => {
     try {
+        const currentUid = auth.currentUser?.uid;
+        if (!currentUid) {
+            if (isMomentsDemoModeEnabled()) {
+                return getFilteredMockMoments(categoryFilter);
+            }
+            return [];
+        }
+
+        const acceptedIds = await getAcceptedConnectionUserIds(currentUid);
+        const authorizedAuthors = [currentUid, ...Array.from(acceptedIds)].slice(0, 30);
+
         const q = query(
             collection(db, COLLECTIONS.posts),
+            where('authorId', 'in', authorizedAuthors),
             limit(100)
         );
         const snapshot = await getDocs(q);
-        const currentUid = auth.currentUser?.uid;
 
         const realMoments = snapshot.docs
             .filter(docSnap => {
                 const data = docSnap.data();
                 const norm = normalizeFirestorePost(docSnap.id, data);
                 if (!isMomentPost(norm, data)) return false;
-                // Only published moments are public; drafts visible only to author
-                if (norm.status === 'draft') {
-                    if (!currentUid || norm.authorId !== currentUid) return false;
-                }
+                if (norm.status === 'draft' && norm.authorId !== currentUid) return false;
                 const moment = postToMoment(norm);
                 if (categoryFilter && categoryFilter.toLowerCase() !== 'all') {
                     return moment.category.toLowerCase() === categoryFilter.toLowerCase();
@@ -1889,9 +1905,10 @@ export const getMomentsPosts = async (categoryFilter?: string): Promise<StreamMo
 };
 
 /**
- * Real-time subscription to Moments posts across the network for Hub -> Stream -> Moments.
- * Respects demo mode: when demo mode is enabled, delivers high-fidelity mock Moments merged
- * with real user broadcasts. When disabled, displays purely real broadcasts from Firestore.
+ * Real-time subscription to Moments posts enforcing connections-only visibility.
+ * Listens to accepted connections in real time. When a connection is accepted,
+ * new moments appear immediately. When a connection is removed, former connection's
+ * moments are immediately purged from client state.
  */
 export const subscribeToMomentsPosts = (
     onMoments: (moments: StreamMoment[]) => void,
@@ -1899,6 +1916,7 @@ export const subscribeToMomentsPosts = (
     onError?: (error: Error) => void
 ) => {
     let latestRealMoments: StreamMoment[] = [];
+    let innerUnsub: (() => void) | null = null;
 
     const emitMoments = () => {
         if (isMomentsDemoModeEnabled()) {
@@ -1920,53 +1938,74 @@ export const subscribeToMomentsPosts = (
     // Initial instant emission for smooth responsiveness
     emitMoments();
 
-    const q = query(
-        collection(db, COLLECTIONS.posts),
-        limit(100)
-    );
+    const currentUid = auth.currentUser?.uid;
+    if (!currentUid) {
+        return () => {
+            window.removeEventListener('invox_moments_demo_changed', handleDemoChange);
+        };
+    }
 
-    const unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-            const currentUid = auth.currentUser?.uid;
-            latestRealMoments = snapshot.docs
-                .filter(docSnap => {
-                    const data = docSnap.data();
-                    const norm = normalizeFirestorePost(docSnap.id, data);
-                    if (!isMomentPost(norm, data)) return false;
-                    // Drafts only visible to author
-                    if (norm.status === 'draft') {
-                        if (!currentUid || norm.authorId !== currentUid) return false;
-                    }
-                    const moment = postToMoment(norm);
-                    if (categoryFilter && categoryFilter.toLowerCase() !== 'all') {
-                        return moment.category.toLowerCase() === categoryFilter.toLowerCase();
-                    }
-                    return true;
-                })
-                .map(docSnap => postToMoment(normalizeFirestorePost(docSnap.id, docSnap.data())))
-                .sort((a, b) => {
-                    const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
-                    const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
-                    return dateB - dateA;
-                });
-
-            console.log(`[HUB_STREAM_MOMENTS] Live Moments update: found ${latestRealMoments.length} real moments`);
-            emitMoments();
-        },
-        (err) => {
-            console.warn('[MOMENTS_POSTS_SUBSCRIBE_WARN]', err);
-            if (isMomentsDemoModeEnabled()) {
-                emitMoments();
-            } else {
-                onError?.(err);
+    const unsubConnections = subscribeAcceptedConnectionUserIds(
+        currentUid,
+        (acceptedIds) => {
+            if (innerUnsub) {
+                innerUnsub();
+                innerUnsub = null;
             }
-        }
+
+            // Immediately purge any former connections when status changes
+            const authorizedSet = new Set<string>([currentUid, ...Array.from(acceptedIds)]);
+            latestRealMoments = latestRealMoments.filter(m => authorizedSet.has(m.authorId));
+            emitMoments();
+
+            const authorizedList = Array.from(authorizedSet).slice(0, 30);
+            const q = query(
+                collection(db, COLLECTIONS.posts),
+                where('authorId', 'in', authorizedList),
+                limit(100)
+            );
+
+            innerUnsub = onSnapshot(
+                q,
+                (snapshot) => {
+                    latestRealMoments = snapshot.docs
+                        .filter(docSnap => {
+                            const data = docSnap.data();
+                            const norm = normalizeFirestorePost(docSnap.id, data);
+                            if (!isMomentPost(norm, data)) return false;
+                            if (norm.status === 'draft' && norm.authorId !== currentUid) return false;
+                            const moment = postToMoment(norm);
+                            if (categoryFilter && categoryFilter.toLowerCase() !== 'all') {
+                                return moment.category.toLowerCase() === categoryFilter.toLowerCase();
+                            }
+                            return true;
+                        })
+                        .map(docSnap => postToMoment(normalizeFirestorePost(docSnap.id, docSnap.data())))
+                        .sort((a, b) => {
+                            const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+                            const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+                            return dateB - dateA;
+                        });
+
+                    emitMoments();
+                },
+                (err) => {
+                    console.warn('[MOMENTS_POSTS_SUBSCRIBE_WARN]', err);
+                    if (isMomentsDemoModeEnabled()) {
+                        emitMoments();
+                    } else {
+                        onError?.(err);
+                    }
+                }
+            );
+        },
+        onError
     );
 
     return () => {
         window.removeEventListener('invox_moments_demo_changed', handleDemoChange);
-        unsubscribe();
+        if (innerUnsub) innerUnsub();
+        unsubConnections();
     };
 };
 
@@ -2112,6 +2151,8 @@ export const createLoopPost = async (input: CreateLoopInput): Promise<StreamLoop
         type: PostType.Loop,
         postType: 'Loop',
         isLoop: true,
+        isHub: true,
+        hubType: 'loop',
         mediaUrl: finalMediaUrl || null,
         imageUrl: finalMediaUrl || null,
         mediaType: 'image',
@@ -2196,9 +2237,10 @@ export const updateLoopPost = async (id: string, input: Partial<CreateLoopInput>
 /**
  * Deletes a Loop post.
  */
-export const deleteLoopPost = async (id: string): Promise<void> => {
+export const deleteLoopPost = async (id: string, userId?: string): Promise<void> => {
     const currentUser = auth.currentUser;
-    if (!currentUser) {
+    const authorId = userId || currentUser?.uid;
+    if (!authorId) {
         throw new Error('Authentication required: You must be logged in to delete a loop.');
     }
     await deleteDocument(COLLECTIONS.posts, id);
@@ -2266,7 +2308,10 @@ export const getUserStruckLoopIds = async (userId: string, loopIds: string[]): P
 };
 
 /**
- * Real-time subscription to Loops for Hub -> Stream -> Loops.
+ * Real-time subscription to Loops for Hub -> Stream -> Loops enforcing connections-only visibility.
+ * Listens to accepted connections in real time. When a connection is accepted,
+ * new loops appear immediately. When a connection is removed, former connection's
+ * loops are immediately purged from client state.
  */
 export const subscribeToLoopsPosts = (
     onLoops: (loops: StreamLoop[]) => void,
@@ -2274,6 +2319,7 @@ export const subscribeToLoopsPosts = (
     onError?: (error: Error) => void
 ) => {
     let latestRealLoops: StreamLoop[] = [];
+    let innerUnsub: (() => void) | null = null;
 
     const emitLoops = () => {
         const mockFiltered = getFilteredMockLoops(categoryFilter);
@@ -2310,50 +2356,200 @@ export const subscribeToLoopsPosts = (
     // Initial instant emission
     emitLoops();
 
-    const q = query(
-        collection(db, COLLECTIONS.posts),
-        limit(100)
-    );
+    const currentUid = auth.currentUser?.uid;
+    if (!currentUid) {
+        return () => {
+            window.removeEventListener('invox_moments_demo_changed', handleDemoChange);
+        };
+    }
 
-    const unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-            const currentUid = auth.currentUser?.uid;
-            latestRealLoops = snapshot.docs
-                .filter(docSnap => {
-                    const data = docSnap.data();
-                    const norm = normalizeFirestorePost(docSnap.id, data);
-                    if (!isLoopPost(norm, data)) return false;
-                    // Drafts only visible to author
-                    if (norm.status === 'draft') {
-                        if (!currentUid || norm.authorId !== currentUid) return false;
-                    }
-                    return true;
-                })
-                .map(docSnap => postToLoop(normalizeFirestorePost(docSnap.id, docSnap.data()), docSnap.data()))
-                .sort((a, b) => {
-                    const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
-                    const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
-                    return dateB - dateA;
-                });
-
-            console.log(`[HUB_STREAM_LOOPS] Live Loops update: found ${latestRealLoops.length} real loops`);
-            emitLoops();
-        },
-        (err) => {
-            console.warn('[LOOPS_POSTS_SUBSCRIBE_WARN]', err);
-            if (isMomentsDemoModeEnabled() || latestRealLoops.length === 0) {
-                emitLoops();
-            } else {
-                onError?.(err);
+    const unsubConnections = subscribeAcceptedConnectionUserIds(
+        currentUid,
+        (acceptedIds) => {
+            if (innerUnsub) {
+                innerUnsub();
+                innerUnsub = null;
             }
-        }
+
+            // Immediately purge any former connections when status changes
+            const authorizedSet = new Set<string>([currentUid, ...Array.from(acceptedIds)]);
+            latestRealLoops = latestRealLoops.filter(l => authorizedSet.has(l.authorId));
+            emitLoops();
+
+            const authorizedList = Array.from(authorizedSet).slice(0, 30);
+            const q = query(
+                collection(db, COLLECTIONS.posts),
+                where('authorId', 'in', authorizedList),
+                limit(100)
+            );
+
+            innerUnsub = onSnapshot(
+                q,
+                (snapshot) => {
+                    latestRealLoops = snapshot.docs
+                        .filter(docSnap => {
+                            const data = docSnap.data();
+                            const norm = normalizeFirestorePost(docSnap.id, data);
+                            if (!isLoopPost(norm, data)) return false;
+                            if (norm.status === 'draft' && norm.authorId !== currentUid) return false;
+                            return true;
+                        })
+                        .map(docSnap => postToLoop(normalizeFirestorePost(docSnap.id, docSnap.data()), docSnap.data()))
+                        .sort((a, b) => {
+                            const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+                            const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+                            return dateB - dateA;
+                        });
+
+                    emitLoops();
+                },
+                (err) => {
+                    console.warn('[LOOPS_POSTS_SUBSCRIBE_WARN]', err);
+                    if (isMomentsDemoModeEnabled() || latestRealLoops.length === 0) {
+                        emitLoops();
+                    } else {
+                        onError?.(err);
+                    }
+                }
+            );
+        },
+        onError
     );
 
     return () => {
         window.removeEventListener('invox_moments_demo_changed', handleDemoChange);
-        unsubscribe();
+        if (innerUnsub) innerUnsub();
+        unsubConnections();
     };
+};
+
+/**
+ * Result structure for direct Hub item requests (Moments, Loops).
+ */
+export interface GetHubPostResult {
+    post: Post | null;
+    isRestricted: boolean;
+    restrictionReason?: string;
+    notFound?: boolean;
+}
+
+/**
+ * Fetches a single Hub post by ID, strictly enforcing authorization at the data layer.
+ * Returns an explicit access-restricted status without leaking sensitive payload data
+ * if the requester is neither the creator nor an accepted connection.
+ */
+export const getHubPostById = async (
+    postId: string,
+    currentUserId?: string
+): Promise<GetHubPostResult> => {
+    if (!postId) {
+        return { post: null, isRestricted: false, notFound: true };
+    }
+
+    try {
+        const postRef = doc(db, COLLECTIONS.posts, postId);
+        const postSnap = await getDoc(postRef);
+
+        if (!postSnap.exists()) {
+            return { post: null, isRestricted: false, notFound: true };
+        }
+
+        const data = postSnap.data();
+        const norm = normalizeFirestorePost(postSnap.id, data);
+        const isHub = isMomentPost(norm, data) || isLoopPost(norm, data) || Boolean(data.isHub);
+
+        // Non-Hub posts are governed by general visibility
+        if (!isHub) {
+            return { post: norm, isRestricted: false };
+        }
+
+        const requesterUid = currentUserId || auth.currentUser?.uid;
+
+        // Content creator always has access
+        if (requesterUid && (norm.authorId === requesterUid || data.authorId === requesterUid)) {
+            return { post: norm, isRestricted: false };
+        }
+
+        // Unauthenticated users cannot view private Hub content
+        if (!requesterUid) {
+            return {
+                post: null,
+                isRestricted: true,
+                restrictionReason: 'Authentication required. This Hub transmission is restricted to accepted connections of the creator.',
+            };
+        }
+
+        // Check canonical accepted connection status
+        const isAccepted = await isUserAcceptedConnection(requesterUid, norm.authorId);
+        if (isAccepted) {
+            return { post: norm, isRestricted: false };
+        }
+
+        return {
+            post: null,
+            isRestricted: true,
+            restrictionReason: 'Private Node: This transmission is strictly restricted to accepted connections of this node creator.',
+        };
+    } catch (err: any) {
+        console.warn('[GET_HUB_POST_BY_ID_ERROR]', err);
+        if (err?.code === 'permission-denied') {
+            return {
+                post: null,
+                isRestricted: true,
+                restrictionReason: 'Access Denied: Insufficient authorization to access this Hub transmission.',
+            };
+        }
+        return { post: null, isRestricted: false, notFound: true };
+    }
+};
+
+/**
+ * Searches Hub content (Moments and Loops) scoped strictly to the authenticated user's
+ * own content and their accepted connections. Non-connection content is never searched or returned.
+ */
+export const searchHubContent = async (
+    searchTerm: string,
+    currentUserId?: string
+): Promise<{ moments: StreamMoment[]; loops: StreamLoop[] }> => {
+    const uid = currentUserId || auth.currentUser?.uid;
+    const cleanTerm = (searchTerm || '').trim().toLowerCase();
+    if (!uid || !cleanTerm) {
+        return { moments: [], loops: [] };
+    }
+
+    try {
+        const acceptedIds = await getAcceptedConnectionUserIds(uid);
+        const authorizedUids = [uid, ...Array.from(acceptedIds)].slice(0, 30);
+
+        const q = query(
+            collection(db, COLLECTIONS.posts),
+            where('authorId', 'in', authorizedUids),
+            limit(100)
+        );
+
+        const snapshot = await getDocs(q);
+        const moments: StreamMoment[] = [];
+        const loops: StreamLoop[] = [];
+
+        snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            const norm = normalizeFirestorePost(docSnap.id, data);
+            const searchableText = `${norm.title || ''} ${norm.content || ''} ${norm.oneLine || ''} ${norm.author?.name || ''} ${norm.category || ''}`.toLowerCase();
+
+            if (!searchableText.includes(cleanTerm)) return;
+
+            if (isMomentPost(norm, data)) {
+                moments.push(postToMoment(norm));
+            } else if (isLoopPost(norm, data)) {
+                loops.push(postToLoop(norm, data));
+            }
+        });
+
+        return { moments, loops };
+    } catch (err) {
+        console.warn('[SEARCH_HUB_CONTENT_WARN]', err);
+        return { moments: [], loops: [] };
+    }
 };
 
 

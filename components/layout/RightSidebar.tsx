@@ -1596,8 +1596,24 @@ const HubSidebar: React.FC<Pick<RightSidebarProps, 'hubView' | 'setHubView' | 'h
     }
 
     const hubNavItems = [
-        { name: 'Stream', icon: SoundWaveIcon, view: 'stream' },
-        { name: 'Conversations', icon: ChatBubbleIcon, action: () => setHubRightSidebarView && setHubRightSidebarView('conversations') },
+        { 
+            name: 'Stream', 
+            icon: SoundWaveIcon, 
+            action: () => {
+                if (setHubView) setHubView('stream');
+                if (setHubRightSidebarView) setHubRightSidebarView('main');
+            },
+            view: 'stream' 
+        },
+        { 
+            name: 'Conversations', 
+            icon: ChatBubbleIcon, 
+            action: () => {
+                if (setHubView) setHubView('conversations');
+                if (setHubRightSidebarView) setHubRightSidebarView('main');
+            },
+            view: 'conversations' 
+        },
     ];
 
     return (
