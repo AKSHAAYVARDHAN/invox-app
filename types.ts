@@ -71,6 +71,7 @@ export enum PostType {
   Collab = 'Collab',
   Showcase = 'Showcase',
   Moment = 'Moment',
+  Loop = 'Loop',
 }
 
 export interface Channel {
@@ -141,9 +142,13 @@ export interface Post {
   createdAt: Date;
   updatedAt?: Date;
   userCommented?: boolean;
-  userSharedInsight?: boolean;
   userLiked?: boolean;
   userSaved?: boolean;
+  userStruck?: boolean;
+  externalUrl?: string;
+  musicMeta?: MusicMeta;
+  strikes?: number;
+  strikeCount?: number;
   collabDetails?: CollabDetails;
 }
 
@@ -444,16 +449,51 @@ export interface StreamMoment {
     createdAt?: Date | any;
 }
 
+export type LoopCategory = 'Zaps' | 'Thoughts' | 'Music' | 'Mood' | 'Thought';
+
+export interface MusicMeta {
+    trackTitle?: string;
+    artist?: string;
+    streamUrl?: string;
+}
+
 export interface StreamLoop {
     id: string;
+    authorId?: string;
     author: {
         name: string;
         avatarUrl: string;
+        username?: string;
+        isVerified?: boolean;
+        uid?: string;
     };
-    category: 'Zaps' | 'Mood' | 'Thought' | 'Music';
-    title: string;
-    content: string;
-    imageUrl: string;
+    category: LoopCategory;
+    title?: string;
+    headline?: string;
+    content?: string;
+    description?: string;
+    imageUrl?: string;
+    mediaUrl?: string;
+    mediaType?: 'image' | 'video' | 'audio';
+    externalUrl?: string;
+    musicMeta?: MusicMeta;
+    stats?: {
+        likes: number;
+        views: number;
+        comments: number;
+        shares?: number;
+        saves?: number;
+        strikes?: number;
+    };
+    likes?: number;
+    views?: number;
+    comments?: number;
+    strikes?: number;
+    userLiked?: boolean;
+    userSaved?: boolean;
+    userStruck?: boolean;
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
 }
 
 export type SectionId = 'explore' | 'trendz' | 'spotlight' | 'communities' | 'hub' | 'mySpace';

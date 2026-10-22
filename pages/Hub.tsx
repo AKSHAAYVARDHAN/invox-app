@@ -5,19 +5,20 @@ import MomentCard from '../components/stream/MomentCard';
 import MomentCardSkeleton from '../components/stream/MomentCardSkeleton';
 import LoopCard from '../components/stream/LoopCard';
 import LoopCardSkeleton from '../components/stream/LoopCardSkeleton';
+import CreateLoopModal from '../components/loops/CreateLoopModal';
 import ChatInterface from '../components/hub/ChatInterface';
 import InteractiveGlobe from '../components/hub/InteractiveGlobe';
 import { CubeIcon, ChatBubbleBottomCenterTextIcon, SparklesIcon, RadioIcon, PlusIcon } from '../components/ui/Icons';
-import { subscribeToMomentsPosts, subscribeToUserSavedPostIds, getUserLikedPostIds } from '../services/postService';
+import { 
+    subscribeToMomentsPosts, 
+    subscribeToLoopsPosts,
+    subscribeToUserSavedPostIds, 
+    getUserLikedPostIds,
+    getUserStruckLoopIds,
+    deleteLoopPost
+} from '../services/postService';
 import { isMomentsDemoModeEnabled, toggleMomentsDemoMode } from '../services/momentsDemoData';
 import { useAuth } from '../contexts/AuthContext';
-
-const mockLoops: StreamLoop[] = [
-    { id: 'l1', author: { name: 'Adams', avatarUrl: 'https://picsum.photos/seed/201/200' }, category: 'Zaps', title: 'Tactical Cyber Setup', content: "Real-time surveillance matrix deployed.", imageUrl: 'https://picsum.photos/seed/zap/400/600' },
-    { id: 'l2', author: { name: 'Lisa Jones', avatarUrl: 'https://picsum.photos/seed/202/200' }, category: 'Mood', title: 'Atmospheric Resonance', content: 'Dark wave synthesizer session recordings.', imageUrl: 'https://picsum.photos/seed/mood/400/600' },
-    { id: 'l3', author: { name: 'Harvey', avatarUrl: 'https://picsum.photos/seed/203/200' }, category: 'Thought', title: 'Network Theory', content: 'Decentralized collective node synchronizations.', imageUrl: 'https://picsum.photos/seed/thought/400/600' },
-    { id: 'l4', author: { name: 'Akshaay', avatarUrl: 'https://picsum.photos/seed/204/200' }, category: 'Music', title: 'Midnight Protocol', content: 'Low-latency broadcast streams.', imageUrl: 'https://picsum.photos/seed/music/400/600' },
-];
 
 const HubPage = () => {
     const { currentUser } = useAuth();
@@ -45,6 +46,17 @@ const HubPage = () => {
     const [activeStreamTab, setActiveStreamTab] = useState<'Moments' | 'Loops'>('Moments');
     const [activeMomentsFilter, setActiveMomentsFilter] = useState('All');
     const [moments, setMoments] = useState<StreamMoment[]>([]);
+    
+    // Loops state
+    const [activeLoopsFilter, setActiveLoopsFilter] = useState('All');
+    const [loops, setLoops] = useState<StreamLoop[]>([]);
+    const [loopsLoading, setLoopsLoading] = useState(true);
+    const [userStruckLoopIds, setUserStruckLoopIds] = useState<Set<string>>(new Set());
+    const [isCreateLoopModalOpen, setIsCreateLoopModalOpen] = useState(false);
+    const [editingLoop, setEditingLoop] = useState<StreamLoop | null>(null);
+    const [loopToDelete, setLoopToDelete] = useState<StreamLoop | null>(null);
+    const [isDeletingLoop, setIsDeletingLoop] = useState(false);
+
     const [userLikedIds, setUserLikedIds] = useState<Set<string>>(new Set());
     const [userSavedIds, setUserSavedIds] = useState<Set<string>>(new Set());
     const [streamLoading, setStreamLoading] = useState(true);
@@ -79,7 +91,7 @@ const HubPage = () => {
 
     // Live subscription to real published Moments
     useEffect(() => {
-        if (effectiveHubView !== 'stream') return;
+        if (effectiveHubView !== 'stream' || activeStreamTab !== 'Moments') return;
 
         setStreamLoading(true);
         const unsubscribeMoments = subscribeToMomentsPosts(
@@ -112,7 +124,63 @@ const HubPage = () => {
             unsubscribeMoments();
             unsubscribeSaved();
         };
-    }, [effectiveHubView, activeMomentsFilter, currentUser?.uid]);
+    }, [effectiveHubView, activeStreamTab, activeMomentsFilter, currentUser?.uid]);
+
+    // Live subscription to real published Loops
+    useEffect(() => {
+        if (effectiveHubView !== 'stream' || activeStreamTab !== 'Loops') return;
+
+        setLoopsLoading(true);
+        const unsubscribeLoops = subscribeToLoopsPosts(
+            (liveLoops) => {
+                setLoops(liveLoops);
+                setLoopsLoading(false);
+            },
+            activeLoopsFilter,
+            (err) => {
+                console.error('[HUB_LOOPS_FETCH_ERROR]', err);
+                setLoopsLoading(false);
+            }
+        );
+
+        let unsubscribeSaved = () => {};
+        if (currentUser?.uid) {
+            getUserLikedPostIds(currentUser.uid)
+                .then(setUserLikedIds)
+                .catch(console.warn);
+
+            getUserStruckLoopIds(currentUser.uid)
+                .then(setUserStruckLoopIds)
+                .catch(console.warn);
+
+            unsubscribeSaved = subscribeToUserSavedPostIds(
+                currentUser.uid,
+                (savedSet) => {
+                    setUserSavedIds(savedSet);
+                }
+            );
+        }
+
+        return () => {
+            unsubscribeLoops();
+            unsubscribeSaved();
+        };
+    }, [effectiveHubView, activeStreamTab, activeLoopsFilter, currentUser?.uid]);
+
+    const handleConfirmDeleteLoop = async () => {
+        if (!loopToDelete || !currentUser?.uid) return;
+        setIsDeletingLoop(true);
+        try {
+            await deleteLoopPost(loopToDelete.id, currentUser.uid);
+            setLoops(prev => prev.filter(l => l.id !== loopToDelete.id));
+            setLoopToDelete(null);
+        } catch (err: any) {
+            console.error('[DELETE_LOOP_ERROR]', err);
+            alert(err?.message || 'Failed to delete loop');
+        } finally {
+            setIsDeletingLoop(false);
+        }
+    };
     
     if (selectedHubConversation && setSelectedHubConversation) {
         return (
@@ -256,8 +324,10 @@ const HubPage = () => {
             );
         };
 
+        const loopSubFilters = ['All', 'Zaps', 'Thoughts', 'Music', 'Mood'];
+
         const renderLoopsContent = () => {
-            if (streamLoading) {
+            if (loopsLoading) {
                 return (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <LoopCardSkeleton />
@@ -268,9 +338,59 @@ const HubPage = () => {
                 );
             }
 
+            if (loops.length > 0) {
+                return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {loops.map(loop => (
+                            <LoopCard 
+                                key={loop.id} 
+                                loop={loop} 
+                                userLiked={userLikedIds.has(loop.id)}
+                                userSaved={userSavedIds.has(loop.id)}
+                                userStruck={userStruckLoopIds.has(loop.id)}
+                                onEdit={(targetLoop) => {
+                                    setEditingLoop(targetLoop);
+                                    setIsCreateLoopModalOpen(true);
+                                }}
+                                onDelete={(targetLoop) => {
+                                    setLoopToDelete(targetLoop);
+                                }}
+                            />
+                        ))}
+                    </div>
+                );
+            }
+
             return (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {mockLoops.map(loop => <LoopCard key={loop.id} loop={loop} />)}
+                <div className="bg-[#0c0c0e] border border-zinc-800 p-8 text-center font-mono">
+                    <div className="w-12 h-12 bg-zinc-900 border border-zinc-700 flex items-center justify-center mx-auto mb-3 text-zinc-500">
+                        <SparklesIcon className="w-6 h-6" />
+                    </div>
+                    <span className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1">// NO_LOOPS_RECORDED</span>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-2">
+                        No {activeLoopsFilter !== 'All' ? activeLoopsFilter : 'Loops'} Broadcasted Yet
+                    </h3>
+                    <p className="text-xs text-zinc-400 max-w-sm mx-auto mb-5 leading-relaxed">
+                        Be the first node to broadcast your {
+                            activeLoopsFilter === 'Zaps' ? 'quick discoveries, tools, and links' :
+                            activeLoopsFilter === 'Thoughts' ? 'opinions, questions, and reflections' :
+                            activeLoopsFilter === 'Music' ? 'track discoveries and listening stream' :
+                            activeLoopsFilter === 'Mood' ? 'creative mood, aesthetic, and vibe' :
+                            'loops'
+                        } to the network.
+                    </p>
+                    <div className="flex flex-wrap items-center justify-center gap-3">
+                        <button
+                            onClick={() => {
+                                setEditingLoop(null);
+                                setIsCreateLoopModalOpen(true);
+                            }}
+                            className="inline-flex items-center gap-2 bg-white hover:bg-zinc-200 text-black px-4 py-2 text-xs font-mono font-bold uppercase tracking-wider border border-white transition-colors"
+                        >
+                            <PlusIcon className="w-4 h-4 text-black" />
+                            <span>+ Broadcast First Loop</span>
+                        </button>
+                    </div>
                 </div>
             );
         };
@@ -301,11 +421,18 @@ const HubPage = () => {
                         </button>
 
                         <button
-                            onClick={() => navigate('/myspace/uploads')}
+                            onClick={() => {
+                                if (activeStreamTab === 'Loops') {
+                                    setEditingLoop(null);
+                                    setIsCreateLoopModalOpen(true);
+                                } else {
+                                    navigate('/myspace/uploads?tab=Hub&sub=Stills');
+                                }
+                            }}
                             className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-zinc-200 text-black font-mono text-xs font-bold uppercase tracking-wider transition-colors border border-white"
                         >
                             <PlusIcon className="w-3.5 h-3.5 text-black" />
-                            <span>Broadcast Moment</span>
+                            <span>{activeStreamTab === 'Loops' ? '+ Broadcast Loop' : 'Broadcast Moment'}</span>
                         </button>
                         <div className="flex items-center gap-1.5 font-mono text-[10px] text-zinc-400 bg-[#0c0c0e] border border-zinc-800 px-2.5 py-1">
                             <RadioIcon className="w-3.5 h-3.5 text-green-400 animate-pulse" />
@@ -355,8 +482,83 @@ const HubPage = () => {
                         </div>
                     </div>
                 )}
+
+                {/* Sub-filters for Loops (Segmented Slide Bar) */}
+                {activeStreamTab === 'Loops' && (
+                    <div className="w-full bg-[#08080a] border border-zinc-800 p-1">
+                        <div className="grid grid-cols-5 gap-1">
+                            {loopSubFilters.map(filter => {
+                                const isSelected = activeLoopsFilter === filter;
+                                return (
+                                    <button 
+                                        key={filter}
+                                        onClick={() => setActiveLoopsFilter(filter)}
+                                        className={`py-2 px-1 text-center font-mono text-[11px] md:text-xs uppercase tracking-wider transition-all duration-150 ${
+                                            isSelected 
+                                                ? 'bg-[#18181d] border border-zinc-700 text-white font-bold shadow-sm' 
+                                                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/40 border border-transparent font-medium'
+                                        }`}
+                                    >
+                                        {filter}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
                 
                 {activeStreamTab === 'Moments' ? renderMomentsContent() : renderLoopsContent()}
+
+                {/* Create / Edit Loop Modal */}
+                <CreateLoopModal 
+                    isOpen={isCreateLoopModalOpen}
+                    onClose={() => {
+                        setIsCreateLoopModalOpen(false);
+                        setEditingLoop(null);
+                    }}
+                    onLoopCreated={() => {
+                        // Subscribed listener automatically refreshes
+                    }}
+                    initialLoop={editingLoop}
+                />
+
+                {/* Loop Delete Confirmation Modal */}
+                {loopToDelete && (
+                    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+                        <div className="bg-[#0c0c0e] border border-red-900/60 p-6 max-w-md w-full shadow-2xl font-mono">
+                            <span className="text-[10px] uppercase tracking-widest text-red-400 block mb-1">// CONFIRM_DELETION</span>
+                            <h3 className="text-base font-bold text-white uppercase tracking-wider mb-2">Delete Loop Record?</h3>
+                            <p className="text-xs text-zinc-400 mb-6 leading-relaxed">
+                                Are you sure you want to delete <span className="text-white font-semibold">"{loopToDelete.title || loopToDelete.headline || 'Untitled Loop'}"</span>? This transmission will be permanently erased from the network.
+                            </p>
+                            <div className="flex items-center justify-end gap-3">
+                                <button
+                                    type="button"
+                                    disabled={isDeletingLoop}
+                                    onClick={() => setLoopToDelete(null)}
+                                    className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs uppercase tracking-wider border border-zinc-700 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={isDeletingLoop}
+                                    onClick={handleConfirmDeleteLoop}
+                                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs uppercase tracking-wider font-bold transition-colors flex items-center gap-2 disabled:opacity-50"
+                                >
+                                    {isDeletingLoop ? (
+                                        <>
+                                            <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            <span>Deleting...</span>
+                                        </>
+                                    ) : (
+                                        <span>Delete Permanently</span>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }

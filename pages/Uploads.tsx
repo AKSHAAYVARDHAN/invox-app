@@ -10,22 +10,31 @@ import { PollCard } from '../components/feed/PollCard';
 import { EditPostModal } from '../components/feed/EditPostModal';
 import { handleImageError } from '../components/utils/imageUtils';
 import { CollabManagementHub } from '../components/spotlight/CollabManagementHub';
+import LoopCard from '../components/stream/LoopCard';
+import CreateLoopModal from '../components/loops/CreateLoopModal';
 import { useAuth } from '../contexts/AuthContext';
-import { createPost, deletePost, subscribeToUserPosts } from '../services/postService';
+import { createPost, deletePost, subscribeToUserPosts, isLoopPost, postToLoop, deleteLoopPost } from '../services/postService';
 import { subscribeToUserChannels, deleteChannel } from '../services/channelService';
 import { subscribeToUserPolls, deletePoll } from '../services/pollService';
-import { Post, Channel, Poll, PostType, CollabDetails } from '../types';
+import { Post, Channel, Poll, PostType, CollabDetails, StreamLoop, LoopCategory } from '../types';
 
 const mainTabs = ['Explore', 'Spotlight', 'Hub'] as const;
 type MainTab = typeof mainTabs[number];
 
 const UploadsPage = () => {
     const { currentUser, userProfile } = useAuth();
+    const [searchParams] = ReactRouterDOM.useSearchParams();
     const [activeTab, setActiveTab] = useState<MainTab>('Explore');
     const [exploreSubTab, setExploreSubTab] = useState<'Channels' | 'Feeds' | 'Discover'>('Channels');
     const [spotlightSubTab, setSpotlightSubTab] = useState<'Showcase' | 'Collabs'>('Showcase');
-    const [hubSubTab, setHubSubTab] = useState<'Stills' | 'Tapes' | 'Knacks'>('Stills');
+    const [hubSubTab, setHubSubTab] = useState<'Loops' | 'Stills' | 'Tapes' | 'Knacks'>('Loops');
     
+    // Loops management state (My Space -> Hub -> Loops)
+    const [mySpaceLoopFilter, setMySpaceLoopFilter] = useState<'All' | 'Zaps' | 'Thoughts' | 'Music' | 'Mood'>('All');
+    const [isCreateLoopModalOpen, setIsCreateLoopModalOpen] = useState(false);
+    const [editingLoop, setEditingLoop] = useState<StreamLoop | null>(null);
+    const [loopToDelete, setLoopToDelete] = useState<StreamLoop | null>(null);
+
     // Feed creation modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedChannelForFeed, setSelectedChannelForFeed] = useState<string | undefined>(undefined);
@@ -161,6 +170,28 @@ const UploadsPage = () => {
         return () => unsubscribe();
     }, [currentUser?.uid]);
 
+    // Sync tabs from URL query parameters (e.g. /myspace/uploads?tab=Hub&sub=Loops)
+    useEffect(() => {
+        const tabParam = searchParams.get('tab');
+        const subParam = searchParams.get('sub');
+        if (tabParam === 'Hub') {
+            setActiveTab('Hub');
+            if (subParam === 'Loops' || subParam === 'Stills' || subParam === 'Tapes' || subParam === 'Knacks') {
+                setHubSubTab(subParam as any);
+            }
+        } else if (tabParam === 'Spotlight') {
+            setActiveTab('Spotlight');
+            if (subParam === 'Showcase' || subParam === 'Collabs') {
+                setSpotlightSubTab(subParam as any);
+            }
+        } else if (tabParam === 'Explore') {
+            setActiveTab('Explore');
+            if (subParam === 'Channels' || subParam === 'Feeds' || subParam === 'Discover') {
+                setExploreSubTab(subParam as any);
+            }
+        }
+    }, [searchParams]);
+
     // Handle quick access triggers from the right sidebar
     useEffect(() => {
         if (uploadTriggerTarget) {
@@ -168,6 +199,11 @@ const UploadsPage = () => {
                 setActiveTab('Explore');
                 setExploreSubTab('Channels');
                 setIsCreateChannelModalOpen(true);
+            } else if (uploadTriggerTarget === 'Loop') {
+                setActiveTab('Hub');
+                setHubSubTab('Loops');
+                setEditingLoop(null);
+                setIsCreateLoopModalOpen(true);
             } else {
                 if (uploadTriggerTarget === 'Feed') {
                     setActiveTab('Explore');
@@ -202,11 +238,61 @@ const UploadsPage = () => {
         } else if (activeTab === 'Spotlight') {
             name = spotlightSubTab === 'Showcase' ? 'Showcase' : 'Collab';
         } else if (activeTab === 'Hub') {
-            if (hubSubTab === 'Stills') name = 'Still';
+            if (hubSubTab === 'Loops') name = 'Loop';
+            else if (hubSubTab === 'Stills') name = 'Still';
             else if (hubSubTab === 'Tapes') name = 'Tape';
             else name = 'Knack';
         }
         return { name, section };
+    };
+
+    // User's Loops published to Hub
+    const userLoops: StreamLoop[] = useMemo(() => {
+        return userPosts
+            .filter(p => isLoopPost(p, p))
+            .map(p => postToLoop(p, p))
+            .sort((a, b) => {
+                const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+                const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+                return dateB - dateA;
+            });
+    }, [userPosts]);
+
+    const filteredUserLoops = useMemo(() => {
+        if (mySpaceLoopFilter === 'All') return userLoops;
+        const fLower = mySpaceLoopFilter.toLowerCase();
+        return userLoops.filter(l => {
+            const cat = l.category.toLowerCase();
+            if (fLower === 'thoughts' || fLower === 'thought') {
+                return cat === 'thoughts' || cat === 'thought';
+            }
+            return cat === fLower;
+        });
+    }, [userLoops, mySpaceLoopFilter]);
+
+    const zapsCount = useMemo(() => userLoops.filter(l => l.category.toLowerCase() === 'zaps').length, [userLoops]);
+    const thoughtsCount = useMemo(() => userLoops.filter(l => l.category.toLowerCase() === 'thoughts' || l.category.toLowerCase() === 'thought').length, [userLoops]);
+    const musicCount = useMemo(() => userLoops.filter(l => l.category.toLowerCase() === 'music').length, [userLoops]);
+    const moodCount = useMemo(() => userLoops.filter(l => l.category.toLowerCase() === 'mood').length, [userLoops]);
+
+    const confirmDeleteLoop = async () => {
+        if (!loopToDelete) return;
+        const targetId = loopToDelete.id;
+        setDeletingId(targetId);
+        setActionError(null);
+
+        try {
+            await deleteLoopPost(targetId);
+            setUserPosts(prev => prev.filter(p => p.id !== targetId));
+            setLoopToDelete(null);
+            setActionSuccess('Loop broadcast deleted successfully.');
+            setTimeout(() => setActionSuccess(null), 4000);
+        } catch (err: any) {
+            console.error('[DELETE_LOOP_ERROR]', err);
+            setActionError(err?.message || 'Failed to delete loop');
+        } finally {
+            setDeletingId(null);
+        }
     };
 
     const { name, section } = getTargetInfo();
@@ -525,6 +611,7 @@ const UploadsPage = () => {
     const isChannelsView = activeTab === 'Explore' && exploreSubTab === 'Channels';
     const isDiscoverView = activeTab === 'Explore' && exploreSubTab === 'Discover';
     const isCollabView = activeTab === 'Spotlight' && spotlightSubTab === 'Collabs';
+    const isLoopsView = activeTab === 'Hub' && hubSubTab === 'Loops';
 
     return (
         <div className="space-y-4">
@@ -625,8 +712,25 @@ const UploadsPage = () => {
                     {activeTab === 'Hub' && (
                         <>
                             <button 
+                                onClick={() => setHubSubTab('Loops')} 
+                                className={`w-1/4 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                    hubSubTab === 'Loops' 
+                                        ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/30' 
+                                        : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                                }`}
+                            >
+                                <span>// Loops</span>
+                                <span className={`text-[10px] px-1.5 py-0.2 border transition-colors ${
+                                    hubSubTab === 'Loops'
+                                        ? 'bg-zinc-800 text-zinc-200 border-zinc-600'
+                                        : 'bg-zinc-900/60 text-zinc-500 border-zinc-800'
+                                }`}>
+                                    {userLoops.length}
+                                </span>
+                            </button>
+                            <button 
                                 onClick={() => setHubSubTab('Stills')} 
-                                className={`w-1/3 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                className={`w-1/4 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                                     hubSubTab === 'Stills' 
                                         ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/30' 
                                         : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
@@ -636,7 +740,7 @@ const UploadsPage = () => {
                             </button>
                             <button 
                                 onClick={() => setHubSubTab('Tapes')} 
-                                className={`w-1/3 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                className={`w-1/4 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                                     hubSubTab === 'Tapes' 
                                         ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/30' 
                                         : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
@@ -646,7 +750,7 @@ const UploadsPage = () => {
                             </button>
                             <button 
                                 onClick={() => setHubSubTab('Knacks')} 
-                                className={`w-1/3 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                className={`w-1/4 text-center py-2 text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                                     hubSubTab === 'Knacks' 
                                         ? 'border-b-2 border-zinc-400 text-white font-bold bg-zinc-900/30' 
                                         : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
@@ -1080,6 +1184,107 @@ const UploadsPage = () => {
                         }
                     }}
                 />
+            ) : isLoopsView ? (
+                /* DEDICATED MY SPACE LOOPS WORKSPACE (MY SPACE -> HUB -> LOOPS) */
+                <div className="space-y-4 font-mono">
+                    {/* Header bar: Telemetry & Actions */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-[#0c0c0e] border border-zinc-800 p-3.5">
+                        <div>
+                            <span className="text-zinc-500 uppercase tracking-widest text-[10px] block">// YOUR LOOPS BROADCASTS</span>
+                            <div className="text-white font-bold tracking-wider mt-1 flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
+                                <span>ALL <span className="text-zinc-400 font-normal">{userLoops.length}</span></span>
+                                <span className="text-zinc-700">|</span>
+                                <span>ZAPS <span className="text-zinc-400 font-normal">{zapsCount}</span></span>
+                                <span className="text-zinc-700">|</span>
+                                <span>THOUGHTS <span className="text-zinc-400 font-normal">{thoughtsCount}</span></span>
+                                <span className="text-zinc-700">|</span>
+                                <span>MUSIC <span className="text-zinc-400 font-normal">{musicCount}</span></span>
+                                <span className="text-zinc-700">|</span>
+                                <span>MOOD <span className="text-zinc-400 font-normal">{moodCount}</span></span>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => {
+                                    setEditingLoop(null);
+                                    setIsCreateLoopModalOpen(true);
+                                }}
+                                className="flex items-center gap-1.5 bg-white text-black hover:bg-zinc-200 px-4 py-2 text-xs uppercase font-bold tracking-wider transition-all"
+                            >
+                                <PlusIcon className="w-3.5 h-3.5 text-black" />
+                                <span>BROADCAST LOOP</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Sub-filters bar */}
+                    <div className="flex space-x-1 border border-zinc-800 bg-[#0c0c0e] p-1">
+                        {(['All', 'Zaps', 'Thoughts', 'Music', 'Mood'] as const).map(filter => (
+                            <button
+                                key={filter}
+                                onClick={() => setMySpaceLoopFilter(filter)}
+                                className={`flex-1 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider transition-all duration-150 ${
+                                    mySpaceLoopFilter === filter
+                                        ? 'bg-zinc-800 text-white font-bold border border-zinc-700'
+                                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent'
+                                }`}
+                            >
+                                {filter}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Loops List or Empty State */}
+                    {loading ? (
+                        <div className="py-20 flex justify-center items-center">
+                            <div className="w-8 h-8 border-2 border-zinc-500 border-t-white rounded-full animate-spin"></div>
+                        </div>
+                    ) : filteredUserLoops.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 px-4 bg-[#0c0c0e] border border-zinc-800 font-mono text-center">
+                            <div className="max-w-md w-full">
+                                <span className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-2">// LOOPS_INITIALIZER</span>
+                                <h2 className="text-base font-bold text-white mb-2 tracking-wider uppercase">
+                                    No {mySpaceLoopFilter !== 'All' ? mySpaceLoopFilter : 'Loop'} Broadcasts Yet
+                                </h2>
+                                <p className="text-zinc-400 text-xs mb-6 leading-relaxed">
+                                    {mySpaceLoopFilter === 'Zaps' ? 'Share technical discoveries, quick finds, and telemetry links.' :
+                                     mySpaceLoopFilter === 'Thoughts' ? 'Publish technical reflections, architectural opinions, and questions.' :
+                                     mySpaceLoopFilter === 'Music' ? 'Broadcast track recommendations, listening notes, and streaming links.' :
+                                     mySpaceLoopFilter === 'Mood' ? 'Express aesthetic vibes, atmospheres, and late-night focus states.' :
+                                     'Loops are short expressive transmissions that broadcast across the Hub stream in real time.'}
+                                </p>
+                                <button
+                                    onClick={() => {
+                                        setEditingLoop(null);
+                                        setIsCreateLoopModalOpen(true);
+                                    }}
+                                    className="inline-flex items-center gap-2 bg-white text-black hover:bg-zinc-200 px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-all"
+                                >
+                                    <PlusIcon className="w-4 h-4 text-black" />
+                                    <span>Broadcast Your First Loop</span>
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-10">
+                            {filteredUserLoops.map(loop => (
+                                <LoopCard
+                                    key={loop.id}
+                                    loop={loop}
+                                    onEdit={(l) => {
+                                        setEditingLoop(l);
+                                        setIsCreateLoopModalOpen(true);
+                                    }}
+                                    onDelete={(id) => {
+                                        const target = userLoops.find(item => item.id === id);
+                                        if (target) setLoopToDelete(target);
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
             ) : (
                 /* OTHER TABS: Explore, Spotlight Showcase, Hub */
                 <div>
@@ -1775,6 +1980,60 @@ const UploadsPage = () => {
                     setMySpaceDiscoverFilter('Polls');
                 }}
             />
+
+            {/* Create / Edit Loop Modal */}
+            <CreateLoopModal
+                isOpen={isCreateLoopModalOpen}
+                onClose={() => {
+                    setIsCreateLoopModalOpen(false);
+                    setEditingLoop(null);
+                }}
+                initialData={editingLoop}
+                isEditMode={Boolean(editingLoop)}
+                onSuccess={(newOrUpdatedLoop) => {
+                    setActionSuccess(editingLoop ? 'Loop updated successfully.' : 'Loop broadcasted successfully.');
+                    setTimeout(() => setActionSuccess(null), 4000);
+                }}
+            />
+
+            {/* Loop Delete Confirmation Modal */}
+            {loopToDelete && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-[#0c0c0e] border border-zinc-800 max-w-md w-full p-6 space-y-4">
+                        <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                            <span className="text-xs font-mono uppercase tracking-widest text-zinc-500">// CONFIRM_DELETION</span>
+                            <button onClick={() => setLoopToDelete(null)} className="text-zinc-500 hover:text-white">
+                                <CloseIcon className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <p className="text-xs font-mono text-zinc-300 leading-relaxed">
+                            Are you sure you want to delete this Loop transmission: <span className="text-white font-bold">"{loopToDelete.headline || loopToDelete.title}"</span>? This action is permanent.
+                        </p>
+                        <div className="flex justify-end gap-3 pt-2">
+                            <button
+                                onClick={() => setLoopToDelete(null)}
+                                className="px-4 py-2 border border-zinc-700 text-zinc-300 hover:text-white text-xs font-mono uppercase tracking-wider transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDeleteLoop}
+                                disabled={!!deletingId}
+                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-mono uppercase tracking-wider font-bold transition-colors flex items-center gap-2 disabled:opacity-50"
+                            >
+                                {deletingId === loopToDelete.id ? (
+                                    <>
+                                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        <span>Deleting...</span>
+                                    </>
+                                ) : (
+                                    <span>Delete Loop</span>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Edit Post Modal (Exclusively accessible from My Space) */}
             {editingPost && (

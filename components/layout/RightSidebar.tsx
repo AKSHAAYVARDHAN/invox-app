@@ -1715,6 +1715,7 @@ const TargetSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onS
         {
             title: 'Hub',
             targets: [
+                { name: 'Loops', context: 'Loop', icon: SparklesIcon },
                 { name: 'Stills', context: 'Still', icon: PencilIcon },
                 { name: 'Tapes', context: 'Tape', icon: PlayIcon },
                 { name: 'Knacks', context: 'Knack', icon: WrenchScrewdriverIcon },

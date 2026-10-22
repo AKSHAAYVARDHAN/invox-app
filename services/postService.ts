@@ -21,9 +21,10 @@ import { db, auth } from '../firebase';
 import { COLLECTIONS, createDocument, deleteDocument, FirestoreRecord, getDocument, listDocuments, updateDocument } from './firestoreService';
 import { uploadFile, getStoragePath } from './storageService';
 import { incrementChannelPostCount, decrementChannelPostCount, getChannelById } from './channelService';
-import { Post, PostType, CollabDetails, Project, StreamMoment } from '../types';
+import { Post, PostType, CollabDetails, Project, StreamMoment, StreamLoop, LoopCategory, MusicMeta } from '../types';
 import { generateSummary } from './geminiService';
 import { isMomentsDemoModeEnabled, getFilteredMockMoments } from './momentsDemoData';
+import { getFilteredMockLoops } from './loopsDemoData';
 
 export interface CreatePostInput {
     channelId?: string;
@@ -161,6 +162,8 @@ export const normalizeFirestorePost = (id: string, data: Record<string, any>): P
         postType = PostType.Poll;
     } else if (rawType === 'collab' || rawCat === 'collab' || rawDom === 'collab' || Boolean(data.collabDetails)) {
         postType = PostType.Collab;
+    } else if (rawType === 'loop' || rawCat === 'zaps' || rawCat === 'thoughts' || rawCat === 'thought' || rawCat === 'music' || rawCat === 'mood' || Boolean(data.isLoop)) {
+        postType = PostType.Loop;
     } else {
         postType = PostType.Feed;
     }
@@ -217,6 +220,10 @@ export const normalizeFirestorePost = (id: string, data: Record<string, any>): P
         createdAt: createdAtDate,
         updatedAt: data.updatedAt ? (typeof data.updatedAt?.toDate === 'function' ? data.updatedAt.toDate() : new Date(data.updatedAt)) : undefined,
         collabDetails: data.collabDetails || undefined,
+        externalUrl: data.externalUrl || undefined,
+        musicMeta: data.musicMeta || undefined,
+        strikes: Number(data.strikeCount ?? data.strikes ?? 0),
+        strikeCount: Number(data.strikeCount ?? data.strikes ?? 0),
     };
 };
 
@@ -1962,5 +1969,392 @@ export const subscribeToMomentsPosts = (
         unsubscribe();
     };
 };
+
+// ==========================================
+// Loops (Hub -> Stream -> Loops)
+// ==========================================
+
+export interface CreateLoopInput {
+    category: LoopCategory;
+    headline: string;
+    description: string;
+    content?: string;
+    mediaFile?: File | null;
+    mediaUrl?: string | null;
+    externalUrl?: string | null;
+    musicMeta?: MusicMeta;
+    authorProfile?: {
+        displayName?: string;
+        username?: string;
+        photoURL?: string;
+        role?: string;
+    };
+}
+
+/**
+ * Checks if a post represents a Loop item.
+ */
+export const isLoopPost = (post: Post, rawData?: any): boolean => {
+    const rawType = (post.type || post.postType || rawData?.type || rawData?.postType || '').toString().toLowerCase();
+    const rawCat = (post.category || rawData?.category || '').toString().toLowerCase();
+    return (
+        rawType === 'loop' ||
+        Boolean(rawData?.isLoop) ||
+        rawCat === 'zaps' ||
+        rawCat === 'thoughts' ||
+        rawCat === 'thought' ||
+        rawCat === 'music' ||
+        rawCat === 'mood'
+    );
+};
+
+/**
+ * Normalizes a post into a StreamLoop.
+ */
+export const postToLoop = (post: Post, rawData?: any): StreamLoop => {
+    let category: LoopCategory = 'Zaps';
+    const rawCat = (post.category || rawData?.category || '').toString().toLowerCase();
+    if (rawCat === 'thoughts' || rawCat === 'thought') {
+        category = 'Thoughts';
+    } else if (rawCat === 'music') {
+        category = 'Music';
+    } else if (rawCat === 'mood') {
+        category = 'Mood';
+    } else {
+        category = 'Zaps';
+    }
+
+    const headline = post.hook || post.title || post.oneLine || post.aiSummary || 'Untitled Loop';
+    const description = post.content || post.aiSummary || '';
+    const imgUrl = post.mediaUrl || (post.mediaUrls && post.mediaUrls[0]) || '';
+
+    return {
+        id: post.id,
+        authorId: post.authorId || post.author?.id || post.author?.uid,
+        author: {
+            name: post.author?.name || 'Invox Member',
+            avatarUrl: post.author?.avatarUrl || `https://picsum.photos/seed/${post.authorId || post.id}/200`,
+            username: post.author?.username || undefined,
+            isVerified: Boolean(post.author?.isVerified),
+            uid: post.author?.uid || post.authorId,
+        },
+        category,
+        title: headline,
+        headline,
+        content: description,
+        description,
+        imageUrl: imgUrl,
+        mediaUrl: imgUrl,
+        mediaType: post.mediaType || 'image',
+        externalUrl: post.externalUrl || rawData?.externalUrl || undefined,
+        musicMeta: post.musicMeta || rawData?.musicMeta || undefined,
+        stats: {
+            likes: Number(post.stats?.likes ?? post.likeCount ?? 0),
+            views: Number(post.stats?.views ?? post.viewCount ?? 0),
+            comments: Number(post.stats?.comments ?? post.commentCount ?? 0),
+            shares: 0,
+            saves: Number(post.saveCount ?? 0),
+            strikes: Number(post.strikes ?? post.strikeCount ?? 0),
+        },
+        likes: Number(post.stats?.likes ?? post.likeCount ?? 0),
+        views: Number(post.stats?.views ?? post.viewCount ?? 0),
+        comments: Number(post.stats?.comments ?? post.commentCount ?? 0),
+        strikes: Number(post.strikes ?? post.strikeCount ?? 0),
+        userLiked: Boolean(post.userLiked),
+        userSaved: Boolean(post.userSaved),
+        userStruck: Boolean(post.userStruck),
+        createdAt: post.createdAt instanceof Date ? post.createdAt : new Date(post.createdAt || Date.now()),
+        updatedAt: post.updatedAt,
+    };
+};
+
+/**
+ * Creates and broadcasts a new Loop to Firestore.
+ */
+export const createLoopPost = async (input: CreateLoopInput): Promise<StreamLoop> => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        throw new Error('Authentication required: You must be logged in to broadcast a loop.');
+    }
+
+    let finalMediaUrl = input.mediaUrl || '';
+
+    // Handle media file upload to Firebase Storage if provided
+    if (input.mediaFile) {
+        const fileExt = input.mediaFile.name.split('.').pop() || 'jpg';
+        const storagePath = `loops/${currentUser.uid}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        finalMediaUrl = await uploadFile(input.mediaFile, storagePath);
+    }
+
+    const authorDisplayName = input.authorProfile?.displayName || currentUser.displayName || 'Invox Member';
+    const authorPhoto = input.authorProfile?.photoURL || currentUser.photoURL || `https://picsum.photos/seed/${currentUser.uid}/200`;
+    const authorUsername = input.authorProfile?.username || (currentUser.email ? currentUser.email.split('@')[0] : 'member');
+
+    const cleanCategory: LoopCategory = input.category === 'Thought' ? 'Thoughts' : input.category;
+
+    const payload = {
+        authorId: currentUser.uid,
+        author: {
+            name: authorDisplayName,
+            avatarUrl: authorPhoto,
+            username: authorUsername,
+            isVerified: false,
+            uid: currentUser.uid,
+        },
+        title: input.headline,
+        oneLine: input.headline,
+        aiSummary: input.headline,
+        hook: input.headline,
+        content: input.description || input.content || '',
+        description: input.description || input.content || '',
+        category: cleanCategory,
+        domain: cleanCategory,
+        type: PostType.Loop,
+        postType: 'Loop',
+        isLoop: true,
+        mediaUrl: finalMediaUrl || null,
+        imageUrl: finalMediaUrl || null,
+        mediaType: 'image',
+        externalUrl: input.externalUrl?.trim() || null,
+        musicMeta: cleanCategory === 'Music' && input.musicMeta ? {
+            trackTitle: input.musicMeta.trackTitle?.trim() || '',
+            artist: input.musicMeta.artist?.trim() || '',
+            streamUrl: input.musicMeta.streamUrl?.trim() || '',
+        } : null,
+        stats: {
+            likes: 0,
+            views: 0,
+            comments: 0,
+        },
+        likeCount: 0,
+        viewCount: 0,
+        commentCount: 0,
+        saveCount: 0,
+        strikeCount: 0,
+        status: 'published',
+        isPublished: true,
+        visibility: 'public',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+    };
+
+    const docRef = await createDocument(COLLECTIONS.posts, payload);
+    const newDocSnap = await getDoc(doc(db, COLLECTIONS.posts, docRef.id));
+    const normalized = normalizeFirestorePost(docRef.id, newDocSnap.data() || payload);
+    return postToLoop(normalized, newDocSnap.data() || payload);
+};
+
+/**
+ * Updates an existing Loop.
+ */
+export const updateLoopPost = async (id: string, input: Partial<CreateLoopInput>): Promise<void> => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        throw new Error('Authentication required: You must be logged in to edit a loop.');
+    }
+
+    let finalMediaUrl = input.mediaUrl;
+    if (input.mediaFile) {
+        const fileExt = input.mediaFile.name.split('.').pop() || 'jpg';
+        const storagePath = `loops/${currentUser.uid}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        finalMediaUrl = await uploadFile(input.mediaFile, storagePath);
+    }
+
+    const updates: Record<string, any> = {
+        updatedAt: serverTimestamp(),
+    };
+
+    if (input.headline !== undefined) {
+        updates.title = input.headline;
+        updates.oneLine = input.headline;
+        updates.aiSummary = input.headline;
+        updates.hook = input.headline;
+    }
+    if (input.description !== undefined) {
+        updates.content = input.description;
+        updates.description = input.description;
+    }
+    if (input.category !== undefined) {
+        const cat = input.category === 'Thought' ? 'Thoughts' : input.category;
+        updates.category = cat;
+        updates.domain = cat;
+    }
+    if (finalMediaUrl !== undefined) {
+        updates.mediaUrl = finalMediaUrl || null;
+        updates.imageUrl = finalMediaUrl || null;
+    }
+    if (input.externalUrl !== undefined) {
+        updates.externalUrl = input.externalUrl?.trim() || null;
+    }
+    if (input.musicMeta !== undefined) {
+        updates.musicMeta = input.musicMeta;
+    }
+
+    await updateDocument(COLLECTIONS.posts, id, updates);
+};
+
+/**
+ * Deletes a Loop post.
+ */
+export const deleteLoopPost = async (id: string): Promise<void> => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        throw new Error('Authentication required: You must be logged in to delete a loop.');
+    }
+    await deleteDocument(COLLECTIONS.posts, id);
+};
+
+/**
+ * Toggles a strike on a loop post.
+ */
+export const toggleStrikeLoop = async (loopId: string): Promise<{ struck: boolean; strikeCount: number }> => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        throw new Error('Authentication required: You must be logged in to strike a loop.');
+    }
+
+    const strikeRef = doc(db, COLLECTIONS.posts, loopId, 'strikes', currentUser.uid);
+    const postRef = doc(db, COLLECTIONS.posts, loopId);
+    const strikeSnap = await getDoc(strikeRef);
+    const alreadyStruck = strikeSnap.exists();
+
+    if (alreadyStruck) {
+        await deleteDoc(strikeRef);
+        await updateDoc(postRef, {
+            strikeCount: increment(-1),
+            strikes: increment(-1),
+        });
+        const updatedPost = await getDoc(postRef);
+        const count = Math.max(0, Number(updatedPost.data()?.strikeCount ?? updatedPost.data()?.strikes ?? 0));
+        return { struck: false, strikeCount: count };
+    } else {
+        await setDoc(strikeRef, {
+            userId: currentUser.uid,
+            struckAt: serverTimestamp(),
+        });
+        await updateDoc(postRef, {
+            strikeCount: increment(1),
+            strikes: increment(1),
+        });
+        const updatedPost = await getDoc(postRef);
+        const count = Math.max(1, Number(updatedPost.data()?.strikeCount ?? updatedPost.data()?.strikes ?? 1));
+        return { struck: true, strikeCount: count };
+    }
+};
+
+/**
+ * Fetches user's struck loop IDs.
+ */
+export const getUserStruckLoopIds = async (userId: string, loopIds: string[]): Promise<Set<string>> => {
+    if (!userId || loopIds.length === 0) return new Set();
+    const struckSet = new Set<string>();
+
+    await Promise.all(
+        loopIds.map(async (loopId) => {
+            try {
+                const strikeSnap = await getDoc(doc(db, COLLECTIONS.posts, loopId, 'strikes', userId));
+                if (strikeSnap.exists()) {
+                    struckSet.add(loopId);
+                }
+            } catch {
+                // ignore
+            }
+        })
+    );
+
+    return struckSet;
+};
+
+/**
+ * Real-time subscription to Loops for Hub -> Stream -> Loops.
+ */
+export const subscribeToLoopsPosts = (
+    onLoops: (loops: StreamLoop[]) => void,
+    categoryFilter?: string,
+    onError?: (error: Error) => void
+) => {
+    let latestRealLoops: StreamLoop[] = [];
+
+    const emitLoops = () => {
+        const mockFiltered = getFilteredMockLoops(categoryFilter);
+        const realIds = new Set(latestRealLoops.map(l => l.id));
+        const nonDuplicateMocks = mockFiltered.filter(l => !realIds.has(l.id));
+
+        // Filter real loops by category if active
+        let filteredReal = latestRealLoops;
+        if (categoryFilter && categoryFilter.toLowerCase() !== 'all') {
+            const fLower = categoryFilter.toLowerCase();
+            filteredReal = latestRealLoops.filter(l => {
+                const cat = l.category.toLowerCase();
+                if (fLower === 'thoughts' || fLower === 'thought') {
+                    return cat === 'thoughts' || cat === 'thought';
+                }
+                return cat === fLower;
+            });
+        }
+
+        // If demo mode or 0 real loops exist, include starter demo loops so the feed is never dead empty
+        if (isMomentsDemoModeEnabled() || latestRealLoops.length === 0) {
+            onLoops([...filteredReal, ...nonDuplicateMocks]);
+        } else {
+            onLoops([...filteredReal]);
+        }
+    };
+
+    // Listen for global demo mode changes
+    const handleDemoChange = () => {
+        emitLoops();
+    };
+    window.addEventListener('invox_moments_demo_changed', handleDemoChange);
+
+    // Initial instant emission
+    emitLoops();
+
+    const q = query(
+        collection(db, COLLECTIONS.posts),
+        limit(100)
+    );
+
+    const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+            const currentUid = auth.currentUser?.uid;
+            latestRealLoops = snapshot.docs
+                .filter(docSnap => {
+                    const data = docSnap.data();
+                    const norm = normalizeFirestorePost(docSnap.id, data);
+                    if (!isLoopPost(norm, data)) return false;
+                    // Drafts only visible to author
+                    if (norm.status === 'draft') {
+                        if (!currentUid || norm.authorId !== currentUid) return false;
+                    }
+                    return true;
+                })
+                .map(docSnap => postToLoop(normalizeFirestorePost(docSnap.id, docSnap.data()), docSnap.data()))
+                .sort((a, b) => {
+                    const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+                    const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+                    return dateB - dateA;
+                });
+
+            console.log(`[HUB_STREAM_LOOPS] Live Loops update: found ${latestRealLoops.length} real loops`);
+            emitLoops();
+        },
+        (err) => {
+            console.warn('[LOOPS_POSTS_SUBSCRIBE_WARN]', err);
+            if (isMomentsDemoModeEnabled() || latestRealLoops.length === 0) {
+                emitLoops();
+            } else {
+                onError?.(err);
+            }
+        }
+    );
+
+    return () => {
+        window.removeEventListener('invox_moments_demo_changed', handleDemoChange);
+        unsubscribe();
+    };
+};
+
 
 
