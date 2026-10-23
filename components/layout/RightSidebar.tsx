@@ -1493,37 +1493,33 @@ const HubConversationsSidebar: React.FC<{
   onBack: () => void;
   setSelectedHubConversation: (conversation: HubConversation | null) => void;
   conversations: HubConversation[];
-}> = ({ onBack, setSelectedHubConversation, conversations }) => {
-    const [filter, setFilter] = useState('All');
-    const [isFilterOpen, setIsFilterOpen] = useState(false);
+  initialFilter?: string;
+}> = ({ onBack, setSelectedHubConversation, conversations, initialFilter = 'All' }) => {
+    const [filter, setFilter] = useState(initialFilter);
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterSearchTerm, setFilterSearchTerm] = useState('');
-    
-    const filterOptionsWithIcons = [
-        { name: 'All', icon: ClipboardListIcon },
-        { name: 'Unread', icon: BellIcon },
-        { name: 'Comrades', icon: UsersIcon },
-        { name: 'Groups', icon: ShieldCheckIcon },
-        { name: 'Explore', icon: ExploreIcon },
-        { name: 'Spotlight', icon: SpotlightIcon },
+
+    useEffect(() => {
+        if (initialFilter) {
+            setFilter(initialFilter);
+        }
+    }, [initialFilter]);
+
+    const filterOptions = [
+        { id: 'All', label: 'ALL' },
+        { id: 'Comrades', label: 'COMRADES' },
+        { id: 'Crew', label: 'CREW' },
+        { id: 'Unread', label: 'UNREAD' },
     ];
 
-    const filterRef = useRef<HTMLDivElement>(null);
-  
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
-                setIsFilterOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
     const filteredConversations = conversations.filter(convo => {
+        const isCrew = filter === 'Crew' || filter === 'Groups';
+        const isComrades = filter === 'Comrades';
+
         const filterMatch =
             filter === 'All' ||
             (filter === 'Unread' && convo.unreadCount > 0) ||
+            (isComrades && (convo.category === 'comrade' || (!convo.isGroup && convo.category !== 'explore' && convo.category !== 'spotlight'))) ||
+            (isCrew && (convo.category === 'group' || convo.isGroup === true)) ||
             (filter.toLowerCase().replace(/s$/, '') === convo.category);
 
         const searchMatch = convo.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -1531,14 +1527,20 @@ const HubConversationsSidebar: React.FC<{
         return filterMatch && searchMatch;
     });
 
+    const headerLabel = filter === 'Comrades' ? '// COMRADES' : filter === 'Crew' ? '// CREW' : '// CONVERSATIONS';
+
     return (
         <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
             <div className="h-full flex flex-col gap-4">
                 <div className="flex items-center gap-2 px-4">
-                    <button onClick={onBack} className="p-1.5 border border-zinc-800 bg-[#0c0c0e] hover:border-zinc-600 text-zinc-400 hover:text-white" aria-label="Back to Hub main">
+                    <button 
+                        onClick={onBack} 
+                        className="p-1.5 border border-zinc-800 bg-[#0c0c0e] hover:border-zinc-600 text-zinc-400 hover:text-white transition-colors" 
+                        aria-label="Back to Hub main"
+                    >
                         <ArrowLeftIcon className="w-4 h-4" />
                     </button>
-                    <h2 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// CONVERSATIONS</h2>
+                    <h2 className="font-mono text-xs font-bold text-white uppercase tracking-wider">{headerLabel}</h2>
                 </div>
 
                 <div className="relative px-4">
@@ -1551,105 +1553,201 @@ const HubConversationsSidebar: React.FC<{
                         className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
                     />
                 </div>
+
+                {/* Filter Tabs */}
+                <div className="flex items-center gap-1.5 px-4 overflow-x-auto no-scrollbar">
+                    {filterOptions.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setFilter(tab.id)}
+                            className={`px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider whitespace-nowrap border transition-colors ${
+                                filter === tab.id
+                                    ? 'bg-white text-black border-white font-bold'
+                                    : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
+                            }`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
                 
                 <div className="flex-1 overflow-y-auto no-scrollbar px-4 space-y-2">
-                    {filteredConversations.map(convo => {
-                        const lastMessage = convo.messages[convo.messages.length - 1];
-                        const lastMessageText = lastMessage?.text || (lastMessage ? `[${lastMessage.type}]` : 'No messages');
-                        return (
-                            <button 
-                                key={convo.id}
-                                onClick={() => setSelectedHubConversation && setSelectedHubConversation(convo)}
-                                className="w-full text-left bg-[#0c0c0e] p-2.5 flex items-center justify-between gap-2.5 border border-zinc-800 hover:border-zinc-600 transition-colors"
-                            >
-                                <div className="flex items-center gap-2.5 overflow-hidden">
-                                    <div className="relative flex-shrink-0">
-                                        <img src={convo.avatarUrl} onError={handleImageError} alt={convo.name} className="w-8 h-8 object-cover border border-zinc-800" />
+                    {filteredConversations.length > 0 ? (
+                        filteredConversations.map(convo => {
+                            const lastMessage = convo.messages[convo.messages.length - 1];
+                            const lastMessageText = lastMessage?.text || (lastMessage ? `[${lastMessage.type}]` : 'No messages');
+                            return (
+                                <button 
+                                    key={convo.id}
+                                    onClick={() => setSelectedHubConversation && setSelectedHubConversation(convo)}
+                                    className="w-full text-left bg-[#0c0c0e] p-2.5 flex items-center justify-between gap-2.5 border border-zinc-800 hover:border-zinc-600 transition-colors"
+                                >
+                                    <div className="flex items-center gap-2.5 overflow-hidden">
+                                        <div className="relative flex-shrink-0">
+                                            <img src={convo.avatarUrl} onError={handleImageError} alt={convo.name} className="w-8 h-8 object-cover border border-zinc-800" />
+                                        </div>
+                                        <div className="overflow-hidden">
+                                            <div className="flex items-center gap-1.5">
+                                                <p className="font-mono font-bold text-xs text-white truncate">{convo.name}</p>
+                                                {convo.isGroup ? (
+                                                    <span className="text-[9px] font-mono text-zinc-500 border border-zinc-800 px-1 uppercase">CREW</span>
+                                                ) : (
+                                                    <span className="text-[9px] font-mono text-zinc-500 border border-zinc-800 px-1 uppercase">1:1</span>
+                                                )}
+                                            </div>
+                                            <p className="text-[11px] font-mono text-zinc-500 truncate">{lastMessageText}</p>
+                                        </div>
                                     </div>
-                                    <div className="overflow-hidden">
-                                        <p className="font-mono font-bold text-xs text-white truncate">{convo.name}</p>
-                                        <p className="text-[11px] font-mono text-zinc-500 truncate">{lastMessageText}</p>
+                                    <div className="flex flex-col items-end flex-shrink-0">
+                                        <p className="text-[10px] font-mono text-zinc-500 mb-1">{convo.timestamp}</p>
+                                        {convo.unreadCount > 0 && (
+                                            <span className="bg-red-600 text-white text-[10px] font-mono font-bold px-1.5 py-0.2">
+                                                {convo.unreadCount}
+                                            </span>
+                                        )}
                                     </div>
-                                </div>
-                                <div className="flex flex-col items-end flex-shrink-0">
-                                    <p className="text-[10px] font-mono text-zinc-500 mb-1">{convo.timestamp}</p>
-                                    {convo.unreadCount > 0 && (
-                                        <span className="bg-red-600 text-white text-[10px] font-mono font-bold px-1.5 py-0.2">
-                                            {convo.unreadCount}
-                                        </span>
-                                    )}
-                                </div>
-                            </button>
-                        );
-                    })}
+                                </button>
+                            );
+                        })
+                    ) : (
+                        <div className="p-6 text-center border border-zinc-800/80 bg-[#0c0c0e] font-mono">
+                            <span className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1">// EMPTY_STREAM</span>
+                            <p className="text-xs text-zinc-400">No {filter !== 'All' ? filter : 'active'} conversations found.</p>
+                        </div>
+                    )}
                 </div>
             </div>
         </aside>
     );
 };
 
-const HubSidebar: React.FC<Pick<RightSidebarProps, 'hubView' | 'setHubView' | 'hubRightSidebarView' | 'setHubRightSidebarView' | 'setSelectedHubConversation' | 'hubConversations'>> = ({ hubView, setHubView, hubRightSidebarView, setHubRightSidebarView, setSelectedHubConversation, hubConversations }) => {
-    
-    if (hubRightSidebarView === 'conversations') {
-        if (!setHubRightSidebarView || !setSelectedHubConversation || !hubConversations) return null;
-        return <HubConversationsSidebar onBack={() => { setHubRightSidebarView('main'); setSelectedHubConversation(null); if (setHubView) setHubView('welcome'); }} setSelectedHubConversation={setSelectedHubConversation} conversations={hubConversations} />;
-    }
-
-    const hubNavItems = [
-        { 
-            name: 'Stream', 
-            icon: SoundWaveIcon, 
-            action: () => {
-                if (setHubView) setHubView('stream');
-                if (setHubRightSidebarView) setHubRightSidebarView('main');
-            },
-            view: 'stream' 
-        },
-        { 
-            name: 'Conversations', 
-            icon: ChatBubbleIcon, 
-            action: () => {
-                if (setHubView) setHubView('conversations');
-                if (setHubRightSidebarView) setHubRightSidebarView('main');
-            },
-            view: 'conversations' 
-        },
-    ];
-
+const HubSidebar: React.FC<Pick<RightSidebarProps, 'hubView' | 'setHubView' | 'hubRightSidebarView' | 'setHubRightSidebarView' | 'setSelectedHubConversation' | 'hubConversations'>> = ({ 
+    hubView, 
+    setHubView, 
+    hubRightSidebarView, 
+    setHubRightSidebarView, 
+    setSelectedHubConversation, 
+    hubConversations 
+}) => {
     return (
         <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
             <div className="h-full flex flex-col gap-4 overflow-y-auto no-scrollbar">
                 {hubView === 'stream' && (
                     <div className="flex items-center gap-2 px-4">
-                        <button onClick={() => setHubView && setHubView('welcome')} className="p-1.5 border border-zinc-800 bg-[#0c0c0e] hover:border-zinc-600 text-zinc-400 hover:text-white" aria-label="Back to Global Collective">
+                        <button 
+                            onClick={() => setHubView && setHubView('welcome')} 
+                            className="p-1.5 border border-zinc-800 bg-[#0c0c0e] hover:border-zinc-600 text-zinc-400 hover:text-white transition-colors" 
+                            aria-label="Back to Global Collective"
+                        >
                             <ArrowLeftIcon className="w-4 h-4" />
                         </button>
                         <h2 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// STREAM</h2>
                     </div>
                 )}
 
+                {/* Search Bar */}
                 <div className="relative px-4">
                     <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                    <input type="search" placeholder="SEARCH_HUB..." className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors" />
+                    <input 
+                        type="search" 
+                        placeholder="SEARCH_HUB..." 
+                        className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors" 
+                    />
                 </div>
 
-                <div className="bg-[#0c0c0e] border border-zinc-800 p-3 mx-4">
+                {/* Card 1 — Stream */}
+                <div className="bg-[#0c0c0e] border border-zinc-800 p-4 mx-4">
+                    <div className="flex items-center justify-between mb-1.5">
+                        <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">
+                            // STREAM
+                        </h3>
+                        {hubView === 'stream' && (
+                            <span className="w-1.5 h-1.5 bg-green-500"></span>
+                        )}
+                    </div>
+                    <p className="font-mono text-[11px] text-zinc-400 mb-3.5 leading-relaxed">
+                        Broadcast moments and share your latest loops.
+                    </p>
+                    <button
+                        onClick={() => {
+                            if (setHubView) setHubView('stream');
+                            if (setHubRightSidebarView) setHubRightSidebarView('main');
+                        }}
+                        className={`w-full flex items-center justify-between p-2.5 font-mono text-xs uppercase tracking-wider transition-all border ${
+                            hubView === 'stream'
+                                ? 'bg-[#18181d] text-white border-zinc-700 font-bold'
+                                : 'bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600 hover:text-white hover:bg-zinc-900/50'
+                        }`}
+                    >
+                        <div className="flex items-center gap-2.5">
+                            <SoundWaveIcon className="w-4 h-4 text-zinc-400" />
+                            <span className="font-bold">OPEN STREAM</span>
+                        </div>
+                        <span className="font-mono text-zinc-400">→</span>
+                    </button>
+                </div>
+
+                {/* Card 2 — Converse */}
+                <div className="bg-[#0c0c0e] border border-zinc-800 p-4 mx-4">
+                    <div className="flex items-center justify-between mb-1.5">
+                        <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">
+                            // CONVERSE
+                        </h3>
+                        {(hubView === 'conversations' || hubRightSidebarView === 'conversations' || hubRightSidebarView === 'comrades' || hubRightSidebarView === 'crew') && (
+                            <span className="w-1.5 h-1.5 bg-green-500"></span>
+                        )}
+                    </div>
+                    <p className="font-mono text-[11px] text-zinc-400 mb-3.5 leading-relaxed">
+                        Private conversations with your network.
+                    </p>
                     <div className="space-y-2">
-                        {hubNavItems.map(item => (
-                            <button
-                                key={item.name}
-                                onClick={() => {
-                                    if (item.action) item.action();
-                                    else if (item.view && setHubView) setHubView(item.view);
-                                }}
-                                className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${
-                                    hubView === item.view ? 'bg-[#18181d] text-white border-zinc-700 font-bold' : 'bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600'
-                                }`}
-                            >
-                                <item.icon className="w-4 h-4" />
-                                <span>{item.name}</span>
-                            </button>
-                        ))}
+                        {/* COMRADES navigation row */}
+                        <button
+                            onClick={() => {
+                                if (setHubView) setHubView('conversations');
+                                if (setHubRightSidebarView) setHubRightSidebarView('comrades');
+                            }}
+                            className={`w-full text-left p-2.5 font-mono transition-all border group ${
+                                hubView === 'conversations' && hubRightSidebarView === 'comrades'
+                                    ? 'bg-[#18181d] border-zinc-700'
+                                    : 'bg-black/60 border-zinc-800/90 hover:border-zinc-600 hover:bg-zinc-900/50'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between mb-1">
+                                <div className="flex items-center gap-2">
+                                    <UsersIcon className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
+                                    <span className="text-xs font-bold uppercase tracking-wider text-white">COMRADES</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-zinc-600">1:1</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-400 leading-snug pl-6">
+                                One-to-one conversations with your connections.
+                            </p>
+                        </button>
+
+                        {/* CREW navigation row */}
+                        <button
+                            onClick={() => {
+                                if (setHubView) setHubView('conversations');
+                                if (setHubRightSidebarView) setHubRightSidebarView('crew');
+                            }}
+                            className={`w-full text-left p-2.5 font-mono transition-all border group ${
+                                hubView === 'conversations' && hubRightSidebarView === 'crew'
+                                    ? 'bg-[#18181d] border-zinc-700'
+                                    : 'bg-black/60 border-zinc-800/90 hover:border-zinc-600 hover:bg-zinc-900/50'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between mb-1">
+                                <div className="flex items-center gap-2">
+                                    <ShieldCheckIcon className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
+                                    <span className="text-xs font-bold uppercase tracking-wider text-white">CREW</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-zinc-600">GROUP</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-400 leading-snug pl-6">
+                                Group conversations with your teams.
+                            </p>
+                        </button>
                     </div>
                 </div>
             </div>

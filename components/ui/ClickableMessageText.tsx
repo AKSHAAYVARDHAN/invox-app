@@ -63,7 +63,7 @@ export const ClickableMessageText: React.FC<ClickableMessageTextProps> = ({
                     const teamInvite = parseTeamInvitationUrl(url);
                     if (teamInvite) {
                         return (
-                            <div key={index} className="my-1.5 not-prose">
+                            <div key={index} className="my-1.5 not-prose max-w-full min-w-0 overflow-hidden">
                                 <TeamInvitationCard
                                     inviteUrl={teamInvite.originalUrl}
                                     token={teamInvite.token}
@@ -71,6 +71,7 @@ export const ClickableMessageText: React.FC<ClickableMessageTextProps> = ({
                                     targetHash={teamInvite.targetHash}
                                     timestamp={timestamp}
                                     isSender={isSender}
+                                    className="max-w-full"
                                 />
                                 {trailing && <span className="inline">{trailing}</span>}
                             </div>

@@ -11,6 +11,7 @@ interface ConversationSearchBarProps {
     onPrevMatch: () => void;
     onNextMatch: () => void;
     placeholder?: string;
+    maxWidth?: string;
 }
 
 export const ConversationSearchBar: React.FC<ConversationSearchBarProps> = ({
@@ -23,6 +24,7 @@ export const ConversationSearchBar: React.FC<ConversationSearchBarProps> = ({
     onPrevMatch,
     onNextMatch,
     placeholder = 'Search messages in this conversation...',
+    maxWidth,
 }) => {
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -54,9 +56,14 @@ export const ConversationSearchBar: React.FC<ConversationSearchBarProps> = ({
     const hasQuery = searchQuery.trim().length > 0;
 
     return (
-        <div className="h-11 px-3 sm:px-4 border-b border-zinc-800 bg-[#0c0d10] flex items-center justify-between gap-2.5 flex-shrink-0 font-mono text-xs z-10 transition-all">
-            {/* Search Input Container */}
-            <div className="relative flex items-center flex-1 h-8 bg-[#121315] hover:bg-[#151619] border border-zinc-700 hover:border-zinc-500 focus-within:border-emerald-400 focus-within:ring-1 focus-within:ring-emerald-400/20 px-2.5 transition-colors">
+        <div className="h-11 border-b border-zinc-800 bg-[#0c0d10] flex-shrink-0 font-mono text-xs z-10 transition-all">
+            <div
+                className={`w-full h-full flex items-center justify-between gap-2.5 ${
+                    maxWidth ? `${maxWidth} mx-auto px-4 sm:px-6 lg:px-8` : 'px-3 sm:px-4'
+                }`}
+            >
+                {/* Search Input Container */}
+                <div className="relative flex items-center flex-1 h-8 bg-[#121315] hover:bg-[#151619] border border-zinc-700 hover:border-zinc-500 focus-within:border-emerald-400 focus-within:ring-1 focus-within:ring-emerald-400/20 px-2.5 transition-colors">
                 <MagnifyingGlassIcon className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0 mr-2 pointer-events-none" />
                 <input
                     ref={inputRef}
@@ -130,6 +137,7 @@ export const ConversationSearchBar: React.FC<ConversationSearchBarProps> = ({
                     <CloseIcon className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">DONE</span>
                 </button>
+            </div>
             </div>
         </div>
     );

@@ -26,7 +26,11 @@ import {
     type TeamMember,
     type TeamMessage,
 } from '../../services/teamService';
-import { subscribeFollowedProfiles } from '../../services/connectionService';
+import { 
+    subscribeFollowedProfiles,
+    isUserAcceptedConnection,
+    subscribeAcceptedConnectionUserIds
+} from '../../services/connectionService';
 import type { InvoxUser } from '../../types';
 import {
     SparklesIcon,
@@ -38,6 +42,10 @@ import {
     TrashIcon,
     LogoutIcon,
     CheckIcon,
+    EllipsisVerticalIcon,
+    PaperClipIcon,
+    ShieldCheckIcon,
+    ChatBubbleBottomCenterTextIcon,
 } from '../ui/Icons';
 import { ClickableMessageText } from '../ui/ClickableMessageText';
 import {
@@ -51,16 +59,41 @@ import { ConversationSummaryModal } from '../spotlight/ConversationSummaryModal'
 import { ConversationSearchBar } from '../spotlight/ConversationSearchBar';
 import { handleImageError } from '../utils/imageUtils';
 
-export const HubConversationsView: React.FC = () => {
+export interface HubConversationsViewProps {
+    initialSection?: 'comrades' | 'crew';
+    activeSection?: 'comrades' | 'crew';
+    onSectionChange?: (section: 'comrades' | 'crew') => void;
+    onBack?: () => void;
+}
+
+export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
+    initialSection = 'comrades',
+    activeSection: controlledSection,
+    onSectionChange,
+    onBack,
+}) => {
     const { currentUser, userProfile } = useAuth();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
 
     // Primary subsections: // COMRADES or // CREW
-    const [activeSection, setActiveSection] = useState<'comrades' | 'crew'>('comrades');
+    const [internalSection, setInternalSection] = useState<'comrades' | 'crew'>(initialSection);
+    const activeSection = controlledSection || internalSection;
+
+    useEffect(() => {
+        if (controlledSection && controlledSection !== internalSection) {
+            setInternalSection(controlledSection);
+        }
+    }, [controlledSection]);
+
+    const handleSwitchSection = (sec: 'comrades' | 'crew') => {
+        setInternalSection(sec);
+        if (onSectionChange) onSectionChange(sec);
+    };
 
     // Followed connections / comrades for starting new chats or inviting to crew
     const [followedProfiles, setFollowedProfiles] = useState<InvoxUser[]>([]);
+    const [acceptedConnectionIds, setAcceptedConnectionIds] = useState<Set<string>>(new Set());
 
     // ----------------------------------------------------
     // COMRADES (1-on-1 Direct Messaging) State
@@ -165,6 +198,28 @@ export const HubConversationsView: React.FC = () => {
         }
     };
 
+    // References for file attachments and menus
+    const comradeFileInputRef = useRef<HTMLInputElement>(null);
+    const crewFileInputRef = useRef<HTMLInputElement>(null);
+    const [isComradeMenuOpen, setIsComradeMenuOpen] = useState<boolean>(false);
+    const comradeMenuRef = useRef<HTMLDivElement>(null);
+    const [isCrewMenuOpen, setIsCrewMenuOpen] = useState<boolean>(false);
+    const crewMenuRef = useRef<HTMLDivElement>(null);
+
+    // Close menus on outside click
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (comradeMenuRef.current && !comradeMenuRef.current.contains(e.target as Node)) {
+                setIsComradeMenuOpen(false);
+            }
+            if (crewMenuRef.current && !crewMenuRef.current.contains(e.target as Node)) {
+                setIsCrewMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     // Fetch followed profiles for connection pickers
     useEffect(() => {
         if (!currentUser?.uid) return;
@@ -175,6 +230,22 @@ export const HubConversationsView: React.FC = () => {
         );
         return () => unsub();
     }, [currentUser?.uid]);
+
+    // Subscribe to accepted connection IDs (mutual connections only)
+    useEffect(() => {
+        if (!currentUser?.uid) return;
+        const unsub = subscribeAcceptedConnectionUserIds(
+            currentUser.uid,
+            (ids) => setAcceptedConnectionIds(ids),
+            (err) => console.warn('[ACCEPTED_CONNECTION_IDS_ERROR]', err)
+        );
+        return () => unsub();
+    }, [currentUser?.uid]);
+
+    // Comrades restricted exclusively to verified mutual accepted connections
+    const eligibleAcceptedComrades = useMemo(() => {
+        return followedProfiles.filter((p) => acceptedConnectionIds.has(p.uid));
+    }, [followedProfiles, acceptedConnectionIds]);
 
     // ----------------------------------------------------
     // COMRADES Subscriptions
@@ -401,11 +472,73 @@ export const HubConversationsView: React.FC = () => {
     };
 
     // ----------------------------------------------------
+    // File / Image Attachment Upload Handlers
+    // ----------------------------------------------------
+    const handleComradeFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !selectedComradeConv || !currentUser?.uid) return;
+        try {
+            const isImage = file.type.startsWith('image/');
+            const other = getOtherComradeParticipant(selectedComradeConv);
+            const senderName = userProfile?.displayName || currentUser.displayName || 'You';
+            const senderAvatar = userProfile?.photoURL || currentUser.photoURL || null;
+            const text = isImage
+                ? `[IMAGE TRANSMISSION: ${file.name}]`
+                : `[FILE TRANSMISSION: ${file.name} (${(file.size / 1024).toFixed(1)} KB)]`;
+
+            await sendCollabMessage({
+                conversationId: selectedComradeConv.id,
+                senderId: currentUser.uid,
+                senderName,
+                senderAvatar,
+                text,
+                recipientId: other.userId || undefined,
+            });
+        } catch (err) {
+            console.error('[ATTACH_FILE_COMRADE_ERROR]', err);
+        } finally {
+            e.target.value = '';
+        }
+    };
+
+    const handleCrewFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !selectedCrewId || !currentUser?.uid) return;
+        try {
+            const isImage = file.type.startsWith('image/');
+            const senderName = userProfile?.displayName || currentUser.displayName || 'Crew Member';
+            const senderAvatar = userProfile?.photoURL || currentUser.photoURL || null;
+            const text = isImage
+                ? `[IMAGE TRANSMISSION: ${file.name}]`
+                : `[FILE TRANSMISSION: ${file.name} (${(file.size / 1024).toFixed(1)} KB)]`;
+
+            await sendTeamMessage({
+                teamId: selectedCrewId,
+                senderId: currentUser.uid,
+                senderName,
+                senderAvatar,
+                text,
+            });
+        } catch (err) {
+            console.error('[ATTACH_FILE_CREW_ERROR]', err);
+        } finally {
+            e.target.value = '';
+        }
+    };
+
+    // ----------------------------------------------------
     // Start Direct Conversation with a Connection
     // ----------------------------------------------------
     const handleStartDirectChat = async (targetUser: InvoxUser) => {
         if (!currentUser) return;
         try {
+            // Enforce accepted-connection authorization policy
+            const isAccepted = await isUserAcceptedConnection(currentUser.uid, targetUser.uid);
+            if (!isAccepted && !acceptedConnectionIds.has(targetUser.uid)) {
+                alert('Comrade transmissions require an accepted mutual connection between both nodes.');
+                return;
+            }
+
             const convId = await getOrCreateDirectConversation({
                 currentUser,
                 userProfile,
@@ -555,97 +688,45 @@ export const HubConversationsView: React.FC = () => {
     }, [isCrewSearchOpen, crewChatSearchQuery, crewMessages]);
 
     return (
-        <div className="font-mono flex flex-col h-[calc(100vh-4.5rem)] md:h-[calc(100vh-5rem)] -mx-4 sm:-mx-6 lg:-mx-8 -mt-4 md:-mt-6 -mb-4 md:-mb-10 bg-[#09090b] text-zinc-100 overflow-hidden">
-            {/* Top Primary Tabs Bar: // STREAM | // COMRADES & // CREW */}
-            <div className="h-12 border-b border-zinc-800 bg-[#0c0c0e] px-4 sm:px-6 flex items-center justify-between flex-shrink-0 z-20">
-                <div className="flex items-center gap-1 sm:gap-2 h-full">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            navigate('/hub?tab=stream');
-                        }}
-                        className="h-full px-2.5 sm:px-3 text-zinc-400 hover:text-white flex items-center gap-1 text-xs font-mono uppercase tracking-wider transition-colors mr-1 sm:mr-2 border-r border-zinc-800 cursor-pointer"
-                        title="Back to Hub Stream (Moments & Loops)"
-                    >
-                        <span>←</span>
-                        <span className="hidden sm:inline">// STREAM</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => setActiveSection('comrades')}
-                        className={`h-full px-3 sm:px-5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 cursor-pointer ${
-                            activeSection === 'comrades'
-                                ? 'border-white text-white bg-zinc-900/50'
-                                : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'
-                        }`}
-                    >
-                        <span className="text-[10px] text-zinc-500 font-mono">//</span>
-                        <span>COMRADES</span>
-                        {comradeConvs.some((c) => getConversationUnreadCount(c, currentUser?.uid) > 0) && (
-                            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                        )}
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => setActiveSection('crew')}
-                        className={`h-full px-3 sm:px-5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 cursor-pointer ${
-                            activeSection === 'crew'
-                                ? 'border-white text-white bg-zinc-900/50'
-                                : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'
-                        }`}
-                    >
-                        <span className="text-[10px] text-zinc-500 font-mono">//</span>
-                        <span>CREW</span>
-                        {crews.length > 0 && (
-                            <span className="text-[10px] text-zinc-500 font-mono px-1.5 py-0.2 bg-zinc-850">
-                                {crews.length}
-                            </span>
-                        )}
-                    </button>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    {activeSection === 'comrades' ? (
-                        <button
-                            type="button"
-                            onClick={() => setShowNewComradeModal(true)}
-                            className="h-8 px-3 bg-white text-black hover:bg-zinc-200 border border-white text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
-                            title="Start new direct conversation with a connection"
-                        >
-                            <PlusIcon className="w-3.5 h-3.5 text-black" />
-                            <span className="hidden sm:inline">NEW TRANSMISSION</span>
-                            <span className="sm:hidden">NEW</span>
-                        </button>
-                    ) : (
-                        <button
-                            type="button"
-                            onClick={() => setShowCreateCrewModal(true)}
-                            className="h-8 px-3 bg-white text-black hover:bg-zinc-200 border border-white text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
-                            title="Create a new Crew group"
-                        >
-                            <PlusIcon className="w-3.5 h-3.5 text-black" />
-                            <span className="hidden sm:inline">CREATE CREW</span>
-                            <span className="sm:hidden">CREATE</span>
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            {/* Main Content Workspace (Split layout) */}
-            <div className="flex-1 flex min-h-0 overflow-hidden relative">
+        <div className="w-full font-mono flex flex-col flex-1 min-h-0 text-zinc-100">
+            {/* Card-based Messaging Container */}
+            <div className="w-full bg-[#0c0c0e] border border-zinc-800 shadow-2xl flex flex-col md:flex-row overflow-hidden flex-1 h-[calc(100dvh-5.25rem)] md:h-[calc(100dvh-6.25rem)] lg:h-[calc(100dvh-3rem)] min-h-[480px] relative">
                 {/* ---------------------------------------------------- */}
                 {/* SUBSECTION 1: COMRADES (1-on-1 Direct Messaging)     */}
                 {/* ---------------------------------------------------- */}
                 {activeSection === 'comrades' && (
                     <>
-                        {/* LEFT SIDEBAR: Comrade Conversations List */}
+                        {/* LEFT PANEL: Comrade Conversations Inbox */}
                         <aside
-                            className={`w-full md:w-80 lg:w-96 flex flex-col border-r border-zinc-800 bg-[#0c0d10] flex-shrink-0 ${
+                            className={`w-full md:w-80 lg:w-84 flex-shrink-0 border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col h-full bg-[#0b0b0d] overflow-hidden ${
                                 selectedComradeId ? 'hidden md:flex' : 'flex'
                             }`}
                         >
+                        {/* Panel Header - Aligned with ChatHeader h-14 height */}
+                        <div className="h-14 px-4 border-b border-zinc-800 bg-[#0c0c0e] flex items-center justify-between flex-shrink-0 font-mono">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-white uppercase tracking-wider">// COMRADES</span>
+                                <span className="text-[10px] text-zinc-500 border border-zinc-800 px-1.5 py-0.5">
+                                    {filteredComrades.length}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="hidden sm:flex text-[10px] text-emerald-400 items-center gap-1.5 font-mono mr-1">
+                                    <span className="w-1.5 h-1.5 bg-emerald-400 inline-block animate-pulse"></span>
+                                    1:1
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowNewComradeModal(true)}
+                                    className="h-7 px-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-750 hover:border-zinc-500 text-zinc-200 hover:text-white text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer"
+                                    title="Start direct conversation with an accepted connection"
+                                >
+                                    <PlusIcon className="w-3 h-3 text-zinc-400" />
+                                    <span>NEW</span>
+                                </button>
+                            </div>
+                        </div>
+
                             <SearchInput
                                 value={comradeSearch}
                                 onChange={setComradeSearch}
@@ -661,7 +742,7 @@ export const HubConversationsView: React.FC = () => {
                                         </span>
                                     </div>
                                 ) : filteredComrades.length === 0 ? (
-                                    <div className="p-8 text-center space-y-3">
+                                    <div className="p-8 text-center space-y-3 font-mono">
                                         <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
                                             // NO TRANSMISSIONS
                                         </span>
@@ -700,6 +781,7 @@ export const HubConversationsView: React.FC = () => {
                                                     unreadCount,
                                                     isSelected,
                                                     subtitle: other.username ? `@${other.username}` : '// Comrade',
+                                                    isOnline: true,
                                                 }}
                                                 onClick={() => {
                                                     setSelectedComradeId(convo.id);
@@ -716,7 +798,7 @@ export const HubConversationsView: React.FC = () => {
 
                         {/* RIGHT MAIN PANEL: Active Comrade Chat Timeline */}
                         <main
-                            className={`flex-1 min-w-0 flex flex-col bg-[#08080a] overflow-hidden relative h-full ${
+                            className={`flex-1 min-w-0 flex flex-col bg-[#0c0c0e] h-full overflow-hidden relative ${
                                 !selectedComradeId ? 'hidden md:flex' : 'flex'
                             }`}
                         >
@@ -728,7 +810,7 @@ export const HubConversationsView: React.FC = () => {
                                         return (
                                             <ChatHeader
                                                 title={other.displayName}
-                                                subtitle={other.username ? `@${other.username} • Comrade` : '// Comrade'}
+                                                subtitle={other.username ? `@${other.username} • [ONLINE]` : '// Comrade • [ONLINE]'}
                                                 avatarUrl={other.photoURL}
                                                 isTeam={false}
                                                 onBackMobile={() => setSelectedComradeId(null)}
@@ -772,6 +854,61 @@ export const HubConversationsView: React.FC = () => {
                                                         <ArrowUpRightIcon className="w-3 h-3 text-zinc-400" />
                                                     </button>
                                                 )}
+
+                                                {/* Contextual Menu */}
+                                                <div className="relative" ref={comradeMenuRef}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsComradeMenuOpen((prev) => !prev)}
+                                                        className="h-8 w-8 border border-zinc-800 bg-zinc-900 hover:border-zinc-700 text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center text-xs"
+                                                        title="Transmission Options"
+                                                    >
+                                                        <EllipsisVerticalIcon className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    {isComradeMenuOpen && (
+                                                        <div className="absolute right-0 top-full mt-1 w-48 bg-[#0c0c0e] border border-zinc-800 shadow-2xl z-30 py-1 font-mono text-xs">
+                                                            {other.userId && (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setIsComradeMenuOpen(false);
+                                                                        navigate(`/profile/${other.userId}`);
+                                                                    }}
+                                                                    className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-zinc-900 hover:text-white flex items-center justify-between"
+                                                                >
+                                                                    <span>VIEW PROFILE</span>
+                                                                    <ArrowUpRightIcon className="w-3 h-3 text-zinc-500" />
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                onClick={() => {
+                                                                    setIsComradeMenuOpen(false);
+                                                                    setShowComradeSummaryModal(true);
+                                                                }}
+                                                                className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                                                            >
+                                                                GENERATE SUMMARY
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setIsComradeMenuOpen(false);
+                                                                    alert('Channel notifications muted.');
+                                                                }}
+                                                                className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                                                            >
+                                                                MUTE CHANNEL
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setIsComradeMenuOpen(false);
+                                                                    setSelectedComradeId(null);
+                                                                }}
+                                                                className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-zinc-900 hover:text-white border-t border-zinc-800"
+                                                            >
+                                                                CLOSE SESSION
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </ChatHeader>
                                         );
                                     })()}
@@ -803,10 +940,10 @@ export const HubConversationsView: React.FC = () => {
                                     {/* Message Timeline */}
                                     <div
                                         ref={comradeTimelineRef}
-                                        className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 min-h-0 relative no-scrollbar"
+                                        className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 min-h-0 relative no-scrollbar"
                                     >
                                         {loadingComradeMsgs ? (
-                                            <div className="py-12 text-center my-auto">
+                                            <div className="py-12 text-center my-auto font-mono">
                                                 <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
                                                 <p className="text-[10px] text-zinc-500 uppercase tracking-wider">
                                                     // RETRIEVING MESSAGES...
@@ -829,8 +966,8 @@ export const HubConversationsView: React.FC = () => {
                                                 return (
                                                     <React.Fragment key={msg.id}>
                                                         {showDateSeparator && (
-                                                            <div className="flex items-center justify-center my-4">
-                                                                <span className="text-[9px] font-mono text-zinc-500 bg-zinc-900 border border-zinc-800 px-2 py-0.5 tracking-widest uppercase">
+                                                            <div className="flex items-center justify-center my-3 sm:my-4 font-mono select-none">
+                                                                <span className="text-[9px] text-zinc-500 bg-zinc-900 border border-zinc-800 px-2.5 py-0.5 tracking-widest uppercase">
                                                                     {formatDaySeparator(msg.createdAt)}
                                                                 </span>
                                                             </div>
@@ -838,7 +975,7 @@ export const HubConversationsView: React.FC = () => {
                                                         <div
                                                             className={`flex flex-col ${
                                                                 isMe ? 'items-end' : 'items-start'
-                                                            }`}
+                                                            } max-w-full`}
                                                         >
                                                             {!isMe && msg.senderName && (
                                                                 <span className="text-[10px] text-zinc-400 mb-1 px-1 font-semibold font-mono tracking-wide">
@@ -846,13 +983,13 @@ export const HubConversationsView: React.FC = () => {
                                                                 </span>
                                                             )}
                                                             <div
-                                                                className={`max-w-[85%] sm:max-w-[70%] px-3.5 py-2.5 text-xs border shadow-sm ${
+                                                                className={`max-w-[85%] sm:max-w-[72%] min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs border shadow-sm ${
                                                                     isMe
                                                                         ? 'bg-zinc-850 border-zinc-750 text-zinc-100'
                                                                         : 'bg-[#131317] border-zinc-800 text-zinc-200'
                                                                 }`}
                                                             >
-                                                                <div className="whitespace-pre-wrap break-words leading-relaxed font-mono">
+                                                                <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed font-mono min-w-0">
                                                                     <ClickableMessageText
                                                                         text={msg.text}
                                                                         isSender={isMe}
@@ -883,6 +1020,14 @@ export const HubConversationsView: React.FC = () => {
                                         )}
                                     </div>
 
+                                    {/* Hidden file attachment input */}
+                                    <input
+                                        type="file"
+                                        ref={comradeFileInputRef}
+                                        onChange={handleComradeFileSelect}
+                                        className="hidden"
+                                    />
+
                                     {/* Bottom Message Composer */}
                                     <MessageComposer
                                         value={comradeInput}
@@ -892,16 +1037,43 @@ export const HubConversationsView: React.FC = () => {
                                         disabled={loadingComradeMsgs}
                                         isSending={sendingComrade}
                                         textareaRef={comradeComposerRef}
+                                        onAttachFile={() => comradeFileInputRef.current?.click()}
                                     />
                                 </>
                             ) : (
-                                <div className="flex-1 flex items-center justify-center p-8 text-center">
-                                    <EmptyMessagingState
-                                        title="// SELECT COMRADE"
-                                        description="Choose a direct communication stream from the sidebar or start a new transmission."
-                                        actionLabel="+ New Transmission"
-                                        onAction={() => setShowNewComradeModal(true)}
-                                    />
+                                <div className="flex-1 flex flex-col bg-[#0c0c0e] h-full">
+                                    {/* Aligned placeholder header row sharing the top edge */}
+                                    <div className="h-14 px-4 sm:px-6 border-b border-zinc-800 bg-[#0c0c0e] flex items-center justify-between flex-shrink-0 font-mono">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
+                                                // TRANSMISSION_WORKSPACE
+                                            </span>
+                                        </div>
+                                        <span className="text-[10px] text-zinc-600 font-mono">// IDLE</span>
+                                    </div>
+                                    <div className="flex-1 flex items-center justify-center p-6 sm:p-8 text-center font-mono">
+                                        <div className="bg-[#0b0b0d] border border-zinc-800 p-6 sm:p-8 max-w-md w-full shadow-xl">
+                                            <div className="w-12 h-12 bg-zinc-900 border border-zinc-700 flex items-center justify-center mx-auto mb-4 text-zinc-400">
+                                                <ChatBubbleBottomCenterTextIcon className="w-6 h-6" />
+                                            </div>
+                                            <span className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1">
+                                                // TRANSMISSION_TERMINAL
+                                            </span>
+                                            <h2 className="text-base font-bold uppercase tracking-wider text-white mb-2">
+                                                No Comrade Selected
+                                            </h2>
+                                            <p className="text-xs text-zinc-400 leading-relaxed mb-6 font-mono">
+                                                Choose an active direct transmission from the left inbox or transmit a new signal to an accepted connection.
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowNewComradeModal(true)}
+                                                className="px-4 py-2 bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+                                            >
+                                                + Transmit Signal
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </main>
@@ -913,16 +1085,41 @@ export const HubConversationsView: React.FC = () => {
                 {/* ---------------------------------------------------- */}
                 {activeSection === 'crew' && (
                     <>
-                        {/* LEFT SIDEBAR: Crew Groups List */}
+                        {/* LEFT PANEL: Crew Groups Inbox */}
                         <aside
-                            className={`w-full md:w-80 lg:w-96 flex flex-col border-r border-zinc-800 bg-[#0c0d10] flex-shrink-0 ${
+                            className={`w-full md:w-80 lg:w-84 flex-shrink-0 border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col h-full bg-[#0b0b0d] overflow-hidden ${
                                 selectedCrewId ? 'hidden md:flex' : 'flex'
                             }`}
                         >
+                            {/* Panel Header - Aligned with ChatHeader h-14 height */}
+                            <div className="h-14 px-4 border-b border-zinc-800 bg-[#0c0c0e] flex items-center justify-between flex-shrink-0 font-mono">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-white uppercase tracking-wider">// CREW</span>
+                                    <span className="text-[10px] text-zinc-500 border border-zinc-800 px-1.5 py-0.5">
+                                        {filteredCrews.length}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="hidden sm:flex text-[10px] text-cyan-400 items-center gap-1.5 font-mono mr-1">
+                                        <span className="w-1.5 h-1.5 bg-cyan-400 inline-block animate-pulse"></span>
+                                        SQUAD
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowCreateCrewModal(true)}
+                                        className="h-7 px-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-750 hover:border-zinc-500 text-zinc-200 hover:text-white text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer"
+                                        title="Form a new Crew group"
+                                    >
+                                        <PlusIcon className="w-3 h-3 text-zinc-400" />
+                                        <span>NEW</span>
+                                    </button>
+                                </div>
+                            </div>
+
                             <SearchInput
                                 value={crewSearch}
                                 onChange={setCrewSearch}
-                                placeholder="Search crew groups..."
+                                placeholder="Search crew..."
                             />
 
                             <div className="flex-1 overflow-y-auto divide-y divide-zinc-850/60 no-scrollbar">
@@ -985,7 +1182,7 @@ export const HubConversationsView: React.FC = () => {
 
                         {/* RIGHT MAIN PANEL: Active Crew Chat Timeline */}
                         <main
-                            className={`flex-1 min-w-0 flex flex-col bg-[#08080a] overflow-hidden relative h-full ${
+                            className={`flex-1 min-w-0 flex flex-col bg-[#0c0c0e] h-full overflow-hidden relative ${
                                 !selectedCrewId ? 'hidden md:flex' : 'flex'
                             }`}
                         >
@@ -1042,6 +1239,72 @@ export const HubConversationsView: React.FC = () => {
                                                 ROSTER ({crewMembers.length || activeCrew.memberCount || 1})
                                             </span>
                                         </button>
+
+                                        {/* Contextual Menu */}
+                                        <div className="relative" ref={crewMenuRef}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsCrewMenuOpen((prev) => !prev)}
+                                                className="h-8 w-8 border border-zinc-800 bg-zinc-900 hover:border-zinc-700 hover:bg-zinc-850 text-zinc-400 hover:text-white transition-colors flex items-center justify-center cursor-pointer"
+                                                title="Crew actions"
+                                            >
+                                                <EllipsisVerticalIcon className="w-4 h-4" />
+                                            </button>
+
+                                            {isCrewMenuOpen && (
+                                                <div className="absolute right-0 mt-1 w-48 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono text-xs">
+                                                    <button
+                                                        onClick={() => {
+                                                            setIsCrewMenuOpen(false);
+                                                            setShowCrewMembersDrawer(true);
+                                                        }}
+                                                        className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-zinc-900 hover:text-white flex items-center gap-2"
+                                                    >
+                                                        <UsersIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                        <span>CREW ROSTER</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setIsCrewMenuOpen(false);
+                                                            setShowAddMemberModal(true);
+                                                        }}
+                                                        className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-zinc-900 hover:text-white flex items-center gap-2"
+                                                    >
+                                                        <PlusIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                        <span>ADD COMRADE</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setIsCrewMenuOpen(false);
+                                                            setShowCrewSummaryModal(true);
+                                                        }}
+                                                        className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-zinc-900 hover:text-white flex items-center gap-2"
+                                                    >
+                                                        <SparklesIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                        <span>GENERATE SUMMARY</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setIsCrewMenuOpen(false);
+                                                            handleLeaveOrDisbandCrew();
+                                                        }}
+                                                        className="w-full text-left px-3 py-2 text-red-400 hover:bg-red-950/30 hover:text-red-300 border-t border-zinc-850 flex items-center gap-2"
+                                                    >
+                                                        {activeCrew.ownerId === currentUser?.uid ? (
+                                                            <>
+                                                                <TrashIcon className="w-3.5 h-3.5 text-red-400" />
+                                                                <span>DISBAND CREW</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <LogoutIcon className="w-3.5 h-3.5 text-red-400" />
+                                                                <span>LEAVE SQUAD</span>
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
                                     </ChatHeader>
 
                                     {/* In-chat Search Bar */}
@@ -1072,7 +1335,7 @@ export const HubConversationsView: React.FC = () => {
                                     <div className="flex-1 flex min-h-0 overflow-hidden relative">
                                         <div
                                             ref={crewTimelineRef}
-                                            className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 min-h-0 relative no-scrollbar"
+                                            className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 min-h-0 relative no-scrollbar"
                                         >
                                             {loadingCrewMsgs ? (
                                                 <div className="py-12 text-center my-auto">
@@ -1098,8 +1361,8 @@ export const HubConversationsView: React.FC = () => {
                                                     return (
                                                         <React.Fragment key={msg.id}>
                                                             {showDateSeparator && (
-                                                                <div className="flex items-center justify-center my-4">
-                                                                    <span className="text-[9px] font-mono text-zinc-500 bg-zinc-900 border border-zinc-800 px-2 py-0.5 tracking-widest uppercase">
+                                                                <div className="flex items-center justify-center my-3 sm:my-4 font-mono select-none">
+                                                                    <span className="text-[9px] font-mono text-zinc-500 bg-zinc-900 border border-zinc-800 px-2.5 py-0.5 tracking-widest uppercase">
                                                                         {formatDaySeparator(msg.createdAt)}
                                                                     </span>
                                                                 </div>
@@ -1107,7 +1370,7 @@ export const HubConversationsView: React.FC = () => {
                                                             <div
                                                                 className={`flex flex-col ${
                                                                     isMe ? 'items-end' : 'items-start'
-                                                                }`}
+                                                                } max-w-full`}
                                                             >
                                                                 {!isMe && (
                                                                     <div className="flex items-center gap-1.5 mb-1 px-1">
@@ -1129,13 +1392,13 @@ export const HubConversationsView: React.FC = () => {
                                                                     </div>
                                                                 )}
                                                                 <div
-                                                                    className={`max-w-[85%] sm:max-w-[70%] px-3.5 py-2.5 text-xs border shadow-sm ${
+                                                                    className={`max-w-[85%] sm:max-w-[72%] min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs border shadow-sm ${
                                                                         isMe
                                                                             ? 'bg-zinc-850 border-zinc-750 text-zinc-100'
                                                                             : 'bg-[#131317] border-zinc-800 text-zinc-200'
                                                                     }`}
                                                                 >
-                                                                    <div className="whitespace-pre-wrap break-words leading-relaxed font-mono">
+                                                                    <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed font-mono min-w-0">
                                                                         <ClickableMessageText
                                                                             text={msg.text}
                                                                             isSender={isMe}
@@ -1274,33 +1537,64 @@ export const HubConversationsView: React.FC = () => {
                                     )}
                                 </div>
 
-                                {/* Bottom Message Composer */}
+                                 {/* Bottom Message Composer */}
                                 <MessageComposer
                                     value={crewInput}
                                     onChange={setCrewInput}
                                     onSend={handleSendCrewMessage}
+                                    onAttachFile={() => crewFileInputRef.current?.click()}
                                     placeholder="// BROADCAST TO CREW SQUAD..."
                                     disabled={loadingCrewMsgs}
                                     isSending={sendingCrew}
                                     textareaRef={crewComposerRef}
                                 />
+                                <input
+                                    type="file"
+                                    ref={crewFileInputRef}
+                                    onChange={handleCrewFileSelect}
+                                    className="hidden"
+                                />
                             </>
                         ) : (
-                            <div className="flex-1 flex items-center justify-center p-8 text-center">
-                                <EmptyMessagingState
-                                    title="// SELECT CREW"
-                                    description="Choose a crew group channel from the left sidebar or form a new squad."
-                                    actionLabel="+ Create Crew"
-                                    onAction={() => setShowCreateCrewModal(true)}
-                                />
+                            <div className="flex-1 flex flex-col bg-[#0c0c0e] h-full">
+                                {/* Aligned placeholder header row sharing the top edge */}
+                                <div className="h-14 px-4 sm:px-6 border-b border-zinc-800 bg-[#0c0c0e] flex items-center justify-between flex-shrink-0 font-mono">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
+                                            // SQUAD_WORKSPACE
+                                        </span>
+                                    </div>
+                                    <span className="text-[10px] text-zinc-600 font-mono">// IDLE</span>
+                                </div>
+                                <div className="flex-1 flex items-center justify-center p-6 sm:p-8 text-center bg-[#0c0c0e]">
+                                    <div className="max-w-md w-full border border-zinc-800 bg-[#0b0b0d] p-6 sm:p-8 space-y-4 font-mono shadow-xl">
+                                        <div className="w-12 h-12 bg-zinc-900 border border-zinc-700 flex items-center justify-center mx-auto text-zinc-400">
+                                            <UsersIcon className="w-6 h-6" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div className="text-[10px] text-zinc-500 uppercase tracking-widest">// SQUAD_TRANSMISSION</div>
+                                            <h3 className="text-sm font-bold uppercase tracking-wider text-white">No Crew Selected</h3>
+                                            <p className="text-xs text-zinc-400 leading-relaxed font-mono">
+                                                Select a crew squadron from the left inbox or initialize a new group collaboration.
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowCreateCrewModal(true)}
+                                            className="px-4 py-2 bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+                                        >
+                                            + Form Crew
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </main>
                 </>
             )}
-        </div>
+            </div>
 
-        {/* ---------------------------------------------------- */}
+            {/* ---------------------------------------------------- */}
         {/* MODAL 1: New Comrade Transmission Modal              */}
         {/* ---------------------------------------------------- */}
         {showNewComradeModal && (
@@ -1335,15 +1629,15 @@ export const HubConversationsView: React.FC = () => {
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-2 space-y-1 divide-y divide-zinc-900 no-scrollbar">
-                        {followedProfiles.length === 0 ? (
+                        {eligibleAcceptedComrades.length === 0 ? (
                             <div className="p-6 text-center text-zinc-500 text-xs">
-                                // NO CONNECTED COMRADES FOUND
-                                <p className="text-[11px] text-zinc-400 mt-1">
-                                    Follow other creator nodes across Invox to open direct communications.
+                                <div className="font-bold text-zinc-400 mb-1 tracking-wider uppercase">// NO ACCEPTED CONNECTIONS</div>
+                                <p className="text-[11px] text-zinc-400 leading-relaxed max-w-xs mx-auto">
+                                    Direct comrade messaging is strictly authorized for mutual accepted connections. Connect with creators via the Network to initiate direct transmissions.
                                 </p>
                             </div>
                         ) : (
-                            followedProfiles
+                            eligibleAcceptedComrades
                                 .filter((p) => {
                                     const q = newComradeFilter.toLowerCase();
                                     const name = (p.displayName || p.name || '').toLowerCase();

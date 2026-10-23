@@ -7,6 +7,7 @@ import LoopCard from '../components/stream/LoopCard';
 import LoopCardSkeleton from '../components/stream/LoopCardSkeleton';
 import CreateLoopModal from '../components/loops/CreateLoopModal';
 import ChatInterface from '../components/hub/ChatInterface';
+import HubConversationsView from '../components/hub/HubConversationsView';
 import InteractiveGlobe from '../components/hub/InteractiveGlobe';
 import { CubeIcon, ChatBubbleBottomCenterTextIcon, SparklesIcon, RadioIcon, PlusIcon, ShieldCheckIcon } from '../components/ui/Icons';
 import { 
@@ -29,20 +30,30 @@ const HubPage = () => {
     const { 
         setRightSidebarVariant, 
         hubView,
+        setHubView,
+        hubRightSidebarView,
+        setHubRightSidebarView,
         selectedHubConversation,
         setSelectedHubConversation,
         updateHubConversation,
     } = ReactRouterDOM.useOutletContext<{
         setRightSidebarVariant: (variant: string) => void;
         hubView: string;
+        setHubView?: (view: string) => void;
+        hubRightSidebarView?: string;
+        setHubRightSidebarView?: (view: string) => void;
         selectedHubConversation: HubConversation | null;
         setSelectedHubConversation: (conversation: HubConversation | null) => void;
         updateHubConversation: (conversation: HubConversation) => void;
     }>();
 
-    // Check query params to keep stream view on refresh or direct links
+    // Check query params to keep stream or conversations view on refresh or direct links
     const queryView = searchParams.get('view') || searchParams.get('tab');
-    const effectiveHubView = queryView === 'stream' ? 'stream' : hubView;
+    const effectiveHubView = queryView === 'stream' 
+        ? 'stream' 
+        : (queryView === 'conversations' || queryView === 'comrades' || queryView === 'crew' || hubRightSidebarView === 'comrades' || hubRightSidebarView === 'crew') 
+            ? 'conversations' 
+            : hubView;
 
     const [activeStreamTab, setActiveStreamTab] = useState<'Moments' | 'Loops'>('Moments');
     const [activeMomentsFilter, setActiveMomentsFilter] = useState('All');
@@ -262,6 +273,25 @@ const HubPage = () => {
         return renderRestrictedModal();
     }
 
+    if (effectiveHubView === 'conversations') {
+        const activeSection = (hubRightSidebarView === 'crew' || queryView === 'crew') ? 'crew' : 'comrades';
+        return (
+            <HubConversationsView 
+                initialSection={activeSection}
+                activeSection={activeSection}
+                onSectionChange={(section) => {
+                    if (setHubRightSidebarView) {
+                        setHubRightSidebarView(section);
+                    }
+                }}
+                onBack={() => {
+                    if (setHubView) setHubView('welcome');
+                    if (setHubRightSidebarView) setHubRightSidebarView('main');
+                }}
+            />
+        );
+    }
+
     if (selectedHubConversation && setSelectedHubConversation) {
         return (
             <div className="-mx-4 sm:-mx-6 lg:-mx-8 -mt-4 md:-mt-6 -mb-4 md:-mb-10 h-[calc(100vh-4rem)] md:h-screen transition-all duration-300 overflow-hidden">
@@ -312,26 +342,6 @@ const HubPage = () => {
                                 <span>Broadcast Signal</span>
                             </button>
                         </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    if (effectiveHubView === 'conversations') {
-        return (
-            <div className="flex items-center justify-center h-[calc(100vh-8rem)] p-6 text-center">
-                <div className="bg-[#0c0c0e] border border-zinc-800 p-8 max-w-md w-full">
-                    <div className="w-12 h-12 bg-zinc-900 border border-zinc-700 flex items-center justify-center mx-auto mb-4 text-zinc-400">
-                        <ChatBubbleBottomCenterTextIcon className="w-6 h-6" />
-                    </div>
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block mb-1">// TRANSMISSION_CHANNELS</span>
-                    <h2 className="text-base font-bold font-mono uppercase tracking-wider text-white mb-2">Conversations Terminal</h2>
-                    <p className="text-xs font-mono text-zinc-400 leading-relaxed mb-6">
-                        Select a communication stream from the right sidebar to initiate real-time dialogue with nodes in your network.
-                    </p>
-                    <div className="text-[10px] font-mono text-zinc-600 uppercase border-t border-zinc-800/80 pt-4">
-                        &gt; WAITING_FOR_OPERATOR_INPUT
                     </div>
                 </div>
             </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { handleImageError } from '../utils/imageUtils';
-import { MagnifyingGlassIcon, SendIcon } from '../ui/Icons';
+import { MagnifyingGlassIcon, SendIcon, PaperClipIcon } from '../ui/Icons';
 
 export interface ConversationItemData {
     id: string;
@@ -13,6 +13,7 @@ export interface ConversationItemData {
     unreadCount?: number;
     isSelected: boolean;
     subtitle?: string;
+    isOnline?: boolean;
 }
 
 interface ConversationCardProps {
@@ -40,6 +41,7 @@ export const ConversationCard: React.FC<ConversationCardProps> = ({ data, onClic
         unreadCount = 0,
         isSelected,
         subtitle,
+        isOnline,
     } = data;
 
     const hasUnread = unreadCount > 0 && !isSelected;
@@ -57,22 +59,30 @@ export const ConversationCard: React.FC<ConversationCardProps> = ({ data, onClic
             }`}
         >
             {/* Conversation Avatar (Sharp, compact rectangular box) */}
-            <div
-                className={`w-9 h-9 sm:w-10 sm:h-10 bg-zinc-900 border flex items-center justify-center flex-shrink-0 text-xs font-bold text-white overflow-hidden transition-colors ${
-                    hasUnread ? 'border-emerald-700/80 ring-1 ring-emerald-500/30' : isSelected ? 'border-zinc-600' : 'border-zinc-800'
-                }`}
-            >
-                {avatarUrl ? (
-                    <img
-                        src={avatarUrl}
-                        alt={name}
-                        className="w-full h-full object-cover"
-                        onError={handleImageError}
+            <div className="relative flex-shrink-0">
+                <div
+                    className={`w-9 h-9 sm:w-10 sm:h-10 bg-zinc-900 border flex items-center justify-center text-xs font-bold text-white overflow-hidden transition-colors ${
+                        hasUnread ? 'border-emerald-700/80 ring-1 ring-emerald-500/30' : isSelected ? 'border-zinc-600' : 'border-zinc-800'
+                    }`}
+                >
+                    {avatarUrl ? (
+                        <img
+                            src={avatarUrl}
+                            alt={name}
+                            className="w-full h-full object-cover"
+                            onError={handleImageError}
+                        />
+                    ) : isTeam ? (
+                        <span className="text-emerald-400 font-bold text-sm tracking-tighter">//</span>
+                    ) : (
+                        <span className="text-zinc-300">{name ? name.charAt(0).toUpperCase() : '?'}</span>
+                    )}
+                </div>
+                {isOnline && (
+                    <span
+                        className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border border-black z-10"
+                        title="Online"
                     />
-                ) : isTeam ? (
-                    <span className="text-emerald-400 font-bold text-sm tracking-tighter">//</span>
-                ) : (
-                    <span className="text-zinc-300">{name ? name.charAt(0).toUpperCase() : '?'}</span>
                 )}
             </div>
 
@@ -186,6 +196,7 @@ interface ChatHeaderProps {
     isTeam?: boolean;
     onBackMobile?: () => void;
     children?: React.ReactNode;
+    maxWidth?: string;
 }
 
 /**
@@ -198,63 +209,70 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     isTeam,
     onBackMobile,
     children,
+    maxWidth,
 }) => {
     return (
-        <div className="h-14 px-4 border-b border-zinc-800 bg-[#0c0c0e] flex items-center justify-between gap-3 flex-shrink-0 relative z-20 font-mono">
-            <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
-                {onBackMobile && (
-                    <button
-                        type="button"
-                        onClick={onBackMobile}
-                        className="md:hidden text-xs text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer pr-1 flex-shrink-0 font-mono"
-                        title="Back to conversation list"
-                    >
-                        <span>←</span>
-                    </button>
-                )}
-
-                {/* Avatar */}
-                <div className="w-8 h-8 sm:w-9 sm:h-9 bg-zinc-900 border border-zinc-750 flex items-center justify-center flex-shrink-0 text-xs font-bold text-white overflow-hidden">
-                    {avatarUrl ? (
-                        <img
-                            src={avatarUrl}
-                            alt={title}
-                            className="w-full h-full object-cover"
-                            onError={handleImageError}
-                        />
-                    ) : isTeam ? (
-                        <span className="text-emerald-400 font-bold">//</span>
-                    ) : (
-                        <span>{title ? title.charAt(0).toUpperCase() : '?'}</span>
+        <div className="h-14 border-b border-zinc-800 bg-[#0c0c0e] flex-shrink-0 relative z-20 font-mono">
+            <div
+                className={`w-full h-full flex items-center justify-between gap-3 ${
+                    maxWidth ? `${maxWidth} mx-auto px-4 sm:px-6 lg:px-8` : 'px-4'
+                }`}
+            >
+                <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
+                    {onBackMobile && (
+                        <button
+                            type="button"
+                            onClick={onBackMobile}
+                            className="md:hidden text-xs text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer pr-1 flex-shrink-0 font-mono"
+                            title="Back to conversation list"
+                        >
+                            <span>←</span>
+                        </button>
                     )}
-                </div>
 
-                {/* Title and Subtitle */}
-                <div className="min-w-0 flex flex-col justify-center">
-                    <div className="flex items-center gap-2">
-                        <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider truncate">
-                            {title}
-                        </h3>
-                        {isTeam && (
-                            <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-1 py-0.2 flex-shrink-0">
-                                TEAM
+                    {/* Avatar */}
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 bg-zinc-900 border border-zinc-750 flex items-center justify-center flex-shrink-0 text-xs font-bold text-white overflow-hidden">
+                        {avatarUrl ? (
+                            <img
+                                src={avatarUrl}
+                                alt={title}
+                                className="w-full h-full object-cover"
+                                onError={handleImageError}
+                            />
+                        ) : isTeam ? (
+                            <span className="text-emerald-400 font-bold">//</span>
+                        ) : (
+                            <span>{title ? title.charAt(0).toUpperCase() : '?'}</span>
+                        )}
+                    </div>
+
+                    {/* Title and Subtitle */}
+                    <div className="min-w-0 flex flex-col justify-center">
+                        <div className="flex items-center gap-2">
+                            <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider truncate">
+                                {title}
+                            </h3>
+                            {isTeam && (
+                                <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-1 py-0.2 flex-shrink-0">
+                                    TEAM
+                                </span>
+                            )}
+                        </div>
+                        {subtitle && (
+                            <span className="text-[10px] text-zinc-400 font-mono truncate mt-0.5">
+                                {subtitle}
                             </span>
                         )}
                     </div>
-                    {subtitle && (
-                        <span className="text-[10px] text-zinc-400 font-mono truncate mt-0.5">
-                            {subtitle}
-                        </span>
-                    )}
                 </div>
-            </div>
 
-            {/* Right-side Action slot */}
-            {children && (
-                <div className="flex items-center gap-2 flex-shrink-0">
-                    {children}
-                </div>
-            )}
+                {/* Right-side Action slot */}
+                {children && (
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        {children}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };
@@ -267,6 +285,8 @@ interface MessageComposerProps {
     disabled?: boolean;
     isSending?: boolean;
     textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
+    onAttachFile?: () => void;
+    maxWidth?: string;
 }
 
 /**
@@ -280,6 +300,8 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
     disabled = false,
     isSending = false,
     textareaRef,
+    onAttachFile,
+    maxWidth,
 }) => {
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -291,46 +313,64 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
     };
 
     return (
-        <div className="p-3 sm:p-3.5 border-t border-zinc-800 bg-[#0c0c0e] flex-shrink-0 z-10 font-mono">
-            <form
-                onSubmit={(e) => {
-                    e.preventDefault();
-                    if (value.trim() && !disabled && !isSending) {
-                        onSend();
-                    }
-                }}
-                className="flex items-end gap-2"
+        <div className="border-t border-zinc-800 bg-[#0c0c0e] flex-shrink-0 z-10 font-mono">
+            <div
+                className={`w-full ${
+                    maxWidth ? `${maxWidth} mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-3.5` : 'p-3 sm:p-3.5'
+                }`}
             >
-                <textarea
-                    ref={textareaRef}
-                    rows={1}
-                    value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={placeholder}
-                    disabled={disabled || isSending}
-                    className="flex-1 bg-black/60 border border-zinc-800 focus:border-zinc-600 text-xs text-white px-3.5 py-2.5 resize-none focus:outline-none placeholder:text-zinc-600 leading-relaxed font-mono disabled:opacity-50 min-h-[40px] max-h-[120px] transition-colors"
-                />
-
-                <button
-                    type="submit"
-                    disabled={!value.trim() || disabled || isSending}
-                    className="h-10 px-4 bg-white text-black hover:bg-zinc-200 border border-white text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex-shrink-0 flex items-center justify-center gap-1.5 font-mono"
-                    title="Send message (Enter)"
+                <form
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        if (value.trim() && !disabled && !isSending) {
+                            onSend();
+                        }
+                    }}
+                    className="flex items-end gap-2"
                 >
-                    {isSending ? (
-                        <>
-                            <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                            <span className="hidden sm:inline">SENDING...</span>
-                        </>
-                    ) : (
-                        <>
-                            <span>SEND</span>
-                            <SendIcon className="w-3 h-3 text-black" />
-                        </>
+                    {onAttachFile && (
+                        <button
+                            type="button"
+                            onClick={onAttachFile}
+                            disabled={disabled || isSending}
+                            className="h-10 w-10 flex items-center justify-center border border-zinc-800 bg-black/60 hover:bg-zinc-900 text-zinc-400 hover:text-white transition-colors cursor-pointer disabled:opacity-40 flex-shrink-0"
+                            title="Attach file or image"
+                        >
+                            <PaperClipIcon className="w-4 h-4" />
+                        </button>
                     )}
-                </button>
-            </form>
+
+                    <textarea
+                        ref={textareaRef}
+                        rows={1}
+                        value={value}
+                        onChange={(e) => onChange(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder={placeholder}
+                        disabled={disabled || isSending}
+                        className="flex-1 bg-black/60 border border-zinc-800 focus:border-zinc-600 text-xs text-white px-3.5 py-2.5 resize-none focus:outline-none placeholder:text-zinc-600 leading-relaxed font-mono disabled:opacity-50 min-h-[40px] max-h-[120px] transition-colors"
+                    />
+
+                    <button
+                        type="submit"
+                        disabled={!value.trim() || disabled || isSending}
+                        className="h-10 px-4 bg-white text-black hover:bg-zinc-200 border border-white text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex-shrink-0 flex items-center justify-center gap-1.5 font-mono"
+                        title="Send message (Enter)"
+                    >
+                        {isSending ? (
+                            <>
+                                <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                                <span className="hidden sm:inline">SENDING...</span>
+                            </>
+                        ) : (
+                            <>
+                                <span>SEND</span>
+                                <SendIcon className="w-3 h-3 text-black" />
+                            </>
+                        )}
+                    </button>
+                </form>
+            </div>
         </div>
     );
 };
