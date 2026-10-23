@@ -1713,19 +1713,16 @@ const HubSidebar: React.FC<Pick<RightSidebarProps, 'hubView' | 'setHubView' | 'h
                                     : 'bg-black/60 border-zinc-800/90 hover:border-zinc-600 hover:bg-zinc-900/50'
                             }`}
                         >
-                            <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <UsersIcon className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
                                     <span className="text-xs font-bold uppercase tracking-wider text-white">COMRADES</span>
                                 </div>
                                 <span className="text-[10px] font-mono text-zinc-600">1:1</span>
                             </div>
-                            <p className="text-[11px] text-zinc-400 leading-snug pl-6">
-                                One-to-one conversations with your connections.
-                            </p>
                         </button>
 
-                        {/* CREW navigation row */}
+                        {/* CREWS navigation row */}
                         <button
                             onClick={() => {
                                 if (setHubView) setHubView('conversations');
@@ -1737,16 +1734,13 @@ const HubSidebar: React.FC<Pick<RightSidebarProps, 'hubView' | 'setHubView' | 'h
                                     : 'bg-black/60 border-zinc-800/90 hover:border-zinc-600 hover:bg-zinc-900/50'
                             }`}
                         >
-                            <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <ShieldCheckIcon className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
-                                    <span className="text-xs font-bold uppercase tracking-wider text-white">CREW</span>
+                                    <span className="text-xs font-bold uppercase tracking-wider text-white">CREWS</span>
                                 </div>
                                 <span className="text-[10px] font-mono text-zinc-600">GROUP</span>
                             </div>
-                            <p className="text-[11px] text-zinc-400 leading-snug pl-6">
-                                Group conversations with your teams.
-                            </p>
                         </button>
                     </div>
                 </div>
