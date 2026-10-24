@@ -740,19 +740,19 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
                                 ) : filteredComrades.length === 0 ? (
                                     <div className="p-8 text-center space-y-3 font-mono">
                                         <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-                                            // NO TRANSMISSIONS
+                                            // NO CONVERSATIONS YET
                                         </span>
                                         <p className="text-xs text-zinc-400 max-w-xs mx-auto leading-relaxed">
                                             {comradeSearch
                                                 ? 'No conversations match your search filter.'
-                                                : 'Connect and exchange transmissions with individual comrades.'}
+                                                : 'Start a private conversation with your connections.'}
                                         </p>
                                         <button
                                             type="button"
                                             onClick={() => setShowNewComradeModal(true)}
                                             className="px-3.5 py-1.5 bg-white text-black text-xs font-bold uppercase tracking-wider hover:bg-zinc-200 transition-colors cursor-pointer"
                                         >
-                                            + Transmit Signal
+                                            + New Conversation
                                         </button>
                                     </div>
                                 ) : (
@@ -1030,7 +1030,7 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
                                     <div className="h-14 px-4 sm:px-6 border-b border-zinc-800 bg-[#0c0c0e] flex items-center justify-between flex-shrink-0 font-mono">
                                         <div className="flex items-center gap-2">
                                             <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
-                                                // TRANSMISSION_WORKSPACE
+                                                // CONVERSATION_WORKSPACE
                                             </span>
                                         </div>
                                         <span className="text-[10px] text-zinc-600 font-mono">// IDLE</span>
@@ -1041,20 +1041,20 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
                                                 <ChatBubbleBottomCenterTextIcon className="w-6 h-6" />
                                             </div>
                                             <span className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1">
-                                                // TRANSMISSION_TERMINAL
+                                                // CONVERSATION
                                             </span>
                                             <h2 className="text-base font-bold uppercase tracking-wider text-white mb-2">
                                                 No Comrade Selected
                                             </h2>
                                             <p className="text-xs text-zinc-400 leading-relaxed mb-6 font-mono">
-                                                Choose an active direct transmission from the left inbox or transmit a new signal to an accepted connection.
+                                                Select a conversation from your inbox or start a new conversation with one of your connections.
                                             </p>
                                             <button
                                                 type="button"
                                                 onClick={() => setShowNewComradeModal(true)}
                                                 className="px-4 py-2 bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
                                             >
-                                                + Transmit Signal
+                                                + New Conversation
                                             </button>
                                         </div>
                                     </div>
