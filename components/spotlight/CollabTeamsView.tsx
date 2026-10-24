@@ -4,6 +4,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
     createTeam,
+    subscribeToSpotlightTeams,
     subscribeToUserTeams,
     subscribeToTeam,
     subscribeToTeamMembers,
@@ -451,7 +452,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         }
 
         setLoadingTeams(true);
-        const unsub = subscribeToUserTeams(
+        const unsub = subscribeToSpotlightTeams(
             currentUser.uid,
             (userTeams) => {
                 setTeams(userTeams);
@@ -469,7 +470,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         };
     }, [currentUser?.uid]);
 
-    // 3. Track real-time unread counts
+    // 3. Track real-time unread counts (Spotlight teams only)
     useEffect(() => {
         if (!currentUser?.uid) {
             setTeamUnreadMap({});
@@ -481,7 +482,8 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
             (res) => {
                 setTeamUnreadMap(res.teamUnreadMap);
             },
-            selectedTeamId
+            selectedTeamId,
+            'spotlight'
         );
 
         return () => {

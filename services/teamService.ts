@@ -44,6 +44,9 @@ export interface Team {
     lastMessageTimestamp?: any;
     createdAt?: any;
     updatedAt?: any;
+    isCrew?: boolean;
+    environment?: 'spotlight' | 'hub';
+    scope?: 'spotlight_teams' | 'hub_crews';
 }
 
 export interface TeamMember {
@@ -68,7 +71,33 @@ export interface TeamMessage {
     text: string;
     createdAt: any;
     readBy?: string[];
+    environment?: 'spotlight' | 'hub';
+    scope?: 'spotlight_teams' | 'hub_crews';
 }
+
+/**
+ * Discriminator to check whether a team belongs to Spotlight Teams (project collaboration).
+ */
+export const isSpotlightTeam = (t: Team | any): boolean => {
+    if (!t) return false;
+    if (t.environment === 'spotlight' || t.scope === 'spotlight_teams') return true;
+    if (t.environment === 'hub' || t.scope === 'hub_crews' || t.isCrew === true) return false;
+    if (typeof t.id === 'string' && t.id.startsWith('crew_')) return false;
+    if (t.projectId === 'hub_crew') return false;
+    return true;
+};
+
+/**
+ * Discriminator to check whether a team belongs to Hub Crews (group collective chats).
+ */
+export const isHubCrew = (t: Team | any): boolean => {
+    if (!t) return false;
+    if (t.environment === 'hub' || t.scope === 'hub_crews' || t.isCrew === true) return true;
+    if (t.environment === 'spotlight' || t.scope === 'spotlight_teams') return false;
+    if (typeof t.id === 'string' && t.id.startsWith('crew_')) return true;
+    if (t.projectId === 'hub_crew') return true;
+    return false;
+};
 
 export interface TeamInvitation {
     id: string; // token
@@ -166,6 +195,9 @@ export const createTeam = async ({
         lastMessageTimestamp: serverTimestamp(),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        isCrew: false,
+        environment: 'spotlight',
+        scope: 'spotlight_teams',
     };
 
     await setDoc(teamRef, sanitizeForFirestore(teamData));
@@ -216,9 +248,10 @@ export const createTeam = async ({
 };
 
 /**
- * Subscribes to all Teams where the current user is a member.
+ * Subscribes strictly to Spotlight project collaboration teams.
+ * Guarantees that Hub Crews are completely excluded.
  */
-export const subscribeToUserTeams = (
+export const subscribeToSpotlightTeams = (
     userId: string,
     onUpdate: (teams: Team[]) => void,
     onError?: (error: any) => void
@@ -228,6 +261,113 @@ export const subscribeToUserTeams = (
         return () => {};
     }
 
+    const q = query(
+        collection(db, COLLECTIONS.teams),
+        where('memberIds', 'array-contains', userId)
+    );
+
+    return onSnapshot(
+        q,
+        (snapshot) => {
+            const list: Team[] = [];
+            snapshot.docs.forEach((docSnap) => {
+                const team = {
+                    id: docSnap.id,
+                    ...(docSnap.data() as any),
+                } as Team;
+
+                if (isSpotlightTeam(team)) {
+                    list.push(team);
+                }
+            });
+
+            // Sort by latest message or update timestamp
+            list.sort((a, b) => {
+                const getTime = (val: any) => {
+                    if (!val) return 0;
+                    if (typeof val.toDate === 'function') return val.toDate().getTime();
+                    if (val instanceof Date) return val.getTime();
+                    return new Date(val).getTime() || 0;
+                };
+                const timeA = getTime(a.lastMessageTimestamp || a.updatedAt || a.createdAt);
+                const timeB = getTime(b.lastMessageTimestamp || b.updatedAt || b.createdAt);
+                return timeB - timeA;
+            });
+
+            onUpdate(list);
+        },
+        (err) => {
+            console.error('[SUBSCRIBE_SPOTLIGHT_TEAMS_ERROR]', err);
+            if (onError) onError(err);
+        }
+    );
+};
+
+/**
+ * Subscribes strictly to Hub Crews (group collective chats).
+ * Guarantees that Spotlight project collaboration teams are completely excluded.
+ */
+export const subscribeToHubCrews = (
+    userId: string,
+    onUpdate: (teams: Team[]) => void,
+    onError?: (error: any) => void
+): (() => void) => {
+    if (!userId) {
+        onUpdate([]);
+        return () => {};
+    }
+
+    const q = query(
+        collection(db, COLLECTIONS.teams),
+        where('memberIds', 'array-contains', userId)
+    );
+
+    return onSnapshot(
+        q,
+        (snapshot) => {
+            const list: Team[] = [];
+            snapshot.docs.forEach((docSnap) => {
+                const team = {
+                    id: docSnap.id,
+                    ...(docSnap.data() as any),
+                } as Team;
+
+                if (isHubCrew(team)) {
+                    list.push(team);
+                }
+            });
+
+            // Sort by latest message or update timestamp
+            list.sort((a, b) => {
+                const getTime = (val: any) => {
+                    if (!val) return 0;
+                    if (typeof val.toDate === 'function') return val.toDate().getTime();
+                    if (val instanceof Date) return val.getTime();
+                    return new Date(val).getTime() || 0;
+                };
+                const timeA = getTime(a.lastMessageTimestamp || a.updatedAt || a.createdAt);
+                const timeB = getTime(b.lastMessageTimestamp || b.updatedAt || b.createdAt);
+                return timeB - timeA;
+            });
+
+            onUpdate(list);
+        },
+        (err) => {
+            console.error('[SUBSCRIBE_HUB_CREWS_ERROR]', err);
+            if (onError) onError(err);
+        }
+    );
+};
+
+/**
+ * Subscribes to all Teams where the current user is a member.
+ * Maintained for backward compatibility.
+ */
+export const subscribeToUserTeams = (
+    userId: string,
+    onUpdate: (teams: Team[]) => void,
+    onError?: (error: any) => void
+): (() => void) => {
     const q = query(
         collection(db, COLLECTIONS.teams),
         where('memberIds', 'array-contains', userId)
@@ -484,7 +624,26 @@ export const sendTeamMessage = async ({
     const cleanText = text.trim();
     if (!cleanText) return;
 
-    // 1. Add message doc
+    const teamRef = doc(db, COLLECTIONS.teams, teamId);
+    let teamData: Team | null = null;
+    try {
+        const tSnap = await getDoc(teamRef);
+        if (tSnap.exists()) {
+            teamData = { id: tSnap.id, ...(tSnap.data() as any) } as Team;
+        }
+    } catch (e) {
+        console.warn('[GET_TEAM_DOC_FOR_MESSAGE_WARN]', e);
+    }
+
+    const isHub = teamData?.environment === 'hub'
+        || teamData?.scope === 'hub_crews'
+        || teamData?.projectId === 'hub_crew'
+        || teamData?.isCrew === true
+        || teamId.startsWith('crew_');
+    const environment: 'hub' | 'spotlight' = isHub ? 'hub' : 'spotlight';
+    const scope: 'hub_crews' | 'spotlight_teams' = isHub ? 'hub_crews' : 'spotlight_teams';
+
+    // 1. Add message doc with environment and scope
     const msgsRef = collection(db, COLLECTIONS.teams, teamId, 'messages');
     await addDoc(msgsRef, sanitizeForFirestore({
         teamId,
@@ -493,17 +652,20 @@ export const sendTeamMessage = async ({
         senderAvatar: senderAvatar || null,
         text: cleanText,
         readBy: [senderId],
+        environment,
+        scope,
         createdAt: serverTimestamp(),
     }));
 
-    // 2. Update parent team document with latest message info
-    const teamRef = doc(db, COLLECTIONS.teams, teamId);
+    // 2. Update parent team document with latest message info and environment/scope
     await updateDoc(teamRef, sanitizeForFirestore({
         lastMessage: cleanText,
         lastMessageSenderId: senderId,
         lastMessageSenderName: senderName,
         lastMessageTimestamp: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        environment,
+        scope,
     })).catch((e) => console.warn('[UPDATE_TEAM_LAST_MESSAGE_WARN]', e));
 
     // 3. Update sender's lastReadAt
@@ -514,9 +676,7 @@ export const sendTeamMessage = async ({
 
     // 4. Notify all other team members in real-time
     try {
-        const teamSnap = await getDoc(teamRef);
-        if (teamSnap.exists()) {
-            const teamData = teamSnap.data() as Team;
+        if (teamData) {
             const memberIds = Array.isArray(teamData.memberIds) ? teamData.memberIds : [];
             const otherMembers = memberIds.filter((mId) => mId && mId !== senderId);
 
@@ -526,14 +686,15 @@ export const sendTeamMessage = async ({
                     actorId: senderId,
                     actorName: senderName,
                     actorAvatar: senderAvatar || null,
-                    type: 'message_team',
-                    title: `Team Message • ${teamData.name || 'Team Workspace'}`,
+                    type: isHub ? 'message_direct' : 'message_team',
+                    title: isHub ? `Crew Message • ${teamData.name || 'Crew Group'}` : `Team Message • ${teamData.name || 'Team Workspace'}`,
                     body: `${senderName}: ${cleanText.slice(0, 100)}`,
                     targetType: 'team',
                     targetId: teamId,
                     metadata: {
                         teamId,
                         projectId: teamData.projectId,
+                        environment,
                     },
                 }).catch(() => {});
             }
@@ -1358,7 +1519,8 @@ export const joinTeamViaInvitation = async ({
 export const subscribeToUserTeamUnreadCounts = (
     userId: string,
     onUpdate: (result: { totalTeamsUnread: number; teamUnreadMap: Record<string, number> }) => void,
-    activeTeamId?: string | null
+    activeTeamId?: string | null,
+    environment?: 'spotlight' | 'hub'
 ): (() => void) => {
     if (!userId) {
         onUpdate({ totalTeamsUnread: 0, teamUnreadMap: {} });
@@ -1395,6 +1557,16 @@ export const subscribeToUserTeamUnreadCounts = (
 
             teamsSnap.docs.forEach((docSnap) => {
                 const teamId = docSnap.id;
+                const teamData = { id: teamId, ...(docSnap.data() as any) } as Team;
+
+                // Environment filtering:
+                if (environment === 'spotlight' && !isSpotlightTeam(teamData)) {
+                    return;
+                }
+                if (environment === 'hub' && !isHubCrew(teamData)) {
+                    return;
+                }
+
                 currentTeamIds.add(teamId);
 
                 if (!messageListeners.has(teamId)) {
@@ -2153,8 +2325,8 @@ export const createCrewGroup = async ({
     }
 
     const uniqueMemberIds = Array.from(new Set([user.uid, ...(initialMemberIds || [])]));
-    const teamRef = doc(collection(db, COLLECTIONS.teams));
-    const teamId = teamRef.id;
+    const teamId = `crew_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const teamRef = doc(db, COLLECTIONS.teams, teamId);
 
     const creatorName = userProfile?.displayName || user.displayName || 'Crew Lead';
     const creatorAvatar = userProfile?.photoURL || user.photoURL || null;
@@ -2177,6 +2349,9 @@ export const createCrewGroup = async ({
         lastMessageTimestamp: serverTimestamp(),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        isCrew: true,
+        environment: 'hub',
+        scope: 'hub_crews',
     };
 
     await setDoc(teamRef, sanitizeForFirestore(teamData));

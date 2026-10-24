@@ -570,3 +570,217 @@ export const subscribeAcceptedConnectionUserIds = (
         unsubFollowers();
     };
 };
+
+export interface UserRelationshipCounts {
+    followingCount: number;
+    followerCount: number;
+    connectionCount: number;
+    followingIds: Set<string>;
+    followerIds: Set<string>;
+    connectionIds: Set<string>;
+}
+
+/**
+ * Subscribes in real-time to a user's relationships (Following, Followers, Connections).
+ * Connections are strictly derived from reciprocal follow relationships:
+ * User A follows User B AND User B follows User A.
+ */
+export const subscribeUserRelationships = (
+    userId: string,
+    onUpdate: (rel: UserRelationshipCounts) => void,
+    onError?: (err: Error) => void
+): (() => void) => {
+    if (!userId) {
+        onUpdate({
+            followingCount: 0,
+            followerCount: 0,
+            connectionCount: 0,
+            followingIds: new Set<string>(),
+            followerIds: new Set<string>(),
+            connectionIds: new Set<string>(),
+        });
+        return () => {};
+    }
+
+    let followingIds = new Set<string>();
+    let followerIds = new Set<string>();
+
+    const recompute = () => {
+        const connectionIds = new Set<string>();
+        followingIds.forEach((id) => {
+            if (followerIds.has(id)) {
+                connectionIds.add(id);
+            }
+        });
+        onUpdate({
+            followingCount: followingIds.size,
+            followerCount: followerIds.size,
+            connectionCount: connectionIds.size,
+            followingIds,
+            followerIds,
+            connectionIds,
+        });
+    };
+
+    const qFollowing = query(collection(db, COLLECTIONS.follows), where('followerId', '==', userId));
+    const qFollowers = query(collection(db, COLLECTIONS.follows), where('followingId', '==', userId));
+
+    const unsubFollowing = onSnapshot(
+        qFollowing,
+        (snap) => {
+            const ids = new Set<string>();
+            snap.forEach((d) => {
+                const data = d.data();
+                const id = data.followingId || data.followingUid || data.toUserId;
+                if (id && id !== userId) ids.add(id);
+            });
+            followingIds = ids;
+            recompute();
+        },
+        (err) => {
+            console.error('[SUBSCRIBE_USER_RELATIONSHIPS_FOLLOWING_ERROR]', err);
+            onError?.(err);
+        }
+    );
+
+    const unsubFollowers = onSnapshot(
+        qFollowers,
+        (snap) => {
+            const ids = new Set<string>();
+            snap.forEach((d) => {
+                const data = d.data();
+                const id = data.followerId || data.followerUid || data.fromUserId;
+                if (id && id !== userId) ids.add(id);
+            });
+            followerIds = ids;
+            recompute();
+        },
+        (err) => {
+            console.error('[SUBSCRIBE_USER_RELATIONSHIPS_FOLLOWERS_ERROR]', err);
+            onError?.(err);
+        }
+    );
+
+    return () => {
+        unsubFollowing();
+        unsubFollowers();
+    };
+};
+
+/**
+ * Real-time subscription to the full InvoxUser profiles of a user's mutual Connections.
+ */
+export const subscribeUserConnections = (
+    userId: string,
+    onProfiles: (profiles: InvoxUser[]) => void,
+    onError?: (err: Error) => void
+): (() => void) => {
+    if (!userId) {
+        onProfiles([]);
+        return () => {};
+    }
+
+    let active = true;
+    const unsub = subscribeUserRelationships(
+        userId,
+        async (rel) => {
+            if (!active) return;
+            if (rel.connectionIds.size === 0) {
+                onProfiles([]);
+                return;
+            }
+            try {
+                const profiles = await getProfilesByIds(Array.from(rel.connectionIds));
+                if (active) onProfiles(profiles);
+            } catch (err: any) {
+                console.error('[SUBSCRIBE_USER_CONNECTIONS_PROFILES_ERROR]', err);
+                if (active) onError?.(err);
+            }
+        },
+        onError
+    );
+
+    return () => {
+        active = false;
+        unsub();
+    };
+};
+
+/**
+ * Real-time subscription to the full InvoxUser profiles of a user's Followers.
+ */
+export const subscribeUserFollowers = (
+    userId: string,
+    onProfiles: (profiles: InvoxUser[]) => void,
+    onError?: (err: Error) => void
+): (() => void) => {
+    if (!userId) {
+        onProfiles([]);
+        return () => {};
+    }
+
+    let active = true;
+    const unsub = subscribeUserRelationships(
+        userId,
+        async (rel) => {
+            if (!active) return;
+            if (rel.followerIds.size === 0) {
+                onProfiles([]);
+                return;
+            }
+            try {
+                const profiles = await getProfilesByIds(Array.from(rel.followerIds));
+                if (active) onProfiles(profiles);
+            } catch (err: any) {
+                console.error('[SUBSCRIBE_USER_FOLLOWERS_PROFILES_ERROR]', err);
+                if (active) onError?.(err);
+            }
+        },
+        onError
+    );
+
+    return () => {
+        active = false;
+        unsub();
+    };
+};
+
+/**
+ * Real-time subscription to the full InvoxUser profiles of a user's Following list.
+ */
+export const subscribeUserFollowing = (
+    userId: string,
+    onProfiles: (profiles: InvoxUser[]) => void,
+    onError?: (err: Error) => void
+): (() => void) => {
+    if (!userId) {
+        onProfiles([]);
+        return () => {};
+    }
+
+    let active = true;
+    const unsub = subscribeUserRelationships(
+        userId,
+        async (rel) => {
+            if (!active) return;
+            if (rel.followingIds.size === 0) {
+                onProfiles([]);
+                return;
+            }
+            try {
+                const profiles = await getProfilesByIds(Array.from(rel.followingIds));
+                if (active) onProfiles(profiles);
+            } catch (err: any) {
+                console.error('[SUBSCRIBE_USER_FOLLOWING_PROFILES_ERROR]', err);
+                if (active) onError?.(err);
+            }
+        },
+        onError
+    );
+
+    return () => {
+        active = false;
+        unsub();
+    };
+};
+

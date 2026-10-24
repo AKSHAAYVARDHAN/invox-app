@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
+    subscribeToHubComradeConversations,
     subscribeToUserConversations,
     subscribeToConversationMessages,
     sendCollabMessage,
@@ -12,6 +13,7 @@ import {
     type CollabChatMessage,
 } from '../../services/collabMessageService';
 import {
+    subscribeToHubCrews,
     subscribeToUserTeams,
     subscribeToTeam,
     subscribeToTeamMembers,
@@ -258,11 +260,9 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
         }
 
         setLoadingComrades(true);
-        const unsub = subscribeToUserConversations(
+        const unsub = subscribeToHubComradeConversations(
             currentUser.uid,
-            (allConvs) => {
-                // Keep conversations that are direct comrades or applications
-                const directs = allConvs.filter((c) => !c.isTeam && c.type !== 'team');
+            (directs) => {
                 setComradeConvs(directs);
                 setLoadingComrades(false);
 
@@ -313,7 +313,7 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
     }, [selectedComradeId, currentUser?.uid]);
 
     // ----------------------------------------------------
-    // CREW Subscriptions
+    // CREW Subscriptions (Hub Crews only, Spotlight teams excluded)
     // ----------------------------------------------------
     useEffect(() => {
         if (!currentUser?.uid) {
@@ -323,7 +323,7 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
         }
 
         setLoadingCrews(true);
-        const unsub = subscribeToUserTeams(
+        const unsub = subscribeToHubCrews(
             currentUser.uid,
             (teamList) => {
                 setCrews(teamList);

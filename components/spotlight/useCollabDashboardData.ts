@@ -6,6 +6,7 @@ import {
 } from '../../services/collabApplicationService';
 import { subscribeToUserPosts } from '../../services/postService';
 import {
+    subscribeToSpotlightInboxConversations,
     subscribeToUserConversations,
     subscribeToUserUnreadMessages,
     calculateTotalInboxUnread,
@@ -50,7 +51,7 @@ export function useCollabDashboardData(
     const [teamServiceUnread, setTeamServiceUnread] = useState<number>(0);
     const [loading, setLoading] = useState<boolean>(true);
 
-    // Subscribe to real-time team unread counts from teamService
+    // Subscribe to real-time team unread counts from teamService (Spotlight only)
     useEffect(() => {
         if (!currentUser?.uid) {
             setTeamServiceUnread(0);
@@ -62,7 +63,8 @@ export function useCollabDashboardData(
             (res) => {
                 setTeamServiceUnread(res.totalTeamsUnread);
             },
-            activeTeamConversationId
+            activeTeamConversationId,
+            'spotlight'
         );
 
         return () => {
@@ -70,7 +72,7 @@ export function useCollabDashboardData(
         };
     }, [currentUser?.uid, activeTeamConversationId]);
 
-    // Subscribe to real-time message unread counts (listens to actual messages)
+    // Subscribe to real-time message unread counts (Spotlight Inbox only)
     useEffect(() => {
         if (!currentUser?.uid) {
             setRealtimeInboxUnread(0);
@@ -88,7 +90,8 @@ export function useCollabDashboardData(
                 setConvUnreadMap(result.convUnreadMap);
                 setRealtimeUnreadLoaded(true);
             },
-            activeConversationId
+            activeConversationId,
+            'spotlight'
         );
 
         return () => {
@@ -147,7 +150,7 @@ export function useCollabDashboardData(
             }
         );
 
-        const unsubConversations = subscribeToUserConversations(
+        const unsubConversations = subscribeToSpotlightInboxConversations(
             currentUser.uid,
             (convList) => {
                 setConversations(convList);

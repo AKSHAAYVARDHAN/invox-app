@@ -9,7 +9,8 @@ import { uploadFile } from '../services/storageService';
 import { COLLECTIONS, updateDocument } from '../services/firestoreService';
 import { getFriendlyErrorMessage } from '../utils/errorHandler';
 import { updateUserAuthProfile, subscribeUserProfile } from '../services/authService';
-import { subscribeConnectionStatus, connectWithUser, disconnectFromUser } from '../services/connectionService';
+import { subscribeConnectionStatus, connectWithUser, disconnectFromUser, subscribeUserRelationships } from '../services/connectionService';
+import { ConnectionsListModal, type RelationshipTab } from '../components/profile/ConnectionsListModal';
 import { computeProfileCompletion } from './Settings';
 import type { InvoxUser } from '../types';
 
@@ -117,6 +118,24 @@ const ProfilePage = () => {
     const [isConnected, setIsConnected] = useState(false);
     const [isConnecting, setIsConnecting] = useState(false);
 
+    // Relationship counts & modal state (Following, Followers, Connections)
+    const [relationshipCounts, setRelationshipCounts] = useState<{
+        followingCount: number;
+        followerCount: number;
+        connectionCount: number;
+    }>({
+        followingCount: 0,
+        followerCount: 0,
+        connectionCount: 0,
+    });
+    const [isConnectionsModalOpen, setIsConnectionsModalOpen] = useState(false);
+    const [connectionsModalTab, setConnectionsModalTab] = useState<RelationshipTab>('connections');
+
+    const handleOpenConnectionsModal = (tab: RelationshipTab) => {
+        setConnectionsModalTab(tab);
+        setIsConnectionsModalOpen(true);
+    };
+
     // Similar Profiles state
     const [allDiscoverableProfiles, setAllDiscoverableProfiles] = useState<DiscoverableProfile[]>([]);
     const [similarProfiles, setSimilarProfiles] = useState<DiscoverableProfile[]>([]);
@@ -163,6 +182,31 @@ const ProfilePage = () => {
             unsub();
         };
     }, [isOwnProfile, resolvedUid, currentUser?.uid]);
+
+    const effectiveProfileUid = isOwnProfile ? currentUser?.uid : (resolvedUid || targetProfile?.uid);
+
+    // Real-time listener for relationship counts (Following, Followers, Connections)
+    useEffect(() => {
+        if (!effectiveProfileUid) return;
+
+        const unsubscribe = subscribeUserRelationships(
+            effectiveProfileUid,
+            (rel) => {
+                setRelationshipCounts({
+                    followingCount: rel.followingCount,
+                    followerCount: rel.followerCount,
+                    connectionCount: rel.connectionCount,
+                });
+            },
+            (err) => {
+                console.error('[PROFILE_RELATIONSHIPS_SUBSCRIBE_ERROR]', err);
+            }
+        );
+
+        return () => {
+            unsubscribe();
+        };
+    }, [effectiveProfileUid]);
 
     // Fetch all discoverable profiles
     useEffect(() => {
@@ -609,14 +653,36 @@ const ProfilePage = () => {
                             )}
                         </div>
 
-                        {/* Follower counts */}
-                        <div className="flex gap-5 mt-3 text-xs font-mono">
-                            <span className="text-zinc-400">
-                                <span className="font-bold text-white">{userProfile?.followingCount ?? 0}</span> Following
-                            </span>
-                            <span className="text-zinc-400">
-                                <span className="font-bold text-white">{userProfile?.followerCount ?? 0}</span> Followers
-                            </span>
+                        {/* Relationship counts: Following, Followers, Connections */}
+                        <div className="flex flex-wrap items-center gap-5 mt-3 text-xs font-mono">
+                            <button
+                                type="button"
+                                onClick={() => handleOpenConnectionsModal('following')}
+                                className="text-zinc-400 hover:text-white transition-colors cursor-pointer text-left group"
+                            >
+                                <span className="font-bold text-white group-hover:underline">
+                                    {relationshipCounts.followingCount ?? activeProfile?.followingCount ?? 0}
+                                </span> Following
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleOpenConnectionsModal('followers')}
+                                className="text-zinc-400 hover:text-white transition-colors cursor-pointer text-left group"
+                            >
+                                <span className="font-bold text-white group-hover:underline">
+                                    {relationshipCounts.followerCount ?? activeProfile?.followerCount ?? 0}
+                                </span> Followers
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleOpenConnectionsModal('connections')}
+                                className="text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer text-left group flex items-center gap-1.5"
+                            >
+                                <span className="font-bold text-emerald-400 group-hover:underline">
+                                    {relationshipCounts.connectionCount ?? activeProfile?.connectionCount ?? 0}
+                                </span>
+                                <span className="text-zinc-300 group-hover:text-emerald-300">Connections</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -814,6 +880,16 @@ const ProfilePage = () => {
                     </div>
                 )}
             </div>
+
+            {effectiveProfileUid && (
+                <ConnectionsListModal
+                    isOpen={isConnectionsModalOpen}
+                    onClose={() => setIsConnectionsModalOpen(false)}
+                    targetUserId={effectiveProfileUid}
+                    targetUserName={displayName}
+                    initialTab={connectionsModalTab}
+                />
+            )}
 
             <ImageZoomModal
                 isOpen={!!zoomedImageUrl}

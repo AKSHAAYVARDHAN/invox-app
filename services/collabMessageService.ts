@@ -51,6 +51,8 @@ export interface CollabConversation {
     unreadCounts?: Record<string, number>;
     isTeam?: boolean;
     type?: 'collab_application' | 'direct' | 'team';
+    environment?: 'spotlight' | 'hub';
+    scope?: 'spotlight_inbox' | 'hub_comrades' | 'spotlight_teams' | 'hub_crews';
 }
 
 export interface CollabChatMessage {
@@ -65,7 +67,51 @@ export interface CollabChatMessage {
     readAt?: any;
     readBy?: string[];
     createdAt: any;
+    environment?: 'spotlight' | 'hub';
+    scope?: 'spotlight_inbox' | 'hub_comrades' | 'spotlight_teams' | 'hub_crews';
 }
+
+/**
+ * Discriminator to check whether a conversation belongs to Spotlight Inbox.
+ * Ensures Spotlight and Hub conversations never cross-contaminate.
+ */
+export const isSpotlightConversation = (c: CollabConversation | any): boolean => {
+    if (!c) return false;
+    // Explicit environment or scope check
+    if (c.environment === 'spotlight' || c.scope === 'spotlight_inbox') return true;
+    if (c.environment === 'hub' || c.scope === 'hub_comrades') return false;
+    // Identifier check
+    if (typeof c.id === 'string') {
+        if (c.id.startsWith('hub_comrade_') || c.id.startsWith('direct_')) return false;
+        if (c.id.startsWith('collab_app_') || c.id.startsWith('spotlight_')) return true;
+    }
+    // Metadata check
+    if (c.type === 'collab_application') return true;
+    if (c.applicationId || c.collabId) return true;
+    if (c.type === 'direct' || c.roleTitle === 'Comrade') return false;
+    return true; // Default legacy non-comrade to Spotlight
+};
+
+/**
+ * Discriminator to check whether a conversation belongs to Hub Comrades (1:1 direct).
+ * Ensures Hub Comrades conversations are strictly separated from Spotlight.
+ */
+export const isHubComradeConversation = (c: CollabConversation | any): boolean => {
+    if (!c) return false;
+    // Explicit environment or scope check
+    if (c.environment === 'hub' || c.scope === 'hub_comrades') return true;
+    if (c.environment === 'spotlight' || c.scope === 'spotlight_inbox') return false;
+    // Identifier check
+    if (typeof c.id === 'string') {
+        if (c.id.startsWith('hub_comrade_') || c.id.startsWith('direct_')) return true;
+        if (c.id.startsWith('collab_app_') || c.id.startsWith('spotlight_')) return false;
+    }
+    // Metadata check
+    if (c.type === 'direct' || c.roleTitle === 'Comrade') {
+        return !c.applicationId && !c.collabId;
+    }
+    return false;
+};
 
 /**
  * Gets an existing conversation for an application or creates one deterministically.
@@ -145,6 +191,8 @@ export const getOrCreateCollabConversation = async ({
         },
         isTeam: false,
         type: 'collab_application',
+        environment: 'spotlight',
+        scope: 'spotlight_inbox',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     };
@@ -155,7 +203,8 @@ export const getOrCreateCollabConversation = async ({
 
 /**
  * Gets or creates a deterministic direct 1-on-1 conversation between two users (comrades).
- * Uses ID format `direct_${min(uid1, uid2)}_${max(uid1, uid2)}`.
+ * Uses ID format `hub_comrade_${min(uid1, uid2)}_${max(uid1, uid2)}`.
+ * Preserves backward compatibility with any existing `direct_` records.
  */
 export const getOrCreateDirectConversation = async ({
     currentUser,
@@ -180,12 +229,23 @@ export const getOrCreateDirectConversation = async ({
     }
 
     const sortedIds = [currentUser.uid, targetUser.uid].sort();
-    const conversationId = `direct_${sortedIds[0]}_${sortedIds[1]}`;
-    const convRef = doc(db, COLLECTIONS.messages, conversationId);
+    const primaryId = `hub_comrade_${sortedIds[0]}_${sortedIds[1]}`;
+    const legacyId = `direct_${sortedIds[0]}_${sortedIds[1]}`;
 
-    const snapshot = await getDoc(convRef);
-    if (snapshot.exists()) {
-        return conversationId;
+    // 1. Check if new hub_comrade_ doc exists
+    const primaryRef = doc(db, COLLECTIONS.messages, primaryId);
+    const primarySnap = await getDoc(primaryRef);
+    if (primarySnap.exists()) {
+        return primaryId;
+    }
+
+    // 2. Backward compatibility: check if legacy direct_ doc exists
+    const legacyRef = doc(db, COLLECTIONS.messages, legacyId);
+    const legacySnap = await getDoc(legacyRef);
+    if (legacySnap.exists()) {
+        // Tag legacy doc with hub environment
+        await setDoc(legacyRef, { environment: 'hub', scope: 'hub_comrades' }, { merge: true }).catch(() => {});
+        return legacyId;
     }
 
     const currentParticipant: CollabConversationParticipant = {
@@ -226,16 +286,123 @@ export const getOrCreateDirectConversation = async ({
         },
         isTeam: false,
         type: 'direct',
+        environment: 'hub',
+        scope: 'hub_comrades',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     };
 
-    await setDoc(convRef, sanitizeForFirestore(newConversation));
-    return conversationId;
+    await setDoc(primaryRef, sanitizeForFirestore(newConversation));
+    return primaryId;
+};
+
+/**
+ * Subscribes to Spotlight Inbox conversations only (project collaboration applications & direct messages).
+ * Guarantees that Hub Comrade conversations are completely excluded.
+ */
+export const subscribeToSpotlightInboxConversations = (
+    userId: string,
+    onUpdate: (conversations: CollabConversation[]) => void,
+    onError?: (error: any) => void
+) => {
+    const q = query(
+        collection(db, COLLECTIONS.messages),
+        where('participants', 'array-contains', userId)
+    );
+
+    return onSnapshot(
+        q,
+        (snapshot) => {
+            const list: CollabConversation[] = [];
+            snapshot.docs.forEach((docSnap) => {
+                const data = docSnap.data();
+                const conv: CollabConversation = {
+                    id: docSnap.id,
+                    ...data,
+                } as CollabConversation;
+
+                if (isSpotlightConversation(conv)) {
+                    list.push(conv);
+                }
+            });
+
+            // Sort by most recent activity
+            list.sort((a, b) => {
+                const getTime = (val: any) => {
+                    if (!val) return 0;
+                    if (typeof val.toDate === 'function') return val.toDate().getTime();
+                    if (val instanceof Date) return val.getTime();
+                    return new Date(val).getTime() || 0;
+                };
+                const timeA = getTime(a.updatedAt || a.lastMessageTimestamp || a.createdAt);
+                const timeB = getTime(b.updatedAt || b.lastMessageTimestamp || b.createdAt);
+                return timeB - timeA;
+            });
+
+            onUpdate(list);
+        },
+        (err) => {
+            console.error('[SUBSCRIBE_SPOTLIGHT_INBOX_ERROR]', err);
+            if (onError) onError(err);
+        }
+    );
+};
+
+/**
+ * Subscribes to Hub Comrade conversations only (private 1:1 comrade converse).
+ * Guarantees that Spotlight Inbox applications and collaboration chats are completely excluded.
+ */
+export const subscribeToHubComradeConversations = (
+    userId: string,
+    onUpdate: (conversations: CollabConversation[]) => void,
+    onError?: (error: any) => void
+) => {
+    const q = query(
+        collection(db, COLLECTIONS.messages),
+        where('participants', 'array-contains', userId)
+    );
+
+    return onSnapshot(
+        q,
+        (snapshot) => {
+            const list: CollabConversation[] = [];
+            snapshot.docs.forEach((docSnap) => {
+                const data = docSnap.data();
+                const conv: CollabConversation = {
+                    id: docSnap.id,
+                    ...data,
+                } as CollabConversation;
+
+                if (isHubComradeConversation(conv)) {
+                    list.push(conv);
+                }
+            });
+
+            // Sort by most recent activity
+            list.sort((a, b) => {
+                const getTime = (val: any) => {
+                    if (!val) return 0;
+                    if (typeof val.toDate === 'function') return val.toDate().getTime();
+                    if (val instanceof Date) return val.getTime();
+                    return new Date(val).getTime() || 0;
+                };
+                const timeA = getTime(a.updatedAt || a.lastMessageTimestamp || a.createdAt);
+                const timeB = getTime(b.updatedAt || b.lastMessageTimestamp || b.createdAt);
+                return timeB - timeA;
+            });
+
+            onUpdate(list);
+        },
+        (err) => {
+            console.error('[SUBSCRIBE_HUB_COMRADE_ERROR]', err);
+            if (onError) onError(err);
+        }
+    );
 };
 
 /**
  * Subscribes to all conversations where the user is a participant.
+ * Kept for generic/backward compatibility.
  */
 export const subscribeToUserConversations = (
     userId: string,
@@ -394,7 +561,16 @@ export const sendCollabMessage = async ({
         ? [targetRecipientId]
         : participants.filter(p => p !== senderId);
 
-    // 1. Add individual message with read: false and recipientId
+    // Determine environment and scope
+    const isHub = convData?.environment === 'hub'
+        || convData?.scope === 'hub_comrades'
+        || conversationId.startsWith('hub_comrade_')
+        || conversationId.startsWith('direct_')
+        || (convData?.type === 'direct' && !convData?.applicationId && !convData?.collabId);
+    const environment: 'hub' | 'spotlight' = isHub ? 'hub' : 'spotlight';
+    const scope: 'hub_comrades' | 'spotlight_inbox' = isHub ? 'hub_comrades' : 'spotlight_inbox';
+
+    // 1. Add individual message with environment and scope
     const msgsRef = collection(db, COLLECTIONS.messages, conversationId, 'messages');
     await addDoc(msgsRef, sanitizeForFirestore({
         conversationId,
@@ -405,10 +581,12 @@ export const sendCollabMessage = async ({
         recipientId: targetRecipientId || (recipientsToNotify[0] || null),
         read: false,
         readBy: [senderId],
+        environment,
+        scope,
         createdAt: serverTimestamp(),
     }));
 
-    // 2. Update parent conversation summary and recipient unread counts
+    // 2. Update parent conversation summary, unread counts, and environment/scope
     try {
         const updatePayload: Record<string, any> = {
             lastMessage: cleanText,
@@ -416,6 +594,8 @@ export const sendCollabMessage = async ({
             lastMessageTimestamp: serverTimestamp(),
             updatedAt: serverTimestamp(),
             participants: Array.from(new Set(participants)),
+            environment,
+            scope,
             [`unreadCounts.${senderId}`]: 0,
         };
 
@@ -437,6 +617,8 @@ export const sendCollabMessage = async ({
                 lastMessageTimestamp: serverTimestamp(),
                 updatedAt: serverTimestamp(),
                 participants: Array.from(new Set(participants)),
+                environment,
+                scope,
             };
             const unreadCounts: Record<string, number> = {
                 ...(convData?.unreadCounts || {}),
@@ -588,12 +770,33 @@ export const calculateTotalInboxUnread = (
 
     let total = 0;
     for (const c of conversations) {
-        // Exclude team conversations from inbox count
+        // Exclude team conversations and exclude Hub comrades
         if (c.isTeam || c.type === 'team') continue;
+        if (!isSpotlightConversation(c)) continue;
 
         // If the user is currently viewing this conversation, exclude it
         if (activeConversationId && c.id === activeConversationId) continue;
 
+        total += getConversationUnreadCount(c, userId);
+    }
+
+    return total;
+};
+
+/**
+ * Calculates the total unread message count across all Hub Comrades conversations for a user.
+ */
+export const calculateTotalComradesUnread = (
+    conversations: CollabConversation[],
+    userId?: string | null,
+    activeConversationId?: string | null
+): number => {
+    if (!userId || !conversations || conversations.length === 0) return 0;
+
+    let total = 0;
+    for (const c of conversations) {
+        if (!isHubComradeConversation(c)) continue;
+        if (activeConversationId && c.id === activeConversationId) continue;
         total += getConversationUnreadCount(c, userId);
     }
 
@@ -635,11 +838,13 @@ export interface UserUnreadCountsResult {
  * Real-time subscription to unread message counts across all conversations for a user.
  * Directly listens to individual messages in the user's active conversations,
  * guaranteeing instant, reactive updates without page reloads or stale document caches.
+ * When environment is specified ('spotlight' | 'hub'), restricts listeners strictly to that environment.
  */
 export const subscribeToUserUnreadMessages = (
     userId: string,
     onUpdate: (data: UserUnreadCountsResult) => void,
-    activeConversationId?: string | null
+    activeConversationId?: string | null,
+    environment?: 'spotlight' | 'hub'
 ): (() => void) => {
     if (!userId) {
         onUpdate({ totalInboxUnread: 0, totalTeamsUnread: 0, convUnreadMap: {} });
@@ -685,6 +890,16 @@ export const subscribeToUserUnreadMessages = (
             convsSnap.docs.forEach((docSnap) => {
                 const convId = docSnap.id;
                 const data = docSnap.data();
+                const convObj: CollabConversation = { id: convId, ...data } as CollabConversation;
+
+                // Environment filtering:
+                if (environment === 'spotlight' && !isSpotlightConversation(convObj)) {
+                    return;
+                }
+                if (environment === 'hub' && !isHubComradeConversation(convObj)) {
+                    return;
+                }
+
                 currentConvIds.add(convId);
                 convTypeMap[convId] = Boolean(data.isTeam || data.type === 'team');
 

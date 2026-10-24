@@ -3,12 +3,14 @@ import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
+    subscribeToSpotlightInboxConversations,
     subscribeToUserConversations,
     subscribeToConversationMessages,
     subscribeToUserUnreadMessages,
     sendCollabMessage,
     markConversationAsRead,
     getConversationUnreadCount,
+    isSpotlightConversation,
     type CollabConversation,
     type CollabChatMessage,
 } from '../../services/collabMessageService';
@@ -209,7 +211,8 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
             (result) => {
                 setConvUnreadMap(result.convUnreadMap);
             },
-            selectedConvId
+            selectedConvId,
+            'spotlight'
         );
 
         return () => {
@@ -217,7 +220,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
         };
     }, [currentUser?.uid, selectedConvId]);
 
-    // Subscribe to all conversations the user is a participant of
+    // Subscribe to Spotlight Inbox conversations (guarantees Hub Comrades exclusion)
     useEffect(() => {
         if (!currentUser?.uid) {
             setConversations([]);
@@ -226,7 +229,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
         }
 
         setLoading(true);
-        const unsub = subscribeToUserConversations(
+        const unsub = subscribeToSpotlightInboxConversations(
             currentUser.uid,
             (list) => {
                 setConversations(list);
@@ -246,7 +249,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
 
     // Data partitioning: Inbox (direct collab applications) vs Teams
     const inboxConversations = useMemo(
-        () => conversations.filter((c) => !c.isTeam && c.type !== 'team'),
+        () => conversations.filter((c) => isSpotlightConversation(c) && !c.isTeam && c.type !== 'team'),
         [conversations]
     );
     const teamConversations = useMemo(

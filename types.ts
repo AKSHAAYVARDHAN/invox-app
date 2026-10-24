@@ -37,6 +37,7 @@ export interface InvoxUser extends User {
   portfolioURL: string;
   followerCount: number;
   followingCount: number;
+  connectionCount?: number;
   savedPostCount: number;
   savedProjectCount: number;
   savedOpportunityCount: number;
