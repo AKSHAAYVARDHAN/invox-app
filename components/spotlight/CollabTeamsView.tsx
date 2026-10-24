@@ -10,9 +10,13 @@ import {
     subscribeToTeamMembers,
     subscribeToTeamMessages,
     sendTeamMessage,
+    updateTeamMessage,
+    updateTeamDetails,
     markTeamAsRead,
     createTeamInvitation,
     getTeamInvitation,
+    getOrCreateTeamInviteToken,
+    regenerateTeamInvitation,
     getTeam,
     subscribeToTeamInvitations,
     revokeTeamInvitation,
@@ -51,6 +55,16 @@ import {
     MagnifyingGlassIcon,
     SendIcon,
     SparklesIcon,
+    InformationCircleIcon,
+    CogIcon,
+    PencilSquareIcon,
+    LinkIcon,
+    ClipboardIcon,
+    RegenerateIcon,
+    CheckCircleIcon,
+    XCircleIcon,
+    ArrowUpRightIcon,
+    BriefcaseIcon,
 } from '../ui/Icons';
 import { ClickableMessageText } from '../ui/ClickableMessageText';
 import { TeamInvitationCard } from '../ui/TeamInvitationCard';
@@ -130,11 +144,35 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
     const [membersTab, setMembersTab] = useState<'roster' | 'requests' | 'access'>('roster');
     const [rejectionReasonMap, setRejectionReasonMap] = useState<Record<string, string>>({});
 
-    // Message actions & deletion state
+    // Message actions & editing state
     const [activeMessageMenuId, setActiveMessageMenuId] = useState<string | null>(null);
+    const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+    const [editingMessageText, setEditingMessageText] = useState<string>('');
+    const [isSavingMessageEdit, setIsSavingMessageEdit] = useState<boolean>(false);
+    const [messageEditError, setMessageEditError] = useState<string | null>(null);
     const [messageToDelete, setMessageToDelete] = useState<TeamMessage | null>(null);
     const [isDeletingMessage, setIsDeletingMessage] = useState<boolean>(false);
     const [deleteMessageError, setDeleteMessageError] = useState<string | null>(null);
+
+    // Team Info Modal state (accessible to all members)
+    const [showTeamInfoModal, setShowTeamInfoModal] = useState<boolean>(false);
+    const [teamInfoMemberFilter, setTeamInfoMemberFilter] = useState<string>('');
+
+    // Team Settings Modal state (owner / admin only)
+    const [showTeamSettingsModal, setShowTeamSettingsModal] = useState<boolean>(false);
+    const [teamSettingsTab, setTeamSettingsTab] = useState<'general' | 'invitation' | 'join_policy'>('general');
+    const [settingsTeamName, setSettingsTeamName] = useState<string>('');
+    const [settingsTeamDesc, setSettingsTeamDesc] = useState<string>('');
+    const [settingsTeamAvatarUrl, setSettingsTeamAvatarUrl] = useState<string>('');
+    const [isSavingTeamSettings, setIsSavingTeamSettings] = useState<boolean>(false);
+    const [teamSettingsFeedback, setTeamSettingsFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [isRegeneratingInvite, setIsRegeneratingInvite] = useState<boolean>(false);
+    const [isRevokingInvite, setIsRevokingInvite] = useState<boolean>(false);
+    const [inviteCopied, setInviteCopied] = useState<boolean>(false);
+
+    // Disband Team Modal Confirmation (owner only)
+    const [showDisbandModal, setShowDisbandModal] = useState<boolean>(false);
+    const [isDisbandingTeam, setIsDisbandingTeam] = useState<boolean>(false);
 
     // Leave / Disband Team state
     const [showLeaveModal, setShowLeaveModal] = useState<boolean>(false);
@@ -163,6 +201,12 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
 
     // Invitations management state
     const [invitations, setInvitations] = useState<TeamInvitation[]>([]);
+
+    // Active team invitation token (for Team Settings modal and link sharing)
+    const teamInviteToken = useMemo(() => {
+        return invitations.find((i) => i.status === 'active') || invitations[0] || null;
+    }, [invitations]);
+
     const [acceptedCollabs, setAcceptedCollabs] = useState<CollabApplication[]>([]);
     const [copiedToken, setCopiedToken] = useState<string | null>(null);
     const [isGeneratingInvite, setIsGeneratingInvite] = useState<boolean>(false);
@@ -374,6 +418,14 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
         const handleModalEscape = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
                 if (messageToDelete && !isDeletingMessage) setMessageToDelete(null);
+                else if (editingMessageId && !isSavingMessageEdit) {
+                    setEditingMessageId(null);
+                    setEditingMessageText('');
+                    setMessageEditError(null);
+                }
+                else if (showTeamInfoModal) setShowTeamInfoModal(false);
+                else if (showTeamSettingsModal && !isSavingTeamSettings) setShowTeamSettingsModal(false);
+                else if (showDisbandModal && !isDisbandingTeam) setShowDisbandModal(false);
                 else if (showTransferModal && !isTransferringOwnership) setShowTransferModal(false);
                 else if (showLeaveModal && !isLeavingTeam) setShowLeaveModal(false);
                 else if (memberToRemove && !isRemovingMember) setMemberToRemove(null);
@@ -389,6 +441,10 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
 
         if (
             messageToDelete ||
+            editingMessageId ||
+            showTeamInfoModal ||
+            showTeamSettingsModal ||
+            showDisbandModal ||
             showTransferModal ||
             showLeaveModal ||
             memberToRemove ||
@@ -408,6 +464,13 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
     }, [
         messageToDelete,
         isDeletingMessage,
+        editingMessageId,
+        isSavingMessageEdit,
+        showTeamInfoModal,
+        showTeamSettingsModal,
+        isSavingTeamSettings,
+        showDisbandModal,
+        isDisbandingTeam,
         showTransferModal,
         isTransferringOwnership,
         showLeaveModal,
@@ -561,8 +624,13 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
             }
 
             setActiveTeam(team);
-            if (team.joinPolicy && !showJoinSettingsModalRef.current) {
-                setSelectedJoinPolicy(team.joinPolicy);
+            if (team) {
+                setSettingsTeamName(team.name || '');
+                setSettingsTeamDesc(team.description || '');
+                setSettingsTeamAvatarUrl(team.avatarUrl || '');
+                if (team.joinPolicy && !showJoinSettingsModalRef.current) {
+                    setSelectedJoinPolicy(team.joinPolicy);
+                }
             }
         });
 
@@ -913,6 +981,294 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
             setDeleteMessageError(err?.message || 'Failed to delete message. Please try again.');
         } finally {
             setIsDeletingMessage(false);
+        }
+    };
+
+    // Helper: Save Message Edit (Own messages only)
+    const handleSaveMessageEdit = async (messageId: string) => {
+        if (!activeTeam || !currentUser?.uid) return;
+        const clean = editingMessageText.trim();
+        if (!clean) {
+            setMessageEditError('Message content cannot be empty.');
+            return;
+        }
+
+        setIsSavingMessageEdit(true);
+        setMessageEditError(null);
+        try {
+            await updateTeamMessage({
+                teamId: activeTeam.id,
+                messageId,
+                userId: currentUser.uid,
+                newText: clean,
+            });
+
+            // Optimistically update message in local state
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.id === messageId ? { ...m, text: clean, editedAt: new Date() } : m
+                )
+            );
+            setEditingMessageId(null);
+            setEditingMessageText('');
+        } catch (err: any) {
+            console.error('[EDIT_TEAM_MESSAGE_ERROR]', err);
+            setMessageEditError(err?.message || 'Failed to update message.');
+        } finally {
+            setIsSavingMessageEdit(false);
+        }
+    };
+
+    // Helper: Save Team General Settings (Admin / Owner Only)
+    const handleSaveTeamGeneralSettings = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!activeTeam || !currentUser?.uid) return;
+        if (activeTeam.ownerId !== currentUser.uid) {
+            setTeamSettingsFeedback({
+                type: 'error',
+                message: 'Unauthorized: Only the team owner/admin can modify team parameters.',
+            });
+            return;
+        }
+
+        const cleanName = settingsTeamName.trim();
+        if (!cleanName) {
+            setTeamSettingsFeedback({
+                type: 'error',
+                message: 'Team designation name cannot be blank.',
+            });
+            return;
+        }
+
+        setIsSavingTeamSettings(true);
+        setTeamSettingsFeedback(null);
+        try {
+            await updateTeamDetails({
+                teamId: activeTeam.id,
+                userId: currentUser.uid,
+                name: cleanName,
+                description: settingsTeamDesc.trim(),
+                avatarUrl: settingsTeamAvatarUrl.trim() || null,
+            });
+            setActiveTeam((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          name: cleanName,
+                          description: settingsTeamDesc.trim(),
+                          avatarUrl: settingsTeamAvatarUrl.trim() || null,
+                      }
+                    : prev
+            );
+            setTeams((prev) =>
+                prev.map((t) =>
+                    t.id === activeTeam.id
+                        ? {
+                              ...t,
+                              name: cleanName,
+                              description: settingsTeamDesc.trim(),
+                              avatarUrl: settingsTeamAvatarUrl.trim() || null,
+                          }
+                        : t
+                )
+            );
+            setTeamSettingsFeedback({
+                type: 'success',
+                message: 'Team intelligence parameters saved successfully.',
+            });
+        } catch (err: any) {
+            console.error('[SAVE_TEAM_SETTINGS_ERROR]', err);
+            setTeamSettingsFeedback({
+                type: 'error',
+                message: err?.message || 'Failed to update team settings.',
+            });
+        } finally {
+            setIsSavingTeamSettings(false);
+        }
+    };
+
+    // Helper: Save Team Join Policy (Admin / Owner Only)
+    const handleSaveTeamJoinPolicy = async (targetPolicy: TeamJoinPolicy) => {
+        if (!activeTeam || !currentUser?.uid) return;
+        if (activeTeam.ownerId !== currentUser.uid) return;
+
+        setIsSavingTeamSettings(true);
+        setTeamSettingsFeedback(null);
+        try {
+            await updateTeamJoinPolicy({
+                teamId: activeTeam.id,
+                userId: currentUser.uid,
+                policy: targetPolicy,
+            });
+            setSelectedJoinPolicy(targetPolicy);
+            setActiveTeam((prev) => (prev ? { ...prev, joinPolicy: targetPolicy } : prev));
+            setTeamSettingsFeedback({
+                type: 'success',
+                message: `Join policy set to ${
+                    targetPolicy === 'approval_required' ? 'Approval Required' : 'Anyone with link'
+                }.`,
+            });
+        } catch (err: any) {
+            console.error('[UPDATE_TEAM_JOIN_POLICY_ERROR]', err);
+            setTeamSettingsFeedback({
+                type: 'error',
+                message: err?.message || 'Failed to update join policy.',
+            });
+        } finally {
+            setIsSavingTeamSettings(false);
+        }
+    };
+
+    // Helper: Regenerate Team Invitation Link (Admin / Owner Only)
+    const handleGenerateOrRegenerateTeamInvite = async () => {
+        if (!activeTeam || !currentUser || isRegeneratingInvite) return;
+        if (activeTeam.ownerId !== currentUser.uid) return;
+
+        setIsRegeneratingInvite(true);
+        setTeamSettingsFeedback(null);
+        try {
+            const newInvite = await regenerateTeamInvitation({
+                teamId: activeTeam.id,
+                teamName: activeTeam.name,
+                projectId: activeTeam.projectId,
+                projectTitle: activeTeam.projectTitle,
+                user: currentUser,
+                userProfile,
+            });
+            setInvitations((prev) => [newInvite, ...prev.filter((i) => i.id !== newInvite.id)]);
+            setTeamSettingsFeedback({
+                type: 'success',
+                message: 'New invitation token successfully generated. Previous tokens revoked.',
+            });
+        } catch (err: any) {
+            console.error('[REGENERATE_TEAM_INVITE_ERROR]', err);
+            setTeamSettingsFeedback({
+                type: 'error',
+                message: err?.message || 'Failed to regenerate invitation link.',
+            });
+        } finally {
+            setIsRegeneratingInvite(false);
+        }
+    };
+
+    // Helper: Revoke Team Invitation Link (Admin / Owner Only)
+    const handleRevokeTeamInvite = async (token?: string | any) => {
+        const targetToken = typeof token === 'string' && token ? token : teamInviteToken?.token;
+        if (!activeTeam || !targetToken || !currentUser?.uid || isRevokingInvite) return;
+        if (activeTeam.ownerId !== currentUser.uid) return;
+
+        setIsRevokingInvite(true);
+        setTeamSettingsFeedback(null);
+        try {
+            await revokeTeamInvitation(targetToken, currentUser.uid);
+            setInvitations((prev) =>
+                prev.map((i) => (i.token === targetToken ? { ...i, status: 'revoked' } : i))
+            );
+            setTeamSettingsFeedback({
+                type: 'success',
+                message: 'Invitation link revoked. Incoming joins blocked.',
+            });
+        } catch (err: any) {
+            console.error('[REVOKE_TEAM_INVITE_ERROR]', err);
+            setTeamSettingsFeedback({
+                type: 'error',
+                message: err?.message || 'Failed to revoke invitation link.',
+            });
+        } finally {
+            setIsRevokingInvite(false);
+        }
+    };
+
+    // Helper: Copy Team Invitation Link with Feedback
+    const handleCopyTeamInviteLink = async (link?: string | any) => {
+        const targetUrl =
+            typeof link === 'string' && link
+                ? link
+                : teamInviteToken?.token
+                ? getTeamInvitationUrl(teamInviteToken.token, activeTeam?.id)
+                : '';
+        if (!targetUrl) return;
+        try {
+            if (navigator?.clipboard?.writeText) {
+                await navigator.clipboard.writeText(targetUrl);
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = targetUrl;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            }
+            setInviteCopied(true);
+            setTimeout(() => setInviteCopied(false), 2500);
+        } catch (err) {
+            console.error('[COPY_INVITE_LINK_ERROR]', err);
+        }
+    };
+
+    // Auto-create or fetch invitation token if owner views settings and none exists yet
+    useEffect(() => {
+        if (
+            showTeamSettingsModal &&
+            teamSettingsTab === 'invitation' &&
+            activeTeam &&
+            isOwner &&
+            !teamInviteToken &&
+            !isRegeneratingInvite &&
+            currentUser
+        ) {
+            getOrCreateTeamInviteToken({
+                teamId: activeTeam.id,
+                teamName: activeTeam.name,
+                projectId: activeTeam.projectId,
+                projectTitle: activeTeam.projectTitle,
+                user: currentUser,
+                userProfile,
+            })
+                .then((inv) => {
+                    setInvitations((prev) => [inv, ...prev.filter((i) => i.id !== inv.id)]);
+                })
+                .catch((err) => {
+                    console.warn('[AUTO_GET_TEAM_INVITE_WARN]', err);
+                });
+        }
+    }, [
+        showTeamSettingsModal,
+        teamSettingsTab,
+        activeTeam?.id,
+        isOwner,
+        teamInviteToken,
+        currentUser?.uid,
+    ]);
+
+    // Helper: Confirm Disband Squad (Owner Only)
+    const handleConfirmDisbandTeam = async () => {
+        if (!activeTeam || !currentUser?.uid || isDisbandingTeam) return;
+        if (activeTeam.ownerId !== currentUser.uid) return;
+
+        setIsDisbandingTeam(true);
+        const teamIdToDisband = activeTeam.id;
+        try {
+            await deleteTeam(teamIdToDisband, currentUser.uid);
+            setActiveTeam(null);
+            setSelectedTeamId(null);
+            setMessages([]);
+            setMembers([]);
+            setShowDisbandModal(false);
+            setShowMenu(false);
+            setShowMembersDrawer(false);
+            setIsExpanded(false);
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete('teamId');
+                return next;
+            });
+            setTeams((prev) => prev.filter((t) => t.id !== teamIdToDisband));
+        } catch (err: any) {
+            console.error('[DISBAND_TEAM_ERROR]', err);
+            alert(err?.message || 'Failed to disband squad.');
+        } finally {
+            setIsDisbandingTeam(false);
         }
     };
 
@@ -1745,134 +2101,182 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                 ref={menuRef}
                                                 role="menu"
                                                 aria-orientation="vertical"
-                                                className="absolute right-0 top-full mt-1.5 w-48 bg-[#0c0c0e] border border-zinc-800 shadow-2xl z-30 font-mono text-xs divide-y divide-zinc-850/80"
+                                                className="absolute right-0 top-full mt-1.5 w-56 bg-[#0c0c0e] border border-zinc-800 shadow-2xl z-30 font-mono text-xs divide-y divide-zinc-850"
                                             >
-                                                <button
-                                                    type="button"
-                                                    role="menuitem"
-                                                    onClick={() => {
-                                                        setShowMenu(false);
-                                                        setShowProjectModal(true);
-                                                    }}
-                                                    className="w-full text-left px-3.5 py-2.5 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
-                                                >
-                                                    <span>// PROJECT</span>
-                                                    <span className="text-[10px] text-zinc-600">↗</span>
-                                                </button>
-
-                                                <button
-                                                    type="button"
-                                                    role="menuitem"
-                                                    onClick={() => {
-                                                        setShowMenu(false);
-                                                        setMembersTab('roster');
-                                                        setShowMembersDrawer(true);
-                                                    }}
-                                                    className="w-full text-left px-3.5 py-2.5 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
-                                                >
-                                                    <span>// TEAM MEMBERS</span>
-                                                    <span className="text-[10px] text-zinc-500 font-mono">
-                                                        [{members.length || activeTeam.memberCount || 1}]
-                                                    </span>
-                                                </button>
-
-                                                {isOwner && (
+                                                {/* SECTION 1: GENERAL ACTIONS (ALL MEMBERS) */}
+                                                <div className="py-1">
                                                     <button
                                                         type="button"
                                                         role="menuitem"
                                                         onClick={() => {
                                                             setShowMenu(false);
-                                                            setJoinRequestsFeedback(null);
-                                                            setShowJoinRequestsModal(true);
+                                                            setShowTeamInfoModal(true);
                                                         }}
-                                                        className="w-full text-left px-3.5 py-2.5 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
+                                                        className="w-full text-left px-3.5 py-2 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
                                                     >
-                                                        <span className="flex items-center gap-1.5">
-                                                            <span>// JOIN REQUESTS</span>
-                                                            {pendingJoinRequestsCount > 0 && (
-                                                                <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
-                                                            )}
+                                                        <span className="flex items-center gap-2">
+                                                            <InformationCircleIcon className="w-3.5 h-3.5 text-emerald-400" />
+                                                            <span>// TEAM INFO</span>
                                                         </span>
-                                                        {pendingJoinRequestsCount > 0 ? (
-                                                            <span className="text-[9px] font-bold text-amber-300 bg-amber-950/80 border border-amber-700/90 px-1.5 py-0.2">
-                                                                [{pendingJoinRequestsCount} PENDING]
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-[10px] text-zinc-500 font-mono">
-                                                                [{joinRequests.length}]
-                                                            </span>
-                                                        )}
+                                                        <span className="text-[10px] text-zinc-500 font-mono">
+                                                            [{members.length || activeTeam.memberCount || 1}]
+                                                        </span>
                                                     </button>
-                                                )}
 
-                                                {isOwner && (
                                                     <button
                                                         type="button"
                                                         role="menuitem"
                                                         onClick={() => {
                                                             setShowMenu(false);
-                                                            setSelectedJoinPolicy(activeTeam.joinPolicy || 'open');
-                                                            setJoinPolicyFeedback(null);
-                                                            setShowJoinSettingsModal(true);
+                                                            setMembersTab('roster');
+                                                            setShowMembersDrawer(true);
                                                         }}
-                                                        className="w-full text-left px-3.5 py-2.5 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
+                                                        className="w-full text-left px-3.5 py-2 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
                                                     >
-                                                        <span>// TEAM ACCESS</span>
-                                                        <span
-                                                            className={`text-[9px] font-bold px-1.5 py-0.2 border ${
-                                                                (activeTeam.joinPolicy || 'open') === 'approval_required'
-                                                                    ? 'bg-purple-950/60 border-purple-800 text-purple-300'
-                                                                    : 'bg-zinc-900 border-zinc-750 text-zinc-400'
-                                                            }`}
+                                                        <span className="flex items-center gap-2">
+                                                            <UsersIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                            <span>// TEAM MEMBERS</span>
+                                                        </span>
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        role="menuitem"
+                                                        onClick={() => {
+                                                            setShowMenu(false);
+                                                            setShowProjectModal(true);
+                                                        }}
+                                                        className="w-full text-left px-3.5 py-2 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
+                                                    >
+                                                        <span className="flex items-center gap-2">
+                                                            <BriefcaseIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                            <span>// PROJECT DETAILS</span>
+                                                        </span>
+                                                        <span className="text-[10px] text-zinc-600">↗</span>
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        role="menuitem"
+                                                        onClick={() => {
+                                                            setShowMenu(false);
+                                                            setShowSummaryModal(true);
+                                                        }}
+                                                        className="w-full text-left px-3.5 py-2 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
+                                                    >
+                                                        <span className="flex items-center gap-2">
+                                                            <SparklesIcon className="w-3.5 h-3.5 text-purple-400" />
+                                                            <span>// GENERATE SUMMARY</span>
+                                                        </span>
+                                                        <span className="text-[9px] text-purple-400 font-mono">[AI]</span>
+                                                    </button>
+                                                </div>
+
+                                                {/* SECTION 2: ADMINISTRATIVE ACTIONS (OWNER / ADMIN ONLY) */}
+                                                {isOwner && (
+                                                    <div className="py-1">
+                                                        <div className="px-3.5 py-1 text-[9px] font-bold text-zinc-500 uppercase tracking-widest font-mono">
+                                                            ADMIN CONTROL
+                                                        </div>
+
+                                                        <button
+                                                            type="button"
+                                                            role="menuitem"
+                                                            onClick={() => {
+                                                                setShowMenu(false);
+                                                                setTeamSettingsFeedback(null);
+                                                                setTeamSettingsTab('general');
+                                                                setShowTeamSettingsModal(true);
+                                                            }}
+                                                            className="w-full text-left px-3.5 py-2 text-zinc-200 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
                                                         >
-                                                            {(activeTeam.joinPolicy || 'open') === 'approval_required'
-                                                                ? 'APPROVAL REQ'
-                                                                : 'ANYONE WITH LINK'}
-                                                        </span>
-                                                    </button>
+                                                            <span className="flex items-center gap-2">
+                                                                <CogIcon className="w-3.5 h-3.5 text-emerald-400" />
+                                                                <span>// TEAM SETTINGS</span>
+                                                            </span>
+                                                            <span className="text-[9px] text-emerald-400 font-mono">[ADMIN]</span>
+                                                        </button>
+
+                                                        <button
+                                                            type="button"
+                                                            role="menuitem"
+                                                            onClick={() => {
+                                                                setShowMenu(false);
+                                                                setJoinRequestsFeedback(null);
+                                                                setShowJoinRequestsModal(true);
+                                                            }}
+                                                            className="w-full text-left px-3.5 py-2 text-zinc-200 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
+                                                        >
+                                                            <span className="flex items-center gap-2">
+                                                                <UsersIcon className="w-3.5 h-3.5 text-amber-400" />
+                                                                <span>// JOIN REQUESTS</span>
+                                                                {pendingJoinRequestsCount > 0 && (
+                                                                    <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
+                                                                )}
+                                                            </span>
+                                                            {pendingJoinRequestsCount > 0 ? (
+                                                                <span className="text-[9px] font-bold text-amber-300 bg-amber-950/80 border border-amber-700/90 px-1.5 py-0.2">
+                                                                    [{pendingJoinRequestsCount} PENDING]
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[10px] text-zinc-500 font-mono">
+                                                                    [{joinRequests.length}]
+                                                                </span>
+                                                            )}
+                                                        </button>
+
+                                                        <button
+                                                            type="button"
+                                                            role="menuitem"
+                                                            onClick={() => {
+                                                                setShowMenu(false);
+                                                                handleOpenTransferModal();
+                                                            }}
+                                                            className="w-full text-left px-3.5 py-2 text-amber-400 hover:text-amber-300 hover:bg-amber-950/20 transition-colors flex items-center justify-between cursor-pointer"
+                                                        >
+                                                            <span className="flex items-center gap-2">
+                                                                <ShieldCheckIcon className="w-3.5 h-3.5 text-amber-400" />
+                                                                <span>// TRANSFER LEAD</span>
+                                                            </span>
+                                                        </button>
+                                                    </div>
                                                 )}
 
-                                                {isOwner && (
-                                                    <button
-                                                        type="button"
-                                                        role="menuitem"
-                                                        onClick={() => {
-                                                            setShowMenu(false);
-                                                            handleOpenTransferModal();
-                                                        }}
-                                                        className="w-full text-left px-3.5 py-2.5 text-amber-400 hover:text-amber-300 hover:bg-amber-950/20 transition-colors flex items-center justify-between cursor-pointer"
-                                                    >
-                                                        <span>// TRANSFER OWNERSHIP</span>
-                                                        <ShieldCheckIcon className="w-3.5 h-3.5 text-amber-400" />
-                                                    </button>
-                                                )}
-
-                                                <button
-                                                    type="button"
-                                                    role="menuitem"
-                                                    onClick={() => {
-                                                        setShowMenu(false);
-                                                        setShowInviteModal(true);
-                                                    }}
-                                                    className="w-full text-left px-3.5 py-2.5 text-zinc-300 hover:text-white hover:bg-zinc-900/90 transition-colors flex items-center justify-between cursor-pointer"
-                                                >
-                                                    <span>// INVITE MEMBERS</span>
-                                                    <span className="text-[10px] text-emerald-400 font-bold">+</span>
-                                                </button>
-
-                                                <button
-                                                    type="button"
-                                                    role="menuitem"
-                                                    onClick={() => {
-                                                        setShowMenu(false);
-                                                        setLeaveTeamError(null);
-                                                        setShowLeaveModal(true);
-                                                    }}
-                                                    className="w-full text-left px-3.5 py-2.5 text-red-400 hover:text-red-300 hover:bg-red-950/20 transition-colors flex items-center justify-between cursor-pointer"
-                                                >
-                                                    <span>{isOwner && members.length <= 1 ? '// DISBAND SQUAD' : '// LEAVE SQUAD'}</span>
-                                                    <LogoutIcon className="w-3.5 h-3.5 text-red-400" />
-                                                </button>
+                                                {/* SECTION 3: DESTRUCTIVE ACTIONS */}
+                                                <div className="py-1">
+                                                    {isOwner ? (
+                                                        <button
+                                                            type="button"
+                                                            role="menuitem"
+                                                            onClick={() => {
+                                                                setShowMenu(false);
+                                                                setShowDisbandModal(true);
+                                                            }}
+                                                            className="w-full text-left px-3.5 py-2 text-red-400 hover:text-red-300 hover:bg-red-950/20 transition-colors flex items-center justify-between cursor-pointer"
+                                                        >
+                                                            <span className="flex items-center gap-2">
+                                                                <TrashIcon className="w-3.5 h-3.5 text-red-400" />
+                                                                <span>// DISBAND SQUAD</span>
+                                                            </span>
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            role="menuitem"
+                                                            onClick={() => {
+                                                                setShowMenu(false);
+                                                                setLeaveTeamError(null);
+                                                                setShowLeaveModal(true);
+                                                            }}
+                                                            className="w-full text-left px-3.5 py-2 text-red-400 hover:text-red-300 hover:bg-red-950/20 transition-colors flex items-center justify-between cursor-pointer"
+                                                        >
+                                                            <span className="flex items-center gap-2">
+                                                                <LogoutIcon className="w-3.5 h-3.5 text-red-400" />
+                                                                <span>// LEAVE SQUAD</span>
+                                                            </span>
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -1979,26 +2383,96 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                                         : isMe
                                                                         ? 'bg-zinc-900 border-zinc-750 text-zinc-100'
                                                                         : 'bg-[#131316] border-zinc-800 text-zinc-200'
-                                                                }`}
+                                                                } ${editingMessageId === msg.id ? 'w-full min-w-[280px] sm:min-w-[360px]' : ''}`}
                                                             >
-                                                                <div className="whitespace-pre-wrap break-words leading-relaxed font-mono">
-                                                                    <ClickableMessageText
-                                                                        text={msg.text}
-                                                                        isSender={isMe}
-                                                                        timestamp={timeStr}
-                                                                        searchTerm={isSearchOpen ? chatSearchQuery : undefined}
-                                                                    />
-                                                                </div>
-                                                                {timeStr && (
-                                                                    <div
-                                                                        className={`mt-1 text-[10px] ${
-                                                                            isMe
-                                                                                ? 'text-zinc-500 text-right'
-                                                                                : 'text-zinc-600 text-left'
-                                                                        }`}
-                                                                    >
-                                                                        {timeStr}
+                                                                {editingMessageId === msg.id ? (
+                                                                    <div className="space-y-2">
+                                                                        <div className="text-[10px] text-zinc-400 uppercase tracking-wider font-mono flex items-center justify-between">
+                                                                            <span>// EDITING TRANSMISSION</span>
+                                                                            <span className="text-zinc-600 text-[9px]">ESC to cancel</span>
+                                                                        </div>
+                                                                        <textarea
+                                                                            value={editingMessageText}
+                                                                            onChange={(e) => setEditingMessageText(e.target.value)}
+                                                                            onKeyDown={(e) => {
+                                                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                                                    e.preventDefault();
+                                                                                    handleSaveMessageEdit(msg.id);
+                                                                                } else if (e.key === 'Escape') {
+                                                                                    e.preventDefault();
+                                                                                    setEditingMessageId(null);
+                                                                                    setEditingMessageText('');
+                                                                                    setMessageEditError(null);
+                                                                                }
+                                                                            }}
+                                                                            rows={3}
+                                                                            className="w-full bg-black/60 border border-zinc-700 p-2 text-xs text-white placeholder-zinc-500 font-mono focus:outline-none focus:border-emerald-500 resize-none"
+                                                                            placeholder="Update message transmission..."
+                                                                            autoFocus
+                                                                        />
+                                                                        {messageEditError && (
+                                                                            <p className="text-[10px] text-red-400 font-mono">
+                                                                                {messageEditError}
+                                                                            </p>
+                                                                        )}
+                                                                        <div className="flex items-center justify-end gap-2 pt-1 font-mono">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    setEditingMessageId(null);
+                                                                                    setEditingMessageText('');
+                                                                                    setMessageEditError(null);
+                                                                                }}
+                                                                                disabled={isSavingMessageEdit}
+                                                                                className="px-2.5 py-1 text-[10px] uppercase border border-zinc-750 text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors cursor-pointer disabled:opacity-40"
+                                                                            >
+                                                                                Cancel
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => handleSaveMessageEdit(msg.id)}
+                                                                                disabled={isSavingMessageEdit || !editingMessageText.trim()}
+                                                                                className="px-3 py-1 text-[10px] uppercase bg-emerald-600 hover:bg-emerald-500 text-black font-bold tracking-wider transition-colors cursor-pointer disabled:opacity-40 flex items-center gap-1.5"
+                                                                            >
+                                                                                {isSavingMessageEdit ? (
+                                                                                    <>
+                                                                                        <div className="w-2.5 h-2.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                                                                                        <span>SAVING...</span>
+                                                                                    </>
+                                                                                ) : (
+                                                                                    <span>Save Changes</span>
+                                                                                )}
+                                                                            </button>
+                                                                        </div>
                                                                     </div>
+                                                                ) : (
+                                                                    <>
+                                                                        <div className="whitespace-pre-wrap break-words leading-relaxed font-mono">
+                                                                            <ClickableMessageText
+                                                                                text={msg.text}
+                                                                                isSender={isMe}
+                                                                                timestamp={timeStr}
+                                                                                searchTerm={isSearchOpen ? chatSearchQuery : undefined}
+                                                                            />
+                                                                        </div>
+                                                                        <div
+                                                                            className={`mt-1 text-[10px] flex items-center gap-1.5 ${
+                                                                                isMe
+                                                                                    ? 'text-zinc-500 justify-end'
+                                                                                    : 'text-zinc-600 justify-start'
+                                                                            }`}
+                                                                        >
+                                                                            {timeStr && <span>{timeStr}</span>}
+                                                                            {msg.editedAt && (
+                                                                                <span
+                                                                                    className="text-[9px] text-zinc-500 italic font-mono"
+                                                                                    title="Edited message"
+                                                                                >
+                                                                                    (edited)
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </>
                                                                 )}
                                                             </div>
 
@@ -2030,6 +2504,21 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                                                             }`}
                                                                             onClick={(e) => e.stopPropagation()}
                                                                         >
+                                                                            {isMe && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        setActiveMessageMenuId(null);
+                                                                                        setEditingMessageId(msg.id);
+                                                                                        setEditingMessageText(msg.text);
+                                                                                        setMessageEditError(null);
+                                                                                    }}
+                                                                                    className="w-full text-left px-3 py-1.5 text-zinc-300 hover:text-white hover:bg-zinc-900 flex items-center justify-between cursor-pointer"
+                                                                                >
+                                                                                    <span>// EDIT MESSAGE</span>
+                                                                                    <PencilSquareIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                </button>
+                                                                            )}
                                                                             <button
                                                                                 type="button"
                                                                                 onClick={() => {
@@ -3765,6 +4254,855 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
                                 className="px-4 py-2 bg-transparent border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white uppercase transition-colors text-xs font-bold cursor-pointer font-mono"
                             >
                                 Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 10. TEAM INFO MODAL (Accessible to all team members) */}
+            {showTeamInfoModal && activeTeam && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 backdrop-blur-[5px] p-4 font-mono animate-fadeIn"
+                    onClick={() => {
+                        setShowTeamInfoModal(false);
+                        setTeamInfoMemberFilter('');
+                    }}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="team-info-title"
+                >
+                    <div
+                        className="border border-zinc-800 bg-[#0c0c0e] max-w-xl w-full p-5 sm:p-6 space-y-4 shadow-2xl relative animate-fadeInUp select-none text-left flex flex-col max-h-[90vh]"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex items-start justify-between border-b border-zinc-800 pb-3 flex-shrink-0">
+                            <div className="flex items-center gap-2">
+                                <InformationCircleIcon className="w-4 h-4 text-emerald-400" />
+                                <div>
+                                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block">
+                                        // SQUAD DOSSIER
+                                    </span>
+                                    <h3 id="team-info-title" className="text-sm font-bold text-white uppercase tracking-wider mt-0.5">
+                                        TEAM INFO
+                                    </h3>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowTeamInfoModal(false);
+                                    setTeamInfoMemberFilter('');
+                                }}
+                                className="text-zinc-500 hover:text-white text-base leading-none p-1 cursor-pointer font-mono"
+                                title="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="space-y-4 overflow-y-auto pr-1 flex-1">
+                            {/* Team Identity Banner */}
+                            <div className="p-4 bg-zinc-950 border border-zinc-800 flex items-start gap-3.5">
+                                <div className="w-12 h-12 bg-zinc-900 border border-zinc-750 flex items-center justify-center flex-shrink-0 overflow-hidden text-emerald-400 font-bold text-sm">
+                                    {activeTeam.avatarUrl ? (
+                                        <img
+                                            src={activeTeam.avatarUrl}
+                                            alt={activeTeam.name}
+                                            className="w-full h-full object-cover"
+                                            onError={handleImageError}
+                                        />
+                                    ) : (
+                                        <span>{(activeTeam.name || 'T').substring(0, 2).toUpperCase()}</span>
+                                    )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h4 className="text-sm font-bold text-white uppercase tracking-wide truncate">
+                                            {activeTeam.name}
+                                        </h4>
+                                        <span className="text-[9px] px-1.5 py-0.5 bg-emerald-950/80 text-emerald-400 border border-emerald-800 font-mono">
+                                            {activeTeam.joinPolicy === 'approval_required' ? 'APPROVAL REQ.' : 'OPEN ACCESS'}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-zinc-400 mt-1 leading-relaxed whitespace-pre-wrap">
+                                        {activeTeam.description || 'No squad mission description recorded.'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Associated Project Dossier (if linked) */}
+                            {activeTeam.projectName && (
+                                <div className="p-3 bg-zinc-900/40 border border-zinc-800/90 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold flex items-center gap-1.5">
+                                            <BriefcaseIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                            ASSOCIATED SPOTLIGHT PROJECT
+                                        </span>
+                                        {activeTeam.projectDomain && (
+                                            <span className="text-[9px] px-1.5 py-0.2 bg-zinc-800 text-zinc-300 border border-zinc-700 uppercase">
+                                                {activeTeam.projectDomain}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <h5 className="text-xs font-bold text-white truncate">
+                                                {activeTeam.projectName}
+                                            </h5>
+                                            {activeTeam.projectId && (
+                                                <p className="text-[10px] text-zinc-500 font-mono truncate">
+                                                    ID: {activeTeam.projectId}
+                                                </p>
+                                            )}
+                                        </div>
+                                        {activeTeam.projectId && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowTeamInfoModal(false);
+                                                    setShowProjectModal(true);
+                                                }}
+                                                className="px-2.5 py-1 text-[10px] font-mono border border-zinc-750 hover:border-zinc-600 text-zinc-300 hover:text-white uppercase transition-colors flex items-center gap-1 flex-shrink-0 cursor-pointer"
+                                            >
+                                                <span>PROJECT DETAILS</span>
+                                                <ArrowUpRightIcon className="w-3 h-3" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Metadata Grid */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                <div className="p-2.5 bg-zinc-950 border border-zinc-850">
+                                    <span className="text-[9px] text-zinc-500 uppercase tracking-wider block">
+                                        OPERATIVES
+                                    </span>
+                                    <span className="text-xs font-bold text-white mt-0.5 block">
+                                        {members.length || activeTeam.members?.length || 1}
+                                    </span>
+                                </div>
+                                <div className="p-2.5 bg-zinc-950 border border-zinc-850">
+                                    <span className="text-[9px] text-zinc-500 uppercase tracking-wider block">
+                                        COMMISSIONED
+                                    </span>
+                                    <span className="text-xs font-bold text-zinc-300 mt-0.5 block truncate">
+                                        {formatTimestamp(activeTeam.createdAt) || 'Recent'}
+                                    </span>
+                                </div>
+                                <div className="p-2.5 bg-zinc-950 border border-zinc-850 col-span-2">
+                                    <span className="text-[9px] text-zinc-500 uppercase tracking-wider block">
+                                        MEMBERSHIP POLICY
+                                    </span>
+                                    <span className="text-xs font-bold text-emerald-400 mt-0.5 block">
+                                        {activeTeam.joinPolicy === 'approval_required'
+                                            ? 'Approval Required by Owner'
+                                            : 'Anyone with invitation link'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Team Lead Card */}
+                            <div className="p-3 bg-zinc-950 border border-zinc-800 flex items-center justify-between">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="w-8 h-8 bg-zinc-850 border border-zinc-750 flex items-center justify-center flex-shrink-0 text-xs font-bold text-zinc-300 overflow-hidden">
+                                        {activeTeam.ownerAvatar ? (
+                                            <img
+                                                src={activeTeam.ownerAvatar}
+                                                alt={activeTeam.ownerName || 'Lead'}
+                                                className="w-full h-full object-cover"
+                                                onError={handleImageError}
+                                            />
+                                        ) : (
+                                            <span>{(activeTeam.ownerName || 'L').charAt(0).toUpperCase()}</span>
+                                        )}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                                            <span>{activeTeam.ownerName || 'Squad Lead'}</span>
+                                            <span className="text-[8px] px-1 py-0.2 bg-emerald-950 text-emerald-400 border border-emerald-800 uppercase font-mono">
+                                                LEAD
+                                            </span>
+                                        </div>
+                                        <div className="text-[10px] text-zinc-500 truncate">
+                                            Command Authority
+                                        </div>
+                                    </div>
+                                </div>
+                                {activeTeam.ownerId && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowTeamInfoModal(false);
+                                            navigate(`/profile/${activeTeam.ownerId}`);
+                                        }}
+                                        className="px-2.5 py-1 text-[10px] font-mono border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white uppercase transition-colors cursor-pointer"
+                                    >
+                                        // PROFILE
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Operatives Roster with Filter */}
+                            <div className="space-y-2 pt-1">
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
+                                        <UsersIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                        Operatives Roster ({members.length})
+                                    </span>
+                                    <div className="w-44">
+                                        <input
+                                            type="text"
+                                            value={teamInfoMemberFilter}
+                                            onChange={(e) => setTeamInfoMemberFilter(e.target.value)}
+                                            placeholder="Filter members..."
+                                            className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 text-[11px] font-mono text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="border border-zinc-800 divide-y divide-zinc-850 max-h-52 overflow-y-auto">
+                                    {members
+                                        .filter((m) => {
+                                            if (!teamInfoMemberFilter.trim()) return true;
+                                            const query = teamInfoMemberFilter.toLowerCase();
+                                            return (
+                                                (m.displayName || '').toLowerCase().includes(query) ||
+                                                (m.role || '').toLowerCase().includes(query)
+                                            );
+                                        })
+                                        .map((m) => (
+                                            <div
+                                                key={m.id || m.userId}
+                                                className="p-2.5 flex items-center justify-between hover:bg-zinc-900/50 transition-colors"
+                                            >
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <div className="w-7 h-7 bg-zinc-800 border border-zinc-750 flex items-center justify-center overflow-hidden flex-shrink-0 text-xs text-zinc-300">
+                                                        {m.photoURL ? (
+                                                            <img
+                                                                src={m.photoURL}
+                                                                alt={m.displayName || 'Member'}
+                                                                onError={handleImageError}
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                        ) : (
+                                                            <span>{(m.displayName || '?').charAt(0).toUpperCase()}</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="text-xs font-medium text-zinc-200 truncate flex items-center gap-1.5">
+                                                            <span>{m.displayName || 'Operative'}</span>
+                                                            {m.userId === activeTeam.ownerId && (
+                                                                <span className="text-[8px] px-1 py-0.2 bg-emerald-950 text-emerald-400 border border-emerald-800">
+                                                                    LEAD
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-[10px] text-zinc-500">
+                                                            Role: {m.role || 'Member'}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {m.userId && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setShowTeamInfoModal(false);
+                                                            navigate(`/profile/${m.userId}`);
+                                                        }}
+                                                        className="px-2 py-0.5 text-[10px] text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-750 transition-colors cursor-pointer"
+                                                    >
+                                                        Profile
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="pt-2 flex items-center justify-end border-t border-zinc-800/80 flex-shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowTeamInfoModal(false);
+                                    setTeamInfoMemberFilter('');
+                                }}
+                                className="px-4 py-2 bg-transparent border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white uppercase transition-colors text-xs font-bold cursor-pointer font-mono"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 11. TEAM SETTINGS MODAL (Admin / Owner Only) */}
+            {showTeamSettingsModal && activeTeam && isOwner && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 backdrop-blur-[5px] p-4 font-mono animate-fadeIn"
+                    onClick={() => {
+                        if (!isSavingTeamSettings && !isRegeneratingInvite && !isRevokingInvite) {
+                            setShowTeamSettingsModal(false);
+                            setTeamSettingsFeedback(null);
+                        }
+                    }}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="team-settings-title"
+                >
+                    <div
+                        className="border border-zinc-800 bg-[#0c0c0e] max-w-xl w-full flex flex-col max-h-[90vh] shadow-2xl relative animate-fadeInUp select-none text-left"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-[#0e0e12] flex-shrink-0">
+                            <div className="flex items-center gap-2">
+                                <CogIcon className="w-4 h-4 text-emerald-400" />
+                                <div>
+                                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block">
+                                        // SQUAD CONTROL
+                                    </span>
+                                    <h3 id="team-settings-title" className="text-sm font-bold text-white uppercase tracking-wider">
+                                        TEAM SETTINGS [ADMIN]
+                                    </h3>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!isSavingTeamSettings && !isRegeneratingInvite && !isRevokingInvite) {
+                                        setShowTeamSettingsModal(false);
+                                        setTeamSettingsFeedback(null);
+                                    }
+                                }}
+                                disabled={isSavingTeamSettings || isRegeneratingInvite || isRevokingInvite}
+                                className="text-zinc-500 hover:text-white text-base leading-none p-1 cursor-pointer font-mono disabled:opacity-40"
+                                title="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Tabs Bar */}
+                        <div className="flex border-b border-zinc-800 bg-[#09090b] text-xs font-mono flex-shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setTeamSettingsTab('general');
+                                    setTeamSettingsFeedback(null);
+                                }}
+                                className={`flex-1 py-2.5 px-3 uppercase tracking-wider font-semibold border-b-2 transition-colors cursor-pointer ${
+                                    teamSettingsTab === 'general'
+                                        ? 'border-emerald-500 text-emerald-400 bg-zinc-900/40'
+                                        : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'
+                                }`}
+                            >
+                                // General
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setTeamSettingsTab('invitation');
+                                    setTeamSettingsFeedback(null);
+                                }}
+                                className={`flex-1 py-2.5 px-3 uppercase tracking-wider font-semibold border-b-2 transition-colors cursor-pointer ${
+                                    teamSettingsTab === 'invitation'
+                                        ? 'border-emerald-500 text-emerald-400 bg-zinc-900/40'
+                                        : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'
+                                }`}
+                            >
+                                // Invitation Link
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setTeamSettingsTab('join_policy');
+                                    setTeamSettingsFeedback(null);
+                                }}
+                                className={`flex-1 py-2.5 px-3 uppercase tracking-wider font-semibold border-b-2 transition-colors cursor-pointer ${
+                                    teamSettingsTab === 'join_policy'
+                                        ? 'border-emerald-500 text-emerald-400 bg-zinc-900/40'
+                                        : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'
+                                }`}
+                            >
+                                // Join Policy
+                            </button>
+                        </div>
+
+                        {/* Feedback Banner */}
+                        {teamSettingsFeedback && (
+                            <div
+                                className={`px-4 py-2 border-b text-xs flex items-center justify-between flex-shrink-0 ${
+                                    teamSettingsFeedback.type === 'success'
+                                        ? 'bg-emerald-950/70 border-emerald-800 text-emerald-300'
+                                        : 'bg-red-950/70 border-red-800 text-red-300'
+                                }`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <span className="font-bold">//</span>
+                                    <span>{teamSettingsFeedback.message}</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setTeamSettingsFeedback(null)}
+                                    className="text-zinc-400 hover:text-white cursor-pointer"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Tab Content Container */}
+                        <div className="p-5 overflow-y-auto space-y-4 flex-1">
+                            {/* TAB 1: GENERAL */}
+                            {teamSettingsTab === 'general' && (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                                            TEAM NAME *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={settingsTeamName}
+                                            onChange={(e) => setSettingsTeamName(e.target.value)}
+                                            placeholder="Enter team name..."
+                                            className="w-full bg-[#121315] border border-zinc-750 p-2.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 font-mono"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                                            MISSION DESCRIPTION
+                                        </label>
+                                        <textarea
+                                            rows={3}
+                                            value={settingsTeamDesc}
+                                            onChange={(e) => setSettingsTeamDesc(e.target.value)}
+                                            placeholder="Brief description of the team's objectives and collaboration focus..."
+                                            className="w-full bg-[#121315] border border-zinc-750 p-2.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 font-mono resize-none"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                                            AVATAR / BADGE URL (OPTIONAL)
+                                        </label>
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-zinc-900 border border-zinc-750 flex items-center justify-center flex-shrink-0 overflow-hidden text-emerald-400 font-bold text-xs">
+                                                {settingsTeamAvatarUrl.trim() ? (
+                                                    <img
+                                                        src={settingsTeamAvatarUrl.trim()}
+                                                        alt="Preview"
+                                                        className="w-full h-full object-cover"
+                                                        onError={handleImageError}
+                                                    />
+                                                ) : activeTeam.avatarUrl ? (
+                                                    <img
+                                                        src={activeTeam.avatarUrl}
+                                                        alt="Current"
+                                                        className="w-full h-full object-cover"
+                                                        onError={handleImageError}
+                                                    />
+                                                ) : (
+                                                    <span>{(settingsTeamName || 'T').substring(0, 2).toUpperCase()}</span>
+                                                )}
+                                            </div>
+                                            <input
+                                                type="url"
+                                                value={settingsTeamAvatarUrl}
+                                                onChange={(e) => setSettingsTeamAvatarUrl(e.target.value)}
+                                                placeholder="https://images.unsplash.com/... or image link"
+                                                className="flex-1 bg-[#121315] border border-zinc-750 p-2.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 font-mono"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Associated Project Info (Guaranteed Preservation) */}
+                                    {activeTeam.projectName && (
+                                        <div className="p-3 bg-zinc-950 border border-zinc-800 space-y-1.5">
+                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold block">
+                                                // ASSOCIATED SPOTLIGHT PROJECT
+                                            </span>
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="text-white font-bold">{activeTeam.projectName}</span>
+                                                <span className="text-zinc-500 font-mono text-[10px]">ID: {activeTeam.projectId}</span>
+                                            </div>
+                                            <p className="text-[10px] text-zinc-500">
+                                                Project associations are preserved automatically across general squad updates.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <div className="pt-2 flex items-center justify-end gap-3 border-t border-zinc-850">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSettingsTeamName(activeTeam.name || '');
+                                                setSettingsTeamDesc(activeTeam.description || '');
+                                                setSettingsTeamAvatarUrl(activeTeam.avatarUrl || '');
+                                            }}
+                                            disabled={isSavingTeamSettings}
+                                            className="px-3 py-1.5 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white uppercase text-xs font-mono transition-colors cursor-pointer disabled:opacity-40"
+                                        >
+                                            Reset
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleSaveTeamGeneralSettings}
+                                            disabled={isSavingTeamSettings || !settingsTeamName.trim()}
+                                            className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-black text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40 cursor-pointer flex items-center gap-1.5 font-mono"
+                                        >
+                                            {isSavingTeamSettings ? (
+                                                <>
+                                                    <div className="w-3 h-3 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                                                    <span>SAVING...</span>
+                                                </>
+                                            ) : (
+                                                <span>Save General Settings</span>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* TAB 2: INVITATION LINK */}
+                            {teamSettingsTab === 'invitation' && (
+                                <div className="space-y-4">
+                                    <div className="p-3 bg-zinc-950 border border-zinc-800 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                <LinkIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                CANONICAL INVITATION URL
+                                            </span>
+                                            <span
+                                                className={`text-[9px] font-bold px-1.5 py-0.2 border uppercase ${
+                                                    teamInviteToken && teamInviteToken.status === 'active'
+                                                        ? 'bg-emerald-950/80 border-emerald-800 text-emerald-400'
+                                                        : 'bg-red-950/80 border-red-800 text-red-400'
+                                                }`}
+                                            >
+                                                {teamInviteToken && teamInviteToken.status === 'active' ? 'ACTIVE' : 'REVOKED / INACTIVE'}
+                                            </span>
+                                        </div>
+
+                                        <div className="p-2.5 bg-[#09090b] border border-zinc-800 text-xs font-mono text-zinc-300 break-all select-all">
+                                            {teamInviteToken?.token
+                                                ? getTeamInvitationUrl(teamInviteToken.token, activeTeam?.id)
+                                                : 'No active invitation link configured. Generate one below.'}
+                                        </div>
+
+                                        <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleCopyTeamInviteLink()}
+                                                disabled={!teamInviteToken?.token || teamInviteToken.status !== 'active'}
+                                                className="px-3 py-1.5 bg-white hover:bg-zinc-200 text-black text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40 cursor-pointer flex items-center gap-1.5 font-mono"
+                                            >
+                                                {inviteCopied ? (
+                                                    <>
+                                                        <CheckCircleIcon className="w-3.5 h-3.5 text-emerald-700" />
+                                                        <span>COPIED LINK</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <ClipboardIcon className="w-3.5 h-3.5" />
+                                                        <span>COPY LINK</span>
+                                                    </>
+                                                )}
+                                            </button>
+
+                                            <div className="flex items-center gap-2">
+                                                {teamInviteToken && teamInviteToken.status === 'active' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRevokeTeamInvite()}
+                                                        disabled={isRevokingInvite}
+                                                        className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/60 border border-red-800 text-red-300 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40 cursor-pointer flex items-center gap-1.5 font-mono"
+                                                    >
+                                                        {isRevokingInvite ? (
+                                                            <>
+                                                                <div className="w-3 h-3 border-2 border-red-300 border-t-transparent rounded-full animate-spin" />
+                                                                <span>REVOKING...</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <XCircleIcon className="w-3.5 h-3.5" />
+                                                                <span>REVOKE LINK</span>
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={handleGenerateOrRegenerateTeamInvite}
+                                                    disabled={isRegeneratingInvite}
+                                                    className="px-3 py-1.5 border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40 cursor-pointer flex items-center gap-1.5 font-mono"
+                                                >
+                                                    {isRegeneratingInvite ? (
+                                                        <>
+                                                            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                            <span>PROCESSING...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <RegenerateIcon className="w-3.5 h-3.5" />
+                                                            <span>{teamInviteToken ? 'REGENERATE' : 'GENERATE'} LINK</span>
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Stats Card */}
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div className="p-2.5 bg-zinc-950 border border-zinc-850">
+                                            <span className="text-[9px] text-zinc-500 uppercase tracking-wider block">
+                                                TOTAL ACCEPTS
+                                            </span>
+                                            <span className="text-xs font-bold text-white mt-0.5 block">
+                                                {teamInviteToken?.usedCount || 0}
+                                            </span>
+                                        </div>
+                                        <div className="p-2.5 bg-zinc-950 border border-zinc-850">
+                                            <span className="text-[9px] text-zinc-500 uppercase tracking-wider block">
+                                                USAGE LIMIT
+                                            </span>
+                                            <span className="text-xs font-bold text-zinc-300 mt-0.5 block">
+                                                {teamInviteToken?.maxUses ? `${teamInviteToken.maxUses} uses` : 'Unlimited'}
+                                            </span>
+                                        </div>
+                                        <div className="p-2.5 bg-zinc-950 border border-zinc-850">
+                                            <span className="text-[9px] text-zinc-500 uppercase tracking-wider block">
+                                                EXPIRATION
+                                            </span>
+                                            <span className="text-xs font-bold text-emerald-400 mt-0.5 block">
+                                                {teamInviteToken?.expiresAt ? 'Active Window' : 'Never'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] text-zinc-500 leading-relaxed">
+                                        Regenerating will revoke the previous link immediately. Any pending or new users will require the updated URL.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* TAB 3: JOIN POLICY */}
+                            {teamSettingsTab === 'join_policy' && (
+                                <div className="space-y-4">
+                                    <p className="text-xs text-zinc-400 leading-relaxed">
+                                        Define how prospective collaborators gain admission into {activeTeam.name}:
+                                    </p>
+
+                                    <div className="space-y-3" role="radiogroup" aria-label="Team join access settings">
+                                        {/* Option 1: Anyone with link */}
+                                        <div
+                                            role="radio"
+                                            aria-checked={selectedJoinPolicy === 'open'}
+                                            tabIndex={0}
+                                            onClick={() => setSelectedJoinPolicy('open')}
+                                            onKeyDown={(e) => {
+                                                if (e.key === ' ' || e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    setSelectedJoinPolicy('open');
+                                                }
+                                            }}
+                                            className={`p-3.5 border transition-all cursor-pointer space-y-1.5 ${
+                                                selectedJoinPolicy === 'open'
+                                                    ? 'border-emerald-500/90 bg-emerald-950/20 shadow-md'
+                                                    : 'border-zinc-800/80 bg-zinc-950 hover:border-zinc-700'
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <div
+                                                        className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors ${
+                                                            selectedJoinPolicy === 'open'
+                                                                ? 'border-emerald-400 bg-emerald-500'
+                                                                : 'border-zinc-700 bg-zinc-900'
+                                                        }`}
+                                                    >
+                                                        {selectedJoinPolicy === 'open' && (
+                                                            <div className="w-1.5 h-1.5 bg-black rounded-full" />
+                                                        )}
+                                                    </div>
+                                                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                                                        ANYONE WITH THE INVITATION LINK
+                                                    </span>
+                                                </div>
+                                                <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-1.5 py-0.2">
+                                                    OPEN ACCESS
+                                                </span>
+                                            </div>
+                                            <p className="text-[11px] text-zinc-400 leading-relaxed pl-5.5">
+                                                Collaborators with a valid invitation link join the team immediately without requiring manual approval.
+                                            </p>
+                                        </div>
+
+                                        {/* Option 2: Approval Required */}
+                                        <div
+                                            role="radio"
+                                            aria-checked={selectedJoinPolicy === 'approval_required'}
+                                            tabIndex={0}
+                                            onClick={() => setSelectedJoinPolicy('approval_required')}
+                                            onKeyDown={(e) => {
+                                                if (e.key === ' ' || e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    setSelectedJoinPolicy('approval_required');
+                                                }
+                                            }}
+                                            className={`p-3.5 border transition-all cursor-pointer space-y-1.5 ${
+                                                selectedJoinPolicy === 'approval_required'
+                                                    ? 'border-purple-500/90 bg-purple-950/20 shadow-md'
+                                                    : 'border-zinc-800/80 bg-zinc-950 hover:border-zinc-700'
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <div
+                                                        className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors ${
+                                                            selectedJoinPolicy === 'approval_required'
+                                                                ? 'border-purple-400 bg-purple-500'
+                                                                : 'border-zinc-700 bg-zinc-900'
+                                                        }`}
+                                                    >
+                                                        {selectedJoinPolicy === 'approval_required' && (
+                                                            <div className="w-1.5 h-1.5 bg-black rounded-full" />
+                                                        )}
+                                                    </div>
+                                                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                                                        APPROVAL REQUIRED
+                                                    </span>
+                                                </div>
+                                                <span className="text-[9px] font-bold text-purple-400 bg-purple-950/80 border border-purple-800 px-1.5 py-0.2">
+                                                    RESTRICTED
+                                                </span>
+                                            </div>
+                                            <p className="text-[11px] text-zinc-400 leading-relaxed pl-5.5">
+                                                Collaborators must submit a join request. The team owner or an administrator must review and approve before granting access.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-2 flex items-center justify-end border-t border-zinc-850">
+                                        <button
+                                            type="button"
+                                            onClick={handleSaveTeamJoinPolicy}
+                                            disabled={isSavingTeamSettings}
+                                            className="px-4 py-1.5 bg-white hover:bg-zinc-200 text-black text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40 cursor-pointer flex items-center gap-1.5 font-mono"
+                                        >
+                                            {isSavingTeamSettings ? (
+                                                <>
+                                                    <div className="w-3 h-3 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                                                    <span>SAVING...</span>
+                                                </>
+                                            ) : (
+                                                <span>Apply Join Policy</span>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-3 border-t border-zinc-800 bg-[#09090b] flex items-center justify-end flex-shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowTeamSettingsModal(false);
+                                    setTeamSettingsFeedback(null);
+                                }}
+                                disabled={isSavingTeamSettings || isRegeneratingInvite || isRevokingInvite}
+                                className="px-4 py-1.5 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer disabled:opacity-40"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 12. DISBAND TEAM MODAL CONFIRMATION (Owner Only) */}
+            {showDisbandModal && activeTeam && isOwner && (
+                <div
+                    className="fixed inset-0 z-[130] flex items-center justify-center bg-black/80 backdrop-blur-[5px] p-4 font-mono animate-fadeIn"
+                    onClick={() => {
+                        if (!isDisbandingTeam) setShowDisbandModal(false);
+                    }}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="disband-team-title"
+                >
+                    <div
+                        className="border border-red-800/80 bg-[#0c0c0e] max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl relative animate-fadeInUp select-none text-left"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-start justify-between border-b border-zinc-800 pb-3">
+                            <div>
+                                <span className="text-[10px] text-red-500 uppercase tracking-widest font-bold block">
+                                    // DESTRUCTIVE ACTION
+                                </span>
+                                <h3 id="disband-team-title" className="text-sm font-bold text-red-400 uppercase tracking-wider mt-0.5">
+                                    DISBAND TEAM
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!isDisbandingTeam) setShowDisbandModal(false);
+                                }}
+                                disabled={isDisbandingTeam}
+                                className="text-zinc-500 hover:text-white text-base leading-none p-1 cursor-pointer font-mono disabled:opacity-40"
+                                title="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <p className="text-xs text-zinc-300 leading-relaxed">
+                            Are you certain you want to decommission and disband{' '}
+                            <span className="text-white font-bold">{activeTeam.name}</span>?
+                        </p>
+
+                        <div className="p-3 bg-red-950/20 border border-red-900/50 space-y-1.5 text-xs text-red-200">
+                            <p className="font-bold">// PERMANENT CONSEQUENCES:</p>
+                            <ul className="list-disc list-inside space-y-1 text-[11px] text-red-300/90">
+                                <li>All team messages and discussions will be permanently deleted.</li>
+                                <li>All active invitations and member links will be revoked.</li>
+                                <li>The associated spotlight project and creator listing will remain preserved.</li>
+                            </ul>
+                        </div>
+
+                        <div className="pt-2 flex items-center justify-end gap-3 border-t border-zinc-800/80">
+                            <button
+                                type="button"
+                                onClick={() => setShowDisbandModal(false)}
+                                disabled={isDisbandingTeam}
+                                className="px-4 py-2 bg-transparent border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white uppercase transition-colors text-xs font-bold cursor-pointer disabled:opacity-40 font-mono"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmDisbandTeam}
+                                disabled={isDisbandingTeam}
+                                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40 cursor-pointer flex items-center gap-2 font-mono"
+                            >
+                                {isDisbandingTeam ? (
+                                    <>
+                                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        <span>DISBANDING...</span>
+                                    </>
+                                ) : (
+                                    <span>Disband Permanently</span>
+                                )}
                             </button>
                         </div>
                     </div>

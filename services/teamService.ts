@@ -932,6 +932,167 @@ export const updateCrewDetails = async ({
 };
 
 /**
+ * Updates general settings for a project team (name, description, avatarUrl).
+ * Permissions: Only the authorized team owner / admin can update general settings.
+ * Preserves existing project associations and team properties.
+ */
+export const updateTeamDetails = async ({
+    teamId,
+    userId,
+    name,
+    description,
+    avatarUrl,
+}: {
+    teamId: string;
+    userId: string;
+    name: string;
+    description?: string;
+    avatarUrl?: string | null;
+}): Promise<void> => {
+    const cleanName = (name || '').trim();
+    if (!cleanName) {
+        throw new Error('Team name is required.');
+    }
+    if (!teamId || !userId) {
+        throw new Error('Invalid arguments: teamId and userId are required.');
+    }
+
+    if (teamId === 'team_demo_phoenix') {
+        return;
+    }
+
+    const teamRef = doc(db, COLLECTIONS.teams, teamId);
+    const snap = await getDoc(teamRef);
+    if (!snap.exists()) {
+        throw new Error('Team not found.');
+    }
+    const teamData = snap.data() as Team;
+    if (teamData.ownerId !== userId) {
+        throw new Error('Unauthorized: Only the team owner/admin can modify team settings.');
+    }
+
+    const updatePayload: Record<string, any> = {
+        name: cleanName,
+        description: (description || '').trim(),
+        updatedAt: serverTimestamp(),
+    };
+    if (avatarUrl !== undefined) {
+        updatePayload.avatarUrl = avatarUrl;
+    }
+
+    await updateDoc(teamRef, sanitizeForFirestore(updatePayload));
+};
+
+/**
+ * Retrieves an active invitation token for a team, or creates a new one if none exists.
+ */
+export const getOrCreateTeamInviteToken = async ({
+    teamId,
+    teamName,
+    projectId,
+    projectTitle,
+    user,
+    userProfile,
+    expiresInDays,
+    maxUses,
+}: {
+    teamId: string;
+    teamName: string;
+    projectId: string;
+    projectTitle: string;
+    user: User;
+    userProfile?: InvoxUser | null;
+    expiresInDays?: number | null;
+    maxUses?: number;
+}): Promise<TeamInvitation> => {
+    if (!teamId || !user?.uid) {
+        throw new Error('Authentication required.');
+    }
+
+    const invitationsRef = collection(db, COLLECTIONS.teamInvitations);
+    const q = query(
+        invitationsRef,
+        where('teamId', '==', teamId),
+        where('status', '==', 'active')
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+        const docSnap = snap.docs[0];
+        return {
+            id: docSnap.id,
+            ...(docSnap.data() as any),
+        };
+    }
+
+    return await createTeamInvitation({
+        teamId,
+        teamName,
+        projectId,
+        projectTitle,
+        ownerId: user.uid,
+        ownerName: userProfile?.displayName || user.displayName || 'Team Owner',
+        user,
+        expiresInDays,
+        maxUses,
+    });
+};
+
+/**
+ * Revokes any currently active invitation link for the team and generates a brand new token.
+ */
+export const regenerateTeamInvitation = async ({
+    teamId,
+    teamName,
+    projectId,
+    projectTitle,
+    user,
+    userProfile,
+    expiresInDays,
+    maxUses,
+}: {
+    teamId: string;
+    teamName: string;
+    projectId: string;
+    projectTitle: string;
+    user: User;
+    userProfile?: InvoxUser | null;
+    expiresInDays?: number | null;
+    maxUses?: number;
+}): Promise<TeamInvitation> => {
+    if (!teamId || !user?.uid) {
+        throw new Error('Authentication required.');
+    }
+
+    // Revoke any existing active invitations for this team
+    const invitationsRef = collection(db, COLLECTIONS.teamInvitations);
+    const q = query(
+        invitationsRef,
+        where('teamId', '==', teamId),
+        where('status', '==', 'active')
+    );
+    const snap = await getDocs(q);
+    for (const d of snap.docs) {
+        await updateDoc(d.ref, {
+            status: 'revoked',
+            updatedAt: serverTimestamp(),
+        }).catch(() => {});
+    }
+
+    // Generate fresh invitation token
+    return await createTeamInvitation({
+        teamId,
+        teamName,
+        projectId,
+        projectTitle,
+        ownerId: user.uid,
+        ownerName: userProfile?.displayName || user.displayName || 'Team Owner',
+        user,
+        expiresInDays,
+        maxUses,
+    });
+};
+
+/**
  * Retrieves an active invitation token for a crew, or creates a new one if none exists.
  */
 export const getOrCreateCrewInviteToken = async ({
