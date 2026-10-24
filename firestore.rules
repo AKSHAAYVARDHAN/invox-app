@@ -262,11 +262,13 @@ service cloud.firestore {
         allow create: if signedIn()
           && request.resource.data.senderId == uid()
           && uid() in get(/databases/$(database)/documents/messages/$(conversationId)).data.participants;
-        allow update: if signedIn()
-          && (resource.data.senderId == uid()
-              || resource.data.recipientId == uid()
-              || uid() in get(/databases/$(database)/documents/messages/$(conversationId)).data.participants
-              || isModerator());
+        allow update: if signedIn() && (
+          (resource.data.senderId == uid() || isModerator())
+          || (
+            (resource.data.recipientId == uid() || uid() in get(/databases/$(database)/documents/messages/$(conversationId)).data.participants)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt', 'readBy'])
+          )
+        );
         allow delete: if signedIn()
           && (resource.data.senderId == uid() || isModerator());
       }

@@ -6,6 +6,8 @@ import {
     subscribeToUserConversations,
     subscribeToConversationMessages,
     sendCollabMessage,
+    updateCollabMessage,
+    deleteCollabMessage,
     markConversationAsRead,
     getConversationUnreadCount,
     getOrCreateDirectConversation,
@@ -190,6 +192,17 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
     const [isDeletingMsg, setIsDeletingMsg] = useState<boolean>(false);
     const [deleteMsgError, setDeleteMsgError] = useState<string | null>(null);
 
+    // Message Actions (Editing & Deletion) for Comrade
+    const [editingComradeMsgId, setEditingComradeMsgId] = useState<string | null>(null);
+    const [editingComradeMsgText, setEditingComradeMsgText] = useState<string>('');
+    const [isSavingComradeMsgEdit, setIsSavingComradeMsgEdit] = useState<boolean>(false);
+    const [comradeMsgEditError, setComradeMsgEditError] = useState<string | null>(null);
+    const [activeComradeMsgMenuId, setActiveComradeMsgMenuId] = useState<string | null>(null);
+    const activeComradeMsgMenuRef = useRef<HTMLDivElement>(null);
+    const [comradeMsgToDelete, setComradeMsgToDelete] = useState<CollabChatMessage | null>(null);
+    const [isDeletingComradeMsg, setIsDeletingComradeMsg] = useState<boolean>(false);
+    const [deleteComradeMsgError, setDeleteComradeMsgError] = useState<string | null>(null);
+
     // Crew Info Modal
     const [showCrewInfoModal, setShowCrewInfoModal] = useState<boolean>(false);
     const [crewInfoMemberFilter, setCrewInfoMemberFilter] = useState<string>('');
@@ -310,6 +323,9 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
             }
             if (activeMsgMenuRef.current && !activeMsgMenuRef.current.contains(e.target as Node)) {
                 setActiveMsgMenuId(null);
+            }
+            if (activeComradeMsgMenuRef.current && !activeComradeMsgMenuRef.current.contains(e.target as Node)) {
+                setActiveComradeMsgMenuId(null);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -900,6 +916,54 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
             setDeleteMsgError(err?.message || 'Failed to delete message.');
         } finally {
             setIsDeletingMsg(false);
+        }
+    };
+
+    // Comrade Message Editing Handler (Own messages only)
+    const handleSaveComradeMsgEdit = async (messageId: string) => {
+        if (!selectedComradeId || !currentUser?.uid) return;
+        const clean = editingComradeMsgText.trim();
+        if (!clean) {
+            setComradeMsgEditError('Message content cannot be empty.');
+            return;
+        }
+
+        setIsSavingComradeMsgEdit(true);
+        setComradeMsgEditError(null);
+        try {
+            await updateCollabMessage({
+                conversationId: selectedComradeId,
+                messageId,
+                userId: currentUser.uid,
+                newText: clean,
+            });
+            setEditingComradeMsgId(null);
+            setEditingComradeMsgText('');
+        } catch (err: any) {
+            console.error('[EDIT_COMRADE_MESSAGE_ERROR]', err);
+            setComradeMsgEditError(err?.message || 'Failed to update message.');
+        } finally {
+            setIsSavingComradeMsgEdit(false);
+        }
+    };
+
+    // Comrade Message Deletion Handler (Own messages only)
+    const handleConfirmDeleteComradeMsg = async () => {
+        if (!selectedComradeId || !comradeMsgToDelete || !currentUser?.uid) return;
+        setIsDeletingComradeMsg(true);
+        setDeleteComradeMsgError(null);
+        try {
+            await deleteCollabMessage({
+                conversationId: selectedComradeId,
+                messageId: comradeMsgToDelete.id,
+                userId: currentUser.uid,
+            });
+            setComradeMsgToDelete(null);
+        } catch (err: any) {
+            console.error('[DELETE_COMRADE_MESSAGE_ERROR]', err);
+            setDeleteComradeMsgError(err?.message || 'Failed to delete message.');
+        } finally {
+            setIsDeletingComradeMsg(false);
         }
     };
 
@@ -1500,42 +1564,177 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
                                                         <div
                                                             className={`flex flex-col ${
                                                                 isMe ? 'items-end' : 'items-start'
-                                                            } max-w-full`}
+                                                            } max-w-full group/msg relative`}
                                                         >
                                                             {!isMe && msg.senderName && (
                                                                 <span className="text-[10px] text-zinc-400 mb-1 px-1 font-semibold font-mono tracking-wide">
                                                                     {msg.senderName}
                                                                 </span>
                                                             )}
+                                                            {/* Message Bubble with independent contextual actions trigger */}
                                                             <div
-                                                                className={`max-w-[85%] sm:max-w-[72%] min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs border shadow-sm ${
-                                                                    isMe
-                                                                        ? 'bg-zinc-850 border-zinc-750 text-zinc-100'
-                                                                        : 'bg-[#131317] border-zinc-800 text-zinc-200'
+                                                                className={`relative min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs border shadow-sm ${
+                                                                    editingComradeMsgId === msg.id
+                                                                        ? 'w-full min-w-[280px] sm:min-w-[360px] bg-[#141418] border-zinc-650'
+                                                                        : isMe
+                                                                        ? 'bg-zinc-850 border-zinc-750 text-zinc-100 max-w-[85%] sm:max-w-[72%]'
+                                                                        : 'bg-[#131317] border-zinc-800 text-zinc-200 max-w-[85%] sm:max-w-[72%]'
                                                                 }`}
                                                             >
-                                                                <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed font-mono min-w-0">
-                                                                    <ClickableMessageText
-                                                                        text={msg.text}
-                                                                        isSender={isMe}
-                                                                        timestamp={timeStr}
-                                                                        searchTerm={
-                                                                            isComradeSearchOpen
-                                                                                ? comradeChatSearchQuery
-                                                                                : undefined
-                                                                        }
-                                                                    />
-                                                                </div>
-                                                                {timeStr && (
+                                                                {/* Action button: positioned independently immediately to the left of the bubble */}
+                                                                {isMe && editingComradeMsgId !== msg.id && (
                                                                     <div
-                                                                        className={`mt-1.5 text-[10px] font-mono tabular-nums ${
-                                                                            isMe
-                                                                                ? 'text-zinc-500 text-right'
-                                                                                : 'text-zinc-600 text-left'
-                                                                        }`}
+                                                                        className="absolute right-full top-1/2 -translate-y-1/2 mr-1.5 z-20 flex-shrink-0"
+                                                                        ref={activeComradeMsgMenuId === msg.id ? activeComradeMsgMenuRef : null}
                                                                     >
-                                                                        {timeStr}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setActiveComradeMsgMenuId(activeComradeMsgMenuId === msg.id ? null : msg.id);
+                                                                            }}
+                                                                            className={`p-1 text-zinc-400 hover:text-white bg-zinc-900/90 border border-zinc-750 hover:border-zinc-500 transition-all cursor-pointer ${
+                                                                                activeComradeMsgMenuId === msg.id
+                                                                                    ? 'opacity-100 bg-zinc-800 text-white border-zinc-600'
+                                                                                    : 'opacity-0 [@media(hover:none)]:opacity-70 group-hover/msg:opacity-100 hover:opacity-100 focus:opacity-100 focus-visible:opacity-100'
+                                                                            }`}
+                                                                            title="Message options"
+                                                                            aria-label="Message options"
+                                                                            aria-haspopup="true"
+                                                                            aria-expanded={activeComradeMsgMenuId === msg.id}
+                                                                        >
+                                                                            <EllipsisVerticalIcon className="w-3.5 h-3.5" />
+                                                                        </button>
+
+                                                                        {activeComradeMsgMenuId === msg.id && (
+                                                                            <div
+                                                                                className="absolute right-0 top-full mt-1 w-36 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono text-xs"
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                            >
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        setActiveComradeMsgMenuId(null);
+                                                                                        setEditingComradeMsgId(msg.id);
+                                                                                        setEditingComradeMsgText(msg.text);
+                                                                                        setComradeMsgEditError(null);
+                                                                                    }}
+                                                                                    className="w-full text-left px-3 py-1.5 text-zinc-300 hover:bg-zinc-900 hover:text-white flex items-center gap-2 cursor-pointer"
+                                                                                >
+                                                                                    <PencilSquareIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                    <span>Edit Message</span>
+                                                                                </button>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        setActiveComradeMsgMenuId(null);
+                                                                                        setComradeMsgToDelete(msg);
+                                                                                        setDeleteComradeMsgError(null);
+                                                                                    }}
+                                                                                    className="w-full text-left px-3 py-1.5 text-red-400 hover:bg-red-950/30 hover:text-red-300 border-t border-zinc-850 flex items-center gap-2 cursor-pointer"
+                                                                                >
+                                                                                    <TrashIcon className="w-3.5 h-3.5 text-red-400" />
+                                                                                    <span>Delete Message</span>
+                                                                                </button>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
+                                                                )}
+
+                                                                {editingComradeMsgId === msg.id ? (
+                                                                    <div className="space-y-2">
+                                                                        <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono uppercase tracking-wider pb-1 border-b border-zinc-800">
+                                                                            <span className="flex items-center gap-1 text-emerald-400">
+                                                                                <PencilSquareIcon className="w-3 h-3" />
+                                                                                Edit Transmission
+                                                                            </span>
+                                                                            <span className="text-zinc-600">ESC to cancel</span>
+                                                                        </div>
+                                                                        <textarea
+                                                                            value={editingComradeMsgText}
+                                                                            onChange={(e) => setEditingComradeMsgText(e.target.value)}
+                                                                            onKeyDown={(e) => {
+                                                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                                                    e.preventDefault();
+                                                                                    handleSaveComradeMsgEdit(msg.id);
+                                                                                } else if (e.key === 'Escape') {
+                                                                                    setEditingComradeMsgId(null);
+                                                                                    setEditingComradeMsgText('');
+                                                                                    setComradeMsgEditError(null);
+                                                                                }
+                                                                            }}
+                                                                            autoFocus
+                                                                            rows={3}
+                                                                            className="w-full bg-[#0a0a0c] border border-zinc-700 p-2 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500 font-mono resize-none leading-relaxed"
+                                                                            placeholder="Edit your transmission..."
+                                                                        />
+                                                                        {comradeMsgEditError && (
+                                                                            <div className="text-[11px] text-red-400 font-mono flex items-center gap-1">
+                                                                                <span>!</span> {comradeMsgEditError}
+                                                                            </div>
+                                                                        )}
+                                                                        <div className="flex items-center justify-end gap-2 pt-1">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    setEditingComradeMsgId(null);
+                                                                                    setEditingComradeMsgText('');
+                                                                                    setComradeMsgEditError(null);
+                                                                                }}
+                                                                                disabled={isSavingComradeMsgEdit}
+                                                                                className="px-2.5 py-1 text-[11px] font-mono border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors cursor-pointer"
+                                                                            >
+                                                                                Cancel
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => handleSaveComradeMsgEdit(msg.id)}
+                                                                                disabled={isSavingComradeMsgEdit || !editingComradeMsgText.trim()}
+                                                                                className="px-3 py-1 text-[11px] font-mono bg-emerald-600 hover:bg-emerald-500 text-white font-medium flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer"
+                                                                            >
+                                                                                {isSavingComradeMsgEdit ? (
+                                                                                    <>
+                                                                                        <div className="w-2.5 h-2.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                                                        <span>Saving...</span>
+                                                                                    </>
+                                                                                ) : (
+                                                                                    <span>Save Changes</span>
+                                                                                )}
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <>
+                                                                        <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed font-mono min-w-0">
+                                                                            <ClickableMessageText
+                                                                                text={msg.text}
+                                                                                isSender={isMe}
+                                                                                timestamp={timeStr}
+                                                                                searchTerm={
+                                                                                    isComradeSearchOpen
+                                                                                        ? comradeChatSearchQuery
+                                                                                        : undefined
+                                                                                }
+                                                                            />
+                                                                        </div>
+                                                                        <div
+                                                                            className={`mt-1.5 flex items-center gap-1.5 text-[10px] font-mono tabular-nums ${
+                                                                                isMe
+                                                                                    ? 'text-zinc-500 justify-end'
+                                                                                    : 'text-zinc-600 justify-start'
+                                                                            }`}
+                                                                        >
+                                                                            {timeStr && <span>{timeStr}</span>}
+                                                                            {msg.editedAt && (
+                                                                                <span
+                                                                                    className="text-[9px] uppercase tracking-wider text-zinc-500 bg-zinc-900/80 px-1 py-0.5 border border-zinc-800"
+                                                                                    title={`Edited ${formatTimestamp(msg.editedAt)}`}
+                                                                                >
+                                                                                    edited
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -3497,6 +3696,65 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
                             className="px-4 py-1.5 text-xs font-mono bg-red-600 hover:bg-red-500 text-white font-medium uppercase tracking-wider transition-colors disabled:opacity-50 flex items-center gap-1.5"
                         >
                             {isDeletingMsg ? (
+                                <>
+                                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <span>Deleting...</span>
+                                </>
+                            ) : (
+                                <span>Delete Transmission</span>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* ---------------------------------------------------- */}
+        {/* COMRADE MESSAGE DELETE CONFIRMATION MODAL            */}
+        {/* ---------------------------------------------------- */}
+        {comradeMsgToDelete && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fade-in">
+                <div className="w-full max-w-md bg-[#0e0e12] border border-zinc-800 shadow-2xl p-5 space-y-4">
+                    <div className="flex items-center gap-2 text-red-400 border-b border-zinc-800 pb-2.5">
+                        <TrashIcon className="w-4 h-4 flex-shrink-0" />
+                        <h3 className="text-sm font-bold font-mono uppercase tracking-wider text-white">
+                            // PERMANENT DELETION
+                        </h3>
+                    </div>
+
+                    <p className="text-xs font-mono text-zinc-300 leading-relaxed">
+                        Are you sure you want to permanently delete this message from comrade transmissions? This operation cannot be undone.
+                    </p>
+
+                    <div className="p-3 bg-[#08080a] border border-zinc-800 text-xs font-mono text-zinc-400 italic line-clamp-3">
+                        "{comradeMsgToDelete.text}"
+                    </div>
+
+                    {deleteComradeMsgError && (
+                        <div className="text-xs font-mono text-red-400 bg-red-950/40 p-2 border border-red-900">
+                            {deleteComradeMsgError}
+                        </div>
+                    )}
+
+                    <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-zinc-800">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setComradeMsgToDelete(null);
+                                setDeleteComradeMsgError(null);
+                            }}
+                            disabled={isDeletingComradeMsg}
+                            className="px-3 py-1.5 text-xs font-mono border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleConfirmDeleteComradeMsg}
+                            disabled={isDeletingComradeMsg}
+                            className="px-4 py-1.5 text-xs font-mono bg-red-600 hover:bg-red-500 text-white font-medium uppercase tracking-wider transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                        >
+                            {isDeletingComradeMsg ? (
                                 <>
                                     <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                                     <span>Deleting...</span>

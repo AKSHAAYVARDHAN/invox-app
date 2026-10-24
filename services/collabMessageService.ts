@@ -14,6 +14,8 @@ import {
     arrayUnion,
     arrayRemove,
     getDocs,
+    deleteDoc,
+    limit,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { COLLECTIONS, sanitizeForFirestore } from './firestoreService';
@@ -67,6 +69,7 @@ export interface CollabChatMessage {
     readAt?: any;
     readBy?: string[];
     createdAt: any;
+    editedAt?: any;
     environment?: 'spotlight' | 'hub';
     scope?: 'spotlight_inbox' | 'hub_comrades' | 'spotlight_teams' | 'hub_crews';
 }
@@ -957,3 +960,121 @@ export const subscribeToUserUnreadMessages = (
         messageListeners.clear();
     };
 };
+
+/**
+ * Updates a message previously sent in a conversation (Comrades 1:1 or Collab message).
+ * Permissions: Only the message author may edit their own message.
+ * Enforces non-empty content, records editedAt timestamp, and updates parent conversation lastMessage preview.
+ */
+export const updateCollabMessage = async ({
+    conversationId,
+    messageId,
+    userId,
+    newText,
+}: {
+    conversationId: string;
+    messageId: string;
+    userId: string;
+    newText: string;
+}): Promise<void> => {
+    const cleanText = (newText || '').trim();
+    if (!cleanText) {
+        throw new Error('Message content cannot be empty.');
+    }
+    if (!conversationId || !messageId || !userId) {
+        throw new Error('Invalid arguments: conversationId, messageId, and userId are required.');
+    }
+
+    const messageRef = doc(db, COLLECTIONS.messages, conversationId, 'messages', messageId);
+    const messageSnap = await getDoc(messageRef);
+    if (!messageSnap.exists()) {
+        throw new Error('Message not found.');
+    }
+
+    const messageData = messageSnap.data();
+    if (messageData.senderId !== userId) {
+        throw new Error('Unauthorized: Only the message author may edit their own message.');
+    }
+
+    await updateDoc(messageRef, {
+        text: cleanText,
+        editedAt: serverTimestamp(),
+    });
+
+    // If this was the latest message in the conversation, update parent conversation lastMessage preview
+    try {
+        const msgsRef = collection(db, COLLECTIONS.messages, conversationId, 'messages');
+        const q = query(msgsRef, orderBy('createdAt', 'desc'), limit(1));
+        const latestSnap = await getDocs(q);
+        if (!latestSnap.empty && latestSnap.docs[0].id === messageId) {
+            const convRef = doc(db, COLLECTIONS.messages, conversationId);
+            await updateDoc(convRef, {
+                lastMessage: cleanText,
+                updatedAt: serverTimestamp(),
+            }).catch(() => {});
+        }
+    } catch (e) {
+        console.warn('[UPDATE_LAST_MESSAGE_AFTER_EDIT_WARN]', e);
+    }
+};
+
+/**
+ * Deletes a message previously sent in a conversation.
+ * Permissions: Only the message author may delete their own message.
+ * Removes the message document and refreshes parent conversation preview to reflect the remaining latest message.
+ */
+export const deleteCollabMessage = async ({
+    conversationId,
+    messageId,
+    userId,
+}: {
+    conversationId: string;
+    messageId: string;
+    userId: string;
+}): Promise<void> => {
+    if (!conversationId || !messageId || !userId) {
+        throw new Error('Invalid arguments: conversationId, messageId, and userId are required.');
+    }
+
+    const messageRef = doc(db, COLLECTIONS.messages, conversationId, 'messages', messageId);
+    const messageSnap = await getDoc(messageRef);
+    if (!messageSnap.exists()) {
+        // Already deleted
+        return;
+    }
+
+    const messageData = messageSnap.data();
+    if (messageData.senderId !== userId) {
+        throw new Error('Unauthorized: Only the message author may delete their own message.');
+    }
+
+    await deleteDoc(messageRef);
+
+    // Refresh parent conversation preview if this was the latest message
+    try {
+        const msgsRef = collection(db, COLLECTIONS.messages, conversationId, 'messages');
+        const q = query(msgsRef, orderBy('createdAt', 'desc'), limit(1));
+        const latestSnap = await getDocs(q);
+        const convRef = doc(db, COLLECTIONS.messages, conversationId);
+
+        if (!latestSnap.empty) {
+            const latestData = latestSnap.docs[0].data();
+            await updateDoc(convRef, {
+                lastMessage: latestData.text || '',
+                lastSenderId: latestData.senderId || null,
+                lastMessageTimestamp: latestData.createdAt || serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            }).catch((err) => console.warn('[UPDATE_LAST_MESSAGE_AFTER_DELETE_WARN]', err));
+        } else {
+            await updateDoc(convRef, {
+                lastMessage: null,
+                lastSenderId: null,
+                lastMessageTimestamp: null,
+                updatedAt: serverTimestamp(),
+            }).catch((err) => console.warn('[CLEAR_LAST_MESSAGE_AFTER_DELETE_WARN]', err));
+        }
+    } catch (e) {
+        console.warn('[UPDATE_CONVERSATION_PREVIEW_AFTER_DELETE_WARN]', e);
+    }
+};
+
