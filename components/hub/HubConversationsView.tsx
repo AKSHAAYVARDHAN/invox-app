@@ -1972,7 +1972,7 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
                                                                     </div>
                                                                 )}
                                                                 {/* Message Bubble + Action Trigger for author */}
-                                                                <div className={`relative flex items-center ${isMe ? 'flex-row-reverse' : 'flex-row'} max-w-full gap-1.5`}>
+                                                                <div className="relative flex items-center max-w-full gap-1.5">
                                                                     {/* Action button: ONLY show for messages authored by current user (isMe) */}
                                                                     {isMe && editingCrewMsgId !== msg.id && (
                                                                         <div
@@ -1985,8 +1985,15 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
                                                                                     e.stopPropagation();
                                                                                     setActiveMsgMenuId(activeMsgMenuId === msg.id ? null : msg.id);
                                                                                 }}
-                                                                                className="opacity-0 group-hover/msg:opacity-100 hover:opacity-100 p-1 text-zinc-400 hover:text-white bg-zinc-900/90 border border-zinc-750 hover:border-zinc-500 transition-all cursor-pointer"
+                                                                                className={`p-1 text-zinc-400 hover:text-white bg-zinc-900/90 border border-zinc-750 hover:border-zinc-500 transition-all cursor-pointer ${
+                                                                                    activeMsgMenuId === msg.id
+                                                                                        ? 'opacity-100 bg-zinc-800 text-white border-zinc-600'
+                                                                                        : 'opacity-0 [@media(hover:none)]:opacity-70 group-hover/msg:opacity-100 hover:opacity-100 focus:opacity-100 focus-visible:opacity-100'
+                                                                                }`}
                                                                                 title="Message options"
+                                                                                aria-label="Message options"
+                                                                                aria-haspopup="true"
+                                                                                aria-expanded={activeMsgMenuId === msg.id}
                                                                             >
                                                                                 <EllipsisVerticalIcon className="w-3.5 h-3.5" />
                                                                             </button>
