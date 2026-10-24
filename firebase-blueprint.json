@@ -110,6 +110,7 @@
         "ownerId": { "type": "string", "description": "Team owner UID" },
         "ownerName": { "type": "string", "description": "Team owner name" },
         "ownerAvatar": { "type": "string" },
+        "avatarUrl": { "type": "string", "description": "Crew squad avatar image URL" },
         "joinPolicy": { "type": "string", "enum": ["open", "approval_required"], "description": "Team join policy" },
         "memberCount": { "type": "number", "description": "Count of members" },
         "memberIds": { "type": "array", "description": "List of user UIDs" },
@@ -150,6 +151,7 @@
         "senderAvatar": { "type": "string" },
         "text": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
+        "editedAt": { "type": "string", "format": "date-time", "description": "Timestamp when message was last edited by author" },
         "readBy": { "type": "array" }
       },
       "required": ["teamId", "senderId", "text", "createdAt"]

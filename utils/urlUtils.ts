@@ -78,6 +78,19 @@ export const getTeamInvitationUrl = (token: string, teamId?: string): string => 
 };
 
 /**
+ * Constructs a canonical crew invitation URL that works in any external browser.
+ *
+ * Example:
+ * https://invox.vercel.app/#/hub?view=crew&crewId=crew_123&invite=token_xyz
+ */
+export const getCrewInvitationUrl = (token: string, crewId?: string): string => {
+    const baseUrl = getPublicAppBaseUrl();
+    const cleanToken = encodeURIComponent((token || '').trim());
+    const crewParam = crewId ? `&crewId=${encodeURIComponent(crewId.trim())}` : '';
+    return `${baseUrl}/#/hub?view=crew${crewParam}&invite=${cleanToken}`;
+};
+
+/**
  * Checks if a given host or URL belongs to the INVOX application (same host, localhost, preview, or production domain).
  */
 export const isInvoxAppUrl = (urlString: string): boolean => {

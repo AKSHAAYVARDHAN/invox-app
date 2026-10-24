@@ -49,9 +49,10 @@ const HubPage = () => {
 
     // Check query params to keep stream or conversations view on refresh or direct links
     const queryView = searchParams.get('view') || searchParams.get('tab');
+    const hasInviteParam = Boolean(searchParams.get('invite') || searchParams.get('crewId'));
     const effectiveHubView = queryView === 'stream' 
         ? 'stream' 
-        : (queryView === 'conversations' || queryView === 'comrades' || queryView === 'crew' || hubRightSidebarView === 'comrades' || hubRightSidebarView === 'crew') 
+        : (queryView === 'conversations' || queryView === 'comrades' || queryView === 'crew' || hasInviteParam || hubRightSidebarView === 'comrades' || hubRightSidebarView === 'crew') 
             ? 'conversations' 
             : hubView;
 
@@ -274,7 +275,7 @@ const HubPage = () => {
     }
 
     if (effectiveHubView === 'conversations') {
-        const activeSection = (hubRightSidebarView === 'crew' || queryView === 'crew') ? 'crew' : 'comrades';
+        const activeSection = (hubRightSidebarView === 'crew' || queryView === 'crew' || hasInviteParam) ? 'crew' : 'comrades';
         return (
             <HubConversationsView 
                 initialSection={activeSection}

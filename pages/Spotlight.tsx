@@ -2235,7 +2235,6 @@ export const SpotlightPage = () => {
         collabViewParam === 'my_applications' || 
         collabViewParam === 'inbox' || 
         collabViewParam === 'teams' || 
-        collabViewParam === 'messages' || 
         searchParams.has('invite') || 
         openCollabDashboardParam === 'true'
     );
@@ -2282,12 +2281,6 @@ export const SpotlightPage = () => {
     const [messagingOffer, setMessagingOffer] = useState<Offer | null>(null);
     const [liveCollabProjects, setLiveCollabProjects] = useState<Project[]>([]);
     const isCollabManagement = activeTab === 'Collabs' && isCollabManagementView;
-    const isCollabMessageBoard = activeTab === 'Collabs' && (
-        collabViewParam === 'inbox' || 
-        collabViewParam === 'teams' || 
-        collabViewParam === 'messages' || 
-        searchParams.has('invite')
-    );
     const collabManagementTab: 'applications' | 'active' | 'my_applications' = (collabViewParam === 'active') ? 'active' : (collabViewParam === 'my_applications' ? 'my_applications' : 'applications');
 
     const handleBackToCollabs = () => {
@@ -4780,7 +4773,7 @@ export const SpotlightPage = () => {
     
         if (activeTab === 'Collabs') {
             if (isCollabManagement) {
-                if (collabViewParam === 'inbox' || collabViewParam === 'messages') {
+                if (collabViewParam === 'inbox') {
                     return (
                         <CollabMessageBoardView
                             view="inbox"
@@ -4823,7 +4816,7 @@ export const SpotlightPage = () => {
     
 
     return (
-        <div className={`w-full ${isCollabMessageBoard ? 'flex-1 flex flex-col min-h-0 h-full' : 'space-y-4'}`}>
+        <div className="space-y-4">
             {/* Top Navigation Bar: Exact Segmented Slide-Bar UI System from My Space / Explore */}
             {!selectedOfferType && !showPinnedHighlights && !spotlightBrowseState && !isCollabManagement && (
                 <SegmentedSlideBar

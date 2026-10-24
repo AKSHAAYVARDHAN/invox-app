@@ -35,6 +35,7 @@ export interface Team {
     ownerId: string;
     ownerName: string;
     ownerAvatar?: string | null;
+    avatarUrl?: string | null;
     memberCount: number;
     memberIds: string[];
     joinPolicy?: TeamJoinPolicy; // Mode A: 'open' (ANYONE WITH THE LINK) | Mode B: 'approval_required' (APPROVAL REQUIRED)
@@ -70,6 +71,7 @@ export interface TeamMessage {
     senderAvatar?: string | null;
     text: string;
     createdAt: any;
+    editedAt?: any;
     readBy?: string[];
     environment?: 'spotlight' | 'hub';
     scope?: 'spotlight_teams' | 'hub_crews';
@@ -815,6 +817,213 @@ export const deleteTeamMessage = async ({
     } catch (recalcErr) {
         console.warn('[RECALCULATE_LAST_MESSAGE_WARN]', recalcErr);
     }
+};
+
+/**
+ * Updates a message previously sent to a team/crew.
+ * Permissions: Only the message author may edit their own message.
+ * Records editedAt timestamp and refreshes the team's lastMessage preview if this was the latest message.
+ */
+export const updateTeamMessage = async ({
+    teamId,
+    messageId,
+    userId,
+    newText,
+}: {
+    teamId: string;
+    messageId: string;
+    userId: string;
+    newText: string;
+}): Promise<void> => {
+    const cleanText = (newText || '').trim();
+    if (!cleanText) {
+        throw new Error('Message content cannot be empty.');
+    }
+    if (!teamId || !messageId || !userId) {
+        throw new Error('Invalid arguments: teamId, messageId, and userId are required.');
+    }
+
+    if (teamId === 'team_demo_phoenix') {
+        return;
+    }
+
+    const messageRef = doc(db, COLLECTIONS.teams, teamId, 'messages', messageId);
+    const messageSnap = await getDoc(messageRef);
+    if (!messageSnap.exists()) {
+        throw new Error('Message not found.');
+    }
+    const messageData = messageSnap.data();
+    if (messageData.senderId !== userId) {
+        throw new Error('Unauthorized: Only the message author may edit their message.');
+    }
+
+    await updateDoc(messageRef, {
+        text: cleanText,
+        editedAt: serverTimestamp(),
+    });
+
+    // If this was the latest message in the team, update the team doc's lastMessage preview
+    try {
+        const msgsRef = collection(db, COLLECTIONS.teams, teamId, 'messages');
+        const q = query(msgsRef, orderBy('createdAt', 'desc'), limit(1));
+        const latestSnap = await getDocs(q);
+        if (!latestSnap.empty && latestSnap.docs[0].id === messageId) {
+            const teamRef = doc(db, COLLECTIONS.teams, teamId);
+            await updateDoc(teamRef, {
+                lastMessage: cleanText.slice(0, 120),
+                updatedAt: serverTimestamp(),
+            }).catch(() => {});
+        }
+    } catch (e) {
+        console.warn('[UPDATE_LAST_MESSAGE_AFTER_EDIT_WARN]', e);
+    }
+};
+
+/**
+ * Updates crew general metadata (name, description, avatar).
+ * Permissions: Only the authorized crew admin / owner can update crew details.
+ */
+export const updateCrewDetails = async ({
+    teamId,
+    userId,
+    name,
+    description,
+    avatarUrl,
+}: {
+    teamId: string;
+    userId: string;
+    name: string;
+    description?: string;
+    avatarUrl?: string | null;
+}): Promise<void> => {
+    const cleanName = (name || '').trim();
+    if (!cleanName) {
+        throw new Error('Crew name is required.');
+    }
+    if (!teamId || !userId) {
+        throw new Error('Invalid arguments: teamId and userId are required.');
+    }
+
+    if (teamId === 'team_demo_phoenix') {
+        return;
+    }
+
+    const teamRef = doc(db, COLLECTIONS.teams, teamId);
+    const snap = await getDoc(teamRef);
+    if (!snap.exists()) {
+        throw new Error('Crew squad not found.');
+    }
+    const teamData = snap.data() as Team;
+    if (teamData.ownerId !== userId) {
+        throw new Error('Unauthorized: Only the crew admin/owner can modify general settings.');
+    }
+
+    const updatePayload: Record<string, any> = {
+        name: cleanName,
+        description: (description || '').trim(),
+        updatedAt: serverTimestamp(),
+    };
+    if (avatarUrl !== undefined) {
+        updatePayload.avatarUrl = avatarUrl;
+        updatePayload.ownerAvatar = avatarUrl;
+    }
+
+    await updateDoc(teamRef, sanitizeForFirestore(updatePayload));
+};
+
+/**
+ * Retrieves an active invitation token for a crew, or creates a new one if none exists.
+ */
+export const getOrCreateCrewInviteToken = async ({
+    teamId,
+    user,
+    userProfile,
+    crewName,
+}: {
+    teamId: string;
+    user: User;
+    userProfile?: InvoxUser | null;
+    crewName: string;
+}): Promise<TeamInvitation> => {
+    if (!teamId || !user?.uid) {
+        throw new Error('Authentication required.');
+    }
+
+    const invitationsRef = collection(db, COLLECTIONS.teamInvitations);
+    const q = query(
+        invitationsRef,
+        where('teamId', '==', teamId),
+        where('status', '==', 'active')
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+        const docSnap = snap.docs[0];
+        return {
+            id: docSnap.id,
+            ...(docSnap.data() as any),
+        };
+    }
+
+    return await createTeamInvitation({
+        teamId,
+        teamName: crewName,
+        projectId: 'hub_crew',
+        projectTitle: 'Hub Crew',
+        ownerId: user.uid,
+        ownerName: userProfile?.displayName || user.displayName || 'Crew Lead',
+        user,
+    });
+};
+
+/**
+ * Revokes any currently active invitation link for the crew and generates a brand new token.
+ */
+export const regenerateCrewInvitation = async ({
+    teamId,
+    user,
+    userProfile,
+    crewName,
+    expiresInDays,
+    maxUses,
+}: {
+    teamId: string;
+    user: User;
+    userProfile?: InvoxUser | null;
+    crewName: string;
+    expiresInDays?: number | null;
+    maxUses?: number;
+}): Promise<TeamInvitation> => {
+    if (!teamId || !user?.uid) {
+        throw new Error('Authentication required.');
+    }
+
+    // Revoke any existing active invitations for this team
+    const invitationsRef = collection(db, COLLECTIONS.teamInvitations);
+    const q = query(
+        invitationsRef,
+        where('teamId', '==', teamId),
+        where('status', '==', 'active')
+    );
+    const snap = await getDocs(q);
+    for (const d of snap.docs) {
+        await updateDoc(d.ref, {
+            status: 'revoked',
+            updatedAt: serverTimestamp(),
+        }).catch(() => {});
+    }
+
+    // Generate fresh invitation token
+    return await createTeamInvitation({
+        teamId,
+        teamName: crewName,
+        projectId: 'hub_crew',
+        projectTitle: 'Hub Crew',
+        ownerId: user.uid,
+        ownerName: userProfile?.displayName || user.displayName || 'Crew Lead',
+        user,
+        expiresInDays,
+        maxUses,
+    });
 };
 
 /**

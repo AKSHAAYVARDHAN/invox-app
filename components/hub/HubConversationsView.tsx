@@ -16,9 +16,25 @@ import {
     subscribeToHubCrews,
     subscribeToUserTeams,
     subscribeToTeam,
+    getTeam,
     subscribeToTeamMembers,
     subscribeToTeamMessages,
     sendTeamMessage,
+    updateTeamMessage,
+    deleteTeamMessage,
+    updateCrewDetails,
+    getOrCreateCrewInviteToken,
+    regenerateCrewInvitation,
+    revokeTeamInvitation,
+    getTeamInvitation,
+    subscribeToTeamInvitations,
+    updateTeamJoinPolicy,
+    createTeamJoinRequest,
+    getTeamJoinRequest,
+    subscribeToTeamJoinRequests,
+    approveTeamJoinRequest,
+    rejectTeamJoinRequest,
+    joinTeamViaInvitation,
     markTeamAsRead,
     createCrewGroup,
     addMemberToCrew,
@@ -27,6 +43,9 @@ import {
     type Team,
     type TeamMember,
     type TeamMessage,
+    type TeamInvitation,
+    type TeamJoinPolicy,
+    type TeamJoinRequest,
 } from '../../services/teamService';
 import { 
     subscribeFollowedProfiles,
@@ -48,6 +67,15 @@ import {
     PaperClipIcon,
     ShieldCheckIcon,
     ChatBubbleBottomCenterTextIcon,
+    InformationCircleIcon,
+    CogIcon,
+    PencilSquareIcon,
+    ClipboardIcon,
+    ClockIcon,
+    LinkIcon,
+    RegenerateIcon,
+    CheckCircleIcon,
+    XCircleIcon,
 } from '../ui/Icons';
 import { ClickableMessageText } from '../ui/ClickableMessageText';
 import {
@@ -60,6 +88,7 @@ import {
 import { ConversationSummaryModal } from '../spotlight/ConversationSummaryModal';
 import { ConversationSearchBar } from '../spotlight/ConversationSearchBar';
 import { handleImageError } from '../utils/imageUtils';
+import { getCrewInvitationUrl } from '../../utils/urlUtils';
 
 export interface HubConversationsViewProps {
     initialSection?: 'comrades' | 'crew';
@@ -150,6 +179,68 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
     // AI Summary for crew
     const [showCrewSummaryModal, setShowCrewSummaryModal] = useState<boolean>(false);
 
+    // Message Actions (Editing & Deletion) for Crew
+    const [editingCrewMsgId, setEditingCrewMsgId] = useState<string | null>(null);
+    const [editingCrewMsgText, setEditingCrewMsgText] = useState<string>('');
+    const [isSavingMsgEdit, setIsSavingMsgEdit] = useState<boolean>(false);
+    const [crewMsgEditError, setCrewMsgEditError] = useState<string | null>(null);
+    const [activeMsgMenuId, setActiveMsgMenuId] = useState<string | null>(null);
+    const activeMsgMenuRef = useRef<HTMLDivElement>(null);
+    const [crewMsgToDelete, setCrewMsgToDelete] = useState<TeamMessage | null>(null);
+    const [isDeletingMsg, setIsDeletingMsg] = useState<boolean>(false);
+    const [deleteMsgError, setDeleteMsgError] = useState<string | null>(null);
+
+    // Crew Info Modal
+    const [showCrewInfoModal, setShowCrewInfoModal] = useState<boolean>(false);
+    const [crewInfoMemberFilter, setCrewInfoMemberFilter] = useState<string>('');
+
+    // Crew Settings Modal (Admin Only)
+    const [showCrewSettingsModal, setShowCrewSettingsModal] = useState<boolean>(false);
+    const [crewSettingsTab, setCrewSettingsTab] = useState<'general' | 'invitation' | 'join_policy'>('general');
+    const [settingsCrewName, setSettingsCrewName] = useState<string>('');
+    const [settingsCrewDesc, setSettingsCrewDesc] = useState<string>('');
+    const [settingsCrewAvatarUrl, setSettingsCrewAvatarUrl] = useState<string>('');
+    const [settingsJoinPolicy, setSettingsJoinPolicy] = useState<TeamJoinPolicy>('open');
+    const [isSavingCrewSettings, setIsSavingCrewSettings] = useState<boolean>(false);
+    const [crewSettingsFeedback, setCrewSettingsFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+    // Invitations State for Crew
+    const [crewInvitations, setCrewInvitations] = useState<TeamInvitation[]>([]);
+    const [isRegeneratingInvite, setIsRegeneratingInvite] = useState<boolean>(false);
+    const [isRevokingInvite, setIsRevokingInvite] = useState<boolean>(false);
+    const [inviteCopied, setInviteCopied] = useState<boolean>(false);
+
+    // Join Requests State for Crew (Admin Only)
+    const [showJoinRequestsModal, setShowJoinRequestsModal] = useState<boolean>(false);
+    const [crewJoinRequests, setCrewJoinRequests] = useState<TeamJoinRequest[]>([]);
+    const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
+    const [rejectionReasonText, setRejectionReasonText] = useState<string>('');
+    const [isProcessingJoinReq, setIsProcessingJoinReq] = useState<boolean>(false);
+
+    // Disband Confirmation Modal
+    const [showDisbandConfirmModal, setShowDisbandConfirmModal] = useState<boolean>(false);
+    const [isDisbanding, setIsDisbanding] = useState<boolean>(false);
+
+    // Incoming Invitation via URL param
+    const [incomingInviteModal, setIncomingInviteModal] = useState<{
+        isOpen: boolean;
+        token: string;
+        invitation: TeamInvitation | null;
+        team: Team | null;
+        isAlreadyMember: boolean;
+        existingRequest: TeamJoinRequest | null;
+        status: 'idle' | 'loading' | 'valid' | 'invalid' | 'submitting' | 'submitted' | 'joined' | 'error';
+        errorMsg?: string;
+    }>({
+        isOpen: false,
+        token: '',
+        invitation: null,
+        team: null,
+        isAlreadyMember: false,
+        existingRequest: null,
+        status: 'idle',
+    });
+
     // References for scrolling
     const comradeTimelineRef = useRef<HTMLDivElement>(null);
     const crewTimelineRef = useRef<HTMLDivElement>(null);
@@ -216,6 +307,9 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
             }
             if (crewMenuRef.current && !crewMenuRef.current.contains(e.target as Node)) {
                 setIsCrewMenuOpen(false);
+            }
+            if (activeMsgMenuRef.current && !activeMsgMenuRef.current.contains(e.target as Node)) {
+                setActiveMsgMenuId(null);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -343,10 +437,14 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
         return () => unsub();
     }, [currentUser?.uid]);
 
-    // Subscribe to selected Crew details
+    // Subscribe to selected Crew details, invitations, and join requests
     useEffect(() => {
         if (!selectedCrewId) {
             setActiveCrew(null);
+            setCrewMembers([]);
+            setCrewMessages([]);
+            setCrewInvitations([]);
+            setCrewJoinRequests([]);
             return;
         }
 
@@ -380,12 +478,171 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
             }
         );
 
+        // Real-time invitations for this crew
+        const unsubInvs = subscribeToTeamInvitations(
+            selectedCrewId,
+            (invs) => setCrewInvitations(invs),
+            (err) => console.warn('[SUBSCRIBE_CREW_INVITATIONS_WARN]', err)
+        );
+
+        // Real-time join requests for this crew (for admin/lead)
+        const unsubReqs = subscribeToTeamJoinRequests(
+            selectedCrewId,
+            (reqs) => setCrewJoinRequests(reqs),
+            (err) => console.warn('[SUBSCRIBE_CREW_JOIN_REQUESTS_WARN]', err)
+        );
+
         return () => {
             unsubTeam();
             unsubMembers();
             unsubMsgs();
+            unsubInvs();
+            unsubReqs();
         };
     }, [selectedCrewId, currentUser?.uid]);
+
+    // Active invitation link for currently selected crew
+    const activeCrewInvite = useMemo(() => {
+        return crewInvitations.find((i) => i.status === 'active') || crewInvitations[0] || null;
+    }, [crewInvitations]);
+
+    // Pending join requests count for badge
+    const pendingJoinRequests = useMemo(() => {
+        return crewJoinRequests.filter((r) => r.status === 'PENDING');
+    }, [crewJoinRequests]);
+
+    // Synchronize crewId from URL params if specified
+    const urlCrewId = searchParams.get('crewId');
+    const urlInviteToken = searchParams.get('invite');
+
+    useEffect(() => {
+        if (urlCrewId && urlCrewId !== selectedCrewId) {
+            setSelectedCrewId(urlCrewId);
+        }
+    }, [urlCrewId]);
+
+    // Handle incoming invitation link from URL
+    useEffect(() => {
+        if (!urlInviteToken || !currentUser?.uid) return;
+
+        let isCancelled = false;
+        const resolveInvite = async () => {
+            setIncomingInviteModal({
+                isOpen: true,
+                token: urlInviteToken,
+                invitation: null,
+                team: null,
+                isAlreadyMember: false,
+                existingRequest: null,
+                status: 'loading',
+            });
+
+            try {
+                const inv = await getTeamInvitation(urlInviteToken);
+                if (isCancelled) return;
+                if (!inv) {
+                    setIncomingInviteModal(prev => ({
+                        ...prev,
+                        status: 'invalid',
+                        errorMsg: 'This invitation does not exist or has expired.',
+                    }));
+                    return;
+                }
+
+                if (inv.status === 'revoked') {
+                    setIncomingInviteModal(prev => ({
+                        ...prev,
+                        invitation: inv,
+                        status: 'invalid',
+                        errorMsg: 'This invitation link has been revoked by the crew lead.',
+                    }));
+                    return;
+                }
+
+                // Check expiration
+                if (inv.expiresAt) {
+                    const expTime = typeof inv.expiresAt?.toDate === 'function'
+                        ? inv.expiresAt.toDate().getTime()
+                        : new Date(inv.expiresAt).getTime();
+                    if (expTime > 0 && Date.now() > expTime) {
+                        setIncomingInviteModal(prev => ({
+                            ...prev,
+                            invitation: inv,
+                            status: 'invalid',
+                            errorMsg: 'This invitation link has expired.',
+                        }));
+                        return;
+                    }
+                }
+
+                // Check usage limits
+                if (inv.maxUses && inv.maxUses > 0 && inv.usedCount >= inv.maxUses) {
+                    setIncomingInviteModal(prev => ({
+                        ...prev,
+                        invitation: inv,
+                        status: 'invalid',
+                        errorMsg: 'This invitation link has reached its maximum allowed uses.',
+                    }));
+                    return;
+                }
+
+                // Retrieve team details
+                const targetTeam = await getTeam(inv.teamId);
+                if (isCancelled) return;
+                if (!targetTeam) {
+                    setIncomingInviteModal(prev => ({
+                        ...prev,
+                        status: 'invalid',
+                        errorMsg: 'The associated crew squad was not found or has been disbanded.',
+                    }));
+                    return;
+                }
+
+                // Check if user is already a member
+                const isMember = targetTeam.memberIds?.includes(currentUser.uid) || targetTeam.ownerId === currentUser.uid;
+                if (isMember) {
+                    setSelectedCrewId(targetTeam.id);
+                    setIncomingInviteModal({
+                        isOpen: true,
+                        token: urlInviteToken,
+                        invitation: inv,
+                        team: targetTeam,
+                        isAlreadyMember: true,
+                        existingRequest: null,
+                        status: 'valid',
+                    });
+                    return;
+                }
+
+                // Check existing join request
+                let existingReq: TeamJoinRequest | null = null;
+                if (targetTeam.joinPolicy === 'approval_required') {
+                    existingReq = await getTeamJoinRequest(targetTeam.id, currentUser.uid);
+                }
+
+                setIncomingInviteModal({
+                    isOpen: true,
+                    token: urlInviteToken,
+                    invitation: inv,
+                    team: targetTeam,
+                    isAlreadyMember: false,
+                    existingRequest: existingReq,
+                    status: 'valid',
+                });
+            } catch (err: any) {
+                if (isCancelled) return;
+                console.error('[RESOLVE_INVITE_ERROR]', err);
+                setIncomingInviteModal(prev => ({
+                    ...prev,
+                    status: 'error',
+                    errorMsg: err?.message || 'Failed to validate invitation.',
+                }));
+            }
+        };
+
+        resolveInvite();
+        return () => { isCancelled = true; };
+    }, [urlInviteToken, currentUser?.uid]);
 
     // ----------------------------------------------------
     // Comrade Participant Helper
@@ -598,31 +855,315 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
         }
     };
 
-    // Leave or Disband Crew
-    const handleLeaveOrDisbandCrew = async () => {
+    // Message Editing Handler (Own messages only)
+    const handleSaveCrewMsgEdit = async (messageId: string) => {
         if (!activeCrew || !currentUser?.uid) return;
-        const isOwner = activeCrew.ownerId === currentUser.uid;
-        const confirmMsg = isOwner
-            ? `Disband and delete crew "${activeCrew.name}" permanently?`
-            : `Are you sure you want to leave crew "${activeCrew.name}"?`;
+        const clean = editingCrewMsgText.trim();
+        if (!clean) {
+            setCrewMsgEditError('Message content cannot be empty.');
+            return;
+        }
 
-        if (!window.confirm(confirmMsg)) return;
+        setIsSavingMsgEdit(true);
+        setCrewMsgEditError(null);
+        try {
+            await updateTeamMessage({
+                teamId: activeCrew.id,
+                messageId,
+                userId: currentUser.uid,
+                newText: clean,
+            });
+            setEditingCrewMsgId(null);
+            setEditingCrewMsgText('');
+        } catch (err: any) {
+            console.error('[EDIT_CREW_MESSAGE_ERROR]', err);
+            setCrewMsgEditError(err?.message || 'Failed to update message.');
+        } finally {
+            setIsSavingMsgEdit(false);
+        }
+    };
+
+    // Message Deletion Handler (Own messages only)
+    const handleConfirmDeleteCrewMsg = async () => {
+        if (!activeCrew || !crewMsgToDelete || !currentUser?.uid) return;
+        setIsDeletingMsg(true);
+        setDeleteMsgError(null);
+        try {
+            await deleteTeamMessage({
+                teamId: activeCrew.id,
+                messageId: crewMsgToDelete.id,
+                userId: currentUser.uid,
+            });
+            setCrewMsgToDelete(null);
+        } catch (err: any) {
+            console.error('[DELETE_CREW_MESSAGE_ERROR]', err);
+            setDeleteMsgError(err?.message || 'Failed to delete message.');
+        } finally {
+            setIsDeletingMsg(false);
+        }
+    };
+
+    // Crew General Settings Save Handler (Admin Only)
+    const handleSaveCrewGeneralSettings = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!activeCrew || !currentUser?.uid) return;
+        if (activeCrew.ownerId !== currentUser.uid) {
+            setCrewSettingsFeedback({ type: 'error', message: 'Unauthorized: Only the crew lead can update settings.' });
+            return;
+        }
+
+        const cleanName = settingsCrewName.trim();
+        if (!cleanName) {
+            setCrewSettingsFeedback({ type: 'error', message: 'Crew name cannot be blank.' });
+            return;
+        }
+
+        setIsSavingCrewSettings(true);
+        setCrewSettingsFeedback(null);
+        try {
+            await updateCrewDetails({
+                teamId: activeCrew.id,
+                userId: currentUser.uid,
+                name: cleanName,
+                description: settingsCrewDesc.trim(),
+                avatarUrl: settingsCrewAvatarUrl.trim() || null,
+            });
+            setCrewSettingsFeedback({ type: 'success', message: 'Crew intelligence parameters saved successfully.' });
+        } catch (err: any) {
+            console.error('[SAVE_CREW_SETTINGS_ERROR]', err);
+            setCrewSettingsFeedback({ type: 'error', message: err?.message || 'Failed to save crew parameters.' });
+        } finally {
+            setIsSavingCrewSettings(false);
+        }
+    };
+
+    // Crew Join Policy Save Handler (Admin Only)
+    const handleSaveCrewJoinPolicy = async (policy: TeamJoinPolicy) => {
+        if (!activeCrew || !currentUser?.uid) return;
+        if (activeCrew.ownerId !== currentUser.uid) return;
+
+        setIsSavingCrewSettings(true);
+        setCrewSettingsFeedback(null);
+        try {
+            await updateTeamJoinPolicy({
+                teamId: activeCrew.id,
+                userId: currentUser.uid,
+                policy,
+            });
+            setSettingsJoinPolicy(policy);
+            setCrewSettingsFeedback({ type: 'success', message: `Join policy updated to "${policy === 'open' ? 'Anyone with link' : 'Approval Required'}".` });
+        } catch (err: any) {
+            console.error('[SAVE_CREW_JOIN_POLICY_ERROR]', err);
+            setCrewSettingsFeedback({ type: 'error', message: err?.message || 'Failed to update join policy.' });
+        } finally {
+            setIsSavingCrewSettings(false);
+        }
+    };
+
+    // Generate or Regenerate Invitation Link (Admin Only)
+    const handleGenerateOrRegenerateInvite = async () => {
+        if (!activeCrew || !currentUser?.uid) return;
+        if (activeCrew.ownerId !== currentUser.uid) return;
+
+        setIsRegeneratingInvite(true);
+        try {
+            await regenerateCrewInvitation({
+                teamId: activeCrew.id,
+                user: currentUser,
+                userProfile,
+                crewName: activeCrew.name,
+            });
+            setCrewSettingsFeedback({ type: 'success', message: 'Fresh invitation token generated.' });
+        } catch (err: any) {
+            console.error('[REGENERATE_CREW_INVITE_ERROR]', err);
+            setCrewSettingsFeedback({ type: 'error', message: err?.message || 'Failed to generate invitation link.' });
+        } finally {
+            setIsRegeneratingInvite(false);
+        }
+    };
+
+    // Revoke Invitation Link (Admin Only)
+    const handleRevokeCrewInvite = async () => {
+        if (!activeCrew || !activeCrewInvite || !currentUser?.uid) return;
+        if (activeCrew.ownerId !== currentUser.uid) return;
+
+        if (!window.confirm('Revoke this invitation link? Users with this URL will no longer be able to join.')) return;
+
+        setIsRevokingInvite(true);
+        try {
+            await revokeTeamInvitation(activeCrewInvite.token, currentUser.uid);
+            setCrewSettingsFeedback({ type: 'success', message: 'Invitation link revoked.' });
+        } catch (err: any) {
+            console.error('[REVOKE_CREW_INVITE_ERROR]', err);
+            setCrewSettingsFeedback({ type: 'error', message: err?.message || 'Failed to revoke invitation link.' });
+        } finally {
+            setIsRevokingInvite(false);
+        }
+    };
+
+    // Copy Crew Invitation Link to Clipboard
+    const handleCopyCrewInviteLink = async () => {
+        if (!activeCrew || !activeCrewInvite) return;
+        const link = getCrewInvitationUrl(activeCrewInvite.token, activeCrew.id);
+        try {
+            if (navigator?.clipboard?.writeText) {
+                await navigator.clipboard.writeText(link);
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = link;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            }
+            setInviteCopied(true);
+            setTimeout(() => setInviteCopied(false), 2500);
+        } catch (err) {
+            console.error('[COPY_CREW_INVITE_ERROR]', err);
+        }
+    };
+
+    // Approve Join Request (Admin Only)
+    const handleApproveJoinRequest = async (req: TeamJoinRequest) => {
+        if (!activeCrew || !currentUser?.uid) return;
+        if (activeCrew.ownerId !== currentUser.uid) return;
+
+        setIsProcessingJoinReq(true);
+        try {
+            await approveTeamJoinRequest({
+                teamId: activeCrew.id,
+                requestId: req.userId || req.id,
+                adminUser: currentUser,
+                adminProfile: userProfile,
+            });
+        } catch (err: any) {
+            console.error('[APPROVE_JOIN_REQUEST_ERROR]', err);
+            alert(err?.message || 'Failed to approve request.');
+        } finally {
+            setIsProcessingJoinReq(false);
+        }
+    };
+
+    // Reject Join Request (Admin Only)
+    const handleRejectJoinRequest = async (req: TeamJoinRequest) => {
+        if (!activeCrew || !currentUser?.uid) return;
+        if (activeCrew.ownerId !== currentUser.uid) return;
+
+        setIsProcessingJoinReq(true);
+        try {
+            await rejectTeamJoinRequest({
+                teamId: activeCrew.id,
+                requestId: req.userId || req.id,
+                adminUser: currentUser,
+                adminProfile: userProfile,
+                reason: rejectionReasonText.trim() || undefined,
+            });
+            setRejectingRequestId(null);
+            setRejectionReasonText('');
+        } catch (err: any) {
+            console.error('[REJECT_JOIN_REQUEST_ERROR]', err);
+            alert(err?.message || 'Failed to reject request.');
+        } finally {
+            setIsProcessingJoinReq(false);
+        }
+    };
+
+    // Accept Incoming Invite (Direct Join)
+    const handleAcceptIncomingInvite = async () => {
+        if (!incomingInviteModal.invitation || !currentUser) return;
+        setIncomingInviteModal(prev => ({ ...prev, status: 'submitting' }));
+        try {
+            await joinTeamViaInvitation({
+                token: incomingInviteModal.invitation.token,
+                user: currentUser,
+                userProfile,
+                projectRole: 'Crew Member',
+            });
+            const teamId = incomingInviteModal.invitation.teamId;
+            setSelectedCrewId(teamId);
+            setIncomingInviteModal(prev => ({ ...prev, status: 'joined' }));
+
+            // Clean URL search param so invitation modal is not reopened on page refresh
+            searchParams.delete('invite');
+            setSearchParams(searchParams, { replace: true });
+            setTimeout(() => {
+                setIncomingInviteModal(prev => ({ ...prev, isOpen: false }));
+            }, 1200);
+        } catch (err: any) {
+            console.error('[ACCEPT_INCOMING_INVITE_ERROR]', err);
+            setIncomingInviteModal(prev => ({
+                ...prev,
+                status: 'error',
+                errorMsg: err?.message || 'Failed to join crew squad.',
+            }));
+        }
+    };
+
+    // Request Access to Crew (When Mode B Approval Required)
+    const handleRequestIncomingInviteAccess = async () => {
+        if (!incomingInviteModal.invitation || !currentUser) return;
+        setIncomingInviteModal(prev => ({ ...prev, status: 'submitting' }));
+        try {
+            const req = await createTeamJoinRequest({
+                token: incomingInviteModal.invitation.token,
+                user: currentUser,
+                userProfile,
+            });
+            setIncomingInviteModal(prev => ({
+                ...prev,
+                status: 'submitted',
+                existingRequest: req,
+            }));
+        } catch (err: any) {
+            console.error('[REQUEST_INCOMING_INVITE_ACCESS_ERROR]', err);
+            setIncomingInviteModal(prev => ({
+                ...prev,
+                status: 'error',
+                errorMsg: err?.message || 'Failed to submit join request.',
+            }));
+        }
+    };
+
+    // Leave Crew (Non-Owner Members)
+    const handleLeaveCrew = async () => {
+        if (!activeCrew || !currentUser?.uid) return;
+        if (activeCrew.ownerId === currentUser.uid) {
+            setShowDisbandConfirmModal(true);
+            return;
+        }
+
+        if (!window.confirm(`Are you sure you want to leave squad "${activeCrew.name}"?`)) return;
 
         try {
-            if (isOwner) {
-                await deleteTeam(activeCrew.id, currentUser.uid);
-            } else {
-                await leaveTeam({
-                    teamId: activeCrew.id,
-                    userId: currentUser.uid,
-                    userName: userProfile?.displayName || currentUser.displayName || 'Member',
-                });
-            }
+            await leaveTeam({
+                teamId: activeCrew.id,
+                userId: currentUser.uid,
+                userName: userProfile?.displayName || currentUser.displayName || 'Member',
+            });
             setSelectedCrewId(null);
             setShowCrewMembersDrawer(false);
         } catch (err: any) {
             console.error('[LEAVE_CREW_ERROR]', err);
-            alert(err?.message || 'Action failed');
+            alert(err?.message || 'Failed to leave squad.');
+        }
+    };
+
+    // Disband Crew (Owner Only)
+    const handleConfirmDisbandCrew = async () => {
+        if (!activeCrew || !currentUser?.uid) return;
+        if (activeCrew.ownerId !== currentUser.uid) return;
+
+        setIsDisbanding(true);
+        try {
+            await deleteTeam(activeCrew.id, currentUser.uid);
+            setSelectedCrewId(null);
+            setShowDisbandConfirmModal(false);
+            setShowCrewMembersDrawer(false);
+        } catch (err: any) {
+            console.error('[DISBAND_CREW_ERROR]', err);
+            alert(err?.message || 'Failed to disband crew squad.');
+        } finally {
+            setIsDisbanding(false);
         }
     };
 
@@ -1215,56 +1756,132 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
                                             </button>
 
                                             {isCrewMenuOpen && (
-                                                <div className="absolute right-0 mt-1 w-48 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono text-xs">
+                                                <div className="absolute right-0 mt-1 w-52 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono text-xs">
+                                                    {/* ALL MEMBERS: Crew Info */}
                                                     <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setIsCrewMenuOpen(false);
+                                                            setShowCrewInfoModal(true);
+                                                        }}
+                                                        className="w-full text-left px-3 py-2 text-zinc-200 hover:bg-zinc-900 hover:text-white flex items-center gap-2 cursor-pointer"
+                                                    >
+                                                        <InformationCircleIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                        <span>CREW INFO</span>
+                                                    </button>
+
+                                                    {/* ALL MEMBERS: View Members */}
+                                                    <button
+                                                        type="button"
                                                         onClick={() => {
                                                             setIsCrewMenuOpen(false);
                                                             setShowCrewMembersDrawer(true);
                                                         }}
-                                                        className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-zinc-900 hover:text-white flex items-center gap-2"
+                                                        className="w-full text-left px-3 py-2 text-zinc-200 hover:bg-zinc-900 hover:text-white flex items-center gap-2 cursor-pointer"
                                                     >
                                                         <UsersIcon className="w-3.5 h-3.5 text-zinc-400" />
                                                         <span>VIEW MEMBERS</span>
                                                     </button>
+
+                                                    {/* ALL MEMBERS: Add Comrade */}
                                                     <button
+                                                        type="button"
                                                         onClick={() => {
                                                             setIsCrewMenuOpen(false);
                                                             setShowAddMemberModal(true);
                                                         }}
-                                                        className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-zinc-900 hover:text-white flex items-center gap-2"
+                                                        className="w-full text-left px-3 py-2 text-zinc-200 hover:bg-zinc-900 hover:text-white flex items-center gap-2 cursor-pointer"
                                                     >
                                                         <PlusIcon className="w-3.5 h-3.5 text-zinc-400" />
                                                         <span>ADD COMRADE</span>
                                                     </button>
+
+                                                    {/* ALL MEMBERS: Generate Summary */}
                                                     <button
+                                                        type="button"
                                                         onClick={() => {
                                                             setIsCrewMenuOpen(false);
                                                             setShowCrewSummaryModal(true);
                                                         }}
-                                                        className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-zinc-900 hover:text-white flex items-center gap-2"
+                                                        className="w-full text-left px-3 py-2 text-zinc-200 hover:bg-zinc-900 hover:text-white flex items-center gap-2 cursor-pointer"
                                                     >
                                                         <SparklesIcon className="w-3.5 h-3.5 text-zinc-400" />
                                                         <span>GENERATE SUMMARY</span>
                                                     </button>
-                                                    <button
-                                                        onClick={() => {
-                                                            setIsCrewMenuOpen(false);
-                                                            handleLeaveOrDisbandCrew();
-                                                        }}
-                                                        className="w-full text-left px-3 py-2 text-red-400 hover:bg-red-950/30 hover:text-red-300 border-t border-zinc-850 flex items-center gap-2"
-                                                    >
-                                                        {activeCrew.ownerId === currentUser?.uid ? (
-                                                            <>
-                                                                <TrashIcon className="w-3.5 h-3.5 text-red-400" />
-                                                                <span>DISBAND CREW</span>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <LogoutIcon className="w-3.5 h-3.5 text-red-400" />
-                                                                <span>LEAVE SQUAD</span>
-                                                            </>
-                                                        )}
-                                                    </button>
+
+                                                    {/* ADMIN ONLY CONTROLS */}
+                                                    {activeCrew.ownerId === currentUser?.uid && (
+                                                        <>
+                                                            <div className="border-t border-zinc-800 my-1" />
+                                                            <div className="px-3 py-1 text-[9px] text-zinc-500 font-bold uppercase tracking-widest">
+                                                                // ADMIN CONTROLS
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setIsCrewMenuOpen(false);
+                                                                    setCrewSettingsTab('general');
+                                                                    setSettingsCrewName(activeCrew.name || '');
+                                                                    setSettingsCrewDesc(activeCrew.description || '');
+                                                                    setSettingsCrewAvatarUrl(activeCrew.avatarUrl || activeCrew.ownerAvatar || '');
+                                                                    setSettingsJoinPolicy(activeCrew.joinPolicy || 'open');
+                                                                    setCrewSettingsFeedback(null);
+                                                                    setShowCrewSettingsModal(true);
+                                                                }}
+                                                                className="w-full text-left px-3 py-2 text-zinc-200 hover:bg-zinc-900 hover:text-white flex items-center gap-2 cursor-pointer"
+                                                            >
+                                                                <CogIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                                <span>CREW SETTINGS</span>
+                                                            </button>
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setIsCrewMenuOpen(false);
+                                                                    setShowJoinRequestsModal(true);
+                                                                }}
+                                                                className="w-full text-left px-3 py-2 text-zinc-200 hover:bg-zinc-900 hover:text-white flex items-center justify-between cursor-pointer"
+                                                            >
+                                                                <div className="flex items-center gap-2">
+                                                                    <ShieldCheckIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                                    <span>JOIN REQUESTS</span>
+                                                                </div>
+                                                                {pendingJoinRequests.length > 0 && (
+                                                                    <span className="px-1.5 py-0.2 bg-amber-500 text-black text-[9px] font-bold">
+                                                                        {pendingJoinRequests.length}
+                                                                    </span>
+                                                                )}
+                                                            </button>
+                                                        </>
+                                                    )}
+
+                                                    {/* LEAVE / DISBAND ACTIONS */}
+                                                    <div className="border-t border-zinc-800 my-1" />
+                                                    {activeCrew.ownerId === currentUser?.uid ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setIsCrewMenuOpen(false);
+                                                                setShowDisbandConfirmModal(true);
+                                                            }}
+                                                            className="w-full text-left px-3 py-2 text-red-400 hover:bg-red-950/30 hover:text-red-300 flex items-center gap-2 cursor-pointer"
+                                                        >
+                                                            <TrashIcon className="w-3.5 h-3.5 text-red-400" />
+                                                            <span>DISBAND CREW</span>
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setIsCrewMenuOpen(false);
+                                                                handleLeaveCrew();
+                                                            }}
+                                                            className="w-full text-left px-3 py-2 text-red-400 hover:bg-red-950/30 hover:text-red-300 flex items-center gap-2 cursor-pointer"
+                                                        >
+                                                            <LogoutIcon className="w-3.5 h-3.5 text-red-400" />
+                                                            <span>LEAVE SQUAD</span>
+                                                        </button>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -1333,7 +1950,7 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
                                                             <div
                                                                 className={`flex flex-col ${
                                                                     isMe ? 'items-end' : 'items-start'
-                                                                } max-w-full`}
+                                                                } max-w-full group/msg relative`}
                                                             >
                                                                 {!isMe && (
                                                                     <div className="flex items-center gap-1.5 mb-1 px-1">
@@ -1354,39 +1971,169 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
                                                                         </span>
                                                                     </div>
                                                                 )}
-                                                                <div
-                                                                    className={`max-w-[85%] sm:max-w-[72%] min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs border shadow-sm ${
-                                                                        isMe
-                                                                            ? 'bg-zinc-850 border-zinc-750 text-zinc-100'
-                                                                            : 'bg-[#131317] border-zinc-800 text-zinc-200'
-                                                                    }`}
-                                                                >
-                                                                    <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed font-mono min-w-0">
-                                                                        <ClickableMessageText
-                                                                            text={msg.text}
-                                                                            isSender={isMe}
-                                                                            timestamp={timeStr}
-                                                                            searchTerm={
-                                                                                isCrewSearchOpen
-                                                                                    ? crewChatSearchQuery
-                                                                                    : undefined
-                                                                        }
-                                                                    />
-                                                                </div>
-                                                                {timeStr && (
+                                                                {/* Message Bubble + Action Trigger for author */}
+                                                                <div className={`relative flex items-center ${isMe ? 'flex-row-reverse' : 'flex-row'} max-w-full gap-1.5`}>
+                                                                    {/* Action button: ONLY show for messages authored by current user (isMe) */}
+                                                                    {isMe && editingCrewMsgId !== msg.id && (
+                                                                        <div
+                                                                            className="relative flex-shrink-0"
+                                                                            ref={activeMsgMenuId === msg.id ? activeMsgMenuRef : null}
+                                                                        >
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    setActiveMsgMenuId(activeMsgMenuId === msg.id ? null : msg.id);
+                                                                                }}
+                                                                                className="opacity-0 group-hover/msg:opacity-100 hover:opacity-100 p-1 text-zinc-400 hover:text-white bg-zinc-900/90 border border-zinc-750 hover:border-zinc-500 transition-all cursor-pointer"
+                                                                                title="Message options"
+                                                                            >
+                                                                                <EllipsisVerticalIcon className="w-3.5 h-3.5" />
+                                                                            </button>
+
+                                                                            {activeMsgMenuId === msg.id && (
+                                                                                <div
+                                                                                    className="absolute right-0 top-full mt-1 w-36 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono text-xs"
+                                                                                    onClick={(e) => e.stopPropagation()}
+                                                                                >
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            setActiveMsgMenuId(null);
+                                                                                            setEditingCrewMsgId(msg.id);
+                                                                                            setEditingCrewMsgText(msg.text);
+                                                                                            setCrewMsgEditError(null);
+                                                                                        }}
+                                                                                        className="w-full text-left px-3 py-1.5 text-zinc-300 hover:bg-zinc-900 hover:text-white flex items-center gap-2 cursor-pointer"
+                                                                                    >
+                                                                                        <PencilSquareIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                        <span>Edit Message</span>
+                                                                                    </button>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            setActiveMsgMenuId(null);
+                                                                                            setCrewMsgToDelete(msg);
+                                                                                            setDeleteMsgError(null);
+                                                                                        }}
+                                                                                        className="w-full text-left px-3 py-1.5 text-red-400 hover:bg-red-950/30 hover:text-red-300 border-t border-zinc-850 flex items-center gap-2 cursor-pointer"
+                                                                                    >
+                                                                                        <TrashIcon className="w-3.5 h-3.5 text-red-400" />
+                                                                                        <span>Delete Message</span>
+                                                                                    </button>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+
                                                                     <div
-                                                                        className={`mt-1.5 text-[10px] font-mono tabular-nums ${
-                                                                            isMe
-                                                                                ? 'text-zinc-500 text-right'
-                                                                                : 'text-zinc-600 text-left'
+                                                                        className={`min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs border shadow-sm ${
+                                                                            editingCrewMsgId === msg.id
+                                                                                ? 'w-full min-w-[280px] sm:min-w-[360px] bg-[#141418] border-zinc-650'
+                                                                                : isMe
+                                                                                ? 'bg-zinc-850 border-zinc-750 text-zinc-100 max-w-[85%] sm:max-w-[72%]'
+                                                                                : 'bg-[#131317] border-zinc-800 text-zinc-200 max-w-[85%] sm:max-w-[72%]'
                                                                         }`}
                                                                     >
-                                                                        {timeStr}
+                                                                        {editingCrewMsgId === msg.id ? (
+                                                                            <div className="space-y-2">
+                                                                                <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono uppercase tracking-wider pb-1 border-b border-zinc-800">
+                                                                                    <span className="flex items-center gap-1 text-emerald-400">
+                                                                                        <PencilSquareIcon className="w-3 h-3" />
+                                                                                        Edit Transmission
+                                                                                    </span>
+                                                                                    <span className="text-zinc-600">ESC to cancel</span>
+                                                                                </div>
+                                                                                <textarea
+                                                                                    value={editingCrewMsgText}
+                                                                                    onChange={(e) => setEditingCrewMsgText(e.target.value)}
+                                                                                    onKeyDown={(e) => {
+                                                                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                                                                            e.preventDefault();
+                                                                                            handleSaveCrewMsgEdit(msg.id);
+                                                                                        } else if (e.key === 'Escape') {
+                                                                                            setEditingCrewMsgId(null);
+                                                                                            setEditingCrewMsgText('');
+                                                                                            setCrewMsgEditError(null);
+                                                                                        }
+                                                                                    }}
+                                                                                    autoFocus
+                                                                                    rows={3}
+                                                                                    className="w-full bg-[#0a0a0c] border border-zinc-700 p-2 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500 font-mono resize-none leading-relaxed"
+                                                                                    placeholder="Edit your transmission..."
+                                                                                />
+                                                                                {crewMsgEditError && (
+                                                                                    <div className="text-[11px] text-red-400 font-mono flex items-center gap-1">
+                                                                                        <span>!</span> {crewMsgEditError}
+                                                                                    </div>
+                                                                                )}
+                                                                                <div className="flex items-center justify-end gap-2 pt-1">
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            setEditingCrewMsgId(null);
+                                                                                            setEditingCrewMsgText('');
+                                                                                            setCrewMsgEditError(null);
+                                                                                        }}
+                                                                                        disabled={isSavingMsgEdit}
+                                                                                        className="px-2.5 py-1 text-[11px] font-mono border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
+                                                                                    >
+                                                                                        Cancel
+                                                                                    </button>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => handleSaveCrewMsgEdit(msg.id)}
+                                                                                        disabled={isSavingMsgEdit || !editingCrewMsgText.trim()}
+                                                                                        className="px-3 py-1 text-[11px] font-mono bg-emerald-600 hover:bg-emerald-500 text-white font-medium flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+                                                                                    >
+                                                                                        {isSavingMsgEdit ? (
+                                                                                            <>
+                                                                                                <div className="w-2.5 h-2.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                                                                <span>Saving...</span>
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <span>Save Changes</span>
+                                                                                        )}
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <>
+                                                                                <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed font-mono min-w-0">
+                                                                                    <ClickableMessageText
+                                                                                        text={msg.text}
+                                                                                        isSender={isMe}
+                                                                                        timestamp={timeStr}
+                                                                                        searchTerm={
+                                                                                            isCrewSearchOpen
+                                                                                                ? crewChatSearchQuery
+                                                                                                : undefined
+                                                                                        }
+                                                                                    />
+                                                                                </div>
+                                                                                <div
+                                                                                    className={`mt-1.5 flex items-center gap-1.5 text-[10px] font-mono tabular-nums ${
+                                                                                        isMe
+                                                                                            ? 'text-zinc-500 justify-end'
+                                                                                            : 'text-zinc-600 justify-start'
+                                                                                    }`}
+                                                                                >
+                                                                                    {timeStr && <span>{timeStr}</span>}
+                                                                                    {msg.editedAt && (
+                                                                                        <span
+                                                                                            className="text-[9px] uppercase tracking-wider text-zinc-500 bg-zinc-900/80 px-1 py-0.5 border border-zinc-800"
+                                                                                            title={`Edited ${formatTimestamp(msg.editedAt)}`}
+                                                                                        >
+                                                                                            edited
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </>
+                                                                        )}
                                                                     </div>
-                                                                )}
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    </React.Fragment>
+                                                        </React.Fragment>
                                                 );
                                             })
                                         )}
@@ -1910,6 +2657,1097 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
                 messages={crewMessages}
                 currentUser={currentUser}
             />
+        )}
+
+        {/* ---------------------------------------------------- */}
+        {/* CREW INFO MODAL (All Members)                       */}
+        {/* ---------------------------------------------------- */}
+        {showCrewInfoModal && activeCrew && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+                <div className="w-full max-w-2xl bg-[#0c0c0e] border border-zinc-800 shadow-2xl flex flex-col max-h-[90vh]">
+                    {/* Header */}
+                    <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-[#0e0e12]">
+                        <div className="flex items-center gap-2">
+                            <InformationCircleIcon className="w-4 h-4 text-emerald-400" />
+                            <h2 className="text-sm font-bold uppercase tracking-wider text-white font-mono">
+                                // SQUAD INTELLIGENCE [INFO]
+                            </h2>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setShowCrewInfoModal(false);
+                                setCrewInfoMemberFilter('');
+                            }}
+                            className="text-zinc-500 hover:text-white p-1 transition-colors cursor-pointer"
+                        >
+                            <CloseIcon className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    {/* Scrollable Body */}
+                    <div className="p-5 overflow-y-auto space-y-6">
+                        {/* Squad Identity Header Card */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-[#111116] border border-zinc-800">
+                            <div className="w-16 h-16 bg-zinc-900 border border-zinc-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                {activeCrew.avatarUrl ? (
+                                    <img
+                                        src={activeCrew.avatarUrl}
+                                        alt={activeCrew.name}
+                                        onError={handleImageError}
+                                        className="w-full h-full object-cover"
+                                    />
+                                ) : (
+                                    <span className="text-2xl font-bold font-mono text-emerald-400">
+                                        {activeCrew.name.charAt(0).toUpperCase()}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <h3 className="text-base font-bold text-white font-mono">
+                                        {activeCrew.name}
+                                    </h3>
+                                    <span className="text-[10px] font-mono px-2 py-0.5 bg-zinc-800 text-zinc-300 border border-zinc-700 uppercase tracking-wider">
+                                        {crewMembers.length || activeCrew.memberCount || 1} Operatives
+                                    </span>
+                                    <span className={`text-[10px] font-mono px-2 py-0.5 uppercase tracking-wider border ${
+                                        activeCrew.joinPolicy === 'approval_required'
+                                            ? 'bg-amber-950/40 text-amber-300 border-amber-800'
+                                            : 'bg-emerald-950/40 text-emerald-300 border-emerald-800'
+                                    }`}>
+                                        {activeCrew.joinPolicy === 'approval_required' ? 'Approval Required' : 'Direct Join Link'}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-zinc-400 mt-2 font-mono whitespace-pre-wrap leading-relaxed">
+                                    {activeCrew.description || '(No squad operational directive recorded.)'}
+                                </p>
+                                <div className="mt-3 flex flex-wrap items-center gap-4 text-[11px] font-mono text-zinc-500">
+                                    <span className="flex items-center gap-1.5">
+                                        <ClockIcon className="w-3.5 h-3.5 text-zinc-600" />
+                                        Created: {formatTimestamp(activeCrew.createdAt) || 'Unknown date'}
+                                    </span>
+                                    <span>•</span>
+                                    <span className="flex items-center gap-1.5">
+                                        <ShieldCheckIcon className="w-3.5 h-3.5 text-zinc-600" />
+                                        Lead: <span className="text-zinc-300 font-semibold">{activeCrew.ownerName || 'Squad Lead'}</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Crew Lead Highlight */}
+                        <div className="p-3 bg-[#0a0a0d] border border-zinc-850 flex items-center justify-between">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-8 h-8 bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                    {activeCrew.ownerPhotoURL ? (
+                                        <img
+                                            src={activeCrew.ownerPhotoURL}
+                                            alt={activeCrew.ownerName || 'Lead'}
+                                            onError={handleImageError}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        <span className="text-xs font-bold font-mono text-zinc-300">
+                                            {(activeCrew.ownerName || 'L').charAt(0)}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="min-w-0">
+                                    <div className="text-xs font-bold font-mono text-white flex items-center gap-1.5">
+                                        <span>{activeCrew.ownerName || 'Squad Lead'}</span>
+                                        <span className="text-[9px] px-1 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800 uppercase font-mono">
+                                            CREW LEAD
+                                        </span>
+                                    </div>
+                                    <div className="text-[10px] font-mono text-zinc-500">
+                                        {activeCrew.ownerUsername ? `@${activeCrew.ownerUsername}` : 'Command Node'}
+                                    </div>
+                                </div>
+                            </div>
+                            {activeCrew.ownerId && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowCrewInfoModal(false);
+                                        navigate(`/profile/${activeCrew.ownerId}`);
+                                    }}
+                                    className="px-2.5 py-1 text-[10px] font-mono border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white uppercase tracking-wider transition-colors"
+                                >
+                                    View Dossier
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Members Section */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 font-mono flex items-center gap-1.5">
+                                    <UsersIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                    Operatives Roster ({crewMembers.length || 1})
+                                </h4>
+                                <div className="w-48">
+                                    <input
+                                        type="text"
+                                        value={crewInfoMemberFilter}
+                                        onChange={(e) => setCrewInfoMemberFilter(e.target.value)}
+                                        placeholder="Filter operatives..."
+                                        className="w-full px-2.5 py-1 bg-zinc-900 border border-zinc-800 text-xs font-mono text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="border border-zinc-800 divide-y divide-zinc-850 max-h-60 overflow-y-auto">
+                                {crewMembers
+                                    .filter((m) => {
+                                        if (!crewInfoMemberFilter.trim()) return true;
+                                        const query = crewInfoMemberFilter.toLowerCase();
+                                        return (
+                                            (m.displayName || '').toLowerCase().includes(query) ||
+                                            (m.role || '').toLowerCase().includes(query)
+                                        );
+                                    })
+                                    .map((member) => (
+                                        <div
+                                            key={member.id || member.userId}
+                                            className="p-2.5 flex items-center justify-between hover:bg-zinc-900/50 transition-colors"
+                                        >
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                <div className="w-7 h-7 bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                                    {member.photoURL ? (
+                                                        <img
+                                                            src={member.photoURL}
+                                                            alt={member.displayName || 'Member'}
+                                                            onError={handleImageError}
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                    ) : (
+                                                        <span className="text-[10px] font-mono text-zinc-300">
+                                                            {(member.displayName || '?').charAt(0)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="text-xs font-mono font-medium text-zinc-200 truncate flex items-center gap-1.5">
+                                                        <span>{member.displayName || 'Operative'}</span>
+                                                        {member.userId === activeCrew.ownerId && (
+                                                            <span className="text-[9px] px-1 py-0.2 bg-emerald-950/60 text-emerald-400 border border-emerald-800 font-mono">
+                                                                LEAD
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-[10px] font-mono text-zinc-500">
+                                                        Role: {member.role || 'Operative'}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-2">
+                                                {member.userId && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setShowCrewInfoModal(false);
+                                                            navigate(`/profile/${member.userId}`);
+                                                        }}
+                                                        className="px-2 py-0.5 text-[10px] font-mono text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-750 transition-colors"
+                                                    >
+                                                        Dossier
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="p-3 border-t border-zinc-800 bg-[#09090b] flex items-center justify-end">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setShowCrewInfoModal(false);
+                                setCrewInfoMemberFilter('');
+                            }}
+                            className="px-4 py-1.5 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white text-xs font-mono uppercase tracking-wider transition-colors"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* ---------------------------------------------------- */}
+        {/* CREW SETTINGS MODAL (Admin / Owner Only)            */}
+        {/* ---------------------------------------------------- */}
+        {showCrewSettingsModal && activeCrew && activeCrew.ownerId === currentUser?.uid && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+                <div className="w-full max-w-xl bg-[#0c0c0e] border border-zinc-800 shadow-2xl flex flex-col max-h-[90vh]">
+                    {/* Header */}
+                    <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-[#0e0e12]">
+                        <div className="flex items-center gap-2">
+                            <CogIcon className="w-4 h-4 text-emerald-400" />
+                            <h2 className="text-sm font-bold uppercase tracking-wider text-white font-mono">
+                                // CREW SETTINGS [ADMIN CONTROL]
+                            </h2>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setShowCrewSettingsModal(false);
+                                setCrewSettingsFeedback(null);
+                            }}
+                            className="text-zinc-500 hover:text-white p-1 transition-colors cursor-pointer"
+                        >
+                            <CloseIcon className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    {/* Tabs Bar */}
+                    <div className="flex border-b border-zinc-800 bg-[#09090b] text-xs font-mono">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setCrewSettingsTab('general');
+                                setCrewSettingsFeedback(null);
+                            }}
+                            className={`flex-1 py-2.5 px-3 uppercase tracking-wider font-semibold border-b-2 transition-colors ${
+                                crewSettingsTab === 'general'
+                                    ? 'border-emerald-500 text-emerald-400 bg-zinc-900/40'
+                                    : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'
+                            }`}
+                        >
+                            // General
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setCrewSettingsTab('invitation');
+                                setCrewSettingsFeedback(null);
+                            }}
+                            className={`flex-1 py-2.5 px-3 uppercase tracking-wider font-semibold border-b-2 transition-colors ${
+                                crewSettingsTab === 'invitation'
+                                    ? 'border-emerald-500 text-emerald-400 bg-zinc-900/40'
+                                    : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'
+                            }`}
+                        >
+                            // Invitation Link
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setCrewSettingsTab('join_policy');
+                                setCrewSettingsFeedback(null);
+                            }}
+                            className={`flex-1 py-2.5 px-3 uppercase tracking-wider font-semibold border-b-2 transition-colors ${
+                                crewSettingsTab === 'join_policy'
+                                    ? 'border-emerald-500 text-emerald-400 bg-zinc-900/40'
+                                    : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'
+                            }`}
+                        >
+                            // Join Policy
+                        </button>
+                    </div>
+
+                    {/* Feedback Toast */}
+                    {crewSettingsFeedback && (
+                        <div className={`p-3 text-xs font-mono flex items-center gap-2 border-b ${
+                            crewSettingsFeedback.type === 'success'
+                                ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300'
+                                : 'bg-red-950/60 border-red-800 text-red-300'
+                        }`}>
+                            {crewSettingsFeedback.type === 'success' ? (
+                                <CheckCircleIcon className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                            ) : (
+                                <XCircleIcon className="w-4 h-4 text-red-400 flex-shrink-0" />
+                            )}
+                            <span>{crewSettingsFeedback.message}</span>
+                        </div>
+                    )}
+
+                    {/* Tab Body */}
+                    <div className="p-5 overflow-y-auto space-y-5">
+                        {/* TAB A: GENERAL */}
+                        {crewSettingsTab === 'general' && (
+                            <form onSubmit={handleSaveCrewGeneralSettings} className="space-y-4">
+                                <div>
+                                    <label className="block text-[11px] font-mono uppercase tracking-wider text-zinc-400 mb-1.5">
+                                        Squad Designation / Name *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={settingsCrewName}
+                                        onChange={(e) => setSettingsCrewName(e.target.value)}
+                                        placeholder="Enter squad name..."
+                                        required
+                                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[11px] font-mono uppercase tracking-wider text-zinc-400 mb-1.5">
+                                        Squad Operational Directive / Description
+                                    </label>
+                                    <textarea
+                                        value={settingsCrewDesc}
+                                        onChange={(e) => setSettingsCrewDesc(e.target.value)}
+                                        rows={3}
+                                        placeholder="Describe squad objective, domain, or mission..."
+                                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 resize-none leading-relaxed"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[11px] font-mono uppercase tracking-wider text-zinc-400 mb-1.5">
+                                        Squad Avatar URL (Optional)
+                                    </label>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-12 bg-zinc-900 border border-zinc-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                            {settingsCrewAvatarUrl.trim() ? (
+                                                <img
+                                                    src={settingsCrewAvatarUrl.trim()}
+                                                    alt="Avatar preview"
+                                                    onError={handleImageError}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <span className="text-sm font-mono text-zinc-500">
+                                                    {(settingsCrewName || 'C').charAt(0)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="url"
+                                            value={settingsCrewAvatarUrl}
+                                            onChange={(e) => setSettingsCrewAvatarUrl(e.target.value)}
+                                            placeholder="https://example.com/avatar.jpg"
+                                            className="flex-1 px-3 py-2 bg-zinc-900 border border-zinc-700 text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-zinc-500 font-mono mt-1">
+                                        Provide a direct URL to an avatar image asset.
+                                    </p>
+                                </div>
+
+                                <div className="pt-2 flex items-center justify-end gap-2 border-t border-zinc-800">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSettingsCrewName(activeCrew.name || '');
+                                            setSettingsCrewDesc(activeCrew.description || '');
+                                            setSettingsCrewAvatarUrl(activeCrew.avatarUrl || '');
+                                            setCrewSettingsFeedback(null);
+                                        }}
+                                        className="px-3 py-1.5 text-xs font-mono border border-zinc-800 text-zinc-400 hover:text-white transition-colors"
+                                    >
+                                        Reset
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isSavingCrewSettings || !settingsCrewName.trim()}
+                                        className="px-4 py-1.5 text-xs font-mono bg-emerald-600 hover:bg-emerald-500 text-white font-medium uppercase tracking-wider flex items-center gap-2 transition-colors disabled:opacity-50"
+                                    >
+                                        {isSavingCrewSettings ? (
+                                            <>
+                                                <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                <span>Saving...</span>
+                                            </>
+                                        ) : (
+                                            <span>Save Parameters</span>
+                                        )}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+
+                        {/* TAB B: INVITATION LINK */}
+                        {crewSettingsTab === 'invitation' && (
+                            <div className="space-y-5">
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[11px] font-mono uppercase tracking-wider text-zinc-400">
+                                            Squad Invitation Link
+                                        </label>
+                                        {activeCrewInvite && (
+                                            <span className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 border ${
+                                                activeCrewInvite.status === 'active'
+                                                    ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                                                    : 'bg-red-950 text-red-300 border-red-800'
+                                            }`}>
+                                                {activeCrewInvite.status === 'active' ? '[ACTIVE]' : '[REVOKED]'}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {activeCrewInvite ? (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex-1 bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs font-mono text-zinc-200 select-all truncate">
+                                                    {getCrewInvitationUrl(activeCrewInvite.token, activeCrew.id)}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleCopyCrewInviteLink}
+                                                    disabled={activeCrewInvite.status !== 'active'}
+                                                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 transition-colors disabled:opacity-40"
+                                                >
+                                                    {inviteCopied ? (
+                                                        <>
+                                                            <CheckIcon className="w-3.5 h-3.5" />
+                                                            <span>Copied!</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <ClipboardIcon className="w-3.5 h-3.5" />
+                                                            <span>Copy Link</span>
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
+
+                                            {/* Link Metadata */}
+                                            <div className="p-3 bg-[#0a0a0d] border border-zinc-850 space-y-1.5 text-[11px] font-mono text-zinc-400">
+                                                <div className="flex justify-between">
+                                                    <span className="text-zinc-500">Total Uses:</span>
+                                                    <span className="text-zinc-200">{activeCrewInvite.usesCount || 0} accepted</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-zinc-500">Created:</span>
+                                                    <span className="text-zinc-200">{formatTimestamp(activeCrewInvite.createdAt) || 'Active'}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-zinc-500">Link Status:</span>
+                                                    <span className={activeCrewInvite.status === 'active' ? 'text-emerald-400' : 'text-red-400'}>
+                                                        {activeCrewInvite.status === 'active' ? 'Operational & accepting operatives' : 'Revoked — incoming connections blocked'}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Link Actions */}
+                                            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-800">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleGenerateOrRegenerateInvite}
+                                                    disabled={isRegeneratingInvite}
+                                                    className="px-3 py-1.5 border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white text-xs font-mono uppercase tracking-wider flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                                                >
+                                                    <RegenerateIcon className={`w-3.5 h-3.5 ${isRegeneratingInvite ? 'animate-spin' : ''}`} />
+                                                    <span>Regenerate Link</span>
+                                                </button>
+
+                                                {activeCrewInvite.status === 'active' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleRevokeCrewInvite}
+                                                        disabled={isRevokingInvite}
+                                                        className="px-3 py-1.5 border border-red-900/60 hover:border-red-700 text-red-400 hover:text-red-300 text-xs font-mono uppercase tracking-wider transition-colors disabled:opacity-50"
+                                                    >
+                                                        Revoke Link
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="p-4 bg-[#111116] border border-zinc-800 text-center space-y-3">
+                                            <p className="text-xs font-mono text-zinc-400">
+                                                No invitation link currently exists for this squad.
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={handleGenerateOrRegenerateInvite}
+                                                disabled={isRegeneratingInvite}
+                                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono uppercase tracking-wider font-semibold transition-colors flex items-center justify-center gap-2 mx-auto disabled:opacity-50"
+                                            >
+                                                <LinkIcon className="w-3.5 h-3.5" />
+                                                <span>Generate Squad Link</span>
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB C: JOIN SETTINGS */}
+                        {crewSettingsTab === 'join_policy' && (
+                            <div className="space-y-4">
+                                <p className="text-xs font-mono text-zinc-400">
+                                    Configure how new operatives join squad <strong className="text-zinc-200">{activeCrew.name}</strong> when using an active invitation link.
+                                </p>
+
+                                <div className="space-y-3">
+                                    {/* Option 1: Open */}
+                                    <label
+                                        onClick={() => setSettingsJoinPolicy('open')}
+                                        className={`p-3.5 border block cursor-pointer transition-all ${
+                                            settingsJoinPolicy === 'open'
+                                                ? 'bg-[#14141c] border-emerald-500 shadow-sm'
+                                                : 'bg-[#0f0f13] border-zinc-800 hover:border-zinc-700'
+                                        }`}
+                                    >
+                                        <div className="flex items-start gap-3">
+                                            <input
+                                                type="radio"
+                                                name="crew_join_policy"
+                                                checked={settingsJoinPolicy === 'open'}
+                                                onChange={() => setSettingsJoinPolicy('open')}
+                                                className="mt-1 accent-emerald-500 cursor-pointer"
+                                            />
+                                            <div className="space-y-1">
+                                                <div className="text-xs font-bold font-mono text-white flex items-center gap-2">
+                                                    <span>Anyone with the invitation link</span>
+                                                    <span className="text-[9px] font-mono px-1.5 py-0.2 bg-emerald-950 text-emerald-300 border border-emerald-800 uppercase">
+                                                        DIRECT ACCESS
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] font-mono text-zinc-400 leading-relaxed">
+                                                    Operatives who navigate to a valid invitation link are admitted directly into the squad conversation without requiring manual lead approval.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </label>
+
+                                    {/* Option 2: Approval Required */}
+                                    <label
+                                        onClick={() => setSettingsJoinPolicy('approval_required')}
+                                        className={`p-3.5 border block cursor-pointer transition-all ${
+                                            settingsJoinPolicy === 'approval_required'
+                                                ? 'bg-[#14141c] border-emerald-500 shadow-sm'
+                                                : 'bg-[#0f0f13] border-zinc-800 hover:border-zinc-700'
+                                        }`}
+                                    >
+                                        <div className="flex items-start gap-3">
+                                            <input
+                                                type="radio"
+                                                name="crew_join_policy"
+                                                checked={settingsJoinPolicy === 'approval_required'}
+                                                onChange={() => setSettingsJoinPolicy('approval_required')}
+                                                className="mt-1 accent-emerald-500 cursor-pointer"
+                                            />
+                                            <div className="space-y-1">
+                                                <div className="text-xs font-bold font-mono text-white flex items-center gap-2">
+                                                    <span>Approval Required</span>
+                                                    <span className="text-[9px] font-mono px-1.5 py-0.2 bg-amber-950 text-amber-300 border border-amber-800 uppercase">
+                                                        GATED ACCESS
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] font-mono text-zinc-400 leading-relaxed">
+                                                    Operatives who open the invitation link must submit a formal access request. The squad lead will review each request and manually grant or deny squad entry.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <div className="pt-3 flex items-center justify-between border-t border-zinc-800">
+                                    <div className="text-[11px] font-mono text-zinc-500">
+                                        Current Policy: <span className="text-zinc-300 font-bold uppercase">{activeCrew.joinPolicy === 'approval_required' ? 'Approval Required' : 'Direct Join Link'}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSaveCrewJoinPolicy(settingsJoinPolicy)}
+                                        disabled={isSavingCrewSettings}
+                                        className="px-4 py-1.5 text-xs font-mono bg-emerald-600 hover:bg-emerald-500 text-white font-medium uppercase tracking-wider flex items-center gap-2 transition-colors disabled:opacity-50"
+                                    >
+                                        {isSavingCrewSettings ? (
+                                            <>
+                                                <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                <span>Updating...</span>
+                                            </>
+                                        ) : (
+                                            <span>Apply Join Policy</span>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="p-3 border-t border-zinc-800 bg-[#09090b] flex items-center justify-end">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setShowCrewSettingsModal(false);
+                                setCrewSettingsFeedback(null);
+                            }}
+                            className="px-4 py-1.5 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white text-xs font-mono uppercase tracking-wider transition-colors"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* ---------------------------------------------------- */}
+        {/* CREW JOIN REQUESTS MODAL (Admin / Owner Only)       */}
+        {/* ---------------------------------------------------- */}
+        {showJoinRequestsModal && activeCrew && activeCrew.ownerId === currentUser?.uid && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+                <div className="w-full max-w-xl bg-[#0c0c0e] border border-zinc-800 shadow-2xl flex flex-col max-h-[85vh]">
+                    {/* Header */}
+                    <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-[#0e0e12]">
+                        <div className="flex items-center gap-2">
+                            <UsersIcon className="w-4 h-4 text-emerald-400" />
+                            <h2 className="text-sm font-bold uppercase tracking-wider text-white font-mono">
+                                // SQUAD JOIN REQUESTS [PENDING: {crewJoinRequests.length}]
+                            </h2>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setShowJoinRequestsModal(false);
+                                setRejectingRequestId(null);
+                                setRejectionReasonText('');
+                            }}
+                            className="text-zinc-500 hover:text-white p-1 transition-colors cursor-pointer"
+                        >
+                            <CloseIcon className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    {/* Requests List */}
+                    <div className="p-4 overflow-y-auto space-y-3">
+                        {crewJoinRequests.length === 0 ? (
+                            <div className="p-8 text-center border border-dashed border-zinc-800 bg-[#0a0a0d] space-y-2">
+                                <UsersIcon className="w-8 h-8 text-zinc-700 mx-auto" />
+                                <div className="text-xs font-mono text-zinc-400">
+                                    No pending join requests for this squad.
+                                </div>
+                                <div className="text-[10px] font-mono text-zinc-600">
+                                    When operatives request access via invitation link, their dossiers will appear here.
+                                </div>
+                            </div>
+                        ) : (
+                            crewJoinRequests.map((req) => (
+                                <div
+                                    key={req.id}
+                                    className="p-3.5 bg-[#101015] border border-zinc-800 space-y-3"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="w-9 h-9 bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                                {req.userPhotoURL ? (
+                                                    <img
+                                                        src={req.userPhotoURL}
+                                                        alt={req.userDisplayName}
+                                                        onError={handleImageError}
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <span className="text-xs font-bold font-mono text-zinc-300">
+                                                        {(req.userDisplayName || 'O').charAt(0)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="text-xs font-bold font-mono text-white truncate">
+                                                    {req.userDisplayName}
+                                                </div>
+                                                <div className="text-[10px] font-mono text-zinc-400">
+                                                    {req.username ? `@${req.username}` : req.userEmail || 'Operative'}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="text-[10px] font-mono text-zinc-500 flex-shrink-0">
+                                            {formatTimestamp(req.createdAt)}
+                                        </div>
+                                    </div>
+
+                                    {req.userHeadline && (
+                                        <p className="text-[11px] font-mono text-zinc-400 bg-zinc-950/60 p-2 border border-zinc-850">
+                                            {req.userHeadline}
+                                        </p>
+                                    )}
+
+                                    {/* Reject Reason input if active */}
+                                    {rejectingRequestId === req.id && (
+                                        <div className="space-y-2 p-2.5 bg-red-950/20 border border-red-900/40">
+                                            <label className="block text-[10px] font-mono uppercase tracking-wider text-red-300">
+                                                Reason for Rejection (Optional)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={rejectionReasonText}
+                                                onChange={(e) => setRejectionReasonText(e.target.value)}
+                                                placeholder="e.g. Squad capacity reached, or role mismatch..."
+                                                className="w-full px-2.5 py-1.5 bg-black border border-red-900/60 text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-red-500"
+                                            />
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setRejectingRequestId(null);
+                                                        setRejectionReasonText('');
+                                                    }}
+                                                    className="px-2.5 py-1 text-[10px] font-mono border border-zinc-700 text-zinc-400 hover:text-white"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRejectJoinRequest(req)}
+                                                    disabled={isProcessingJoinReq}
+                                                    className="px-3 py-1 text-[10px] font-mono bg-red-600 hover:bg-red-500 text-white font-semibold uppercase tracking-wider disabled:opacity-50"
+                                                >
+                                                    Confirm Rejection
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {rejectingRequestId !== req.id && (
+                                        <div className="flex items-center justify-end gap-2 pt-1 border-t border-zinc-850">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setRejectingRequestId(req.id);
+                                                    setRejectionReasonText('');
+                                                }}
+                                                disabled={isProcessingJoinReq}
+                                                className="px-3 py-1 text-[11px] font-mono border border-zinc-700 hover:border-red-800 text-zinc-400 hover:text-red-400 uppercase tracking-wider transition-colors disabled:opacity-50"
+                                            >
+                                                Reject
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleApproveJoinRequest(req)}
+                                                disabled={isProcessingJoinReq}
+                                                className="px-3.5 py-1 text-[11px] font-mono bg-emerald-600 hover:bg-emerald-500 text-white font-medium uppercase tracking-wider flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                                            >
+                                                <CheckIcon className="w-3.5 h-3.5" />
+                                                <span>Admit Operative</span>
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="p-3 border-t border-zinc-800 bg-[#09090b] flex items-center justify-end">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setShowJoinRequestsModal(false);
+                                setRejectingRequestId(null);
+                                setRejectionReasonText('');
+                            }}
+                            className="px-4 py-1.5 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white text-xs font-mono uppercase tracking-wider transition-colors"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* ---------------------------------------------------- */}
+        {/* CREW MESSAGE DELETE CONFIRMATION MODAL               */}
+        {/* ---------------------------------------------------- */}
+        {crewMsgToDelete && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fade-in">
+                <div className="w-full max-w-md bg-[#0e0e12] border border-zinc-800 shadow-2xl p-5 space-y-4">
+                    <div className="flex items-center gap-2 text-red-400 border-b border-zinc-800 pb-2.5">
+                        <TrashIcon className="w-4 h-4 flex-shrink-0" />
+                        <h3 className="text-sm font-bold font-mono uppercase tracking-wider text-white">
+                            // PERMANENT DELETION
+                        </h3>
+                    </div>
+
+                    <p className="text-xs font-mono text-zinc-300 leading-relaxed">
+                        Are you sure you want to permanently delete this message from squad transmissions? This operation cannot be undone.
+                    </p>
+
+                    <div className="p-3 bg-[#08080a] border border-zinc-800 text-xs font-mono text-zinc-400 italic line-clamp-3">
+                        "{crewMsgToDelete.text}"
+                    </div>
+
+                    {deleteMsgError && (
+                        <div className="text-xs font-mono text-red-400 bg-red-950/40 p-2 border border-red-900">
+                            {deleteMsgError}
+                        </div>
+                    )}
+
+                    <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-zinc-800">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setCrewMsgToDelete(null);
+                                setDeleteMsgError(null);
+                            }}
+                            disabled={isDeletingMsg}
+                            className="px-3 py-1.5 text-xs font-mono border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleConfirmDeleteCrewMsg}
+                            disabled={isDeletingMsg}
+                            className="px-4 py-1.5 text-xs font-mono bg-red-600 hover:bg-red-500 text-white font-medium uppercase tracking-wider transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                            {isDeletingMsg ? (
+                                <>
+                                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <span>Deleting...</span>
+                                </>
+                            ) : (
+                                <span>Delete Transmission</span>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* ---------------------------------------------------- */}
+        {/* CREW DISBAND CONFIRMATION MODAL                      */}
+        {/* ---------------------------------------------------- */}
+        {showDisbandConfirmModal && activeCrew && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fade-in">
+                <div className="w-full max-w-md bg-[#0e0e12] border border-red-900/60 shadow-2xl p-5 space-y-4">
+                    <div className="flex items-center gap-2 text-red-400 border-b border-red-900/40 pb-2.5">
+                        <TrashIcon className="w-4 h-4 flex-shrink-0" />
+                        <h3 className="text-sm font-bold font-mono uppercase tracking-wider text-red-400">
+                            // DISBAND CREW SQUAD
+                        </h3>
+                    </div>
+
+                    <p className="text-xs font-mono text-zinc-300 leading-relaxed">
+                        Warning: Disbanding squad <strong className="text-white">"{activeCrew.name}"</strong> will permanently delete all message history, remove all operative links, and revoke all active invitation tokens.
+                    </p>
+
+                    <div className="p-3 bg-red-950/20 border border-red-900/40 text-[11px] font-mono text-red-300">
+                        This action is irreversible and executes immediate terminal decommission.
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-zinc-800">
+                        <button
+                            type="button"
+                            onClick={() => setShowDisbandConfirmModal(false)}
+                            disabled={isDisbanding}
+                            className="px-3 py-1.5 text-xs font-mono border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleConfirmDisbandCrew}
+                            disabled={isDisbanding}
+                            className="px-4 py-1.5 text-xs font-mono bg-red-600 hover:bg-red-500 text-white font-medium uppercase tracking-wider transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                            {isDisbanding ? (
+                                <>
+                                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <span>Decommissioning...</span>
+                                </>
+                            ) : (
+                                <span>Disband Squad</span>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* ---------------------------------------------------- */}
+        {/* INCOMING CREW INVITATION MODAL (Via URL parameter)  */}
+        {/* ---------------------------------------------------- */}
+        {incomingInviteModal.isOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fade-in">
+                <div className="w-full max-w-md bg-[#0c0c0e] border border-zinc-800 shadow-2xl p-6 space-y-5">
+                    {/* Header */}
+                    <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                        <div className="flex items-center gap-2">
+                            <LinkIcon className="w-4 h-4 text-emerald-400" />
+                            <h3 className="text-sm font-bold font-mono uppercase tracking-wider text-white">
+                                // SQUAD INVITATION
+                            </h3>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                searchParams.delete('invite');
+                                setSearchParams(searchParams, { replace: true });
+                                setIncomingInviteModal(prev => ({ ...prev, isOpen: false }));
+                            }}
+                            className="text-zinc-500 hover:text-white transition-colors"
+                        >
+                            <CloseIcon className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    {/* Content Based on Status */}
+                    {incomingInviteModal.status === 'loading' && (
+                        <div className="py-8 text-center space-y-3">
+                            <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                            <p className="text-xs font-mono text-zinc-400">
+                                Verifying squad invitation token credentials...
+                            </p>
+                        </div>
+                    )}
+
+                    {incomingInviteModal.status === 'invalid' && (
+                        <div className="py-4 text-center space-y-3">
+                            <div className="w-10 h-10 bg-red-950/60 border border-red-800 flex items-center justify-center mx-auto text-red-400">
+                                <XCircleIcon className="w-6 h-6" />
+                            </div>
+                            <div className="text-xs font-bold font-mono text-white uppercase">
+                                Invalid or Expired Invitation
+                            </div>
+                            <p className="text-[11px] font-mono text-zinc-400">
+                                {incomingInviteModal.errorMsg || 'This squad invitation link is no longer operational, has expired, or was revoked by the squad lead.'}
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    searchParams.delete('invite');
+                                    setSearchParams(searchParams, { replace: true });
+                                    setIncomingInviteModal(prev => ({ ...prev, isOpen: false }));
+                                }}
+                                className="px-4 py-2 border border-zinc-700 text-xs font-mono text-zinc-300 hover:text-white uppercase tracking-wider transition-colors"
+                            >
+                                Close Window
+                            </button>
+                        </div>
+                    )}
+
+                    {(incomingInviteModal.status === 'valid' ||
+                      incomingInviteModal.status === 'submitting' ||
+                      incomingInviteModal.status === 'submitted' ||
+                      incomingInviteModal.status === 'joined' ||
+                      incomingInviteModal.status === 'error') && incomingInviteModal.team && (
+                        <div className="space-y-4">
+                            {/* Squad Info Preview */}
+                            <div className="p-4 bg-[#111116] border border-zinc-800 flex items-center gap-3.5">
+                                <div className="w-12 h-12 bg-zinc-900 border border-zinc-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                    {incomingInviteModal.team.avatarUrl ? (
+                                        <img
+                                            src={incomingInviteModal.team.avatarUrl}
+                                            alt={incomingInviteModal.team.name}
+                                            onError={handleImageError}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        <span className="text-lg font-mono font-bold text-emerald-400">
+                                            {incomingInviteModal.team.name.charAt(0).toUpperCase()}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="min-w-0">
+                                    <h4 className="text-sm font-bold font-mono text-white truncate">
+                                        {incomingInviteModal.team.name}
+                                    </h4>
+                                    <div className="text-[10px] font-mono text-zinc-500">
+                                        Lead: {incomingInviteModal.team.ownerName || 'Squad Lead'} • {incomingInviteModal.team.memberCount || 1} Operatives
+                                    </div>
+                                </div>
+                            </div>
+
+                            {incomingInviteModal.team.description && (
+                                <p className="text-xs font-mono text-zinc-400 bg-zinc-950/40 p-2.5 border border-zinc-850">
+                                    {incomingInviteModal.team.description}
+                                </p>
+                            )}
+
+                            {/* Error notification if any */}
+                            {incomingInviteModal.status === 'error' && (
+                                <div className="p-2.5 text-xs font-mono text-red-300 bg-red-950/40 border border-red-900">
+                                    {incomingInviteModal.errorMsg || 'Action failed.'}
+                                </div>
+                            )}
+
+                            {/* Already Member Case */}
+                            {incomingInviteModal.isAlreadyMember ? (
+                                <div className="space-y-3 pt-2 text-center">
+                                    <p className="text-xs font-mono text-emerald-400">
+                                        ✓ You are already an operative in squad "{incomingInviteModal.team.name}".
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            searchParams.delete('invite');
+                                            setSearchParams(searchParams, { replace: true });
+                                            setSelectedCrewId(incomingInviteModal.team!.id);
+                                            setIncomingInviteModal(prev => ({ ...prev, isOpen: false }));
+                                        }}
+                                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs uppercase tracking-wider font-semibold transition-colors"
+                                    >
+                                        Open Squad Transmissions
+                                    </button>
+                                </div>
+                            ) : incomingInviteModal.status === 'submitted' || incomingInviteModal.existingRequest ? (
+                                <div className="space-y-3 pt-2 text-center">
+                                    <div className="p-3 bg-amber-950/30 border border-amber-900 text-xs font-mono text-amber-300 space-y-1">
+                                        <div className="font-bold uppercase tracking-wider">Access Request Pending</div>
+                                        <p className="text-[11px] text-zinc-400">
+                                            Your request has been delivered to squad lead <strong>{incomingInviteModal.team.ownerName || 'Admin'}</strong>. You will gain access once approved.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            searchParams.delete('invite');
+                                            setSearchParams(searchParams, { replace: true });
+                                            setIncomingInviteModal(prev => ({ ...prev, isOpen: false }));
+                                        }}
+                                        className="w-full py-2 border border-zinc-700 text-zinc-300 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors"
+                                    >
+                                        Acknowledge & Close
+                                    </button>
+                                </div>
+                            ) : incomingInviteModal.status === 'joined' ? (
+                                <div className="space-y-3 pt-2 text-center">
+                                    <p className="text-xs font-mono text-emerald-400 font-bold uppercase tracking-wider">
+                                        ✓ Squad Entry Authorized! Transmitting...
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="pt-2 space-y-2">
+                                    {incomingInviteModal.invitation?.joinPolicy === 'approval_required' ? (
+                                        <button
+                                            type="button"
+                                            onClick={handleRequestIncomingInviteAccess}
+                                            disabled={incomingInviteModal.status === 'submitting'}
+                                            className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-mono text-xs uppercase tracking-wider font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                                        >
+                                            {incomingInviteModal.status === 'submitting' ? (
+                                                <>
+                                                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                    <span>Submitting Request...</span>
+                                                </>
+                                            ) : (
+                                                <span>Request Squad Access</span>
+                                            )}
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={handleAcceptIncomingInvite}
+                                            disabled={incomingInviteModal.status === 'submitting'}
+                                            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs uppercase tracking-wider font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                                        >
+                                            {incomingInviteModal.status === 'submitting' ? (
+                                                <>
+                                                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                    <span>Entering Squad...</span>
+                                                </>
+                                            ) : (
+                                                <span>Join Squad Transmissions</span>
+                                            )}
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
         )}
     </div>
 );

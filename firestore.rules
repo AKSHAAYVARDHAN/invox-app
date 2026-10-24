@@ -402,7 +402,9 @@ service cloud.firestore {
           && uid() in get(/databases/$(database)/documents/teams/$(teamId)).data.memberIds;
         allow update: if signedIn() && (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
-          || resource.data.senderId == uid()
+          || (resource.data.senderId == uid()
+              && request.resource.data.senderId == uid()
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt']))
           || isModerator()
         );
         allow delete: if signedIn() && (
