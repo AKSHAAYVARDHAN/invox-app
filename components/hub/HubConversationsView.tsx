@@ -1971,12 +1971,20 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
                                                                         </span>
                                                                     </div>
                                                                 )}
-                                                                {/* Message Bubble + Action Trigger for author */}
-                                                                <div className="relative flex items-center max-w-full gap-1.5">
-                                                                    {/* Action button: ONLY show for messages authored by current user (isMe) */}
+                                                                {/* Message Bubble with independent contextual actions trigger */}
+                                                                <div
+                                                                    className={`relative min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs border shadow-sm ${
+                                                                        editingCrewMsgId === msg.id
+                                                                            ? 'w-full min-w-[280px] sm:min-w-[360px] bg-[#141418] border-zinc-650'
+                                                                            : isMe
+                                                                            ? 'bg-zinc-850 border-zinc-750 text-zinc-100 max-w-[85%] sm:max-w-[72%]'
+                                                                            : 'bg-[#131317] border-zinc-800 text-zinc-200 max-w-[85%] sm:max-w-[72%]'
+                                                                    }`}
+                                                                >
+                                                                    {/* Action button: positioned independently immediately to the left of the bubble */}
                                                                     {isMe && editingCrewMsgId !== msg.id && (
                                                                         <div
-                                                                            className="relative flex-shrink-0"
+                                                                            className="absolute right-full top-1/2 -translate-y-1/2 mr-1.5 z-20 flex-shrink-0"
                                                                             ref={activeMsgMenuId === msg.id ? activeMsgMenuRef : null}
                                                                         >
                                                                             <button
@@ -2024,24 +2032,15 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
                                                                                             setDeleteMsgError(null);
                                                                                         }}
                                                                                         className="w-full text-left px-3 py-1.5 text-red-400 hover:bg-red-950/30 hover:text-red-300 border-t border-zinc-850 flex items-center gap-2 cursor-pointer"
-                                                                                    >
-                                                                                        <TrashIcon className="w-3.5 h-3.5 text-red-400" />
-                                                                                        <span>Delete Message</span>
-                                                                                    </button>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    )}
+                                                                                        >
+                                                                                            <TrashIcon className="w-3.5 h-3.5 text-red-400" />
+                                                                                            <span>Delete Message</span>
+                                                                                        </button>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
 
-                                                                    <div
-                                                                        className={`min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs border shadow-sm ${
-                                                                            editingCrewMsgId === msg.id
-                                                                                ? 'w-full min-w-[280px] sm:min-w-[360px] bg-[#141418] border-zinc-650'
-                                                                                : isMe
-                                                                                ? 'bg-zinc-850 border-zinc-750 text-zinc-100 max-w-[85%] sm:max-w-[72%]'
-                                                                                : 'bg-[#131317] border-zinc-800 text-zinc-200 max-w-[85%] sm:max-w-[72%]'
-                                                                        }`}
-                                                                    >
                                                                         {editingCrewMsgId === msg.id ? (
                                                                             <div className="space-y-2">
                                                                                 <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono uppercase tracking-wider pb-1 border-b border-zinc-800">
@@ -2137,7 +2136,6 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
                                                                                 </div>
                                                                             </>
                                                                         )}
-                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </React.Fragment>
