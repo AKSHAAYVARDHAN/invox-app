@@ -507,13 +507,13 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
             className={`font-mono ${
                 isExpanded
                     ? 'fixed inset-0 w-screen h-screen h-[100dvh] z-[100] bg-[#0c0c0e] flex flex-col m-0 p-0 overflow-hidden'
-                    : 'space-y-4'
+                    : 'flex-1 flex flex-col min-h-0'
             }`}
         >
             {/* View Header: Clean INVOX layout with aligned actions */}
             <div
-                className={`flex items-center justify-between border-b border-zinc-800 ${
-                    isExpanded ? 'flex-shrink-0 px-4 sm:px-6 py-3.5 bg-[#0c0c0e]' : 'px-0 pb-3'
+                className={`flex items-center justify-between border-b border-zinc-800 flex-shrink-0 ${
+                    isExpanded ? 'px-4 sm:px-6 py-3.5 bg-[#0c0c0e]' : 'px-0 pb-3'
                 }`}
             >
                 {/* Left: Section Label and Title */}
@@ -563,7 +563,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
             {loading ? (
                 <div
                     className={`p-12 text-center border border-zinc-800 bg-[#0c0c0e] ${
-                        isExpanded ? 'flex-1 flex flex-col items-center justify-center border-0' : 'h-[640px] flex items-center justify-center'
+                        isExpanded ? 'flex-1 flex flex-col items-center justify-center border-0' : 'flex-1 flex items-center justify-center mb-4'
                     }`}
                 >
                     <div>
@@ -576,8 +576,8 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
             ) : !hasData ? (
                 /* Empty State Display */
                 <div
-                    className={`border border-zinc-800 bg-[#0c0c0e] p-12 sm:p-16 text-center font-mono my-4 ${
-                        isExpanded ? 'flex-1 flex items-center justify-center border-0 m-0' : 'h-[640px] flex items-center justify-center'
+                    className={`border border-zinc-800 bg-[#0c0c0e] p-12 sm:p-16 text-center font-mono ${
+                        isExpanded ? 'flex-1 flex items-center justify-center border-0 m-0' : 'flex-1 flex items-center justify-center mb-4'
                     }`}
                 >
                     <div className="max-w-md mx-auto space-y-1.5">
@@ -595,7 +595,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                 /* Two-Column Messaging Workspace: Compact Sidebar + Large Active Chat */
                 <div
                     className={`bg-[#0c0c0e] font-mono flex flex-col md:flex-row overflow-hidden ${
-                        isExpanded ? 'flex-1 min-h-0 border-0' : 'border border-zinc-800 h-[640px] sm:h-[700px]'
+                        isExpanded ? 'flex-1 min-h-0 border-0' : 'flex-1 min-h-0 border border-zinc-800 mb-4'
                     }`}
                 >
                     {/* LEFT PANEL: Compact Conversation Sidebar */}

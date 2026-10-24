@@ -1730,14 +1730,14 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
             className={`font-mono ${
                 isExpanded
                     ? 'fixed inset-0 w-screen h-screen h-[100dvh] z-[100] bg-[#0c0c0e] flex flex-col m-0 p-0 overflow-hidden'
-                    : 'space-y-4'
+                    : 'flex-1 flex flex-col min-h-0'
             }`}
         >
             {/* 1. View Header: Consistent INVOX layout with aligned actions */}
             <div
-                className={`flex items-center justify-between border-b border-zinc-800 ${
+                className={`flex items-center justify-between border-b border-zinc-800 flex-shrink-0 ${
                     isExpanded
-                        ? 'h-14 px-4 sm:px-6 bg-[#0c0c0e] flex-shrink-0'
+                        ? 'h-14 px-4 sm:px-6 bg-[#0c0c0e]'
                         : 'h-14 px-0 pb-3'
                 }`}
             >
@@ -1797,7 +1797,7 @@ export const CollabTeamsView: React.FC<CollabTeamsViewProps> = ({
             {/* 2. Two-Panel Messaging Workspace (Consistent shared layout grid) */}
             <div
                 className={`bg-[#0c0c0e] font-mono grid grid-cols-1 md:grid-cols-[minmax(280px,340px)_minmax(0,1fr)] lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)] overflow-hidden ${
-                    isExpanded ? 'flex-1 min-h-0 border-0' : 'border border-zinc-800 h-[640px] sm:h-[680px]'
+                    isExpanded ? 'flex-1 min-h-0 border-0' : 'flex-1 min-h-0 border border-zinc-800 mb-4'
                 }`}
             >
                 {/* ─────────────────────────────────────────────────────────── */}
