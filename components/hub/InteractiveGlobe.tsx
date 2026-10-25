@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useLayoutEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -279,6 +279,8 @@ const InteractiveGlobe: React.FC = () => {
 
     const filterDropdownRef = useRef<HTMLDivElement>(null);
     const displayDropdownRef = useRef<HTMLDivElement>(null);
+    const activeDropdownMenuRef = useRef<HTMLDivElement>(null);
+    const [dropdownHeight, setDropdownHeight] = useState<number>(0);
 
     // References for Three.js render loop
     const nodesRef = useRef<UserGlobeNode[]>([]);
@@ -305,7 +307,7 @@ const InteractiveGlobe: React.FC = () => {
         }
     }, [showArcs]);
 
-    // Handle clicks outside of dropdown menus
+    // Handle clicks outside of dropdown menus and Escape key dismissal
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target as Node)) {
@@ -315,9 +317,36 @@ const InteractiveGlobe: React.FC = () => {
                 setIsDisplayOpen(false);
             }
         };
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setIsFilterOpen(false);
+                setIsDisplayOpen(false);
+            }
+        };
+
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
     }, []);
+
+    // Dynamically measure active open dropdown menu to clear the secondary arc legend seamlessly
+    useLayoutEffect(() => {
+        if ((isFilterOpen || isDisplayOpen) && activeDropdownMenuRef.current) {
+            setDropdownHeight(activeDropdownMenuRef.current.offsetHeight + 10);
+            const raf = requestAnimationFrame(() => {
+                if (activeDropdownMenuRef.current) {
+                    setDropdownHeight(activeDropdownMenuRef.current.offsetHeight + 10);
+                }
+            });
+            return () => cancelAnimationFrame(raf);
+        } else {
+            setDropdownHeight(0);
+        }
+    }, [isFilterOpen, isDisplayOpen]);
 
     // 1. Subscribe to genuine user relationships in Firestore
     useEffect(() => {
@@ -1238,7 +1267,10 @@ const InteractiveGlobe: React.FC = () => {
                         </button>
 
                         {isFilterOpen && (
-                            <div className="absolute right-0 top-full mt-1 w-44 bg-[#0c0c0e]/95 border border-zinc-700 shadow-2xl py-1 z-50 font-mono backdrop-blur-md animate-fadeIn">
+                            <div 
+                                ref={activeDropdownMenuRef}
+                                className="absolute left-0 top-full mt-1.5 w-48 bg-[#0c0c0e]/98 border border-zinc-700 shadow-2xl py-1 z-50 font-mono backdrop-blur-md animate-fadeIn"
+                            >
                                 {[
                                     { id: 'all', label: 'All', dot: null },
                                     { id: 'followers', label: 'Followers', dot: 'bg-slate-300' },
@@ -1252,22 +1284,22 @@ const InteractiveGlobe: React.FC = () => {
                                             setRelationshipFilter(item.id as RelationshipFilter);
                                             setIsFilterOpen(false);
                                         }}
-                                        className={`w-full px-3 py-1.5 text-left text-[11px] flex items-center justify-between transition-colors ${
+                                        className={`w-full px-3 py-2 text-left text-[11px] flex items-center justify-between transition-colors ${
                                             relationshipFilter === item.id 
                                                 ? 'bg-zinc-800/90 text-white font-bold border-l-2 border-emerald-400' 
-                                                : 'text-zinc-300 hover:bg-zinc-900 hover:text-white'
+                                                : 'text-zinc-300 hover:bg-zinc-900 hover:text-white border-l-2 border-transparent'
                                         }`}
                                     >
                                         <span className="flex items-center gap-2">
                                             {item.dot ? (
-                                                <span className={`w-1.5 h-1.5 ${item.dot}`}></span>
+                                                <span className={`w-1.5 h-1.5 ${item.dot} shrink-0`}></span>
                                             ) : (
-                                                <span className="w-1.5 h-1.5 bg-transparent"></span>
+                                                <span className="w-1.5 h-1.5 bg-transparent shrink-0"></span>
                                             )}
                                             <span>{item.label}</span>
                                         </span>
                                         {relationshipFilter === item.id && (
-                                            <span className="text-emerald-400 text-[10px]">✓</span>
+                                            <span className="text-emerald-400 text-[10px] font-bold">✓</span>
                                         )}
                                     </button>
                                 ))}
@@ -1317,15 +1349,23 @@ const InteractiveGlobe: React.FC = () => {
                         </button>
 
                         {isDisplayOpen && (
-                            <div className="absolute right-0 top-full mt-1 w-44 bg-[#0c0c0e]/95 border border-zinc-700 shadow-2xl py-1 z-50 font-mono backdrop-blur-md animate-fadeIn">
+                            <div 
+                                ref={activeDropdownMenuRef}
+                                className="absolute right-0 top-full mt-1.5 w-48 bg-[#0c0c0e]/98 border border-zinc-700 shadow-2xl py-1 z-50 font-mono backdrop-blur-md animate-fadeIn"
+                            >
                                 {/* Show Arcs Toggle */}
                                 <button
                                     type="button"
                                     onClick={() => setShowArcs(prev => !prev)}
-                                    className="w-full px-3 py-2 text-left text-[11px] text-zinc-200 hover:bg-zinc-900 hover:text-white flex items-center justify-between transition-colors"
+                                    className="w-full px-3 py-2 text-left text-[11px] text-zinc-200 hover:bg-zinc-900 hover:text-white flex items-center justify-between transition-colors cursor-pointer"
                                 >
-                                    <span>Show Arcs</span>
-                                    <span className={`w-2 h-2 border ${showArcs ? 'bg-emerald-400 border-emerald-400' : 'bg-transparent border-zinc-600'}`}></span>
+                                    <span className="flex items-center gap-2">
+                                        <span className={`w-1.5 h-1.5 ${showArcs ? 'bg-emerald-400' : 'bg-zinc-600'}`}></span>
+                                        <span>Show Arcs</span>
+                                    </span>
+                                    <span className={`w-2.5 h-2.5 border flex items-center justify-center ${showArcs ? 'bg-emerald-400 border-emerald-400' : 'bg-transparent border-zinc-600'}`}>
+                                        {showArcs && <span className="w-1 h-1 bg-black"></span>}
+                                    </span>
                                 </button>
 
                                 <div className="border-t border-zinc-800 my-1"></div>
@@ -1337,18 +1377,24 @@ const InteractiveGlobe: React.FC = () => {
                                         handleResetView();
                                         setIsDisplayOpen(false);
                                     }}
-                                    className="w-full px-3 py-2 text-left text-[11px] text-zinc-200 hover:bg-zinc-900 hover:text-white flex items-center justify-between transition-colors"
+                                    className="w-full px-3 py-2 text-left text-[11px] text-zinc-200 hover:bg-zinc-900 hover:text-white flex items-center justify-between transition-colors cursor-pointer group/reset"
                                 >
-                                    <span>Reset View</span>
-                                    <span className="text-zinc-500">↺</span>
+                                    <span className="flex items-center gap-2">
+                                        <span className="text-zinc-500 group-hover/reset:text-white transition-colors">↺</span>
+                                        <span>Reset View</span>
+                                    </span>
+                                    <span className="text-[10px] text-zinc-500 uppercase">Default</span>
                                 </button>
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* Secondary Row: Compact Arc-Color Legend */}
-                <div className="flex items-center gap-3 px-3 py-1 bg-[#0c0c0e]/95 border border-zinc-800 text-[10px] font-mono text-zinc-400 backdrop-blur-md shadow-xl">
+                {/* Secondary Row: Compact Arc-Color Legend with Dynamic Clearance */}
+                <div 
+                    className="flex items-center gap-3 px-3 py-1.5 bg-[#0c0c0e]/95 border border-zinc-800 text-[10px] font-mono text-zinc-400 backdrop-blur-md shadow-xl transition-[margin-top] duration-200 ease-out"
+                    style={{ marginTop: dropdownHeight > 0 ? `${dropdownHeight}px` : undefined }}
+                >
                     <span className="text-zinc-500 font-bold tracking-wider">// ARCS:</span>
                     <span className="inline-flex items-center gap-1.5">
                         <span className="w-2.5 h-0.5 bg-emerald-400 inline-block shadow-sm"></span>
