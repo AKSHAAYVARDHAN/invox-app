@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.23.0",
+    "country-state-city": "^3.2.1",
     "express": "^5.2.1",
     "firebase": "^12.4.0",
     "react": "^19.2.0",

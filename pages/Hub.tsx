@@ -316,9 +316,6 @@ const HubPage = () => {
                 {/* Overlaid Content */}
                 <div className="relative z-10 p-6 md:p-10 pointer-events-none flex flex-col h-full flex-grow justify-between">
                     <div>
-                        <div className="inline-block bg-black/80 border border-zinc-800 px-2.5 py-1 mb-3">
-                            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">// NODE_DISCOVERY_SYSTEM</span>
-                        </div>
                         <h1 className="text-3xl md:text-5xl font-extrabold font-mono text-white leading-tight uppercase tracking-tight">
                             GLOBAL<br />
                             <span className="text-zinc-400">COLLECTIVE</span>
@@ -333,15 +330,6 @@ const HubPage = () => {
                         <div>
                             <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-widest block mb-1.5">// NETWORK_PINGS</span>
                             <span className="text-3xl md:text-4xl font-bold font-mono text-white tabular-nums tracking-tight">1.2M</span>
-                        </div>
-                        <div className="ml-auto pointer-events-auto">
-                            <button 
-                                onClick={() => navigate('/myspace/uploads')}
-                                className="flex items-center gap-3 bg-white hover:bg-zinc-200 text-black font-mono text-xs font-bold uppercase tracking-wider px-6 py-3.5 border border-white transition-colors shadow-2xl active:scale-[0.98]"
-                            >
-                                <SparklesIcon className="w-4 h-4 text-black" />
-                                <span>Broadcast Signal</span>
-                            </button>
                         </div>
                     </div>
                 </div>

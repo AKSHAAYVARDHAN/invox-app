@@ -48,6 +48,7 @@ import { handleImageError } from '../utils/imageUtils';
 import MyCommunityCardSkeleton from '../communities/MyCommunityCardSkeleton';
 import DomainFilter from '../ui/DomainFilter';
 import { useCollabDashboardData } from '../spotlight/useCollabDashboardData';
+import SettingsSidebar from '../settings/SettingsSidebar';
 
 const trendingTopics = [
     { name: '#QuantumLeap', posts: '12.1K posts' },
@@ -1931,7 +1932,13 @@ const UploadsSidebar: React.FC<{ setUploadTriggerTarget: (target: string | null)
 };
 
 const RightSidebar: React.FC<RightSidebarProps> = ({ variant, ...props }) => {
+    const location = ReactRouterDOM.useLocation();
+
     const renderSidebarContent = () => {
+        if (variant === 'settings' || location.pathname.startsWith('/settings')) {
+            return <SettingsSidebar />;
+        }
+
         switch (variant) {
             case 'feeds':
                 return (
