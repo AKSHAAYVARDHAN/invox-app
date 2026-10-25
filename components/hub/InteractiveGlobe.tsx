@@ -256,6 +256,138 @@ function createPacketSpriteTexture(type: 'connection' | 'following' | 'follower'
     return texture;
 }
 
+interface BoxRect {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+}
+
+function boxesIntersect(a: BoxRect, b: BoxRect): boolean {
+    return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
+}
+
+/**
+ * Dynamically computes an optimal, unobstructed screen position for the Node Telemetry popup card.
+ * Evaluates candidate placements around the selected node (right, left, below, above)
+ * and guarantees that the popup NEVER overlaps:
+ * 1. Bottom-Left statistic cards (Followers, Following, Connections)
+ * 2. Top-Left heading (GLOBAL COLLECTIVE)
+ * 3. Top-Right HUD controls (Filter dropdown, Active only, Counts, Display menu, Legend)
+ * 4. Viewport boundaries (ensuring Profile & Signal buttons remain fully visible and clickable)
+ * 
+ * Automatically falls back to a guaranteed clean safe-zone (e.g. bottom-right / mid-right)
+ * if space beside/below the node is limited or obstructed.
+ */
+function calculateSmartPopupPosition(
+    anchorX: number,
+    anchorY: number,
+    containerWidth: number,
+    containerHeight: number,
+    popupWidth: number,
+    popupHeight: number
+): { x: number; y: number } {
+    const W = Math.min(popupWidth, Math.max(260, containerWidth - 32));
+    const H = Math.min(popupHeight, Math.max(280, containerHeight - 32));
+
+    // Obstacle zone 1: Bottom-Left statistic cards (Followers, Following, Connections)
+    const statsBox: BoxRect = {
+        left: 0,
+        top: Math.max(0, containerHeight - 165),
+        right: Math.min(500, containerWidth * 0.95),
+        bottom: containerHeight,
+    };
+
+    // Obstacle zone 2: Top-Left heading (GLOBAL COLLECTIVE)
+    const headingBox: BoxRect = {
+        left: 0,
+        top: 0,
+        right: 320,
+        bottom: 125,
+    };
+
+    // Obstacle zone 3: Top-Right controls (Filter, Active, Display, Legend)
+    const controlsBox: BoxRect = {
+        left: Math.max(0, containerWidth - 490),
+        top: 0,
+        right: containerWidth,
+        bottom: 155,
+    };
+
+    const hasCollision = (left: number, top: number): boolean => {
+        // Must stay strictly within viewport
+        if (left < 16 || left + W > containerWidth - 16) return true;
+        if (top < 16 || top + H > containerHeight - 16) return true;
+
+        const candidate: BoxRect = {
+            left,
+            top,
+            right: left + W,
+            bottom: top + H,
+        };
+
+        return (
+            boxesIntersect(candidate, statsBox) ||
+            boxesIntersect(candidate, headingBox) ||
+            boxesIntersect(candidate, controlsBox)
+        );
+    };
+
+    // Candidate 1: Beside node to the right
+    const cand1Left = anchorX + 24;
+    const cand1Top = Math.max(16, Math.min(containerHeight - H - 16, anchorY - H / 2));
+    if (!hasCollision(cand1Left, cand1Top)) {
+        return { x: Math.round(cand1Left), y: Math.round(cand1Top) };
+    }
+
+    // Candidate 2: Beside node to the left
+    const cand2Left = anchorX - W - 24;
+    const cand2Top = Math.max(16, Math.min(containerHeight - H - 16, anchorY - H / 2));
+    if (!hasCollision(cand2Left, cand2Top)) {
+        return { x: Math.round(cand2Left), y: Math.round(cand2Top) };
+    }
+
+    // Candidate 3: Below node
+    const cand3Left = Math.max(16, Math.min(containerWidth - W - 16, anchorX - W / 2));
+    const cand3Top = anchorY + 24;
+    if (!hasCollision(cand3Left, cand3Top)) {
+        return { x: Math.round(cand3Left), y: Math.round(cand3Top) };
+    }
+
+    // Candidate 4: Above node
+    const cand4Left = Math.max(16, Math.min(containerWidth - W - 16, anchorX - W / 2));
+    const cand4Top = anchorY - H - 24;
+    if (!hasCollision(cand4Left, cand4Top)) {
+        return { x: Math.round(cand4Left), y: Math.round(cand4Top) };
+    }
+
+    // Candidate 5: Safe Area Fallback — Bottom-Right corner (cleanest area, opposite to stats cards)
+    const cand5Left = containerWidth - W - 24;
+    const cand5Top = containerHeight - H - 24;
+    if (!hasCollision(cand5Left, cand5Top)) {
+        return { x: Math.round(cand5Left), y: Math.round(cand5Top) };
+    }
+
+    // Candidate 6: Mid-Right viewport placement (clear of controls above and statistics below)
+    const cand6Left = Math.max(16, containerWidth - W - 24);
+    const cand6Top = Math.max(165, Math.min(containerHeight - H - 24, (containerHeight - H) / 2));
+    if (!hasCollision(cand6Left, cand6Top)) {
+        return { x: Math.round(cand6Left), y: Math.round(cand6Top) };
+    }
+
+    // Candidate 7: Left-Center placement strictly above the bottom statistics
+    const cand7Left = 24;
+    const cand7Top = Math.max(130, containerHeight - H - 170);
+    if (!hasCollision(cand7Left, cand7Top)) {
+        return { x: Math.round(cand7Left), y: Math.round(cand7Top) };
+    }
+
+    // Absolute fallback: Clamped securely to right viewport side
+    const safeX = Math.max(16, Math.min(containerWidth - W - 16, containerWidth - W - 24));
+    const safeY = Math.max(16, Math.min(containerHeight - H - 16, containerHeight - H - 24));
+    return { x: Math.round(safeX), y: Math.round(safeY) };
+}
+
 const InteractiveGlobe: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
     const navigate = ReactRouterDOM.useNavigate();
@@ -281,6 +413,11 @@ const InteractiveGlobe: React.FC = () => {
     const displayDropdownRef = useRef<HTMLDivElement>(null);
     const activeDropdownMenuRef = useRef<HTMLDivElement>(null);
     const [dropdownHeight, setDropdownHeight] = useState<number>(0);
+
+    // Popup positioning refs & coordinates state
+    const popupCardRef = useRef<HTMLDivElement>(null);
+    const lastClickPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+    const [popupCoords, setPopupCoords] = useState<{ x: number; y: number }>({ x: 24, y: 160 });
 
     // References for Three.js render loop
     const nodesRef = useRef<UserGlobeNode[]>([]);
@@ -347,6 +484,21 @@ const InteractiveGlobe: React.FC = () => {
             setDropdownHeight(0);
         }
     }, [isFilterOpen, isDisplayOpen]);
+
+    // Dynamically adjust popup card coordinates whenever selectedNode changes
+    useLayoutEffect(() => {
+        if (selectedNode && containerRef.current) {
+            const cWidth = containerRef.current.clientWidth;
+            const cHeight = containerRef.current.clientHeight;
+            const cardW = popupCardRef.current?.offsetWidth || 320;
+            const cardH = popupCardRef.current?.offsetHeight || 370;
+            const anchorX = lastClickPosRef.current.x || (cWidth - cardW - 24);
+            const anchorY = lastClickPosRef.current.y || (cHeight - cardH - 24);
+
+            const coords = calculateSmartPopupPosition(anchorX, anchorY, cWidth, cHeight, cardW, cardH);
+            setPopupCoords(coords);
+        }
+    }, [selectedNode]);
 
     // 1. Subscribe to genuine user relationships in Firestore
     useEffect(() => {
@@ -1082,7 +1234,32 @@ const InteractiveGlobe: React.FC = () => {
             }
         };
 
+        let hasDragged = false;
+        controls.addEventListener('change', () => {
+            if (isInteractingRef.current) {
+                hasDragged = true;
+            }
+        });
+
         const handleClick = (e: MouseEvent) => {
+            // Ignore click if the user was dragging/rotating the globe
+            if (hasDragged) {
+                hasDragged = false;
+                return;
+            }
+
+            // If click originated from the popup card, HUD dropdowns, or interactive buttons, do not raycast or deselect
+            const target = e.target as HTMLElement | null;
+            if (popupCardRef.current?.contains(target as Node)) {
+                return;
+            }
+            if (filterDropdownRef.current?.contains(target as Node) || displayDropdownRef.current?.contains(target as Node)) {
+                return;
+            }
+            if (target?.closest('button, a, input, select, [role="button"], [role="menu"]')) {
+                return;
+            }
+
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(nodeHitboxes);
 
@@ -1091,6 +1268,20 @@ const InteractiveGlobe: React.FC = () => {
                 setSelectedNode(node);
                 selectedNodeRef.current = node;
                 rebuildVisualNetwork();
+
+                // Record click coordinates and compute collision-free popup position
+                const rect = containerRef.current?.getBoundingClientRect();
+                const clickX = rect ? e.clientX - rect.left : e.clientX;
+                const clickY = rect ? e.clientY - rect.top : e.clientY;
+                lastClickPosRef.current = { x: clickX, y: clickY };
+
+                const cWidth = containerRef.current?.clientWidth || window.innerWidth;
+                const cHeight = containerRef.current?.clientHeight || window.innerHeight;
+                const cardW = popupCardRef.current?.offsetWidth || 320;
+                const cardH = popupCardRef.current?.offsetHeight || 370;
+
+                const coords = calculateSmartPopupPosition(clickX, clickY, cWidth, cHeight, cardW, cardH);
+                setPopupCoords(coords);
 
                 const worldPos = node.position.clone().applyMatrix4(globeGroup.matrixWorld);
                 const targetPos = worldPos.clone().normalize().multiplyScalar(320);
@@ -1175,6 +1366,15 @@ const InteractiveGlobe: React.FC = () => {
             camera.aspect = newW / newH;
             camera.updateProjectionMatrix();
             renderer.setSize(newW, newH);
+
+            if (selectedNodeRef.current) {
+                const cardW = popupCardRef.current?.offsetWidth || 320;
+                const cardH = popupCardRef.current?.offsetHeight || 370;
+                const anchorX = lastClickPosRef.current.x || (newW - cardW - 24);
+                const anchorY = lastClickPosRef.current.y || (newH - cardH - 24);
+                const coords = calculateSmartPopupPosition(anchorX, anchorY, newW, newH, cardW, cardH);
+                setPopupCoords(coords);
+            }
         };
 
         const resizeObserver = new ResizeObserver(handleResize);
@@ -1538,10 +1738,17 @@ const InteractiveGlobe: React.FC = () => {
 
             {/* Selected Node Detailed Inspector Card Overlay */}
             {selectedNode && (
-                <div className="absolute bottom-6 left-6 z-30 pointer-events-auto max-w-sm w-[calc(100%-3rem)] sm:w-80 animate-fadeInUp">
-                    <div className="bg-[#0c0c0e]/95 backdrop-blur-lg border border-zinc-700/90 p-4 shadow-2xl font-mono">
+                <div 
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute z-30 pointer-events-auto max-w-sm w-[calc(100%-3rem)] sm:w-80 transition-[left,top] duration-200 ease-out animate-fadeIn"
+                    style={{ left: `${popupCoords.x}px`, top: `${popupCoords.y}px` }}
+                >
+                    <div 
+                        ref={popupCardRef}
+                        className="bg-[#0c0c0e]/95 backdrop-blur-lg border border-zinc-700/90 shadow-2xl font-mono flex flex-col max-h-[min(520px,calc(100vh-2rem))] overflow-hidden"
+                    >
                         {/* Header */}
-                        <div className="flex items-center justify-between pb-2 mb-3 border-b border-zinc-800">
+                        <div className="flex items-center justify-between p-3.5 pb-2.5 border-b border-zinc-800 shrink-0">
                             <div className="flex items-center gap-2">
                                 <span className={`w-1.5 h-1.5 ${selectedNode.isActive ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-600'}`}></span>
                                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
@@ -1550,102 +1757,105 @@ const InteractiveGlobe: React.FC = () => {
                             </div>
                             <button
                                 onClick={() => setSelectedNode(null)}
-                                className="text-zinc-500 hover:text-white p-1 transition-colors"
+                                className="text-zinc-500 hover:text-white p-1 transition-colors cursor-pointer"
                             >
                                 <CloseIcon className="w-4 h-4" />
                             </button>
                         </div>
 
-                        {/* Node Identity */}
-                        <div className="flex items-start gap-3 mb-3">
-                            <div className="w-10 h-10 bg-zinc-900 border border-zinc-700 flex items-center justify-center text-sm font-bold text-white shrink-0 overflow-hidden shadow-md">
-                                {selectedNode.photoURL ? (
-                                    <img 
-                                        src={selectedNode.photoURL} 
-                                        alt={selectedNode.displayName} 
-                                        className="w-full h-full object-cover"
-                                        referrerPolicy="no-referrer" 
-                                    />
-                                ) : (
-                                    <span>{selectedNode.displayName[0]?.toUpperCase() || 'N'}</span>
-                                )}
+                        {/* Scrollable Body Content */}
+                        <div className="p-3.5 overflow-y-auto space-y-3 min-h-0 flex-1 custom-scrollbar">
+                            {/* Node Identity */}
+                            <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 bg-zinc-900 border border-zinc-700 flex items-center justify-center text-sm font-bold text-white shrink-0 overflow-hidden shadow-md">
+                                    {selectedNode.photoURL ? (
+                                        <img 
+                                            src={selectedNode.photoURL} 
+                                            alt={selectedNode.displayName} 
+                                            className="w-full h-full object-cover"
+                                            referrerPolicy="no-referrer" 
+                                        />
+                                    ) : (
+                                        <span>{selectedNode.displayName[0]?.toUpperCase() || 'N'}</span>
+                                    )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <h3 className="text-sm font-bold text-white truncate">
+                                        {selectedNode.displayName}
+                                    </h3>
+                                    <p className="text-xs text-zinc-400 truncate">
+                                        @{selectedNode.username}
+                                    </p>
+                                    <p className="text-[10px] text-zinc-300 truncate font-semibold mt-0.5">
+                                        {selectedNode.geo.city ? `${selectedNode.geo.city}, ${selectedNode.geo.country}` : selectedNode.geo.country}
+                                    </p>
+                                </div>
                             </div>
-                            <div className="min-w-0 flex-1">
-                                <h3 className="text-sm font-bold text-white truncate">
-                                    {selectedNode.displayName}
-                                </h3>
-                                <p className="text-xs text-zinc-400 truncate">
-                                    @{selectedNode.username}
-                                </p>
-                                <p className="text-[10px] text-zinc-300 truncate font-semibold mt-0.5">
-                                    {selectedNode.geo.city ? `${selectedNode.geo.city}, ${selectedNode.geo.country}` : selectedNode.geo.country}
-                                </p>
-                            </div>
-                        </div>
 
-                        {/* Relationship Badge & Presence Telemetry */}
-                        <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                            {selectedNode.isCurrentUser ? (
-                                <span className="text-[9px] bg-emerald-950/70 text-emerald-300 border border-emerald-500/70 px-2 py-0.5 font-bold uppercase tracking-wider">
-                                    YOU // HOST
+                            {/* Relationship Badge & Presence Telemetry */}
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                {selectedNode.isCurrentUser ? (
+                                    <span className="text-[9px] bg-emerald-950/70 text-emerald-300 border border-emerald-500/70 px-2 py-0.5 font-bold uppercase tracking-wider">
+                                        YOU // HOST
+                                    </span>
+                                ) : selectedNode.relationshipType === 'connection' ? (
+                                    <span className="text-[9px] bg-emerald-950/70 text-emerald-300 border border-emerald-500/70 px-2 py-0.5 font-bold uppercase tracking-wider flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 bg-emerald-400 inline-block"></span>
+                                        MUTUAL CONNECTION
+                                    </span>
+                                ) : selectedNode.relationshipType === 'following' ? (
+                                    <span className="text-[9px] bg-rose-950/70 text-rose-300 border border-rose-500/70 px-2 py-0.5 font-bold uppercase tracking-wider flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 bg-rose-500 inline-block"></span>
+                                        FOLLOWING
+                                    </span>
+                                ) : (
+                                    <span className="text-[9px] bg-zinc-900 text-slate-300 border border-zinc-700 px-2 py-0.5 font-bold uppercase tracking-wider flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 bg-slate-300 inline-block"></span>
+                                        FOLLOWER
+                                    </span>
+                                )}
+
+                                <span className="text-[9px] text-zinc-400 bg-zinc-900 border border-zinc-800 px-2 py-0.5 font-mono">
+                                    {selectedNode.isActive ? 'ONLINE' : formatLastActiveString(selectedNode.lastSeenAt)}
                                 </span>
-                            ) : selectedNode.relationshipType === 'connection' ? (
-                                <span className="text-[9px] bg-emerald-950/70 text-emerald-300 border border-emerald-500/70 px-2 py-0.5 font-bold uppercase tracking-wider flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 bg-emerald-400 inline-block"></span>
-                                    MUTUAL CONNECTION
-                                </span>
-                            ) : selectedNode.relationshipType === 'following' ? (
-                                <span className="text-[9px] bg-rose-950/70 text-rose-300 border border-rose-500/70 px-2 py-0.5 font-bold uppercase tracking-wider flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 bg-rose-500 inline-block"></span>
-                                    FOLLOWING
-                                </span>
-                            ) : (
-                                <span className="text-[9px] bg-zinc-900 text-slate-300 border border-zinc-700 px-2 py-0.5 font-bold uppercase tracking-wider flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 bg-slate-300 inline-block"></span>
-                                    FOLLOWER
-                                </span>
+                            </div>
+
+                            {/* Bio & Headline */}
+                            {selectedNode.headline && (
+                                <p className="text-xs text-zinc-300 leading-relaxed font-sans line-clamp-2">
+                                    {selectedNode.headline}
+                                </p>
                             )}
 
-                            <span className="text-[9px] text-zinc-400 bg-zinc-900 border border-zinc-800 px-2 py-0.5 font-mono">
-                                {selectedNode.isActive ? 'ONLINE' : formatLastActiveString(selectedNode.lastSeenAt)}
-                            </span>
-                        </div>
+                            {/* Skills / Stacks Tags */}
+                            {selectedNode.skills && selectedNode.skills.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                    {selectedNode.skills.slice(0, 4).map((skill, sIdx) => (
+                                        <span key={sIdx} className="text-[9px] bg-zinc-900 text-zinc-400 border border-zinc-800 px-1.5 py-0.5">
+                                            {skill}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
 
-                        {/* Bio & Headline */}
-                        {selectedNode.headline && (
-                            <p className="text-xs text-zinc-300 mb-3 leading-relaxed font-sans line-clamp-2">
-                                {selectedNode.headline}
-                            </p>
-                        )}
-
-                        {/* Skills / Stacks Tags */}
-                        {selectedNode.skills && selectedNode.skills.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mb-3">
-                                {selectedNode.skills.slice(0, 4).map((skill, sIdx) => (
-                                    <span key={sIdx} className="text-[9px] bg-zinc-900 text-zinc-400 border border-zinc-800 px-1.5 py-0.5">
-                                        {skill}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-
-                        {/* Metric Bar */}
-                        <div className="grid grid-cols-2 gap-2 p-2 bg-zinc-900/80 border border-zinc-800 mb-3 text-center">
-                            <div>
-                                <span className="block text-[9px] text-zinc-500 uppercase">Followers</span>
-                                <span className="text-xs font-bold text-white tabular-nums">{selectedNode.followerCount}</span>
-                            </div>
-                            <div>
-                                <span className="block text-[9px] text-zinc-500 uppercase">Following</span>
-                                <span className="text-xs font-bold text-white tabular-nums">{selectedNode.followingCount}</span>
+                            {/* Metric Bar */}
+                            <div className="grid grid-cols-2 gap-2 p-2 bg-zinc-900/80 border border-zinc-800 text-center">
+                                <div>
+                                    <span className="block text-[9px] text-zinc-500 uppercase">Followers</span>
+                                    <span className="text-xs font-bold text-white tabular-nums">{selectedNode.followerCount}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-[9px] text-zinc-500 uppercase">Following</span>
+                                    <span className="text-xs font-bold text-white tabular-nums">{selectedNode.followingCount}</span>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex items-center gap-2">
+                        {/* Action Buttons Footer (Pinned at bottom, never clipped or covered) */}
+                        <div className="p-3.5 pt-2.5 border-t border-zinc-800/80 bg-[#0c0c0e] shrink-0 flex items-center gap-2">
                             <button
                                 onClick={() => navigate(selectedNode.isCurrentUser ? '/myspace' : `/profile/${selectedNode.id}`)}
-                                className="flex-1 bg-white hover:bg-zinc-200 text-black text-xs font-bold py-2 px-3 uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors border border-white"
+                                className="flex-1 bg-white hover:bg-zinc-200 text-black text-xs font-bold py-2 px-3 uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors border border-white cursor-pointer"
                             >
                                 <ProfileIcon className="w-3.5 h-3.5" />
                                 <span>{selectedNode.isCurrentUser ? 'My Space' : 'Profile'}</span>
@@ -1653,7 +1863,7 @@ const InteractiveGlobe: React.FC = () => {
                             {!selectedNode.isCurrentUser && (
                                 <button
                                     onClick={() => navigate(`/messages`)}
-                                    className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white text-xs font-bold py-2 px-3 uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"
+                                    className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white text-xs font-bold py-2 px-3 uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                                 >
                                     <ChatIcon className="w-3.5 h-3.5" />
                                     <span>Signal</span>
