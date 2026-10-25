@@ -21,6 +21,7 @@ import {
 } from '../services/postService';
 import { isMomentsDemoModeEnabled, toggleMomentsDemoMode } from '../services/momentsDemoData';
 import { useAuth } from '../contexts/AuthContext';
+import { subscribeUserRelationships } from '../services/connectionService';
 
 const HubPage = () => {
     const { currentUser } = useAuth();
@@ -140,6 +141,41 @@ const HubPage = () => {
             }
         };
     }, [setRightSidebarVariant]);
+
+    // Real-time network statistics (Followers, Following, Mutual Connections)
+    const [networkCounts, setNetworkCounts] = useState<{
+        followerCount: number;
+        followingCount: number;
+        connectionCount: number;
+    }>({ followerCount: 0, followingCount: 0, connectionCount: 0 });
+    const [networkCountsLoading, setNetworkCountsLoading] = useState(true);
+
+    useEffect(() => {
+        if (!currentUser?.uid) {
+            setNetworkCounts({ followerCount: 0, followingCount: 0, connectionCount: 0 });
+            setNetworkCountsLoading(false);
+            return;
+        }
+
+        setNetworkCountsLoading(true);
+        const unsubscribe = subscribeUserRelationships(
+            currentUser.uid,
+            (rel) => {
+                setNetworkCounts({
+                    followerCount: rel.followerCount,
+                    followingCount: rel.followingCount,
+                    connectionCount: rel.connectionCount,
+                });
+                setNetworkCountsLoading(false);
+            },
+            (err) => {
+                console.warn('[NETWORK_COUNTS_WARN]', err);
+                setNetworkCountsLoading(false);
+            }
+        );
+
+        return () => unsubscribe();
+    }, [currentUser?.uid]);
 
     // Live subscription to real published Moments
     useEffect(() => {
@@ -322,14 +358,36 @@ const HubPage = () => {
                         </h1>
                     </div>
 
-                    <div className="flex flex-wrap items-end gap-8 md:gap-12 mb-8">
-                        <div>
-                            <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-widest block mb-1.5">// ACTIVE_COMRADES</span>
-                            <span className="text-3xl md:text-4xl font-bold font-mono text-white tabular-nums tracking-tight">42.8K</span>
+                    {/* Real Network Statistics Control Area */}
+                    <div className="flex flex-wrap items-end gap-3 sm:gap-4 mb-4 md:mb-6 pointer-events-auto">
+                        <div className="bg-[#0c0c0e]/90 border border-zinc-800 p-2.5 sm:p-3 min-w-[125px] font-mono shadow-2xl backdrop-blur-md">
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <span className="w-1.5 h-1.5 bg-slate-300 inline-block shadow-sm"></span>
+                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">// FOLLOWERS</span>
+                            </div>
+                            <span className="text-2xl md:text-3xl font-bold text-white tabular-nums tracking-tight">
+                                {networkCountsLoading ? '--' : networkCounts.followerCount}
+                            </span>
                         </div>
-                        <div>
-                            <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-widest block mb-1.5">// NETWORK_PINGS</span>
-                            <span className="text-3xl md:text-4xl font-bold font-mono text-white tabular-nums tracking-tight">1.2M</span>
+
+                        <div className="bg-[#0c0c0e]/90 border border-zinc-800 p-2.5 sm:p-3 min-w-[125px] font-mono shadow-2xl backdrop-blur-md">
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <span className="w-1.5 h-1.5 bg-rose-500 inline-block shadow-sm"></span>
+                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">// FOLLOWING</span>
+                            </div>
+                            <span className="text-2xl md:text-3xl font-bold text-white tabular-nums tracking-tight">
+                                {networkCountsLoading ? '--' : networkCounts.followingCount}
+                            </span>
+                        </div>
+
+                        <div className="bg-[#0c0c0e]/90 border border-zinc-800 p-2.5 sm:p-3 min-w-[125px] font-mono shadow-2xl backdrop-blur-md">
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <span className="w-1.5 h-1.5 bg-emerald-400 inline-block shadow-sm"></span>
+                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">// CONNECTIONS</span>
+                            </div>
+                            <span className="text-2xl md:text-3xl font-bold text-emerald-400 tabular-nums tracking-tight">
+                                {networkCountsLoading ? '--' : networkCounts.connectionCount}
+                            </span>
                         </div>
                     </div>
                 </div>

@@ -3,6 +3,8 @@
  * for INVOX Global Collective Network 3D Globe visualization.
  */
 
+import { Country, City } from 'country-state-city';
+
 export interface GeoLocation {
     lat: number;
     lon: number;
@@ -11,6 +13,9 @@ export interface GeoLocation {
     regionName: string;
     isApproximate: boolean;
 }
+
+// In-memory cache for resolved locations to eliminate redundant parsing
+const locationCache = new Map<string, GeoLocation | null>();
 
 // Major global developer & tech hubs with precise coordinates
 const CITY_COORDINATES: Record<string, { lat: number; lon: number; country: string; city: string }> = {
@@ -221,90 +226,186 @@ function hashString(str: string): number {
     return Math.abs(hash);
 }
 
-export function resolveUserLocation(rawLocation?: string | null, userIdSeed: string = 'node-seed'): GeoLocation {
-    if (!rawLocation || typeof rawLocation !== 'string' || !rawLocation.trim()) {
-        const hash = hashString(userIdSeed);
-        const gateway = DEFAULT_GATEWAYS[hash % DEFAULT_GATEWAYS.length];
-        const jitterLat = ((hash % 100) / 100 - 0.5) * 1.5;
-        const jitterLon = (((hash >> 4) % 100) / 100 - 0.5) * 1.5;
+export interface LocationInput {
+    rawLocation?: string | null;
+    city?: string | null;
+    country?: string | null;
+    countryCode?: string | null;
+    coordinates?: { lat: number; lon: number } | { latitude: number; longitude: number } | null;
+}
+
+/**
+ * Resolves an InvoxUser's real profile location into geographic coordinates.
+ * Returns null if the user has no location or the location cannot be resolved.
+ * Never fabricates or generates random/synthetic coordinates.
+ */
+export function resolveUserLocation(
+    input?: string | LocationInput | null,
+    userIdSeed?: string
+): GeoLocation | null {
+    if (!input) return null;
+
+    let raw = '';
+    let cityHint = '';
+    let countryHint = '';
+    let countryCodeHint = '';
+    let coords: { lat: number; lon: number } | null = null;
+
+    if (typeof input === 'string') {
+        raw = input.trim();
+    } else {
+        raw = (input.rawLocation || '').trim();
+        cityHint = (input.city || '').trim();
+        countryHint = (input.country || '').trim();
+        countryCodeHint = (input.countryCode || '').trim();
+        if (input.coordinates) {
+            const c: any = input.coordinates;
+            const lat = typeof c.lat === 'number' ? c.lat : (typeof c.latitude === 'number' ? c.latitude : null);
+            const lon = typeof c.lon === 'number' ? c.lon : (typeof c.longitude === 'number' ? c.longitude : null);
+            if (lat !== null && lon !== null && !isNaN(lat) && !isNaN(lon)) {
+                coords = { lat, lon };
+            }
+        }
+    }
+
+    // Direct coordinates take highest priority
+    if (coords) {
         return {
-            lat: gateway.lat + jitterLat,
-            lon: gateway.lon + jitterLon,
-            country: gateway.country,
-            regionName: gateway.regionName,
-            isApproximate: true,
+            lat: coords.lat,
+            lon: coords.lon,
+            city: cityHint || undefined,
+            country: countryHint || 'Location Point',
+            regionName: raw || `${cityHint ? cityHint + ', ' : ''}${countryHint}`,
+            isApproximate: false,
         };
     }
 
-    const clean = rawLocation.toLowerCase().trim();
+    const cacheKey = `${raw}::${cityHint}::${countryHint}::${countryCodeHint}`.toLowerCase();
+    if (locationCache.has(cacheKey)) {
+        return locationCache.get(cacheKey)!;
+    }
 
-    // 1. Direct city check
-    for (const [cityKey, cityData] of Object.entries(CITY_COORDINATES)) {
-        if (clean.includes(cityKey)) {
-            return {
-                lat: cityData.lat,
-                lon: cityData.lon,
-                city: cityData.city,
-                country: cityData.country,
-                regionName: `${cityData.city}, ${cityData.country}`,
-                isApproximate: false,
-            };
+    const clean = raw.toLowerCase();
+
+    // 1. Direct city check against major developer hub dictionary
+    if (cityHint && CITY_COORDINATES[cityHint.toLowerCase()]) {
+        const match = CITY_COORDINATES[cityHint.toLowerCase()];
+        const res: GeoLocation = {
+            lat: match.lat,
+            lon: match.lon,
+            city: match.city,
+            country: match.country,
+            regionName: `${match.city}, ${match.country}`,
+            isApproximate: false,
+        };
+        locationCache.set(cacheKey, res);
+        return res;
+    }
+
+    if (clean) {
+        for (const [cityKey, cityData] of Object.entries(CITY_COORDINATES)) {
+            if (clean.includes(cityKey)) {
+                const res: GeoLocation = {
+                    lat: cityData.lat,
+                    lon: cityData.lon,
+                    city: cityData.city,
+                    country: cityData.country,
+                    regionName: `${cityData.city}, ${cityData.country}`,
+                    isApproximate: false,
+                };
+                locationCache.set(cacheKey, res);
+                return res;
+            }
         }
     }
 
-    // 2. Comma separated segments (e.g. "Seattle, WA, USA")
-    const segments = clean.split(',').map(s => s.trim()).filter(Boolean);
-    for (const segment of segments) {
-        if (CITY_COORDINATES[segment]) {
-            const match = CITY_COORDINATES[segment];
-            return {
-                lat: match.lat,
-                lon: match.lon,
-                city: match.city,
-                country: match.country,
-                regionName: `${match.city}, ${match.country}`,
-                isApproximate: false,
-            };
+    // 2. Check country-state-city database if countryCode or countryHint is provided
+    if (countryCodeHint) {
+        if (cityHint) {
+            const cities = City.getCitiesOfCountry(countryCodeHint.toUpperCase());
+            const matchedCity = cities?.find(
+                c => c.name.toLowerCase() === cityHint.toLowerCase()
+            );
+            if (matchedCity && matchedCity.latitude && matchedCity.longitude) {
+                const res: GeoLocation = {
+                    lat: parseFloat(matchedCity.latitude),
+                    lon: parseFloat(matchedCity.longitude),
+                    city: matchedCity.name,
+                    country: countryHint || countryCodeHint.toUpperCase(),
+                    regionName: `${matchedCity.name}, ${countryHint || countryCodeHint.toUpperCase()}`,
+                    isApproximate: false,
+                };
+                locationCache.set(cacheKey, res);
+                return res;
+            }
         }
-        if (COUNTRY_COORDINATES[segment]) {
-            const match = COUNTRY_COORDINATES[segment];
-            return {
-                lat: match.lat,
-                lon: match.lon,
-                country: match.name,
-                regionName: match.name,
-                isApproximate: false,
+        // Fall back to country centroid
+        const countryObj = Country.getCountryByCode(countryCodeHint.toUpperCase());
+        if (countryObj && countryObj.latitude && countryObj.longitude) {
+            const res: GeoLocation = {
+                lat: parseFloat(countryObj.latitude),
+                lon: parseFloat(countryObj.longitude),
+                city: cityHint || undefined,
+                country: countryObj.name,
+                regionName: countryObj.name,
+                isApproximate: true,
             };
-        }
-    }
-
-    // 3. Substring country check
-    for (const [countryKey, countryData] of Object.entries(COUNTRY_COORDINATES)) {
-        const regex = new RegExp(`\\b${countryKey}\\b`, 'i');
-        if (regex.test(clean)) {
-            return {
-                lat: countryData.lat,
-                lon: countryData.lon,
-                country: countryData.name,
-                regionName: countryData.name,
-                isApproximate: false,
-            };
+            locationCache.set(cacheKey, res);
+            return res;
         }
     }
 
-    // 4. Fallback to deterministic regional gateway
-    const hash = hashString(userIdSeed + clean);
-    const gateway = DEFAULT_GATEWAYS[hash % DEFAULT_GATEWAYS.length];
-    const jitterLat = ((hash % 100) / 100 - 0.5) * 2.0;
-    const jitterLon = (((hash >> 4) % 100) / 100 - 0.5) * 2.0;
+    // 3. Comma-separated segments check
+    if (clean) {
+        const segments = clean.split(',').map(s => s.trim()).filter(Boolean);
+        for (const segment of segments) {
+            if (CITY_COORDINATES[segment]) {
+                const match = CITY_COORDINATES[segment];
+                const res: GeoLocation = {
+                    lat: match.lat,
+                    lon: match.lon,
+                    city: match.city,
+                    country: match.country,
+                    regionName: `${match.city}, ${match.country}`,
+                    isApproximate: false,
+                };
+                locationCache.set(cacheKey, res);
+                return res;
+            }
+            if (COUNTRY_COORDINATES[segment]) {
+                const match = COUNTRY_COORDINATES[segment];
+                const res: GeoLocation = {
+                    lat: match.lat,
+                    lon: match.lon,
+                    country: match.name,
+                    regionName: match.name,
+                    isApproximate: true,
+                };
+                locationCache.set(cacheKey, res);
+                return res;
+            }
+        }
 
-    return {
-        lat: gateway.lat + jitterLat,
-        lon: gateway.lon + jitterLon,
-        country: gateway.country,
-        regionName: rawLocation.trim(),
-        isApproximate: true,
-    };
+        // Substring country check
+        for (const [countryKey, countryData] of Object.entries(COUNTRY_COORDINATES)) {
+            const regex = new RegExp(`\\b${countryKey}\\b`, 'i');
+            if (regex.test(clean)) {
+                const res: GeoLocation = {
+                    lat: countryData.lat,
+                    lon: countryData.lon,
+                    country: countryData.name,
+                    regionName: countryData.name,
+                    isApproximate: true,
+                };
+                locationCache.set(cacheKey, res);
+                return res;
+            }
+        }
+    }
+
+    // Unresolved / unknown location — return null rather than fabricating coordinates
+    locationCache.set(cacheKey, null);
+    return null;
 }
 
 /**
