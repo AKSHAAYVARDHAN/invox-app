@@ -27,7 +27,8 @@ import {
 
 export type ArcStatus = 'ACTIVE' | 'CONNECTING' | 'IDLE' | 'DISCONNECTING';
 export type RelationshipType = 'connection' | 'following' | 'follower' | 'self';
-export type NetworkFilter = 'all' | 'followers' | 'following' | 'connections' | 'active';
+export type RelationshipFilter = 'all' | 'followers' | 'following' | 'connections';
+export type NetworkFilter = RelationshipFilter;
 
 export interface UserGlobeNode {
     id: string;
@@ -267,11 +268,17 @@ const InteractiveGlobe: React.FC = () => {
     const [webglError, setWebglError] = useState<string | null>(null);
 
     // Filter & interaction state
-    const [networkFilter, setNetworkFilter] = useState<NetworkFilter>('all');
+    const [relationshipFilter, setRelationshipFilter] = useState<RelationshipFilter>('all');
+    const [activeOnly, setActiveOnly] = useState<boolean>(false);
+    const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
+    const [isDisplayOpen, setIsDisplayOpen] = useState<boolean>(false);
     const [hoveredNode, setHoveredNode] = useState<UserGlobeNode | null>(null);
     const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
     const [selectedNode, setSelectedNode] = useState<UserGlobeNode | null>(null);
     const [showArcs, setShowArcs] = useState<boolean>(true);
+
+    const filterDropdownRef = useRef<HTMLDivElement>(null);
+    const displayDropdownRef = useRef<HTMLDivElement>(null);
 
     // References for Three.js render loop
     const nodesRef = useRef<UserGlobeNode[]>([]);
@@ -297,6 +304,20 @@ const InteractiveGlobe: React.FC = () => {
             arcsGroupRef.current.visible = showArcs;
         }
     }, [showArcs]);
+
+    // Handle clicks outside of dropdown menus
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target as Node)) {
+                setIsFilterOpen(false);
+            }
+            if (displayDropdownRef.current && !displayDropdownRef.current.contains(e.target as Node)) {
+                setIsDisplayOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     // 1. Subscribe to genuine user relationships in Firestore
     useEffect(() => {
@@ -478,12 +499,8 @@ const InteractiveGlobe: React.FC = () => {
         return { allNodes: nodes, allArcs: arcs, hasCurrentUserLocation: hasLocation };
     }, [currentUser, userProfile, networkUsers, relationships]);
 
-    // 3. Apply active relationship filter dynamically without rebuilding Three.js canvas or resetting camera
+    // 3. Apply relationship & active filters dynamically without rebuilding Three.js canvas or resetting camera
     const { filteredNodes, filteredArcs } = useMemo(() => {
-        if (networkFilter === 'all') {
-            return { filteredNodes: allNodes, filteredArcs: allArcs };
-        }
-
         const visibleNodeIds = new Set<string>();
         // Always retain current user if placed
         allNodes.forEach(node => {
@@ -492,15 +509,22 @@ const InteractiveGlobe: React.FC = () => {
                 return;
             }
 
-            if (networkFilter === 'connections' && node.relationshipType === 'connection') {
-                visibleNodeIds.add(node.id);
-            } else if (networkFilter === 'following' && (node.relationshipType === 'following' || relationships?.followingIds.has(node.uid))) {
-                visibleNodeIds.add(node.id);
-            } else if (networkFilter === 'followers' && (node.relationshipType === 'follower' || relationships?.followerIds.has(node.uid))) {
-                visibleNodeIds.add(node.id);
-            } else if (networkFilter === 'active' && node.isActive) {
-                visibleNodeIds.add(node.id);
+            // Relationship match
+            let matchesRel = false;
+            if (relationshipFilter === 'all') {
+                matchesRel = true;
+            } else if (relationshipFilter === 'connections') {
+                matchesRel = node.relationshipType === 'connection';
+            } else if (relationshipFilter === 'following') {
+                matchesRel = node.relationshipType === 'following' || (relationships?.followingIds.has(node.uid) ?? false);
+            } else if (relationshipFilter === 'followers') {
+                matchesRel = node.relationshipType === 'follower' || (relationships?.followerIds.has(node.uid) ?? false);
             }
+
+            if (!matchesRel) return;
+            if (activeOnly && !node.isActive) return;
+
+            visibleNodeIds.add(node.id);
         });
 
         const fNodes = allNodes.filter(n => visibleNodeIds.has(n.id));
@@ -509,18 +533,24 @@ const InteractiveGlobe: React.FC = () => {
             const hasTo = visibleNodeIds.has(arc.toUserId);
             if (!hasTo) return false;
 
-            if (networkFilter === 'connections') return arc.relationshipType === 'connection';
-            if (networkFilter === 'following') return arc.relationshipType === 'following' || arc.relationshipType === 'connection';
-            if (networkFilter === 'followers') return arc.relationshipType === 'follower' || arc.relationshipType === 'connection';
-            if (networkFilter === 'active') {
+            if (relationshipFilter === 'connections' && arc.relationshipType !== 'connection') {
+                return false;
+            }
+            if (relationshipFilter === 'following' && arc.relationshipType !== 'following' && arc.relationshipType !== 'connection') {
+                return false;
+            }
+            if (relationshipFilter === 'followers' && arc.relationshipType !== 'follower' && arc.relationshipType !== 'connection') {
+                return false;
+            }
+            if (activeOnly) {
                 const targetNode = allNodes.find(n => n.id === arc.toUserId);
-                return targetNode?.isActive ?? false;
+                if (!targetNode?.isActive) return false;
             }
             return true;
         });
 
         return { filteredNodes: fNodes, filteredArcs: fArcs };
-    }, [allNodes, allArcs, networkFilter, relationships]);
+    }, [allNodes, allArcs, relationshipFilter, activeOnly, relationships]);
 
     // Keep active visual nodes/arcs synced into animation refs and trigger live mesh rebuild
     useEffect(() => {
@@ -1160,12 +1190,25 @@ const InteractiveGlobe: React.FC = () => {
         };
     }, []);
 
-    // Helper: Reset globe camera view to default orientation
+    // Helper: Reset globe camera view to default orientation and restore default filter state
     const handleResetView = () => {
         if (cameraRef.current && controlsRef.current) {
             targetCameraLookAt.current = new THREE.Vector3(0, 45, 660);
             setSelectedNode(null);
             selectedNodeRef.current = null;
+        }
+        setRelationshipFilter('all');
+        setActiveOnly(false);
+        setShowArcs(true);
+    };
+
+    const getFilterLabel = (filter: RelationshipFilter): string => {
+        switch (filter) {
+            case 'followers': return 'Followers';
+            case 'following': return 'Following';
+            case 'connections': return 'Connections';
+            case 'all':
+            default: return 'All';
         }
     };
 
@@ -1175,77 +1218,147 @@ const InteractiveGlobe: React.FC = () => {
             <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
             {/* Top Telemetry & Controls HUD */}
-            <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2 pointer-events-auto">
-                <div className="flex flex-wrap items-center gap-2">
-                    {/* Dynamic Network Filter Bar */}
-                    <div className="bg-[#0c0c0e]/95 border border-zinc-800/90 p-1 flex items-center gap-1 shadow-xl backdrop-blur-md">
-                        {[
-                            { id: 'all', label: 'ALL' },
-                            { id: 'followers', label: 'FOLLOWERS', dotClass: 'bg-slate-300' },
-                            { id: 'following', label: 'FOLLOWING', dotClass: 'bg-rose-500' },
-                            { id: 'connections', label: 'CONNECTIONS', dotClass: 'bg-emerald-400' },
-                            { id: 'active', label: 'ACTIVE', dotClass: 'bg-emerald-400 animate-pulse' },
-                        ].map((btn) => (
-                            <button
-                                key={btn.id}
-                                onClick={() => setNetworkFilter(btn.id as NetworkFilter)}
-                                className={`px-2 sm:px-2.5 py-1 text-[10px] font-mono tracking-wider transition-all flex items-center gap-1.5 ${
-                                    networkFilter === btn.id
-                                        ? 'bg-zinc-800 text-white font-bold border border-zinc-600 shadow-sm'
-                                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60 border border-transparent'
-                                }`}
-                            >
-                                {btn.dotClass && <span className={`w-1.5 h-1.5 ${btn.dotClass}`}></span>}
-                                <span>{btn.label}</span>
-                            </button>
-                        ))}
+            <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2 pointer-events-auto max-w-[calc(100vw-2rem)]">
+                {/* Main Controls Row */}
+                <div className="flex flex-wrap items-center justify-end gap-2 bg-[#0c0c0e]/95 border border-zinc-800 p-1.5 shadow-2xl backdrop-blur-md">
+                    {/* A. Network Filter Dropdown */}
+                    <div className="relative" ref={filterDropdownRef}>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsFilterOpen(prev => !prev);
+                                setIsDisplayOpen(false);
+                            }}
+                            className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 text-zinc-200 hover:text-white px-2.5 py-1.5 text-[11px] font-mono tracking-wider flex items-center gap-1.5 transition-colors"
+                            title="Select network relationship filter"
+                        >
+                            <span className="text-zinc-500 text-[10px]">FILTER:</span>
+                            <span className="font-semibold text-white uppercase">{getFilterLabel(relationshipFilter)}</span>
+                            <span className="text-zinc-500 text-[9px] ml-0.5">▼</span>
+                        </button>
+
+                        {isFilterOpen && (
+                            <div className="absolute right-0 top-full mt-1 w-44 bg-[#0c0c0e]/95 border border-zinc-700 shadow-2xl py-1 z-50 font-mono backdrop-blur-md animate-fadeIn">
+                                {[
+                                    { id: 'all', label: 'All', dot: null },
+                                    { id: 'followers', label: 'Followers', dot: 'bg-slate-300' },
+                                    { id: 'following', label: 'Following', dot: 'bg-rose-500' },
+                                    { id: 'connections', label: 'Connections', dot: 'bg-emerald-400' },
+                                ].map(item => (
+                                    <button
+                                        key={item.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setRelationshipFilter(item.id as RelationshipFilter);
+                                            setIsFilterOpen(false);
+                                        }}
+                                        className={`w-full px-3 py-1.5 text-left text-[11px] flex items-center justify-between transition-colors ${
+                                            relationshipFilter === item.id 
+                                                ? 'bg-zinc-800/90 text-white font-bold border-l-2 border-emerald-400' 
+                                                : 'text-zinc-300 hover:bg-zinc-900 hover:text-white'
+                                        }`}
+                                    >
+                                        <span className="flex items-center gap-2">
+                                            {item.dot ? (
+                                                <span className={`w-1.5 h-1.5 ${item.dot}`}></span>
+                                            ) : (
+                                                <span className="w-1.5 h-1.5 bg-transparent"></span>
+                                            )}
+                                            <span>{item.label}</span>
+                                        </span>
+                                        {relationshipFilter === item.id && (
+                                            <span className="text-emerald-400 text-[10px]">✓</span>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
-                    {/* Nodes & Arcs Count */}
-                    <div className="bg-[#0c0c0e]/95 border border-zinc-800/90 px-3 py-1.5 flex items-center gap-2 shadow-xl backdrop-blur-md">
-                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-none animate-pulse"></span>
-                        <span className="text-[11px] text-zinc-300 font-mono font-medium tracking-wider">
-                            {filteredNodes.length} NODES <span className="text-zinc-600">/</span> {filteredArcs.length} ARCS
-                        </span>
-                    </div>
-
-                    {/* Arcs Visibility Toggle */}
+                    {/* B. Active Only Toggle */}
                     <button
-                        onClick={() => setShowArcs(prev => !prev)}
-                        title={showArcs ? "Hide Connection Arcs" : "Show Connection Arcs"}
-                        className={`border px-3 py-1.5 text-[11px] font-mono tracking-wider transition-colors shadow-lg active:scale-[0.98] flex items-center gap-1.5 ${
-                            showArcs
-                                ? 'bg-[#0c0c0e]/95 hover:bg-[#18181d] border-zinc-800/90 hover:border-zinc-600 text-zinc-300 hover:text-white'
-                                : 'bg-zinc-900 border-zinc-700 text-zinc-500 hover:text-zinc-300'
+                        type="button"
+                        onClick={() => setActiveOnly(prev => !prev)}
+                        title="Filter network to only currently active users"
+                        className={`border px-2.5 py-1.5 text-[11px] font-mono tracking-wider transition-all flex items-center gap-2 ${
+                            activeOnly
+                                ? 'bg-emerald-950/60 border-emerald-500/80 text-emerald-300 font-semibold'
+                                : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700/80 text-zinc-400 hover:text-zinc-200'
                         }`}
                     >
-                        <span className={`w-1.5 h-1.5 ${showArcs ? 'bg-emerald-400' : 'bg-zinc-600'}`}></span>
-                        <span>ARCS: {showArcs ? 'ON' : 'OFF'}</span>
+                        <span className={`w-2 h-2 border flex items-center justify-center ${activeOnly ? 'bg-emerald-400 border-emerald-400' : 'bg-transparent border-zinc-600'} transition-colors`}>
+                            {activeOnly && <span className="w-1 h-1 bg-black"></span>}
+                        </span>
+                        <span>ACTIVE ONLY</span>
                     </button>
 
-                    {/* Reset Camera View */}
-                    <button
-                        onClick={handleResetView}
-                        title="Recenter Camera"
-                        className="bg-[#0c0c0e]/95 hover:bg-[#18181d] border border-zinc-800/90 hover:border-zinc-600 text-zinc-300 hover:text-white px-3 py-1.5 text-[11px] font-mono tracking-wider transition-colors shadow-lg active:scale-[0.98] flex items-center gap-1.5"
-                    >
-                        <span className="text-zinc-500">↺</span>
-                        <span>RESET</span>
-                    </button>
+                    {/* C. Live Node / Arc Count Status */}
+                    <div className="px-2.5 py-1 text-[11px] font-mono text-zinc-400 border-l border-zinc-800/80 flex items-center gap-1.5 whitespace-nowrap">
+                        <span className="text-zinc-200 font-medium tabular-nums">{filteredNodes.length}</span>
+                        <span className="text-zinc-500">Nodes</span>
+                        <span className="text-zinc-600">·</span>
+                        <span className="text-zinc-200 font-medium tabular-nums">{filteredArcs.length}</span>
+                        <span className="text-zinc-500">Arcs</span>
+                    </div>
+
+                    {/* D. Display Menu Dropdown (Show Arcs + Reset View) */}
+                    <div className="relative" ref={displayDropdownRef}>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsDisplayOpen(prev => !prev);
+                                setIsFilterOpen(false);
+                            }}
+                            className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 text-zinc-200 hover:text-white px-2.5 py-1.5 text-[11px] font-mono tracking-wider flex items-center gap-1.5 transition-colors"
+                            title="Display settings & view controls"
+                        >
+                            <span>DISPLAY</span>
+                            <span className="text-zinc-500 text-[9px]">▼</span>
+                        </button>
+
+                        {isDisplayOpen && (
+                            <div className="absolute right-0 top-full mt-1 w-44 bg-[#0c0c0e]/95 border border-zinc-700 shadow-2xl py-1 z-50 font-mono backdrop-blur-md animate-fadeIn">
+                                {/* Show Arcs Toggle */}
+                                <button
+                                    type="button"
+                                    onClick={() => setShowArcs(prev => !prev)}
+                                    className="w-full px-3 py-2 text-left text-[11px] text-zinc-200 hover:bg-zinc-900 hover:text-white flex items-center justify-between transition-colors"
+                                >
+                                    <span>Show Arcs</span>
+                                    <span className={`w-2 h-2 border ${showArcs ? 'bg-emerald-400 border-emerald-400' : 'bg-transparent border-zinc-600'}`}></span>
+                                </button>
+
+                                <div className="border-t border-zinc-800 my-1"></div>
+
+                                {/* Reset View */}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        handleResetView();
+                                        setIsDisplayOpen(false);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-[11px] text-zinc-200 hover:bg-zinc-900 hover:text-white flex items-center justify-between transition-colors"
+                                >
+                                    <span>Reset View</span>
+                                    <span className="text-zinc-500">↺</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                {/* Arc Relationship Palette Legend */}
-                <div className="hidden sm:flex items-center gap-3 px-3 py-1 bg-[#0c0c0e]/90 border border-zinc-800/90 text-[10px] font-mono text-zinc-400 backdrop-blur-md shadow-lg">
+                {/* Secondary Row: Compact Arc-Color Legend */}
+                <div className="flex items-center gap-3 px-3 py-1 bg-[#0c0c0e]/95 border border-zinc-800 text-[10px] font-mono text-zinc-400 backdrop-blur-md shadow-xl">
                     <span className="text-zinc-500 font-bold tracking-wider">// ARCS:</span>
-                    <span className="inline-flex items-center gap-1">
+                    <span className="inline-flex items-center gap-1.5">
                         <span className="w-2.5 h-0.5 bg-emerald-400 inline-block shadow-sm"></span>
                         <span className="text-zinc-300">Connections (Mutual)</span>
                     </span>
-                    <span className="inline-flex items-center gap-1">
+                    <span className="inline-flex items-center gap-1.5">
                         <span className="w-2.5 h-0.5 bg-rose-500 inline-block shadow-sm"></span>
                         <span className="text-zinc-300">Following</span>
                     </span>
-                    <span className="inline-flex items-center gap-1">
+                    <span className="inline-flex items-center gap-1.5">
                         <span className="w-2.5 h-0.5 bg-slate-300 inline-block shadow-sm"></span>
                         <span className="text-zinc-300">Followers</span>
                     </span>
@@ -1254,7 +1367,7 @@ const InteractiveGlobe: React.FC = () => {
 
             {/* Notice if Signed-In User Lacks a Configured Profile Location */}
             {currentUser && !hasCurrentUserLocation && (
-                <div className="absolute top-20 left-6 z-20 pointer-events-auto max-w-md bg-[#0c0c0e]/95 border border-amber-500/40 p-3 shadow-2xl backdrop-blur-md text-[11px] font-mono">
+                <div className="absolute top-24 left-6 z-20 pointer-events-auto max-w-md bg-[#0c0c0e]/95 border border-amber-500/40 p-3 shadow-2xl backdrop-blur-md text-[11px] font-mono">
                     <div className="flex items-center justify-between gap-2 mb-1">
                         <div className="flex items-center gap-1.5 text-amber-400 font-bold">
                             <span className="w-1.5 h-1.5 bg-amber-400 animate-pulse"></span>
@@ -1281,26 +1394,36 @@ const InteractiveGlobe: React.FC = () => {
                             ⌁
                         </div>
                         <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-1">
-                            {networkFilter === 'connections' && 'NO MUTUAL CONNECTIONS'}
-                            {networkFilter === 'following' && 'NO FOLLOWED CREATORS'}
-                            {networkFilter === 'followers' && 'NO FOLLOWERS DETECTED'}
-                            {networkFilter === 'active' && 'NO ACTIVE NETWORK NODES'}
-                            {networkFilter === 'all' && 'EMPTY NETWORK TOPOLOGY'}
+                            {activeOnly && relationshipFilter === 'connections' && 'NO ACTIVE MUTUAL CONNECTIONS'}
+                            {activeOnly && relationshipFilter === 'following' && 'NO ACTIVE FOLLOWED CREATORS'}
+                            {activeOnly && relationshipFilter === 'followers' && 'NO ACTIVE FOLLOWERS'}
+                            {activeOnly && relationshipFilter === 'all' && 'NO ACTIVE NETWORK NODES'}
+                            {!activeOnly && relationshipFilter === 'connections' && 'NO MUTUAL CONNECTIONS'}
+                            {!activeOnly && relationshipFilter === 'following' && 'NO FOLLOWED CREATORS'}
+                            {!activeOnly && relationshipFilter === 'followers' && 'NO FOLLOWERS DETECTED'}
+                            {!activeOnly && relationshipFilter === 'all' && 'EMPTY NETWORK TOPOLOGY'}
                         </h3>
                         <p className="text-[11px] text-zinc-400 leading-relaxed mb-4">
-                            {networkFilter === 'connections' && 'Network arcs require reciprocal follows. Follow creators back to establish mutual connection links.'}
-                            {networkFilter === 'following' && 'You are not following any users with a registered location yet.'}
-                            {networkFilter === 'followers' && 'No users with registered locations currently follow your profile.'}
-                            {networkFilter === 'active' && 'None of your network comrades have reported activity in the last 20 minutes.'}
-                            {networkFilter === 'all' && 'Connect with other INVOX creators to visualize geographic arcs across the globe.'}
+                            {activeOnly
+                                ? 'None of the creators matching your active filter have reported activity in the last 20 minutes.'
+                                : relationshipFilter === 'connections'
+                                ? 'Network arcs require reciprocal follows. Follow creators back to establish mutual connection links.'
+                                : relationshipFilter === 'following'
+                                ? 'You are not following any users with a registered location yet.'
+                                : relationshipFilter === 'followers'
+                                ? 'No users with registered locations currently follow your profile.'
+                                : 'Connect with other INVOX creators to visualize geographic arcs across the globe.'}
                         </p>
                         <div className="flex justify-center gap-2">
-                            {networkFilter !== 'all' ? (
+                            {relationshipFilter !== 'all' || activeOnly ? (
                                 <button
-                                    onClick={() => setNetworkFilter('all')}
+                                    onClick={() => {
+                                        setRelationshipFilter('all');
+                                        setActiveOnly(false);
+                                    }}
                                     className="bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-bold px-3 py-1.5 uppercase tracking-wider border border-zinc-600 transition-colors"
                                 >
-                                    View All Relationships
+                                    Reset Filters
                                 </button>
                             ) : (
                                 <button
