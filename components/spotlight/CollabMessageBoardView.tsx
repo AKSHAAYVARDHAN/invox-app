@@ -83,6 +83,9 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
     const menuButtonRef = useRef<HTMLButtonElement>(null);
     const [isNearBottom, setIsNearBottom] = useState<boolean>(true);
     const [hasUnreadBelow, setHasUnreadBelow] = useState<boolean>(false);
+    const isNearBottomRef = useRef<boolean>(true);
+    const prevConvIdRef = useRef<string | null>(null);
+    const prevMessageCountRef = useRef<number>(0);
 
     // Prevent background scrolling when chat is expanded
     useEffect(() => {
@@ -357,26 +360,66 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
     const handleTimelineScroll = () => {
         if (!timelineRef.current) return;
         const { scrollTop, scrollHeight, clientHeight } = timelineRef.current;
-        const nearBottom = scrollHeight - scrollTop - clientHeight < 100;
+        const nearBottom = scrollHeight - scrollTop - clientHeight < 80;
+        isNearBottomRef.current = nearBottom;
         setIsNearBottom(nearBottom);
         if (nearBottom) {
             setHasUnreadBelow(false);
         }
     };
 
-    // Smart auto-scroll: only scrolls to bottom if near bottom or if user sent the message
+    // Reset scroll tracking when deselected
+    useEffect(() => {
+        if (!selectedConvId) {
+            prevConvIdRef.current = null;
+            prevMessageCountRef.current = 0;
+        }
+    }, [selectedConvId]);
+
+    // Smart auto-scroll: scrolls to bottom on conversation load or when user sends message,
+    // or when new message arrives and user was already at the bottom.
+    // Crucially does NOT trigger on user scroll events, allowing free scrolling up to older messages!
     useEffect(() => {
         if (messages.length === 0) return;
+
+        const isNewConv = prevConvIdRef.current !== selectedConvId;
         const lastMsg = messages[messages.length - 1];
         const isMyMessage = lastMsg?.senderId === currentUser?.uid;
+        const hasNewMessage = messages.length > prevMessageCountRef.current;
 
-        if (isNearBottom || isMyMessage) {
-            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (isNewConv) {
+            prevConvIdRef.current = selectedConvId;
+            prevMessageCountRef.current = messages.length;
+            isNearBottomRef.current = true;
+            setIsNearBottom(true);
             setHasUnreadBelow(false);
-        } else {
-            setHasUnreadBelow(true);
+            requestAnimationFrame(() => {
+                if (timelineRef.current) {
+                    timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
+                } else {
+                    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+                }
+            });
+            return;
         }
-    }, [messages, currentUser?.uid, isNearBottom]);
+
+        if (hasNewMessage) {
+            prevMessageCountRef.current = messages.length;
+            if (isMyMessage || isNearBottomRef.current) {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                setHasUnreadBelow(false);
+            } else {
+                setHasUnreadBelow(true);
+            }
+        }
+    }, [messages, selectedConvId, currentUser?.uid]);
+
+    // Scroll to bottom when expanded
+    useEffect(() => {
+        if (isExpanded && timelineRef.current) {
+            timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
+        }
+    }, [isExpanded]);
 
     // Handle sending a message
     const handleSendMessage = async () => {
@@ -592,15 +635,15 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                     </div>
                 </div>
             ) : (
-                /* Two-Column Messaging Workspace: Compact Sidebar + Large Active Chat */
+                /* Two-Column Messaging Workspace: Compact Sidebar + Large Active Chat matching Teams layout */
                 <div
-                    className={`bg-[#0c0c0e] font-mono flex flex-col md:flex-row overflow-hidden ${
+                    className={`bg-[#0c0c0e] font-mono grid grid-cols-1 md:grid-cols-[minmax(280px,340px)_minmax(0,1fr)] lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)] overflow-hidden ${
                         isExpanded ? 'flex-1 min-h-0 border-0' : 'flex-1 min-h-0 border border-zinc-800 mb-4'
                     }`}
                 >
                     {/* LEFT PANEL: Compact Conversation Sidebar */}
                     <aside
-                        className={`w-full md:w-80 lg:w-84 flex-shrink-0 border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col h-full bg-[#0b0b0d] overflow-hidden ${
+                        className={`border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col h-full min-h-0 overflow-hidden bg-[#0b0b0d] ${
                             selectedConvId ? 'hidden md:flex' : 'flex'
                         }`}
                     >
@@ -624,7 +667,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                         />
 
                         {/* Conversation Cards List */}
-                        <div className="flex-1 overflow-y-auto divide-y divide-zinc-850/60">
+                        <div className="flex-1 overflow-y-auto divide-y divide-zinc-850/60 min-h-0">
                             {sortedActiveList.length === 0 ? (
                                 <div className="p-6 text-center text-xs text-zinc-500 font-mono">
                                     No conversations matching "{searchQuery}"
@@ -682,7 +725,7 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
 
                     {/* RIGHT PANEL: Large Active Chat Panel */}
                     <main
-                        className={`flex-1 min-w-0 flex flex-col bg-[#08080a] overflow-hidden relative h-full ${
+                        className={`flex flex-col bg-[#08080a] overflow-hidden relative h-full min-h-0 min-w-0 ${
                             !selectedConvId ? 'hidden md:flex' : 'flex'
                         }`}
                     >
@@ -841,101 +884,107 @@ export const CollabMessageBoardView: React.FC<CollabMessageBoardViewProps> = ({
                                     placeholder="Search messages in this inbox thread..."
                                 />
 
-                                {/* Message Thread Timeline */}
-                                <div
-                                    ref={timelineRef}
-                                    onScroll={handleTimelineScroll}
-                                    className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 min-h-0 relative"
-                                >
-                                    {messagesLoading ? (
-                                        <div className="py-12 text-center my-auto">
-                                            <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
-                                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono">
-                                                // LOADING MESSAGES...
-                                            </p>
-                                        </div>
-                                    ) : messages.length === 0 ? (
-                                        <EmptyMessagingState
-                                            title="// NO MESSAGES YET"
-                                            description="Start communicating with your collaborator below."
-                                        />
-                                    ) : (
-                                        messages.map((msg) => {
-                                            const isMe = msg.senderId === currentUser?.uid;
-                                            const timeStr = formatTimestamp(msg.createdAt);
-                                            const isMatchActive = isSearchOpen && activeMatchedMessageId === msg.id;
+                                {/* Chat Content Body (Chat thread + Message composer, confined to workspace) */}
+                                <div className="flex-1 flex overflow-hidden min-h-0 relative">
+                                    {/* Main chat column: messages + composer */}
+                                    <div className="flex-1 flex flex-col min-w-0 overflow-hidden h-full">
+                                        {/* Message Thread Timeline */}
+                                        <div
+                                            ref={timelineRef}
+                                            onScroll={handleTimelineScroll}
+                                            className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 min-h-0 relative overscroll-contain"
+                                        >
+                                            {messagesLoading ? (
+                                                <div className="py-12 text-center my-auto">
+                                                    <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
+                                                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono">
+                                                        // LOADING MESSAGES...
+                                                    </p>
+                                                </div>
+                                            ) : messages.length === 0 ? (
+                                                <EmptyMessagingState
+                                                    title="// NO MESSAGES YET"
+                                                    description="Start communicating with your collaborator below."
+                                                />
+                                            ) : (
+                                                messages.map((msg) => {
+                                                    const isMe = msg.senderId === currentUser?.uid;
+                                                    const timeStr = formatTimestamp(msg.createdAt);
+                                                    const isMatchActive = isSearchOpen && activeMatchedMessageId === msg.id;
 
-                                            return (
-                                                <div
-                                                    id={`inbox-msg-${msg.id}`}
-                                                    key={msg.id}
-                                                    className={`flex flex-col transition-all duration-200 ${isMe ? 'items-end' : 'items-start'}`}
-                                                >
-                                                    {!isMe && msg.senderName && (
-                                                        <span className="text-[10px] text-zinc-400 mb-1 px-1 font-semibold font-mono tracking-wide">
-                                                            {msg.senderName}
-                                                        </span>
-                                                    )}
-                                                    <div
-                                                        className={`max-w-[85%] sm:max-w-[70%] px-3.5 py-2.5 text-xs border shadow-sm transition-all duration-200 ${
-                                                            isMatchActive
-                                                                ? 'ring-2 ring-emerald-400 border-emerald-400 bg-zinc-850 text-white shadow-lg'
-                                                                : isMe
-                                                                ? 'bg-zinc-850 border-zinc-750 text-zinc-100'
-                                                                : 'bg-[#131317] border-zinc-800 text-zinc-200'
-                                                        }`}
-                                                    >
-                                                        <div className="whitespace-pre-wrap break-words leading-relaxed font-mono">
-                                                            <ClickableMessageText
-                                                                text={msg.text}
-                                                                isSender={isMe}
-                                                                timestamp={timeStr}
-                                                                searchTerm={isSearchOpen ? chatSearchQuery : undefined}
-                                                            />
-                                                        </div>
-                                                        {timeStr && (
+                                                    return (
+                                                        <div
+                                                            id={`inbox-msg-${msg.id}`}
+                                                            key={msg.id}
+                                                            className={`flex flex-col transition-all duration-200 ${isMe ? 'items-end' : 'items-start'}`}
+                                                        >
+                                                            {!isMe && msg.senderName && (
+                                                                <span className="text-[10px] text-zinc-400 mb-1 px-1 font-semibold font-mono tracking-wide">
+                                                                    {msg.senderName}
+                                                                </span>
+                                                            )}
                                                             <div
-                                                                className={`mt-1.5 text-[10px] font-mono tabular-nums ${
-                                                                    isMe
-                                                                        ? 'text-zinc-500 text-right'
-                                                                        : 'text-zinc-600 text-left'
+                                                                className={`max-w-[85%] sm:max-w-[70%] px-3.5 py-2.5 text-xs border shadow-sm transition-all duration-200 ${
+                                                                    isMatchActive
+                                                                        ? 'ring-2 ring-emerald-400 border-emerald-400 bg-zinc-850 text-white shadow-lg'
+                                                                        : isMe
+                                                                        ? 'bg-zinc-850 border-zinc-750 text-zinc-100'
+                                                                        : 'bg-[#131317] border-zinc-800 text-zinc-200'
                                                                 }`}
                                                             >
-                                                                {timeStr}
+                                                                <div className="whitespace-pre-wrap break-words leading-relaxed font-mono">
+                                                                    <ClickableMessageText
+                                                                        text={msg.text}
+                                                                        isSender={isMe}
+                                                                        timestamp={timeStr}
+                                                                        searchTerm={isSearchOpen ? chatSearchQuery : undefined}
+                                                                    />
+                                                                </div>
+                                                                {timeStr && (
+                                                                    <div
+                                                                        className={`mt-1.5 text-[10px] font-mono tabular-nums ${
+                                                                            isMe
+                                                                                ? 'text-zinc-500 text-right'
+                                                                                : 'text-zinc-600 text-left'
+                                                                        }`}
+                                                                    >
+                                                                        {timeStr}
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })
-                                    )}
-                                    <div ref={messagesEndRef} />
+                                                        </div>
+                                                    );
+                                                })
+                                            )}
+                                            <div ref={messagesEndRef} />
+                                        </div>
+
+                                        {/* Floating Jump to Latest Button */}
+                                        {hasUnreadBelow && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                                                    setHasUnreadBelow(false);
+                                                }}
+                                                className="absolute bottom-16 right-6 z-10 px-3 py-1 bg-zinc-900 border border-emerald-500 text-emerald-400 text-[10px] font-bold font-mono uppercase tracking-wider shadow-lg hover:bg-zinc-850 cursor-pointer animate-bounce"
+                                            >
+                                                ↓ NEW MESSAGES BELOW
+                                            </button>
+                                        )}
+
+                                        {/* Bottom Message Composer */}
+                                        <MessageComposer
+                                            value={inputText}
+                                            onChange={setInputText}
+                                            onSend={handleSendMessage}
+                                            disabled={isSending}
+                                            isSending={isSending}
+                                            placeholder="// TYPE A MESSAGE (ENTER TO SEND)..."
+                                            textareaRef={textareaRef}
+                                        />
+                                    </div>
                                 </div>
-
-                                {/* Floating Jump to Latest Button */}
-                                {hasUnreadBelow && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-                                            setHasUnreadBelow(false);
-                                        }}
-                                        className="absolute bottom-16 right-6 z-10 px-3 py-1 bg-zinc-900 border border-emerald-500 text-emerald-400 text-[10px] font-bold font-mono uppercase tracking-wider shadow-lg hover:bg-zinc-850 cursor-pointer animate-bounce"
-                                    >
-                                        ↓ NEW MESSAGES BELOW
-                                    </button>
-                                )}
-
-                                {/* Bottom Message Composer */}
-                                <MessageComposer
-                                    value={inputText}
-                                    onChange={setInputText}
-                                    onSend={handleSendMessage}
-                                    disabled={isSending}
-                                    isSending={isSending}
-                                    placeholder="// TYPE A MESSAGE (ENTER TO SEND)..."
-                                    textareaRef={textareaRef}
-                                />
                             </>
                         ) : (
                             /* Initial / No Selected Conversation */
