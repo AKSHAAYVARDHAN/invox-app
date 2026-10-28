@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import type { Trend, MyCommunity, Conference, Event, HubConversation, InvoxUser } from '../../types';
+import type { Trend, MyCommunity, Event, HubConversation, InvoxUser } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { subscribeFollowedProfiles } from '../../services/connectionService';
 import GoForItFilterModal from '../spotlight/GoForItFilterModal';
@@ -182,11 +182,6 @@ const communityPageDomains = [
     { name: 'Idea Exchange', icon: ChatIcon },
 ];
 
-const mockConferences: Conference[] = [
-    { id: 'conf1', title: 'AI in 2025: The Future', date: 'Oct 26', time: '10:00 AM', timezone: 'PST', communityName: 'AI ClubTech', communityAvatarUrl: 'https://picsum.photos/seed/ai-clubtech/200', type: 'Online' },
-    { id: 'conf2', title: 'Design Systems Summit', date: 'Nov 02', time: '1:00 PM', timezone: 'EST', communityName: 'UI/UX Guild', communityAvatarUrl: 'https://picsum.photos/seed/ui-ux-guild/200', type: 'Offline' },
-    { id: 'conf3', title: 'React Forward Conf', date: 'Nov 15', time: '9:00 AM', timezone: 'GMT', communityName: 'JS Junkies', communityAvatarUrl: 'https://picsum.photos/seed/js-junkies/200', type: 'Online' },
-];
 
 const mockEvents: Event[] = [
     { id: 'evt1', title: 'Web3 & The Metaverse', date: 'Dec 01', time: '4:00 PM', timezone: 'PST', communityName: 'Startup Grind', communityAvatarUrl: 'https://picsum.photos/seed/startup-grind/200', eventType: 'Talk', locationType: 'Online' },
@@ -1242,11 +1237,6 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
     const [myCommunityDomains, setMyCommunityDomains] = useState<string[]>([]);
     const [isSearchFocused, setIsSearchFocused] = useState(false);
     
-    const [conferenceFilter, setConferenceFilter] = useState<'All' | 'Online' | 'Offline'>('All');
-    const [hasNewConference, setHasNewConference] = useState(true);
-    const [isConferenceFilterMenuOpen, setIsConferenceFilterMenuOpen] = useState(false);
-    const conferenceFilterMenuRef = useRef<HTMLDivElement>(null);
-    
     const [eventFilter, setEventFilter] = useState<'All' | 'Online' | 'Offline'>('All');
     const [hasNewEvent, setHasNewEvent] = useState(true);
     const [isEventFilterMenuOpen, setIsEventFilterMenuOpen] = useState(false);
@@ -1254,9 +1244,6 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (conferenceFilterMenuRef.current && !conferenceFilterMenuRef.current.contains(event.target as Node)) {
-                setIsConferenceFilterMenuOpen(false);
-            }
             if (eventFilterMenuRef.current && !eventFilterMenuRef.current.contains(event.target as Node)) {
                 setIsEventFilterMenuOpen(false);
             }
@@ -1278,10 +1265,6 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
         const domainMatch = myCommunityDomains.length === 0 || myCommunityDomains.includes(community.category);
         return searchMatch && domainMatch;
     });
-    
-    const filteredConferences = mockConferences.filter(c => 
-        conferenceFilter === 'All' || c.type === conferenceFilter
-    );
 
     const filteredEvents = mockEvents.filter(e =>
         eventFilter === 'All' || e.locationType === eventFilter
@@ -1371,59 +1354,7 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                                     </div>
                                 </div>
                                 
-                                <div className="bg-[#0c0c0e] border border-zinc-800 flex flex-col">
-                                    {/* Header */}
-                                    <div className="flex items-center justify-between p-3.5 border-b border-zinc-800">
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// CONFERENCES</h3>
-                                            {hasNewConference && (
-                                                <span className="w-1.5 h-1.5 bg-red-500 inline-block"></span>
-                                            )}
-                                        </div>
-                                        <div className="relative" ref={conferenceFilterMenuRef}>
-                                            <button onClick={() => setIsConferenceFilterMenuOpen(prev => !prev)} className="p-1 text-zinc-400 hover:text-white transition-colors">
-                                                <EllipsisVerticalIcon className="w-4 h-4" />
-                                            </button>
-                                            {isConferenceFilterMenuOpen && (
-                                                <div className="absolute right-0 mt-1 w-28 bg-[#0c0c0e] border border-zinc-800 z-10 py-1 font-mono text-xs">
-                                                    {(['All', 'Online', 'Offline'] as const).map(filter => (
-                                                        <button
-                                                            key={filter}
-                                                            onClick={() => {
-                                                                setConferenceFilter(filter);
-                                                                setIsConferenceFilterMenuOpen(false);
-                                                            }}
-                                                            className={`w-full text-left px-3 py-1.5 hover:bg-zinc-800 ${conferenceFilter === filter ? 'text-white font-bold bg-zinc-900' : 'text-zinc-400'}`}
-                                                        >
-                                                            {filter}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Conference List */}
-                                    <div className="p-3.5 space-y-3">
-                                        {filteredConferences.slice(0, 3).map(conf => (
-                                            <div key={conf.id} className="flex items-start gap-2.5 border-b border-zinc-900 pb-2.5 last:border-0 last:pb-0">
-                                                <img src={conf.communityAvatarUrl} onError={handleImageError} alt={conf.communityName} className="w-8 h-8 object-cover border border-zinc-800" />
-                                                <div className="flex-1 overflow-hidden">
-                                                    <p className="font-mono font-bold text-white text-xs truncate">{conf.title}</p>
-                                                    <p className="text-[11px] font-mono text-zinc-500 truncate">{conf.communityName}</p>
-                                                    <p className="text-[10px] font-mono text-zinc-600">[{conf.date} // {conf.time}]</p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
 
-                                    <div className="p-3 border-t border-zinc-800 bg-black/40">
-                                        <button className="w-full bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider py-1.5 transition-colors">
-                                            VIEW_ALL
-                                        </button>
-                                    </div>
-                                </div>
-                                
                                 <div className="bg-[#0c0c0e] border border-zinc-800 flex flex-col">
                                     {/* Header */}
                                     <div className="flex items-center justify-between p-3.5 border-b border-zinc-800">
