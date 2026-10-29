@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import type { Community } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { useCommunityMemberships, getAdjustedMemberCount } from '../services/communityService';
 import { 
     StarIcon,
     UsersIcon,
@@ -22,7 +24,7 @@ import { handleImageError } from '../components/utils/imageUtils';
 import MyCommunityCardSkeleton from '../components/communities/MyCommunityCardSkeleton';
 import ComingSoonPage from './ComingSoon';
 
-const mockCommunities: Community[] = [
+export const mockCommunities: Community[] = [
     { id: 'startup-1', name: 'Startup Grind', description: 'Connect with founders, investors, and innovators in the startup ecosystem.', members: 25000, rating: 4.7, category: 'Startup', isVerified: true, avatarUrl: 'https://picsum.photos/seed/startup-grind/200' },
     { id: 'coding-4', name: 'Pythonic Geeks', description: 'From web dev with Django to data science with Pandas.', members: 18000, rating: 4.7, category: 'Coding', isVerified: true, avatarUrl: 'https://picsum.photos/seed/pythonic-geeks/200' },
     { id: 'coding-3', name: 'JS Junkies', description: 'Everything JavaScript: frameworks, libraries, Node.js, and more.', members: 15000, rating: 4.8, category: 'Coding', isVerified: true, avatarUrl: 'https://picsum.photos/seed/js-junkies/200' },
@@ -93,7 +95,21 @@ const formatNumber = (num: number) => {
     return num;
 };
 
-const PodiumCard = ({ community, rank }: { community: Community, rank?: number }) => {
+const PodiumCard = ({ 
+    community, 
+    rank,
+    isMember,
+    isLoading,
+    onToggleMembership,
+}: { 
+    community: Community; 
+    rank?: number;
+    isMember?: boolean;
+    isLoading?: boolean;
+    onToggleMembership?: (community: Community) => void;
+}) => {
+    const displayedMembers = getAdjustedMemberCount(community.members, !!isMember);
+
     return (
         <div className="relative bg-[#0c0c0e] p-4 border border-zinc-800 hover:border-zinc-700 transition-all duration-200 mb-4">
              {rank && (
@@ -120,7 +136,7 @@ const PodiumCard = ({ community, rank }: { community: Community, rank?: number }
             <div className="grid grid-cols-3 gap-2 text-xs font-mono">
                 <div>
                     <p className="text-zinc-500 uppercase text-[10px]">Members</p>
-                    <p className="font-bold text-white text-sm mt-0.5">{formatNumber(community.members)}</p>
+                    <p className="font-bold text-white text-sm mt-0.5">{formatNumber(displayedMembers)}</p>
                 </div>
                 <div>
                     <p className="text-zinc-500 uppercase text-[10px]">Rating</p>
@@ -132,15 +148,30 @@ const PodiumCard = ({ community, rank }: { community: Community, rank?: number }
                 </div>
             </div>
              <div className="mt-3.5 pt-3 border-t border-zinc-850">
-                <button className="w-full bg-white text-black font-mono text-xs font-bold uppercase py-2 hover:bg-zinc-200 transition-colors">
-                    Join Community
+                <button 
+                    onClick={() => onToggleMembership?.(community)}
+                    disabled={isLoading}
+                    className={`w-full font-mono text-xs font-bold uppercase py-2 transition-colors border ${
+                        isMember
+                            ? 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:border-rose-700 hover:text-rose-400 hover:bg-rose-950/30'
+                            : 'bg-white text-black border-white hover:bg-zinc-200'
+                    }`}
+                >
+                    {isLoading ? '...' : isMember ? 'Joined' : 'Join Community'}
                 </button>
             </div>
         </div>
     );
 };
 
-const CommunitySuggestionCard: React.FC<{ community: Community }> = ({ community }) => {
+const CommunitySuggestionCard: React.FC<{ 
+    community: Community;
+    isMember?: boolean;
+    isLoading?: boolean;
+    onToggleMembership?: (community: Community) => void;
+}> = ({ community, isMember, isLoading, onToggleMembership }) => {
+    const displayedMembers = getAdjustedMemberCount(community.members, !!isMember);
+
     return (
         <div className="bg-[#0c0c0e] p-4 border border-zinc-800 hover:border-zinc-700 w-96 flex-shrink-0 flex flex-col h-full min-h-[12rem] transition-colors font-mono">
             <div className="flex justify-between items-start mb-3">
@@ -157,8 +188,16 @@ const CommunitySuggestionCard: React.FC<{ community: Community }> = ({ community
                         {community.isVerified && <ShieldCheckIcon className="w-3.5 h-3.5 text-zinc-400" />}
                     </div>
                 </div>
-                <button className="bg-white text-black px-4 py-1 font-mono text-xs font-bold uppercase hover:bg-zinc-200 transition-colors">
-                    Join
+                <button 
+                    onClick={() => onToggleMembership?.(community)}
+                    disabled={isLoading}
+                    className={`px-4 py-1 font-mono text-xs font-bold uppercase transition-colors border ${
+                        isMember
+                            ? 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:border-rose-700 hover:text-rose-400 hover:bg-rose-950/30'
+                            : 'bg-white text-black border-white hover:bg-zinc-200'
+                    }`}
+                >
+                    {isLoading ? '...' : isMember ? 'Joined' : 'Join'}
                 </button>
             </div>
             <div className="flex-grow">
@@ -168,7 +207,7 @@ const CommunitySuggestionCard: React.FC<{ community: Community }> = ({ community
                 <div className="border-t border-zinc-800 mb-2.5" />
                 <div className="flex justify-between items-center text-xs">
                     <p className="text-zinc-500">
-                        MEMBERS: <span className="font-bold text-white">{formatNumber(community.members)}</span>
+                        MEMBERS: <span className="font-bold text-white">{formatNumber(displayedMembers)}</span>
                     </p>
                     <div className="flex items-center gap-1 text-zinc-300">
                         <StarIcon className="w-3.5 h-3.5 text-white" />
@@ -201,6 +240,8 @@ const CommunitySearchResultSkeleton = () => (
 
 
 const CommunitiesPage = () => {
+    const { currentUser } = useAuth();
+    const { isMember, toggleMembership, actionLoadingId } = useCommunityMemberships(currentUser);
     const [loading, setLoading] = useState(true);
     const [activeTimeframe, setActiveTimeframe] = useState<'All Time' | 'Daily' | 'Weekly' | 'Monthly'>('Daily');
     const [visibleCount, setVisibleCount] = useState(10);
@@ -338,7 +379,12 @@ const CommunitiesPage = () => {
                     <div>
                         {searchResults.map(community => (
                             <React.Fragment key={community.id}>
-                                <PodiumCard community={community} />
+                                <PodiumCard 
+                                    community={community} 
+                                    isMember={isMember(community.id)}
+                                    isLoading={actionLoadingId === community.id}
+                                    onToggleMembership={toggleMembership}
+                                />
                             </React.Fragment>
                         ))}
                     </div>
@@ -426,9 +472,33 @@ const CommunitiesPage = () => {
 
             {/* Podium Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
-                {topThree[1] && <PodiumCard community={topThree[1]} rank={2} />}
-                {topThree[0] && <PodiumCard community={topThree[0]} rank={1} />}
-                {topThree[2] && <PodiumCard community={topThree[2]} rank={3} />}
+                {topThree[1] && (
+                    <PodiumCard 
+                        community={topThree[1]} 
+                        rank={2} 
+                        isMember={isMember(topThree[1].id)}
+                        isLoading={actionLoadingId === topThree[1].id}
+                        onToggleMembership={toggleMembership}
+                    />
+                )}
+                {topThree[0] && (
+                    <PodiumCard 
+                        community={topThree[0]} 
+                        rank={1} 
+                        isMember={isMember(topThree[0].id)}
+                        isLoading={actionLoadingId === topThree[0].id}
+                        onToggleMembership={toggleMembership}
+                    />
+                )}
+                {topThree[2] && (
+                    <PodiumCard 
+                        community={topThree[2]} 
+                        rank={3} 
+                        isMember={isMember(topThree[2].id)}
+                        isLoading={actionLoadingId === topThree[2].id}
+                        onToggleMembership={toggleMembership}
+                    />
+                )}
             </div>
             
             {/* Full Leaderboard Table */}
@@ -440,7 +510,10 @@ const CommunitiesPage = () => {
                     <div className="col-span-3 text-right">RATING</div>
                 </div>
                 <div ref={leaderboardItemsContainerRef} className="divide-y divide-zinc-900">
-                    {restOfLeaderboard.slice(0, visibleCount).map((community, index) => (
+                    {restOfLeaderboard.slice(0, visibleCount).map((community, index) => {
+                        const memberActive = isMember(community.id);
+                        const displayedMembers = getAdjustedMemberCount(community.members, memberActive);
+                        return (
                          <div 
                             key={community.id} 
                             className="grid grid-cols-12 items-center py-2.5 px-4 hover:bg-zinc-950 transition-colors text-xs"
@@ -460,12 +533,13 @@ const CommunitiesPage = () => {
                                     </div>
                                 </div>
                             </div>
-                            <div className="col-span-2 text-center font-bold text-white">{formatNumber(community.members)}</div>
+                            <div className="col-span-2 text-center font-bold text-white">{formatNumber(displayedMembers)}</div>
                             <div className="col-span-3 text-right font-bold text-white flex items-center justify-end gap-1">
                                 {community.rating.toFixed(1)} <StarIcon className="w-3.5 h-3.5 text-white" />
                             </div>
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
                  {(visibleCount < restOfLeaderboard.length || visibleCount > 10) && (
                     <div className="p-3 border-t border-zinc-800 bg-black/40 text-center flex justify-center items-center gap-3 font-mono">
@@ -507,7 +581,13 @@ const CommunitiesPage = () => {
                     <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 mb-3 border-b border-zinc-800 pb-1.5">{categoryData.category}</h3>
                     <div className="flex overflow-x-auto space-x-3 pb-2 no-scrollbar items-stretch">
                       {categoryData.communities.map(community => (
-                        <CommunitySuggestionCard key={community.id} community={community} />
+                        <CommunitySuggestionCard 
+                            key={community.id} 
+                            community={community} 
+                            isMember={isMember(community.id)}
+                            isLoading={actionLoadingId === community.id}
+                            onToggleMembership={toggleMembership}
+                        />
                       ))}
                        <button className="flex-shrink-0 w-36 bg-[#0c0c0e] border border-zinc-800 flex flex-col items-center justify-center text-zinc-400 hover:border-zinc-600 hover:text-white transition-colors">
                           <ForwardIcon className="w-6 h-6 mb-2 text-zinc-500" />

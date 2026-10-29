@@ -49,6 +49,8 @@ import MyCommunityCardSkeleton from '../communities/MyCommunityCardSkeleton';
 import DomainFilter from '../ui/DomainFilter';
 import { useCollabDashboardData } from '../spotlight/useCollabDashboardData';
 import SettingsSidebar from '../settings/SettingsSidebar';
+import { useCommunityMemberships } from '../../services/communityService';
+import { mockCommunities } from '../../pages/Communities';
 
 const trendingTopics = [
     { name: '#QuantumLeap', posts: '12.1K posts' },
@@ -1232,6 +1234,8 @@ const MyCommunityCard: React.FC<{ community: MyCommunity }> = ({ community }) =>
 );
 
 const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 'setCommunityFilters' | 'communityView' | 'setCommunityView'>> = ({ communityFilters, setCommunityFilters, communityView, setCommunityView }) => {
+    const { currentUser } = useAuth();
+    const { memberships } = useCommunityMemberships(currentUser);
     const [loading, setLoading] = useState(false);
     const [myCommunitiesSearchTerm, setMyCommunitiesSearchTerm] = useState('');
     const [myCommunityDomains, setMyCommunityDomains] = useState<string[]>([]);
@@ -1260,7 +1264,28 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
         }
     }, [communityView]);
 
-    const filteredMyCommunities = mockMyCommunities.filter(community => {
+    const liveUserCommunities: MyCommunity[] = React.useMemo(() => {
+        if (!memberships || memberships.length === 0) {
+            return [];
+        }
+        return memberships.map(m => {
+            const mock = mockCommunities.find(c => c.id === m.communityId);
+            return {
+                id: m.communityId,
+                name: m.communityName || mock?.name || m.communityId,
+                latestMessage: 'Joined community',
+                timestamp: 'Active',
+                hasNotification: false,
+                avatarUrl: m.communityAvatarUrl || mock?.avatarUrl || `https://picsum.photos/seed/${m.communityId}/200`,
+                category: m.communityCategory || mock?.category || 'General',
+                isLiveMembership: true,
+            };
+        });
+    }, [memberships]);
+
+    const activeMyCommunities = liveUserCommunities.length > 0 ? liveUserCommunities : mockMyCommunities;
+
+    const filteredMyCommunities = activeMyCommunities.filter(community => {
         const searchMatch = community.name.toLowerCase().includes(myCommunitiesSearchTerm.toLowerCase());
         const domainMatch = myCommunityDomains.length === 0 || myCommunityDomains.includes(community.category);
         return searchMatch && domainMatch;

@@ -306,6 +306,23 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["conversationId", "senderId", "type", "createdAt"]
+    },
+    "CommunityMembership": {
+      "title": "CommunityMembership",
+      "description": "User membership record in a technical community.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "communityId": { "type": "string", "description": "Community identifier" },
+        "communityName": { "type": "string" },
+        "communityAvatarUrl": { "type": "string" },
+        "communityCategory": { "type": "string" },
+        "status": { "type": "string", "enum": ["active"] },
+        "joinedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "communityId", "status", "joinedAt"]
     }
   },
   "firestore": {
@@ -365,6 +382,10 @@
       "schema": "Follow",
       "description": "User follow relationships."
     },
+    "/communityMemberships/{membershipId}": {
+      "schema": "CommunityMembership",
+      "description": "User community memberships tracking joined technical communities."
+    },
     "/hubConversations/{conversationId}": {
       "schema": "HubConversation",
       "description": "Hub conversation channels with connection-restricted Comrades and membership-based Crew groups."
@@ -375,3 +396,4 @@
     }
   }
 }
+

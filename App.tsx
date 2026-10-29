@@ -8,6 +8,7 @@ import ExplorePage from './pages/Explore';
 import SpotlightPage from './pages/Spotlight';
 import TrendzPage from './pages/Trendz';
 import CommunitiesPage from './pages/Communities';
+import { CommunityProfilePage } from './pages/CommunityProfilePage';
 import HubPage from './pages/Hub';
 import ProfilePage from './pages/Profile';
 import MySpacePage from './pages/MySpace';
@@ -466,6 +467,7 @@ const MainAppRoutes = () => (
             <ReactRouterDOM.Route path="/spotlight" element={<SectionRouteGuard sectionId="spotlight"><SpotlightPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/spotlight/project/:projectId" element={<SectionRouteGuard sectionId="spotlight"><ProjectDetailsPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/communities" element={<SectionRouteGuard sectionId="communities"><CommunitiesPage /></SectionRouteGuard>} />
+            <ReactRouterDOM.Route path="/communities/:communityId" element={<SectionRouteGuard sectionId="communities"><CommunityProfilePage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/hub" element={<SectionRouteGuard sectionId="hub"><HubPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/stream" element={<ReactRouterDOM.Navigate to="/hub?tab=stream" replace />} />
             <ReactRouterDOM.Route path="/myspace" element={<SectionRouteGuard sectionId="mySpace"><MySpacePage /></SectionRouteGuard>} />

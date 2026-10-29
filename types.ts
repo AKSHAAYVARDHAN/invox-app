@@ -350,6 +350,18 @@ export interface Community {
   isVerified?: boolean;
 }
 
+export interface CommunityMembership {
+  id: string;
+  userId: string;
+  communityId: string;
+  communityName: string;
+  communityAvatarUrl?: string | null;
+  communityCategory?: string;
+  status: 'active';
+  joinedAt: Date | any;
+  updatedAt?: Date | any;
+}
+
 export interface MyCommunity {
   id: string;
   name: string;
@@ -358,6 +370,7 @@ export interface MyCommunity {
   hasNotification: boolean;
   avatarUrl: string;
   category: string;
+  isLiveMembership?: boolean;
 }
 
 export interface HubContact {

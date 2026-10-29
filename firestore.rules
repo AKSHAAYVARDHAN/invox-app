@@ -165,13 +165,40 @@ service cloud.firestore {
     match /communities/{communityId} {
       allow read: if signedIn();
       allow create: if owns('ownerId');
-      allow update, delete: if existingOwner('ownerId') || isModerator();
+      allow update: if signedIn() && (
+        existingOwner('ownerId') 
+        || isModerator() 
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount', 'members', 'updatedAt'])
+      );
+      allow delete: if existingOwner('ownerId') || isModerator();
     }
 
     match /communityMemberships/{membershipId} {
       allow read: if signedIn();
       allow create: if owns('userId');
-      allow update, delete: if existingOwner('userId') || isModerator();
+      allow update: if signedIn() && (
+        existingOwner('userId') 
+        || isModerator()
+        || (exists(/databases/$(database)/documents/communities/$(resource.data.communityId)) 
+            && get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.ownerId == uid())
+      );
+      allow delete: if signedIn() && (
+        existingOwner('userId') 
+        || isModerator()
+        || (exists(/databases/$(database)/documents/communities/$(resource.data.communityId)) 
+            && get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.ownerId == uid())
+      );
+    }
+
+    match /conclaveGatherings/{gatheringId} {
+      allow read: if signedIn();
+      allow create: if owns('hostId');
+      allow update: if signedIn() && (
+        existingOwner('hostId')
+        || isModerator()
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendeeCount', 'attendeeIds', 'updatedAt'])
+      );
+      allow delete: if existingOwner('hostId') || isModerator();
     }
 
     match /comments/{commentId} {
