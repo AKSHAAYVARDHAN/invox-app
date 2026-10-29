@@ -1236,6 +1236,9 @@ const MyCommunityCard: React.FC<{ community: MyCommunity }> = ({ community }) =>
 const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 'setCommunityFilters' | 'communityView' | 'setCommunityView'>> = ({ communityFilters, setCommunityFilters, communityView, setCommunityView }) => {
     const { currentUser } = useAuth();
     const { memberships } = useCommunityMemberships(currentUser);
+    const navigate = ReactRouterDOM.useNavigate();
+    const location = ReactRouterDOM.useLocation();
+    const isCommunityDetailPage = location.pathname.startsWith('/communities/') && location.pathname !== '/communities';
     const [loading, setLoading] = useState(false);
     const [myCommunitiesSearchTerm, setMyCommunitiesSearchTerm] = useState('');
     const [myCommunityDomains, setMyCommunityDomains] = useState<string[]>([]);
@@ -1344,6 +1347,22 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                     </>
                 ) : (
                     <div className='overflow-y-auto no-scrollbar flex flex-col gap-5'>
+                        {isCommunityDetailPage && (
+                            <div className="px-4">
+                                <button
+                                    onClick={() => {
+                                        navigate('/communities');
+                                        if (setCommunityView) {
+                                            setCommunityView('leaderboard');
+                                        }
+                                    }}
+                                    className="w-full flex items-center gap-2.5 p-2.5 bg-[#0c0c0e] border border-zinc-800 hover:border-zinc-600 text-zinc-300 hover:text-white font-mono text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer group"
+                                >
+                                    <ArrowLeftIcon className="w-4 h-4 flex-shrink-0 text-zinc-400 group-hover:text-white group-hover:-translate-x-0.5 transition-transform" />
+                                    <span>BACK TO COMMUNITIES</span>
+                                </button>
+                            </div>
+                        )}
                         <div className="relative px-4">
                             <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                             <input

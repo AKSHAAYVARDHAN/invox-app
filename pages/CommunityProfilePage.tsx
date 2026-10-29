@@ -63,7 +63,7 @@ export const CommunityProfilePage: React.FC = () => {
     const [activeTab, setActiveTab] = useState<CommunityTab>('overview');
 
     // Existing community membership system integration
-    const { isMember, toggleMembership, actionLoadingId } = useCommunityMemberships(currentUser);
+    const { isMember, toggleMembership, leaveCommunity: hookLeaveCommunity, actionLoadingId } = useCommunityMemberships(currentUser);
     const membershipActive = community ? isMember(community.id) : false;
     const isActionLoading = community ? actionLoadingId === community.id : false;
 
@@ -105,7 +105,7 @@ export const CommunityProfilePage: React.FC = () => {
     }, [communityId, initialCommunity]);
 
     const handleJoinClick = async () => {
-        if (!community) return;
+        if (!community || isActionLoading) return;
         if (!currentUser) {
             navigate('/login');
             return;
@@ -114,8 +114,14 @@ export const CommunityProfilePage: React.FC = () => {
     };
 
     const handleLeaveClick = async () => {
-        if (!community) return;
-        if (window.confirm(`Leave ${community.name}?`)) {
+        if (!community || isActionLoading) return;
+        if (!currentUser) {
+            navigate('/login');
+            return;
+        }
+        if (hookLeaveCommunity) {
+            await hookLeaveCommunity(community.id);
+        } else {
             await toggleMembership(community);
         }
     };
@@ -178,21 +184,6 @@ export const CommunityProfilePage: React.FC = () => {
 
     return (
         <div className="space-y-5 sm:space-y-6 font-mono text-xs pb-16 w-full min-w-0 max-w-full">
-            {/* Top Navigation Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-850 pb-3 w-full min-w-0">
-                <button
-                    onClick={() => navigate('/communities')}
-                    className="flex items-center gap-2 text-zinc-400 hover:text-white uppercase transition-colors group text-xs flex-shrink-0"
-                >
-                    <ArrowLeftIcon className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform flex-shrink-0" />
-                    <span>← Return to Communities</span>
-                </button>
-                <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 min-w-0 truncate">
-                    <span className="uppercase tracking-widest flex-shrink-0">// DOSSIER:</span>
-                    <span className="text-zinc-300 font-bold truncate">#{community.id}</span>
-                </div>
-            </div>
-
             {/* Community Header Card */}
             <div className="bg-[#0c0c0e] border border-zinc-800 relative overflow-hidden w-full min-w-0">
                 {/* Banner backdrop if available */}

@@ -108,6 +108,7 @@ const PodiumCard = ({
     isLoading?: boolean;
     onToggleMembership?: (community: Community) => void;
 }) => {
+    const navigate = ReactRouterDOM.useNavigate();
     const displayedMembers = getAdjustedMemberCount(community.members, !!isMember);
 
     return (
@@ -149,15 +150,10 @@ const PodiumCard = ({
             </div>
              <div className="mt-3.5 pt-3 border-t border-zinc-850">
                 <button 
-                    onClick={() => onToggleMembership?.(community)}
-                    disabled={isLoading}
-                    className={`w-full font-mono text-xs font-bold uppercase py-2 transition-colors border ${
-                        isMember
-                            ? 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:border-rose-700 hover:text-rose-400 hover:bg-rose-950/30'
-                            : 'bg-white text-black border-white hover:bg-zinc-200'
-                    }`}
+                    onClick={() => navigate(`/communities/${community.id}`)}
+                    className="w-full font-mono text-xs font-bold uppercase py-2 transition-colors border bg-white text-black border-white hover:bg-zinc-200"
                 >
-                    {isLoading ? '...' : isMember ? 'Joined' : 'Join Community'}
+                    VIEW COMMUNITY
                 </button>
             </div>
         </div>

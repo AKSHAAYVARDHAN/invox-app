@@ -271,9 +271,15 @@ export const useCommunityMemberships = (user?: { uid: string; displayName?: stri
 
             try {
                 if (currentlyJoined) {
-                    await leaveCommunity(community.id, user.uid);
+                    const success = await leaveCommunity(community.id, user.uid);
+                    if (!success) {
+                        throw new Error('Failed to leave community');
+                    }
                 } else {
-                    await joinCommunity({ community, user });
+                    const result = await joinCommunity({ community, user });
+                    if (!result.success) {
+                        throw new Error('Failed to join community');
+                    }
                 }
                 return !currentlyJoined;
             } catch (err) {
@@ -295,6 +301,42 @@ export const useCommunityMemberships = (user?: { uid: string; displayName?: stri
         [user, joinedIds]
     );
 
+    const leave = useCallback(
+        async (communityId: string) => {
+            if (!user?.uid || !communityId) {
+                return false;
+            }
+
+            setActionLoadingId(communityId);
+
+            // Optimistic update
+            setJoinedIds(prev => {
+                const next = new Set(prev);
+                next.delete(communityId);
+                return next;
+            });
+
+            try {
+                const success = await leaveCommunity(communityId, user.uid);
+                if (!success) {
+                    throw new Error('Failed to leave community');
+                }
+                return true;
+            } catch (err) {
+                // Rollback optimistic update on error
+                setJoinedIds(prev => {
+                    const next = new Set(prev);
+                    next.add(communityId);
+                    return next;
+                });
+                return false;
+            } finally {
+                setActionLoadingId(null);
+            }
+        },
+        [user]
+    );
+
     return {
         memberships,
         joinedIds,
@@ -302,6 +344,7 @@ export const useCommunityMemberships = (user?: { uid: string; displayName?: stri
         actionLoadingId,
         isMember: (communityId: string) => joinedIds.has(communityId),
         toggleMembership,
+        leaveCommunity: leave,
     };
 };
 
