@@ -330,10 +330,10 @@ const ProtectedLayout = () => {
                 <Header toggleSidebar={toggleSidebar} pageTitle={pageTitle} />
 
                 {/* Main Content and Right Sidebar wrapper */}
-                <div className="flex-1 flex overflow-hidden">
-                    <main ref={mainContentRef} className="flex-1 overflow-y-auto overscroll-y-contain no-scrollbar relative flex flex-col">
+                <div className="flex-1 flex overflow-hidden min-w-0">
+                    <main ref={mainContentRef} className="flex-1 overflow-y-auto overscroll-y-contain no-scrollbar relative flex flex-col min-w-0">
                         <PullToRefreshIndicator state={pullState} distance={pullDistance} />
-                        <div className="max-w-5xl mx-auto py-4 md:py-6 px-4 sm:px-6 lg:px-8 flex-1 flex flex-col w-full min-h-0">
+                        <div className="max-w-5xl mx-auto py-4 md:py-6 px-4 sm:px-6 lg:px-8 flex-1 flex flex-col w-full min-h-0 min-w-0">
                             <ReactRouterDOM.Outlet context={outletContextValue} />
                         </div>
                     </main>

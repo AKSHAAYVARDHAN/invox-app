@@ -12,7 +12,8 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { COLLECTIONS, sanitizeForFirestore } from './firestoreService';
-import type { Community, CommunityMembership } from '../types';
+import type { Community, CommunityMembership, ConclaveGathering } from '../types';
+import { MOCK_COMMUNITIES, MOCK_COMMUNITY_EVENTS } from './communitiesDemoData';
 
 export enum OperationType {
     CREATE = 'create',
@@ -70,9 +71,24 @@ export interface JoinCommunityInput {
  * Join a community idempotently.
  * Creates a membership document at communityMemberships/{userId}_{communityId}.
  */
-export const joinCommunity = async ({ community, user }: JoinCommunityInput): Promise<boolean> => {
+export const joinCommunity = async (
+    arg1: JoinCommunityInput | (Pick<Community, 'id' | 'name' | 'category'> & { avatarUrl?: string }),
+    arg2?: { uid: string; displayName?: string | null; email?: string | null }
+): Promise<{ success: boolean; status: string }> => {
+    let community: Pick<Community, 'id' | 'name' | 'category'> & { avatarUrl?: string };
+    let user: { uid: string; displayName?: string | null; email?: string | null };
+
+    if (arg2) {
+        community = arg1 as any;
+        user = arg2;
+    } else {
+        const input = arg1 as JoinCommunityInput;
+        community = input.community;
+        user = input.user;
+    }
+
     if (!user?.uid || !community?.id) {
-        return false;
+        return { success: false, status: 'failed' };
     }
 
     const membershipId = `${user.uid}_${community.id}`;
@@ -85,20 +101,22 @@ export const joinCommunity = async ({ community, user }: JoinCommunityInput): Pr
             sanitizeForFirestore({
                 id: membershipId,
                 userId: user.uid,
+                userName: user.displayName || 'Member',
                 communityId: community.id,
                 communityName: community.name,
                 communityAvatarUrl: community.avatarUrl || null,
                 communityCategory: community.category || 'General',
                 status: 'active',
+                role: 'member',
                 joinedAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             }),
             { merge: true }
         );
-        return true;
+        return { success: true, status: 'active' };
     } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, docPath);
-        return false;
+        return { success: false, status: 'error' };
     }
 };
 
@@ -286,3 +304,293 @@ export const useCommunityMemberships = (user?: { uid: string; displayName?: stri
         toggleMembership,
     };
 };
+
+/**
+ * Subscribes to a single community record, falling back to mock datasets if not in Firestore.
+ */
+export const subscribeCommunity = (
+    communityId: string,
+    onUpdate: (community: Community | null) => void,
+    onError?: (error: any) => void,
+    fallbackCommunities?: Community[]
+): (() => void) => {
+    if (!communityId) {
+        onUpdate(null);
+        return () => {};
+    }
+
+    const mockFound =
+        fallbackCommunities?.find((c) => c.id === communityId) ||
+        MOCK_COMMUNITIES.find((c) => c.id === communityId) ||
+        null;
+
+    try {
+        const communityRef = doc(db, 'communities', communityId);
+        return onSnapshot(
+            communityRef,
+            (snap) => {
+                if (snap.exists()) {
+                    onUpdate({ id: snap.id, ...(snap.data() as any) });
+                } else if (mockFound) {
+                    onUpdate(mockFound);
+                } else {
+                    onUpdate(null);
+                }
+            },
+            (error) => {
+                console.warn('[COMMUNITY_PROFILE_SNAPSHOT_FALLBACK]', error);
+                if (mockFound) {
+                    onUpdate(mockFound);
+                } else {
+                    onError?.(error);
+                }
+            }
+        );
+    } catch (err) {
+        if (mockFound) {
+            onUpdate(mockFound);
+        } else {
+            onError?.(err);
+        }
+        return () => {};
+    }
+};
+
+/**
+ * Subscribes to the roster of members in a specific community.
+ */
+export const subscribeCommunityMembers = (
+    communityId: string,
+    onUpdate: (members: CommunityMembership[]) => void,
+    onError?: (error: any) => void
+): (() => void) => {
+    if (!communityId) {
+        onUpdate([]);
+        return () => {};
+    }
+
+    try {
+        const q = query(
+            collection(db, COLLECTIONS.communityMemberships),
+            where('communityId', '==', communityId)
+        );
+        return onSnapshot(
+            q,
+            (snap) => {
+                const list: CommunityMembership[] = snap.docs.map((d) => ({
+                    id: d.id,
+                    ...(d.data() as any),
+                }));
+                onUpdate(list);
+            },
+            (err) => {
+                console.warn('[COMMUNITY_MEMBERS_SNAPSHOT_ERROR]', err);
+                onUpdate([]);
+                onError?.(err);
+            }
+        );
+    } catch (err) {
+        onUpdate([]);
+        onError?.(err);
+        return () => {};
+    }
+};
+
+/**
+ * Subscribes to Conclave gatherings for a community.
+ */
+export const subscribeConclaveGatherings = (
+    communityId: string,
+    onUpdate: (gatherings: ConclaveGathering[]) => void,
+    onError?: (error: any) => void
+): (() => void) => {
+    const mockGatherings = MOCK_COMMUNITY_EVENTS.filter((e) => e.communityId === communityId);
+
+    try {
+        const q = query(
+            collection(db, 'conclaveGatherings'),
+            where('communityId', '==', communityId)
+        );
+        return onSnapshot(
+            q,
+            (snap) => {
+                if (snap.empty && mockGatherings.length > 0) {
+                    onUpdate(mockGatherings);
+                } else {
+                    const list: ConclaveGathering[] = snap.docs.map((d) => ({
+                        id: d.id,
+                        ...(d.data() as any),
+                    }));
+                    onUpdate(list.length > 0 ? list : mockGatherings);
+                }
+            },
+            (err) => {
+                console.warn('[CONCLAVE_SNAPSHOT_FALLBACK]', err);
+                onUpdate(mockGatherings);
+                onError?.(err);
+            }
+        );
+    } catch (err) {
+        onUpdate(mockGatherings);
+        return () => {};
+    }
+};
+
+/**
+ * Updates a community's profile information.
+ */
+export const updateCommunityIdentity = async (
+    communityId: string,
+    data: Partial<Community>
+): Promise<boolean> => {
+    if (!communityId) return false;
+    try {
+        const ref = doc(db, 'communities', communityId);
+        await setDoc(ref, sanitizeForFirestore({ ...data, updatedAt: serverTimestamp() }), { merge: true });
+        return true;
+    } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `communities/${communityId}`);
+        return false;
+    }
+};
+
+export interface ConclaveCreateInput {
+    communityId: string;
+    communityName: string;
+    communityAvatarUrl?: string;
+    title: string;
+    description: string;
+    format: string;
+    date: string;
+    time: string;
+    timezone?: string;
+    location?: string;
+    virtualUrl?: string;
+}
+
+/**
+ * Schedules a new Conclave gathering.
+ */
+export const createConclaveGathering = async (
+    input: ConclaveCreateInput,
+    user: { uid: string; displayName?: string | null }
+): Promise<ConclaveGathering | null> => {
+    try {
+        const newId = `gathering_${Date.now()}`;
+        const ref = doc(db, 'conclaveGatherings', newId);
+        const item: ConclaveGathering = {
+            id: newId,
+            ...input,
+            hostId: user.uid,
+            hostName: user.displayName || 'Organizer',
+            capacity: 100,
+            attendeeCount: 1,
+            attendeeIds: [user.uid],
+            status: 'scheduled',
+            createdAt: serverTimestamp(),
+        };
+        await setDoc(ref, sanitizeForFirestore(item));
+        return item;
+    } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, 'conclaveGatherings');
+        return null;
+    }
+};
+
+export const COMMUNITY_DOMAINS = [
+    { name: 'Startup', slug: 'startup' },
+    { name: 'Coding', slug: 'coding' },
+    { name: 'Design', slug: 'design' },
+    { name: 'Business', slug: 'business' },
+    { name: 'Artificial Intelligence', slug: 'artificial-intelligence' },
+];
+
+export const sanitizeHandle = (input: string): string => {
+    return input
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, '')
+        .slice(0, 30);
+};
+
+export interface CreateCommunityInput {
+    name: string;
+    handle: string;
+    description: string;
+    purpose?: string;
+    category: string;
+    topics?: string[];
+    avatarUrl?: string;
+    bannerUrl?: string;
+    foundingStory?: string;
+    values?: string[];
+    guidelines?: string[];
+    visibility?: 'public' | 'private';
+    joinPolicy?: 'open' | 'approval_required';
+}
+
+/**
+ * Creates a new community in Firestore and joins the creator as an active member.
+ */
+export const createCommunity = async (
+    payload: CreateCommunityInput,
+    user: { uid: string; displayName?: string | null; photoURL?: string | null }
+): Promise<Community> => {
+    const newId = `comm_${Date.now()}`;
+    const newComm: Community = {
+        id: newId,
+        name: payload.name,
+        description: payload.description,
+        category: payload.category,
+        avatarUrl: payload.avatarUrl || 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=200&h=200&auto=format&fit=crop',
+        members: 1,
+        rating: 5.0,
+        isVerified: false,
+        ownerId: user.uid,
+        purpose: payload.purpose,
+        foundingStory: payload.foundingStory,
+        values: payload.values,
+        guidelines: payload.guidelines,
+        bannerUrl: payload.bannerUrl,
+    };
+
+    try {
+        const commRef = doc(db, 'communities', newId);
+        await setDoc(commRef, sanitizeForFirestore({ ...newComm, createdAt: serverTimestamp() }));
+
+        await joinCommunity({
+            community: newComm,
+            user: {
+                uid: user.uid,
+                displayName: user.displayName,
+            }
+        });
+    } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, `communities/${newId}`);
+    }
+
+    return newComm;
+};
+
+/**
+ * Seeds baseline community data into Firestore if desired.
+ */
+export const seedInitialCommunitiesIfEmpty = async (
+    user?: { uid: string; displayName?: string | null } | null
+): Promise<void> => {
+    try {
+        for (const comm of MOCK_COMMUNITIES.slice(0, 3)) {
+            const commRef = doc(db, 'communities', comm.id);
+            await setDoc(commRef, sanitizeForFirestore({ ...comm, createdAt: serverTimestamp() }), { merge: true });
+        }
+        if (user?.uid && MOCK_COMMUNITIES[0]) {
+            await joinCommunity({
+                community: MOCK_COMMUNITIES[0],
+                user: { uid: user.uid, displayName: user.displayName }
+            });
+        }
+    } catch (err) {
+        console.warn('[SEED_COMMUNITIES_WARN]', err);
+    }
+};
+
+

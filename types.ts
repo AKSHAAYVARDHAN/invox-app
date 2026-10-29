@@ -348,18 +348,49 @@ export interface Community {
   rating: number;
   category: string;
   isVerified?: boolean;
+  ownerId?: string;
+  purpose?: string;
+  foundingStory?: string;
+  values?: string[];
+  guidelines?: string[];
+  bannerUrl?: string;
+  rules?: string[];
 }
 
 export interface CommunityMembership {
   id: string;
   userId: string;
+  userName?: string;
   communityId: string;
   communityName: string;
   communityAvatarUrl?: string | null;
   communityCategory?: string;
-  status: 'active';
+  role?: 'member' | 'moderator' | 'organizer' | 'founder' | string;
+  status: 'active' | 'pending' | 'rejected' | string;
   joinedAt: Date | any;
   updatedAt?: Date | any;
+}
+
+export interface ConclaveGathering {
+  id: string;
+  communityId: string;
+  communityName: string;
+  communityAvatarUrl?: string;
+  title: string;
+  description: string;
+  format: 'online' | 'in-person' | 'hybrid' | string;
+  date: string;
+  time: string;
+  timezone?: string;
+  location?: string;
+  virtualUrl?: string;
+  hostId: string;
+  hostName: string;
+  capacity?: number;
+  attendeeCount?: number;
+  attendeeIds?: string[];
+  status?: 'scheduled' | 'live' | 'completed' | 'cancelled' | string;
+  createdAt?: Date | any;
 }
 
 export interface MyCommunity {

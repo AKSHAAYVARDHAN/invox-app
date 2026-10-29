@@ -170,6 +170,7 @@ const CommunitySuggestionCard: React.FC<{
     isLoading?: boolean;
     onToggleMembership?: (community: Community) => void;
 }> = ({ community, isMember, isLoading, onToggleMembership }) => {
+    const navigate = ReactRouterDOM.useNavigate();
     const displayedMembers = getAdjustedMemberCount(community.members, !!isMember);
 
     return (
@@ -189,15 +190,10 @@ const CommunitySuggestionCard: React.FC<{
                     </div>
                 </div>
                 <button 
-                    onClick={() => onToggleMembership?.(community)}
-                    disabled={isLoading}
-                    className={`px-4 py-1 font-mono text-xs font-bold uppercase transition-colors border ${
-                        isMember
-                            ? 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:border-rose-700 hover:text-rose-400 hover:bg-rose-950/30'
-                            : 'bg-white text-black border-white hover:bg-zinc-200'
-                    }`}
+                    onClick={() => navigate(`/communities/${community.id}`)}
+                    className="px-4 py-1 font-mono text-xs font-bold uppercase transition-colors border bg-white text-black border-white hover:bg-zinc-200"
                 >
-                    {isLoading ? '...' : isMember ? 'Joined' : 'Join'}
+                    VIEW
                 </button>
             </div>
             <div className="flex-grow">
