@@ -323,6 +323,32 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "userId", "communityId", "status", "joinedAt"]
+    },
+    "Community": {
+      "title": "Community",
+      "description": "Domain collective defining Collective Identity (Purpose, Mission, Core Values, Founding Story, Guidelines).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "description": "Community collective name" },
+        "description": { "type": "string", "description": "Clear introduction to the collective" },
+        "purpose": { "type": "string", "description": "Why the community exists" },
+        "mission": { "type": "string", "description": "What the community aims to achieve" },
+        "foundingStory": { "type": "string", "description": "Authentic origins and genesis narrative" },
+        "values": { "type": "array", "description": "Core guiding values and principles" },
+        "guidelines": { "type": "array", "description": "Membership standards and conduct guidelines" },
+        "category": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "adminIds": { "type": "array", "description": "Authorized administrator user UIDs" },
+        "avatarUrl": { "type": "string" },
+        "bannerUrl": { "type": "string" },
+        "members": { "type": "number" },
+        "rating": { "type": "number" },
+        "isVerified": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "description"]
     }
   },
   "firestore": {
@@ -385,6 +411,10 @@
     "/communityMemberships/{membershipId}": {
       "schema": "CommunityMembership",
       "description": "User community memberships tracking joined technical communities."
+    },
+    "/communities/{communityId}": {
+      "schema": "Community",
+      "description": "Technical and domain communities with Collective Identity documents."
     },
     "/hubConversations/{conversationId}": {
       "schema": "HubConversation",

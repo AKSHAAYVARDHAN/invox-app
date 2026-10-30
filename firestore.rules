@@ -163,14 +163,32 @@ service cloud.firestore {
     }
 
     match /communities/{communityId} {
-      allow read: if signedIn();
-      allow create: if owns('ownerId');
-      allow update: if signedIn() && (
-        existingOwner('ownerId') 
-        || isModerator() 
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount', 'members', 'updatedAt'])
+      allow read: if true;
+      allow create: if signedIn() && (
+        (request.resource.data.ownerId == uid()) ||
+        (request.resource.data.creatorId == uid()) ||
+        isModerator()
       );
-      allow delete: if existingOwner('ownerId') || isModerator();
+      allow update: if signedIn() && (
+        // Community Owner or Creator can update
+        ((resource.data.ownerId == uid()) || (resource.data.creatorId == uid()))
+        // Explicit Community Administrator can update content/settings, but CANNOT alter ownership or adminIds
+        || (
+          (('adminIds' in resource.data) && (uid() in resource.data.adminIds))
+          && (!('ownerId' in request.resource.data) || request.resource.data.ownerId == resource.data.ownerId)
+          && (!('creatorId' in request.resource.data) || request.resource.data.creatorId == resource.data.creatorId)
+          && (!('adminIds' in request.resource.data) || request.resource.data.adminIds == resource.data.adminIds)
+        )
+        // Public counters
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount', 'members', 'updatedAt'])
+        // Platform Moderator fallback
+        || isModerator()
+      );
+      allow delete: if signedIn() && (
+        resource.data.ownerId == uid() ||
+        resource.data.creatorId == uid() ||
+        isModerator()
+      );
     }
 
     match /communityMemberships/{membershipId} {
@@ -180,13 +198,25 @@ service cloud.firestore {
         existingOwner('userId') 
         || isModerator()
         || (exists(/databases/$(database)/documents/communities/$(resource.data.communityId)) 
-            && get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.ownerId == uid())
+            && (
+              get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.ownerId == uid()
+              || (
+                'adminIds' in get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data
+                && uid() in get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.adminIds
+              )
+            ))
       );
       allow delete: if signedIn() && (
         existingOwner('userId') 
         || isModerator()
         || (exists(/databases/$(database)/documents/communities/$(resource.data.communityId)) 
-            && get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.ownerId == uid())
+            && (
+              get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.ownerId == uid()
+              || (
+                'adminIds' in get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data
+                && uid() in get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.adminIds
+              )
+            ))
       );
     }
 

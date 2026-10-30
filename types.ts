@@ -339,6 +339,20 @@ export interface Trend {
   createdAt: Date;
 }
 
+export type CommunityRole = 'owner' | 'admin' | 'member';
+
+export interface CommunityCoreValue {
+  id?: string;
+  title: string;
+  description?: string;
+}
+
+export interface CommunityGuideline {
+  id?: string;
+  title: string;
+  description: string;
+}
+
 export interface Community {
   id: string;
   name: string;
@@ -349,12 +363,28 @@ export interface Community {
   category: string;
   isVerified?: boolean;
   ownerId?: string;
+  creatorId?: string;
+  ownerName?: string;
+  ownerAvatar?: string;
+  adminIds?: string[];
   purpose?: string;
+  mission?: string;
   foundingStory?: string;
-  values?: string[];
-  guidelines?: string[];
+  values?: (string | CommunityCoreValue)[];
+  guidelines?: (string | CommunityGuideline)[];
   bannerUrl?: string;
   rules?: string[];
+  handle?: string;
+  topics?: string[];
+  visibility?: 'public' | 'private';
+  joinPolicy?: 'open' | 'approval_required';
+  governanceModel?: string;
+  postPermission?: 'all' | 'admins_only';
+  gatheringPermission?: 'all' | 'admins_only';
+  milestones?: any[];
+  memberCount?: number;
+  createdAt?: any;
+  updatedAt?: any;
 }
 
 export interface CommunityMembership {

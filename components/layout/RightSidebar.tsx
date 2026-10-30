@@ -1726,6 +1726,11 @@ const HubSidebar: React.FC<Pick<RightSidebarProps, 'hubView' | 'setHubView' | 'h
 };
 
 const MySpaceSidebar = () => {
+    const location = ReactRouterDOM.useLocation();
+    const navigate = ReactRouterDOM.useNavigate();
+    const [searchParams] = ReactRouterDOM.useSearchParams();
+    const isCommunityManagerActive = (location.pathname === '/myspace' || location.pathname === '/my-space') && searchParams.get('tab') === 'communities';
+
     const sidebarButtons = [
         { name: 'Uploads', icon: ArrowUpTrayIcon, path: '/myspace/uploads' },
         { name: 'Analytics', icon: PresentationChartBarIcon, path: '#' },
@@ -1735,6 +1740,20 @@ const MySpaceSidebar = () => {
     return (
         <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
             <div className="h-full flex flex-col gap-4 overflow-y-auto no-scrollbar">
+                {isCommunityManagerActive && (
+                    <div className="px-4">
+                        <button
+                            onClick={() => {
+                                navigate('/myspace?tab=galaxy');
+                            }}
+                            className="w-full flex items-center gap-2.5 p-2.5 bg-[#0c0c0e] border border-zinc-800 hover:border-zinc-600 text-zinc-300 hover:text-white font-mono text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer group"
+                        >
+                            <ArrowLeftIcon className="w-4 h-4 flex-shrink-0 text-zinc-400 group-hover:text-white group-hover:-translate-x-0.5 transition-transform" />
+                            <span>BACK TO MY SPACE</span>
+                        </button>
+                    </div>
+                )}
+
                 <div className="relative px-4">
                     <MagnifyingGlassIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                     <input type="search" placeholder="SEARCH_MY_SPACE..." className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors" />
@@ -1752,6 +1771,31 @@ const MySpaceSidebar = () => {
                                 <span>{btn.name}</span>
                             </ReactRouterDOM.Link>
                         ))}
+                    </div>
+                </div>
+
+                {/* COMMUNITY MANAGER Section */}
+                <div className="bg-[#0c0c0e] border border-zinc-800 p-3 mx-4">
+                    <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider mb-2">
+                        // COMMUNITY MANAGER
+                    </h3>
+                    <div className="space-y-2">
+                        <ReactRouterDOM.Link
+                            to="/myspace?tab=communities"
+                            className={`w-full flex items-center justify-between p-2.5 font-mono text-xs uppercase tracking-wider border transition-all ${
+                                isCommunityManagerActive
+                                    ? 'bg-white text-black font-bold border-white'
+                                    : 'bg-black border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600'
+                            }`}
+                        >
+                            <div className="flex items-center gap-2.5">
+                                <UsersIcon className={`w-4 h-4 ${isCommunityManagerActive ? 'text-black' : 'text-zinc-400'}`} />
+                                <span>COMMUNITY MANAGER</span>
+                            </div>
+                            <span className={`text-[10px] font-mono ${isCommunityManagerActive ? 'text-zinc-700 font-bold' : 'text-zinc-600'}`}>
+                                &gt;&gt;
+                            </span>
+                        </ReactRouterDOM.Link>
                     </div>
                 </div>
 

@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { SparklesIcon, ChevronDownIcon, ClockIcon, CheckIcon, GlobeAltIcon, RadioIcon, CubeIcon, UsersIcon } from '../components/ui/Icons';
+import { SparklesIcon, ChevronDownIcon, ClockIcon, CheckIcon, GlobeAltIcon, RadioIcon, CubeIcon } from '../components/ui/Icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useAIAssistant } from '../contexts/AIAssistantContext';
 import { subscribeToUserPosts } from '../services/postService';
@@ -427,39 +427,7 @@ Ask anything to synthesize your signals, spot trends in your audience engagement
 
     if (currentTab === 'communities') {
         return (
-            <div className="space-y-6 font-mono text-xs">
-                {/* Header with Tab switcher */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-800 pb-4">
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-                            <span className="text-[10px] uppercase tracking-widest text-zinc-500">// MY_SPACE</span>
-                            <span className="text-zinc-700">|</span>
-                            <span className="text-[10px] text-zinc-600 uppercase">NODE: {currentUser?.uid ? currentUser.uid.slice(0, 8) : 'ANONYMOUS'}</span>
-                        </div>
-                        <h1 className="text-xl font-bold text-white tracking-tight uppercase mt-0.5">
-                            MY SPACE <span className="text-zinc-500 font-normal text-sm">// COLLECTIVES</span>
-                        </h1>
-                    </div>
-
-                    <div className="flex items-center space-x-1 border border-zinc-800 bg-black p-1">
-                        <button
-                            onClick={() => setSearchParams({ tab: 'galaxy' })}
-                            className="px-3 py-1 font-mono text-xs uppercase font-bold text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
-                        >
-                            // 3D_TELEMETRY
-                        </button>
-                        <button
-                            onClick={() => setSearchParams({ tab: 'communities' })}
-                            className="px-3 py-1 font-mono text-xs uppercase font-bold bg-white text-black transition-colors flex items-center gap-1.5"
-                        >
-                            <UsersIcon className="w-3.5 h-3.5" />
-                            <span>// MY_COMMUNITIES</span>
-                        </button>
-                    </div>
-                </div>
-
-                {/* My Communities Governance deck */}
+            <div className="w-full font-mono text-xs pb-12">
                 <MyCommunitiesManager />
             </div>
         );
@@ -502,13 +470,6 @@ Ask anything to synthesize your signals, spot trends in your audience engagement
                                 className="px-3 py-1 font-mono text-xs uppercase font-bold bg-white text-black transition-colors"
                             >
                                 // 3D_MAP
-                            </button>
-                            <button
-                                onClick={() => setSearchParams({ tab: 'communities' })}
-                                className="px-3 py-1 font-mono text-xs uppercase font-bold text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors flex items-center gap-1.5"
-                            >
-                                <UsersIcon className="w-3.5 h-3.5" />
-                                <span>// COMMUNITIES</span>
                             </button>
                         </div>
                         <TimeframeDropdown current={currentTimeframe} onChange={setCurrentTimeframe} />
