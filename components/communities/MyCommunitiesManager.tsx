@@ -14,7 +14,8 @@ import {
     PlusIcon, 
     PencilSquareIcon,
     TrashIcon,
-    ShieldCheckIcon
+    ShieldCheckIcon,
+    CloseIcon
 } from '../ui/Icons';
 import { handleImageError } from '../utils/imageUtils';
 
@@ -28,6 +29,12 @@ export const MyCommunitiesManager: React.FC = () => {
     const [editingCommunity, setEditingCommunity] = useState<Community | null>(null);
     const [isIdentityModalOpen, setIsIdentityModalOpen] = useState(false);
     const [feedbackMessage, setFeedbackMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+    // Delete confirmation modal state
+    const [communityPendingDeletion, setCommunityPendingDeletion] = useState<Community | null>(null);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     // Reliable stats computed directly from verified owned communities
     const totalMembers = useMemo(() => {
@@ -80,27 +87,54 @@ export const MyCommunitiesManager: React.FC = () => {
         }
     };
 
-    const handleDeleteCommunity = async (community: Community) => {
-        if (!currentUser?.uid) return;
+    const handleOpenDeleteModal = (community: Community) => {
+        setCommunityPendingDeletion(community);
+        setDeleteError(null);
+        setIsDeleteModalOpen(true);
+    };
 
-        const confirmed = window.confirm(
-            `Are you sure you want to permanently delete "${community.name}"?\n\nThis action cannot be undone.`
-        );
-        if (!confirmed) return;
+    const handleCloseDeleteModal = () => {
+        if (isDeleting) return;
+        setIsDeleteModalOpen(false);
+        setCommunityPendingDeletion(null);
+        setDeleteError(null);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!communityPendingDeletion || !currentUser?.uid) return;
+
+        // Authorize: Only the community owner/creator can delete this community
+        const isOwner = communityPendingDeletion.ownerId === currentUser.uid || communityPendingDeletion.creatorId === currentUser.uid;
+        if (!isOwner) {
+            setDeleteError('Unauthorized: Only the sovereign community owner can delete this collective. Platform administrator privileges do not grant deletion authority.');
+            return;
+        }
+
+        setIsDeleting(true);
+        setDeleteError(null);
 
         try {
-            setActionLoadingId(community.id);
-            const result = await deleteCommunity(community.id, currentUser.uid);
+            const result = await deleteCommunity(communityPendingDeletion.id, currentUser.uid);
             if (result.success) {
-                setFeedbackMessage({ text: `Community "${community.name}" was successfully deleted.`, type: 'success' });
+                const deletedName = communityPendingDeletion.name;
+                const deletedId = communityPendingDeletion.id;
+
+                // Update local list immediately to ensure owned community count and statistics update
+                setOwnedCommunities(prev => prev.filter(c => c.id !== deletedId));
+                setIsDeleteModalOpen(false);
+                setCommunityPendingDeletion(null);
+                setFeedbackMessage({
+                    text: `Community "${deletedName}" was successfully deleted from INVOX.`,
+                    type: 'success',
+                });
+                setTimeout(() => setFeedbackMessage(null), 6000);
             } else {
-                setFeedbackMessage({ text: result.error || 'Failed to delete community', type: 'error' });
+                setDeleteError(result.error || 'Failed to delete community. Collective data preserved.');
             }
         } catch (err: any) {
-            setFeedbackMessage({ text: err?.message || 'Error deleting community', type: 'error' });
+            setDeleteError(err?.message || 'Unexpected fault during deletion. Collective data preserved.');
         } finally {
-            setActionLoadingId(null);
-            setTimeout(() => setFeedbackMessage(null), 5000);
+            setIsDeleting(false);
         }
     };
 
@@ -311,13 +345,13 @@ export const MyCommunitiesManager: React.FC = () => {
                                 </button>
 
                                 <button
-                                    onClick={() => handleDeleteCommunity(community)}
-                                    disabled={actionLoadingId === community.id}
-                                    className="px-3 py-2 border border-zinc-850 bg-black hover:border-rose-900 hover:bg-rose-950/30 text-zinc-400 hover:text-rose-400 uppercase transition-colors text-xs flex items-center justify-center gap-1.5 whitespace-nowrap"
+                                    onClick={() => handleOpenDeleteModal(community)}
+                                    disabled={actionLoadingId === community.id || (isDeleting && communityPendingDeletion?.id === community.id)}
+                                    className="px-3 py-2 border border-zinc-850 bg-black hover:border-rose-900 hover:bg-rose-950/30 text-zinc-400 hover:text-rose-400 uppercase transition-colors text-xs flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
                                     title="Delete Community"
                                 >
                                     <TrashIcon className="w-3.5 h-3.5" />
-                                    <span>{actionLoadingId === community.id ? 'Deleting...' : 'Delete'}</span>
+                                    <span>Delete</span>
                                 </button>
                             </div>
                         </div>
@@ -349,6 +383,131 @@ export const MyCommunitiesManager: React.FC = () => {
                         });
                     }}
                 />
+            )}
+
+            {/* Secondary Confirmation Modal for Permanent Community Deletion */}
+            {isDeleteModalOpen && communityPendingDeletion && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+                    <div className="bg-[#0c0c0e] border border-rose-900/60 max-w-lg w-full font-mono text-xs shadow-2xl shadow-rose-950/30 overflow-hidden">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between p-4 border-b border-zinc-850 bg-black/80">
+                            <div className="flex items-center gap-2.5">
+                                <div className="p-1.5 bg-rose-950/60 border border-rose-500/50 text-rose-400">
+                                    <TrashIcon className="w-4 h-4" />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-zinc-500 tracking-wider uppercase font-bold">
+                                            // COMMUNITY MANAGER
+                                        </span>
+                                        <span className="text-zinc-700">|</span>
+                                        <span className="text-[10px] text-rose-400 uppercase font-semibold">
+                                            DESTRUCTIVE_ACTION
+                                        </span>
+                                    </div>
+                                    <h2 className="font-bold text-white uppercase tracking-wider text-sm mt-0.5">
+                                        // CONFIRM_COMMUNITY_DELETION
+                                    </h2>
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleCloseDeleteModal}
+                                disabled={isDeleting}
+                                className="text-zinc-500 hover:text-white transition-colors p-1.5 border border-transparent hover:border-zinc-800 disabled:opacity-40 cursor-pointer"
+                                aria-label="Close"
+                            >
+                                <CloseIcon className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-5 space-y-4">
+                            {/* Error Banner if Deletion Fails */}
+                            {deleteError && (
+                                <div className="p-3 bg-rose-950/40 border border-rose-800 text-rose-300 text-xs flex items-start gap-2">
+                                    <span className="font-bold text-rose-400">[DELETION_FAULT]:</span>
+                                    <span>{deleteError}</span>
+                                </div>
+                            )}
+
+                            {/* Targeted Community Preview Card */}
+                            <div className="p-3.5 bg-black border border-zinc-800 flex items-center gap-3">
+                                {communityPendingDeletion.avatarUrl ? (
+                                    <img
+                                        src={communityPendingDeletion.avatarUrl}
+                                        alt={communityPendingDeletion.name}
+                                        onError={(e) => handleImageError(e, 'avatar')}
+                                        className="w-11 h-11 object-cover border border-zinc-700 flex-shrink-0"
+                                    />
+                                ) : (
+                                    <div className="w-11 h-11 bg-zinc-900 border border-zinc-850 flex items-center justify-center text-zinc-400 font-bold flex-shrink-0">
+                                        {communityPendingDeletion.name.slice(0, 2).toUpperCase()}
+                                    </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-rose-400 font-mono text-xs font-bold">
+                                            @{communityPendingDeletion.handle || communityPendingDeletion.id}
+                                        </span>
+                                        <span className="text-zinc-500 text-[10px] uppercase border border-zinc-850 px-1.5 py-0.2">
+                                            {communityPendingDeletion.category || 'Collective'}
+                                        </span>
+                                    </div>
+                                    <h3 className="text-white font-bold text-sm truncate mt-0.5">
+                                        {communityPendingDeletion.name}
+                                    </h3>
+                                    <div className="text-zinc-500 text-[10px] mt-0.5">
+                                        {communityPendingDeletion.members || (communityPendingDeletion as any).memberCount || 1} network members
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Warning Box */}
+                            <div className="p-3.5 bg-rose-950/20 border border-rose-900/40 space-y-2">
+                                <div className="flex items-center gap-2 text-rose-400 font-bold text-xs uppercase">
+                                    <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping" />
+                                    <span>PERMANENT NETWORK DISMANTLING WARNING</span>
+                                </div>
+                                <p className="text-zinc-300 text-[11px] leading-relaxed">
+                                    Are you sure you want to permanently delete <strong className="text-white">{communityPendingDeletion.name}</strong>?
+                                </p>
+                                <p className="text-zinc-400 text-[11px] leading-relaxed">
+                                    This action is permanent and cannot be undone. It will dismantle the collective identity, guidelines, associated membership records, and conclave activities from the INVOX network.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Modal Actions */}
+                        <div className="p-4 border-t border-zinc-850 bg-black/60 flex items-center justify-between gap-3">
+                            <button
+                                type="button"
+                                onClick={handleCloseDeleteModal}
+                                disabled={isDeleting}
+                                className="px-4 py-2 border border-zinc-700 hover:border-zinc-600 text-zinc-300 hover:text-white uppercase transition-colors text-xs font-mono disabled:opacity-50 cursor-pointer"
+                            >
+                                CANCEL
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmDelete}
+                                disabled={isDeleting}
+                                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold uppercase transition-colors text-xs font-mono flex items-center gap-2 shadow-lg shadow-rose-950/50 disabled:opacity-50 cursor-pointer"
+                            >
+                                {isDeleting ? (
+                                    <>
+                                        <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        <span>DELETING COMMUNITY...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <TrashIcon className="w-3.5 h-3.5" />
+                                        <span>DELETE COMMUNITY</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

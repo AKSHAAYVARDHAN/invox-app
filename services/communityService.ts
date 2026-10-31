@@ -280,6 +280,190 @@ export const subscribeUserAdministeredCommunities = (
 };
 
 /**
+ * Subscribes in real-time to all communities stored in the primary Firestore 'communities' collection.
+ * Provides immediate synchronization for newly created, updated, or deleted communities across the platform.
+ */
+export const subscribeAllCommunities = (
+    onUpdate: (communities: Community[]) => void,
+    onError?: (err: any) => void
+): (() => void) => {
+    try {
+        const q = collection(db, 'communities');
+        return onSnapshot(
+            q,
+            (snapshot) => {
+                const list: Community[] = snapshot.docs.map((d) => ({
+                    id: d.id,
+                    ...(d.data() as any),
+                }));
+                onUpdate(list);
+            },
+            (err) => {
+                console.warn('[ALL_COMMUNITIES_SNAPSHOT_WARN]', err);
+                onError?.(err);
+            }
+        );
+    } catch (err) {
+        console.warn('[ALL_COMMUNITIES_SUBSCRIBE_ERR]', err);
+        return () => {};
+    }
+};
+
+/**
+ * Merges Firestore communities with fallback mock communities.
+ * Rules:
+ * - Firestore communities take precedence.
+ * - Deduplicates by ID, handle/slug, and trimmed name.
+ * - Respects visibility: private communities are excluded unless the user is the owner, creator, or active member.
+ */
+export const mergeCommunitiesWithMocks = (
+    firestoreCommunities: Community[],
+    mockCommunities: Community[],
+    currentUserId?: string | null,
+    isMemberFn?: (communityId: string) => boolean
+): Community[] => {
+    const seenIds = new Set<string>();
+    const seenHandles = new Set<string>();
+    const seenNames = new Set<string>();
+    const result: Community[] = [];
+
+    // Helper to test if a community is visible to the current user
+    const isDiscoverable = (c: Community): boolean => {
+        // If not marked private, it's public and always discoverable
+        if (c.visibility !== 'private') return true;
+        // If private, visible only if current user is owner, creator, or member
+        if (!currentUserId) return false;
+        const isOwner = c.ownerId === currentUserId || c.creatorId === currentUserId;
+        const member = isMemberFn ? isMemberFn(c.id) : false;
+        return isOwner || member;
+    };
+
+    // 1. Process real Firestore communities first (precedence)
+    for (const c of firestoreCommunities) {
+        if (!c || !c.id) continue;
+        if (!isDiscoverable(c)) continue;
+
+        seenIds.add(c.id.toLowerCase());
+        const cleanHandle = (c.handle || '').toLowerCase().replace(/^@/, '').trim();
+        if (cleanHandle) seenHandles.add(cleanHandle);
+        if (c.name) seenNames.add(c.name.trim().toLowerCase());
+
+        result.push(c);
+    }
+
+    // 2. Process mock communities (skip any duplicates)
+    for (const m of mockCommunities) {
+        if (!m || !m.id) continue;
+        if (!isDiscoverable(m)) continue;
+
+        const mId = m.id.toLowerCase();
+        const cleanMockHandle = (m.handle || m.name.toLowerCase().replace(/\s+/g, '')).replace(/^@/, '').trim();
+        const cleanMockName = m.name ? m.name.trim().toLowerCase() : '';
+
+        if (seenIds.has(mId)) continue;
+        if (cleanMockHandle && seenHandles.has(cleanMockHandle)) continue;
+        if (cleanMockName && seenNames.has(cleanMockName)) continue;
+
+        result.push(m);
+    }
+
+    return result;
+};
+
+/**
+ * Filters communities based on the user's search query across name, handle, description, category, and topics.
+ * Handles case-insensitivity, leading/trailing whitespace, leading '@', and individual word tokens.
+ */
+export const filterCommunitiesBySearch = (
+    communities: Community[],
+    rawSearchTerm: string,
+    domainCategories: { name: string }[] = []
+): { results: Community[]; title: string; isCategoryMatch: boolean } => {
+    const trimmed = rawSearchTerm.trim();
+    if (!trimmed) {
+        return { results: communities, title: '', isCategoryMatch: false };
+    }
+
+    const lower = trimmed.toLowerCase();
+    const cleanNoAt = lower.startsWith('@') ? lower.slice(1).trim() : lower;
+    const tokens = cleanNoAt.split(/\s+/).filter(Boolean);
+
+    // Check exact domain match (e.g. user clicked or searched a domain name like "Startup", "Coding")
+    const matchingDomain = domainCategories.find(
+        (d) => d.name.toLowerCase() === lower || d.name.toLowerCase() === cleanNoAt
+    );
+
+    if (matchingDomain) {
+        const results = communities.filter(
+            (c) => (c.category || '').toLowerCase() === matchingDomain.name.toLowerCase()
+        );
+        const title = `COMMUNITIES IN "${matchingDomain.name.toUpperCase()}"`;
+        return {
+            results,
+            searchResults: results,
+            title,
+            searchResultTitle: title,
+            isCategoryMatch: true,
+        };
+    }
+
+    // Match across community name, handle, description, category, topics/tags, purpose, mission
+    const results = communities.filter((community) => {
+        const name = (community.name || '').toLowerCase();
+        const handle = (community.handle || '').toLowerCase().replace(/^@/, '');
+        const description = (community.description || '').toLowerCase();
+        const category = (community.category || '').toLowerCase();
+        const purpose = (community.purpose || '').toLowerCase();
+        const mission = (community.mission || '').toLowerCase();
+        const topics = Array.isArray(community.topics)
+            ? community.topics.map((t) => String(t).toLowerCase())
+            : [];
+
+        // Direct full string matches
+        if (name.includes(cleanNoAt) || name.includes(lower)) return true;
+        if (handle && (handle.includes(cleanNoAt) || cleanNoAt.includes(handle))) return true;
+        if (description.includes(cleanNoAt)) return true;
+        if (category.includes(cleanNoAt)) return true;
+        if (purpose.includes(cleanNoAt) || mission.includes(cleanNoAt)) return true;
+        if (topics.some((t) => t.includes(cleanNoAt) || cleanNoAt.includes(t))) return true;
+
+        // Strip spaces match for handles (e.g. "madmax wizards" matches handle "madmax_wizards" or "madmaxwizards")
+        const compressedSearch = cleanNoAt.replace(/[\s_-]+/g, '');
+        const compressedName = name.replace(/[\s_-]+/g, '');
+        const compressedHandle = handle.replace(/[\s_-]+/g, '');
+        if (compressedSearch && compressedName.includes(compressedSearch)) return true;
+        if (compressedSearch && compressedHandle.includes(compressedSearch)) return true;
+
+        // Token-based match: all tokens must appear across the community's searchable fields
+        if (tokens.length > 1) {
+            const allTokensMatch = tokens.every((token) => {
+                return (
+                    name.includes(token) ||
+                    handle.includes(token) ||
+                    description.includes(token) ||
+                    category.includes(token) ||
+                    purpose.includes(token) ||
+                    mission.includes(token) ||
+                    topics.some((t) => t.includes(token))
+                );
+            });
+            if (allTokensMatch) return true;
+        }
+
+        return false;
+    });
+
+    const title = `SEARCH RESULTS FOR "${trimmed.toUpperCase()}"`;
+    return {
+        results,
+        searchResults: results,
+        title,
+        searchResultTitle: title,
+        isCategoryMatch: false,
+    };
+};
+
+/**
  * Calculates displayed member count safely:
  * baseline + 1 if joined, otherwise baseline. Never negative.
  */
@@ -1038,6 +1222,8 @@ export const updateCommunity = async (
 /**
  * Deletes a community from Firestore.
  * Allowed strictly for the verified community creator/owner.
+ * Platform administrator roles do NOT grant deletion authority.
+ * Cleans up associated community memberships and conclaves to prevent orphaned data.
  */
 export const deleteCommunity = async (
     communityId: string,
@@ -1050,19 +1236,70 @@ export const deleteCommunity = async (
     try {
         const commRef = doc(db, 'communities', communityId);
         const snap = await getDoc(commRef);
-        if (!snap.exists()) {
-            return { success: false, error: 'Community not found' };
-        }
-        const data = snap.data();
-        if (data.ownerId !== userId && data.creatorId !== userId) {
-            return { success: false, error: 'Unauthorized: only the verified community owner can delete this collective.' };
+        let ownerId: string | undefined;
+        let creatorId: string | undefined;
+
+        if (snap.exists()) {
+            const data = snap.data();
+            ownerId = data.ownerId;
+            creatorId = data.creatorId;
+        } else {
+            const mock = MOCK_COMMUNITIES.find(c => c.id === communityId);
+            if (mock) {
+                ownerId = mock.ownerId || mock.creatorId;
+                creatorId = mock.creatorId || mock.ownerId;
+            } else {
+                return { success: false, error: 'Community not found in network.' };
+            }
         }
 
-        await deleteDoc(commRef);
+        // Strict ownership check: Must be ownerId or creatorId.
+        // Platform administrator roles do NOT grant deletion authority.
+        if (ownerId !== userId && creatorId !== userId) {
+            return {
+                success: false,
+                error: 'Unauthorized: Only the sovereign community owner can delete this collective. Platform administrator privileges do not grant deletion rights.'
+            };
+        }
+
+        // Clean up associated community memberships
+        try {
+            const membershipsQuery = query(
+                collection(db, COLLECTIONS.communityMemberships),
+                where('communityId', '==', communityId)
+            );
+            const memSnap = await getDocs(membershipsQuery);
+            if (!memSnap.empty) {
+                const deletePromises = memSnap.docs.map(d => deleteDoc(d.ref));
+                await Promise.all(deletePromises);
+            }
+        } catch (memErr) {
+            console.warn('[DELETE_COMMUNITY_MEMBERSHIPS_CLEANUP_WARN]', memErr);
+        }
+
+        // Clean up associated conclaves if any
+        try {
+            const conclavesQuery = query(
+                collection(db, 'conclaveGatherings'),
+                where('communityId', '==', communityId)
+            );
+            const conclaveSnap = await getDocs(conclavesQuery);
+            if (!conclaveSnap.empty) {
+                const conclavePromises = conclaveSnap.docs.map(d => deleteDoc(d.ref));
+                await Promise.all(conclavePromises);
+            }
+        } catch (cErr) {
+            console.warn('[DELETE_COMMUNITY_CONCLAVES_CLEANUP_WARN]', cErr);
+        }
+
+        if (snap.exists()) {
+            await deleteDoc(commRef);
+        }
+
         return { success: true };
     } catch (err: any) {
         handleFirestoreError(err, OperationType.DELETE, `communities/${communityId}`);
-        return { success: false, error: err?.message || 'Failed to delete community' };
+        return { success: false, error: err?.message || 'Failed to delete community collective' };
     }
 };
 

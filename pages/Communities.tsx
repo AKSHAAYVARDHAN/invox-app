@@ -3,7 +3,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import type { Community } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { useCommunityMemberships, getAdjustedMemberCount } from '../services/communityService';
+import { 
+    useCommunityMemberships, 
+    getAdjustedMemberCount,
+    subscribeAllCommunities,
+    mergeCommunitiesWithMocks,
+    filterCommunitiesBySearch
+} from '../services/communityService';
 import { 
     StarIcon,
     UsersIcon,
@@ -129,7 +135,7 @@ const PodiumCard = ({
                     )}
                     <div>
                         <p className="font-mono font-bold text-white text-sm flex items-center gap-1.5">{community.name} {community.isVerified && <ShieldCheckIcon className="w-3.5 h-3.5 text-zinc-400" />}</p>
-                        <p className="text-[11px] font-mono text-zinc-500">@{community.name.toLowerCase().replace(/\s+/g, '')}</p>
+                        <p className="text-[11px] font-mono text-zinc-500">@{community.handle || community.name.toLowerCase().replace(/\s+/g, '')}</p>
                     </div>
                 </div>
             </div>
@@ -141,7 +147,7 @@ const PodiumCard = ({
                 </div>
                 <div>
                     <p className="text-zinc-500 uppercase text-[10px]">Rating</p>
-                    <p className="font-bold text-white text-sm mt-0.5 flex items-center gap-1">{community.rating.toFixed(1)} <StarIcon className="w-3.5 h-3.5 text-white" /></p>
+                    <p className="font-bold text-white text-sm mt-0.5 flex items-center gap-1">{(community.rating ?? 5.0).toFixed(1)} <StarIcon className="w-3.5 h-3.5 text-white" /></p>
                 </div>
                  <div>
                     <p className="text-zinc-500 uppercase text-[10px]">Category</p>
@@ -203,7 +209,7 @@ const CommunitySuggestionCard: React.FC<{
                     </p>
                     <div className="flex items-center gap-1 text-zinc-300">
                         <StarIcon className="w-3.5 h-3.5 text-white" />
-                        <span className="font-bold text-white">{community.rating.toFixed(1)}</span>
+                        <span className="font-bold text-white">{(community.rating ?? 5.0).toFixed(1)}</span>
                     </div>
                 </div>
             </div>
@@ -234,6 +240,7 @@ const CommunitySearchResultSkeleton = () => (
 const CommunitiesPage = () => {
     const { currentUser } = useAuth();
     const { isMember, toggleMembership, actionLoadingId } = useCommunityMemberships(currentUser);
+    const [firestoreCommunities, setFirestoreCommunities] = useState<Community[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTimeframe, setActiveTimeframe] = useState<'All Time' | 'Daily' | 'Weekly' | 'Monthly'>('Daily');
     const [visibleCount, setVisibleCount] = useState(10);
@@ -247,6 +254,28 @@ const CommunitiesPage = () => {
 
     const { setRightSidebarVariant, communityFilters, setCommunityFilters, communityView, setCommunityView } = outletContext || {};
 
+    // Real-time synchronization with primary Firestore communities collection
+    useEffect(() => {
+        const unsubscribe = subscribeAllCommunities(
+            (list) => {
+                setFirestoreCommunities(list);
+            },
+            (err) => {
+                console.warn('[COMMUNITIES_REALTIME_SYNC_ERR]', err);
+            }
+        );
+        return () => unsubscribe();
+    }, []);
+
+    // Merge real Firestore communities with fallback mock communities
+    const allCommunities = React.useMemo(() => {
+        return mergeCommunitiesWithMocks(
+            firestoreCommunities,
+            mockCommunities,
+            currentUser?.uid,
+            isMember
+        );
+    }, [firestoreCommunities, currentUser?.uid, isMember]);
     
     // Refs for smooth scrolling
     const leaderboardItemsContainerRef = useRef<HTMLDivElement>(null);
@@ -266,9 +295,9 @@ const CommunitiesPage = () => {
     useEffect(() => {
         setLoading(true);
         setVisibleCount(10); // Reset count on filter change
-        const timer = setTimeout(() => setLoading(false), 1500);
+        const timer = setTimeout(() => setLoading(false), 200);
         return () => clearTimeout(timer);
-    }, [activeTimeframe, communityFilters]);
+    }, [activeTimeframe, communityFilters?.searchTerm, communityFilters?.domains]);
 
     useEffect(() => {
         // This effect handles the smooth scroll animation when "Load More" or "View Less" is clicked.
@@ -312,32 +341,27 @@ const CommunitiesPage = () => {
         }
     };
 
-    const isSearchView = communityFilters && communityFilters.searchTerm.trim() !== '';
+    const isSearchView = Boolean(communityFilters && communityFilters.searchTerm && communityFilters.searchTerm.trim() !== '');
+
+    const searchOutcome = React.useMemo(() => {
+        if (!isSearchView || !communityFilters) {
+            return { searchResults: [] as Community[], searchResultTitle: '', isCategoryMatch: false };
+        }
+        const outcome = filterCommunitiesBySearch(
+            allCommunities,
+            communityFilters.searchTerm,
+            communityPageDomains
+        );
+        return {
+            searchResults: outcome.searchResults || outcome.results || [],
+            searchResultTitle: outcome.searchResultTitle || outcome.title || '',
+            isCategoryMatch: Boolean(outcome.isCategoryMatch),
+        };
+    }, [isSearchView, allCommunities, communityFilters?.searchTerm]);
+
+    const { searchResults = [], searchResultTitle = '', isCategoryMatch = false } = searchOutcome;
 
     if (isSearchView) {
-        let searchResults: Community[] = [];
-        let searchResultTitle = '';
-        const searchTermLower = communityFilters.searchTerm.toLowerCase();
-        
-        // Check if search term is a domain name (exact match)
-        const matchingDomain = communityPageDomains.find(
-            domain => domain.name.toLowerCase() === searchTermLower
-        );
-    
-        if (matchingDomain) {
-            // Filter by domain/category
-            searchResults = mockCommunities.filter(
-                community => community.category.toLowerCase() === searchTermLower
-            );
-            searchResultTitle = `COMMUNITIES IN "${matchingDomain.name.toUpperCase()}"`;
-        } else {
-            // Filter by community name (partial match)
-            searchResults = mockCommunities.filter(community =>
-                community.name.toLowerCase().includes(searchTermLower)
-            );
-            searchResultTitle = `SEARCH RESULTS FOR "${communityFilters.searchTerm.toUpperCase()}"`;
-        }
-
         return (
             <div className="space-y-4">
                 <div className="flex items-center justify-between gap-4">
@@ -352,7 +376,7 @@ const CommunitiesPage = () => {
                             </h1>
                         </div>
                     </div>
-                    {matchingDomain && (
+                    {isCategoryMatch && (
                         <button className="flex-shrink-0 flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1.5 font-mono text-xs text-zinc-300 uppercase hover:text-white hover:border-zinc-600 transition-colors">
                             <FilterIcon className="w-4 h-4 text-zinc-500" />
                             <span>Filter by</span>
@@ -367,7 +391,7 @@ const CommunitiesPage = () => {
                         <CommunitySearchResultSkeleton />
                         <CommunitySearchResultSkeleton />
                     </div>
-                ) : searchResults.length > 0 ? (
+                ) : (searchResults && searchResults.length > 0) ? (
                     <div>
                         {searchResults.map(community => (
                             <React.Fragment key={community.id}>
@@ -397,12 +421,12 @@ const CommunitiesPage = () => {
         return <ComingSoonPage pageName="My Communities" />;
     }
 
-    const sortedCommunities = mockCommunities
+    const sortedCommunities = allCommunities
         .filter(community => {
-            const domainMatch = communityFilters.domains.length === 0 || communityFilters.domains.includes(community.category);
+            const domainMatch = !communityFilters?.domains?.length || communityFilters.domains.includes(community.category);
             return domainMatch;
         })
-        .sort((a, b) => b.members - a.members);
+        .sort((a, b) => (b.members || 0) - (a.members || 0));
 
     const topThree = sortedCommunities.slice(0, 3);
     const restOfLeaderboard = sortedCommunities.slice(3);
@@ -410,19 +434,19 @@ const CommunitiesPage = () => {
     const suggestionData = [
         {
             category: 'For Coders',
-            communities: mockCommunities.filter(c => c.category === 'Coding').slice(0, 5),
+            communities: allCommunities.filter(c => c.category === 'Coding').slice(0, 5),
         },
         {
             category: 'For Designers',
-            communities: mockCommunities.filter(c => c.category === 'Design').slice(0, 5),
+            communities: allCommunities.filter(c => c.category === 'Design').slice(0, 5),
         },
         {
             category: 'For Entrepreneurs',
-            communities: mockCommunities.filter(c => c.category === 'Startup').slice(0, 5),
+            communities: allCommunities.filter(c => c.category === 'Startup').slice(0, 5),
         },
         {
             category: 'For AI Enthusiasts',
-            communities: mockCommunities.filter(c => c.category === 'Artificial Intelligence').slice(0, 5),
+            communities: allCommunities.filter(c => c.category === 'Artificial Intelligence').slice(0, 5),
         }
     ];
 
@@ -527,13 +551,13 @@ const CommunitiesPage = () => {
                             </div>
                             <div className="col-span-2 text-center font-bold text-white">{formatNumber(displayedMembers)}</div>
                             <div className="col-span-3 text-right font-bold text-white flex items-center justify-end gap-1">
-                                {community.rating.toFixed(1)} <StarIcon className="w-3.5 h-3.5 text-white" />
+                                {(community.rating ?? 5.0).toFixed(1)} <StarIcon className="w-3.5 h-3.5 text-white" />
                             </div>
                         </div>
                         );
                     })}
                 </div>
-                 {(visibleCount < restOfLeaderboard.length || visibleCount > 10) && (
+                 {((visibleCount < (restOfLeaderboard?.length || 0)) || visibleCount > 10) && (
                     <div className="p-3 border-t border-zinc-800 bg-black/40 text-center flex justify-center items-center gap-3 font-mono">
                         {visibleCount > 10 && (
                              <button 
@@ -543,7 +567,7 @@ const CommunitiesPage = () => {
                                 View Less
                             </button>
                         )}
-                        {visibleCount < restOfLeaderboard.length && (
+                        {visibleCount < (restOfLeaderboard?.length || 0) && (
                             <button 
                                 onClick={handleLoadMore} 
                                 className="bg-white text-black font-mono text-xs font-bold uppercase px-6 py-2 hover:bg-zinc-200 transition-colors"
