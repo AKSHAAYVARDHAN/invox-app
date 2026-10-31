@@ -1360,39 +1360,49 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
                                     </div>
 
                                     {/* Add / Edit Rule Form */}
-                                    <div className="bg-zinc-900/60 border border-zinc-700 p-3 space-y-2.5">
+                                    <div className="bg-zinc-900/60 border border-zinc-700 p-3 sm:p-4 space-y-3">
                                         <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-300 flex items-center justify-between">
                                             <span>{editingRuleIdx !== null ? `// EDIT COMMUNITY RULE #${editingRuleIdx + 1}` : '// DEFINE CUSTOM COMMUNITY RULE'}</span>
                                             <span className="text-zinc-500 font-normal">Rules can be reordered, edited, or removed</span>
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                            <div className="sm:col-span-1">
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="block text-zinc-400 uppercase text-[10px] tracking-wider font-bold mb-1.5 font-mono">
+                                                    Rule Title
+                                                </label>
                                                 <input
                                                     type="text"
                                                     value={ruleTitleInput}
                                                     onChange={(e) => setRuleTitleInput(e.target.value)}
-                                                    placeholder="Rule Title (e.g. Respectful Dissent)"
+                                                    placeholder="Enter a rule title..."
                                                     maxLength={100}
-                                                    className="w-full bg-black border border-zinc-800 px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-400 font-mono"
+                                                    className="w-full bg-black border border-zinc-800 px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-400 font-mono transition-colors"
                                                 />
                                             </div>
-                                            <div className="sm:col-span-2">
-                                                <input
-                                                    type="text"
+                                            <div>
+                                                <label className="block text-zinc-400 uppercase text-[10px] tracking-wider font-bold mb-1.5 font-mono">
+                                                    Rule Description
+                                                </label>
+                                                <textarea
                                                     value={ruleDescInput}
                                                     onChange={(e) => setRuleDescInput(e.target.value)}
-                                                    placeholder="Standard description or enforced behavioral boundary..."
+                                                    onKeyDown={(e) => {
+                                                        // Support Enter/new lines and prevent bubbling to form submit
+                                                        e.stopPropagation();
+                                                    }}
+                                                    placeholder="Describe the rule, expected behaviour, and any restrictions..."
                                                     maxLength={500}
-                                                    className="w-full bg-black border border-zinc-800 px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-400 font-mono"
+                                                    rows={3}
+                                                    className="w-full bg-black border border-zinc-800 px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-400 font-mono resize-y min-h-[76px] transition-colors leading-relaxed"
                                                 />
                                             </div>
                                         </div>
-                                        <div className="flex justify-end gap-2 pt-1">
+                                        <div className="flex justify-end items-center gap-2 pt-1">
                                             {editingRuleIdx !== null && (
                                                 <button
                                                     type="button"
                                                     onClick={handleCancelRuleEdit}
-                                                    className="px-3 py-1 text-xs border border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800 uppercase"
+                                                    className="px-3.5 py-1.5 text-xs border border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800 uppercase transition-colors"
                                                 >
                                                     Cancel
                                                 </button>
@@ -1400,7 +1410,7 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
                                             <button
                                                 type="button"
                                                 onClick={handleSaveRule}
-                                                className="px-3.5 py-1 text-xs font-bold uppercase border border-emerald-500/80 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500 hover:text-black flex items-center gap-1 transition-colors"
+                                                className="px-3.5 py-1.5 text-xs font-bold uppercase border border-emerald-500/80 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500 hover:text-black flex items-center gap-1.5 transition-colors shadow-sm"
                                             >
                                                 {editingRuleIdx !== null ? (
                                                     <>
