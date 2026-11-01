@@ -3,8 +3,10 @@ import type {
     CommunityMembership, 
     ConclaveGathering, 
     Event, 
-    MyCommunity 
+    MyCommunity,
+    Post
 } from '../types';
+import { PostType } from '../types';
 
 /**
  * Storage key to toggle development/demo data source mode.
@@ -510,3 +512,160 @@ export const MOCK_MY_COMMUNITIES: CommunityMembership[] = [
         joinedAt: new Date(NOW - 20 * ONE_DAY),
     }
 ];
+
+/**
+ * Preserved sample public community posts for aggregated public feed testing.
+ * Strictly separate from production Firestore.
+ */
+export const MOCK_COMMUNITY_PUBLIC_POSTS: Post[] = [
+    {
+        id: 'comm-post-mock-1',
+        communityId: 'startup-1',
+        communityName: 'Startup Grind',
+        communityAvatarUrl: 'https://picsum.photos/seed/startup-grind/200',
+        communityHandle: 'startupgrind',
+        authorId: 'user_sg_elena',
+        author: {
+            name: 'Elena Rostova',
+            avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&h=200&auto=format&fit=crop',
+            username: 'elenarostova',
+            isVerified: true
+        },
+        title: 'Zero-Burn Growth Strategy for Early-Stage Founders',
+        aiSummary: 'Practical framework for scaling engineering without venture capital debt.',
+        content: 'We recently ran an empirical analysis across 42 bootstrapped technical startups. Founders prioritizing high customer gross margins and lean edge-distributed compute reached profitability 3.2x faster than those spending heavily on upfront ad acquisitions. Here are the core metrics we tracked:\n\n1. Net Revenue Retention > 115%\n2. Organic Developer Referrals > 40%\n3. Cloud compute spend capped below 8% of ARR.',
+        mediaUrl: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?q=80&w=1200&auto=format&fit=crop',
+        mediaType: 'image',
+        category: 'Startup',
+        domain: 'Startup',
+        tags: ['Startups', 'Bootstrapping', 'Growth', 'Metrics'],
+        visibility: 'public',
+        type: PostType.Feed,
+        stats: { likes: 142, views: 3200, comments: 28 },
+        likeCount: 142,
+        viewCount: 3200,
+        commentCount: 28,
+        createdAt: new Date(NOW - 3 * ONE_HOUR),
+    },
+    {
+        id: 'comm-post-mock-2',
+        communityId: 'coding-4',
+        communityName: 'Pythonic Geeks',
+        communityAvatarUrl: 'https://picsum.photos/seed/pythonic-geeks/200',
+        communityHandle: 'pythonicgeeks',
+        authorId: 'user_py_marcus',
+        author: {
+            name: 'Marcus Vance',
+            avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&h=200&auto=format&fit=crop',
+            username: 'marcus_vance',
+            isVerified: false
+        },
+        title: 'AsyncIO Internals: Avoiding Event Loop Blocking in Python 3.13',
+        aiSummary: 'Deep dive into GIL-free concurrency and free-threaded CPython benchmarks.',
+        content: 'With Python 3.13 experimental free-threading, we benchmarked CPU-bound tasks versus traditional multiprocessing. For mixed I/O and cryptographic hashing pipelines, eliminating the global interpreter lock yielded a 2.8x throughput increase across 16 worker cores without socket deadlock.',
+        mediaUrls: [
+            'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=800&auto=format&fit=crop',
+            'https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=800&auto=format&fit=crop',
+            'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=800&auto=format&fit=crop'
+        ],
+        mediaType: 'image',
+        category: 'Coding',
+        domain: 'Coding',
+        tags: ['Python', 'AsyncIO', 'Concurrency', 'Performance'],
+        visibility: 'public',
+        type: PostType.Feed,
+        stats: { likes: 98, views: 2450, comments: 19 },
+        likeCount: 98,
+        viewCount: 2450,
+        commentCount: 19,
+        createdAt: new Date(NOW - 6 * ONE_HOUR),
+    },
+    {
+        id: 'comm-post-mock-3',
+        communityId: 'design-1',
+        communityName: 'UI/UX Guild',
+        communityAvatarUrl: 'https://picsum.photos/seed/ui-ux-guild/200',
+        communityHandle: 'uiuxguild',
+        authorId: 'user_des_sarah',
+        author: {
+            name: 'Sarah Lindqvist',
+            avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&h=200&auto=format&fit=crop',
+            username: 'sarah_ui',
+            isVerified: true
+        },
+        title: 'Design Systems at Scale: Kinetic Micro-Interactions in Dark UI',
+        aiSummary: 'Principles for dark-mode terminal ergonomics and typographic legibility.',
+        content: 'When designing interfaces for technical operators, density is not the enemy — visual clutter is. By anchoring all components to a 4px modular grid, restricting chromatic contrast to semantic badges, and enforcing monospaced data alignment, cognitive load drops significantly during long sessions.',
+        mediaUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+        thumbnailUrl: 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?q=80&w=800&auto=format&fit=crop',
+        mediaType: 'video',
+        category: 'Design',
+        domain: 'Design',
+        tags: ['DesignSystems', 'Typography', 'Ergonomics', 'DarkUI'],
+        visibility: 'public',
+        type: PostType.Feed,
+        stats: { likes: 215, views: 4800, comments: 34 },
+        likeCount: 215,
+        viewCount: 4800,
+        commentCount: 34,
+        createdAt: new Date(NOW - 14 * ONE_HOUR),
+    },
+    {
+        id: 'comm-post-mock-4',
+        communityId: 'coding-3',
+        communityName: 'JS Junkies',
+        communityAvatarUrl: 'https://picsum.photos/seed/js-junkies/200',
+        communityHandle: 'jsjunkies',
+        authorId: 'user_js_tariq',
+        author: {
+            name: 'Tariq Al-Mansoor',
+            avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&h=200&auto=format&fit=crop',
+            username: 'tariq_dev',
+            isVerified: false
+        },
+        title: 'Fine-Grained Reactivity in TypeScript: Signals vs State Reducers',
+        aiSummary: 'Comparative benchmark of memory consumption and virtual DOM reconciliation.',
+        content: 'We migrated an interactive canvas benchmark to signal-based fine-grained dependency graphs. Frame rates remained locked at 60fps with 5,000 updating nodes, reducing unnecessary component rerenders by over 80%. What is your team strategy for state management in 2026?',
+        category: 'Coding',
+        domain: 'Coding',
+        tags: ['JavaScript', 'TypeScript', 'React', 'Architecture'],
+        visibility: 'public',
+        type: PostType.Feed,
+        stats: { likes: 176, views: 3900, comments: 42 },
+        likeCount: 176,
+        viewCount: 3900,
+        commentCount: 42,
+        createdAt: new Date(NOW - 22 * ONE_HOUR),
+    },
+    {
+        id: 'comm-post-mock-5',
+        communityId: 'ai-1',
+        communityName: 'AI ClubTech',
+        communityAvatarUrl: 'https://picsum.photos/seed/ai-clubtech/200',
+        communityHandle: 'aiclubtech',
+        authorId: 'user_ai_dr_chen',
+        author: {
+            name: 'Dr. Aaron Chen',
+            avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=200&h=200&auto=format&fit=crop',
+            username: 'dr_chen_ai',
+            isVerified: true
+        },
+        title: 'Quantized LLM Inference on Edge Hardware: 4-bit vs 8-bit Accuracy',
+        aiSummary: 'Empirical perplexity analysis of local open-weights models running on Apple Silicon & Snapdragon.',
+        content: 'Testing Llama-3 and Mistral quantized via AWQ and GGUF: 4-bit quantization preserves 96.4% of benchmark reasoning capability while cutting memory bandwidth by more than half. Edge inference is now fast enough for offline sub-100ms conversational loops.',
+        mediaUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1200&auto=format&fit=crop',
+        mediaType: 'image',
+        category: 'Artificial Intelligence',
+        domain: 'Artificial Intelligence',
+        tags: ['AI', 'LLM', 'EdgeCompute', 'Quantization'],
+        visibility: 'public',
+        type: PostType.Feed,
+        stats: { likes: 310, views: 7100, comments: 56 },
+        likeCount: 310,
+        viewCount: 7100,
+        commentCount: 56,
+        createdAt: new Date(NOW - 28 * ONE_HOUR),
+    }
+];
+
+

@@ -49,7 +49,9 @@ import MyCommunityCardSkeleton from '../communities/MyCommunityCardSkeleton';
 import DomainFilter from '../ui/DomainFilter';
 import { useCollabDashboardData } from '../spotlight/useCollabDashboardData';
 import SettingsSidebar from '../settings/SettingsSidebar';
-import { useCommunityMemberships } from '../../services/communityService';
+import { useCommunityMemberships, useUserJoinedCommunities } from '../../services/communityService';
+import type { JoinedCommunityRecord } from '../../services/communityService';
+import { PrivateCommunityInteractionModal } from '../communities/PrivateCommunityInteractionModal';
 import { mockCommunities } from '../../pages/Communities';
 
 const trendingTopics = [
@@ -1217,12 +1219,15 @@ const GoForItSidebar: React.FC<GoForItSidebarProps> = ({ filters, setFilters, se
     );
 };
 
-const MyCommunityCard: React.FC<{ community: MyCommunity }> = ({ community }) => (
-    <div className="bg-[#0c0c0e] p-2.5 border border-zinc-800 hover:border-zinc-600 flex items-center justify-between cursor-pointer transition-colors">
+const MyCommunityCard: React.FC<{ community: MyCommunity; onClick?: () => void }> = ({ community, onClick }) => (
+    <div 
+        onClick={onClick}
+        className="bg-[#0c0c0e] p-2.5 border border-zinc-800 hover:border-zinc-600 flex items-center justify-between cursor-pointer transition-colors group"
+    >
         <div className="flex items-center gap-2.5 overflow-hidden">
             <img src={community.avatarUrl} onError={handleImageError} alt={community.name} className="w-8 h-8 object-cover border border-zinc-800 flex-shrink-0" />
             <div className="overflow-hidden">
-                <p className="font-mono font-bold text-xs text-white truncate">{community.name}</p>
+                <p className="font-mono font-bold text-xs text-white truncate group-hover:text-emerald-400 transition-colors">{community.name}</p>
                 <p className="text-[11px] font-mono text-zinc-500 truncate">{community.latestMessage}</p>
             </div>
         </div>
@@ -1235,7 +1240,7 @@ const MyCommunityCard: React.FC<{ community: MyCommunity }> = ({ community }) =>
 
 const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 'setCommunityFilters' | 'communityView' | 'setCommunityView'>> = ({ communityFilters, setCommunityFilters, communityView, setCommunityView }) => {
     const { currentUser } = useAuth();
-    const { memberships } = useCommunityMemberships(currentUser);
+    const { joinedCommunities, loading: joinedLoading } = useUserJoinedCommunities(currentUser);
     const navigate = ReactRouterDOM.useNavigate();
     const location = ReactRouterDOM.useLocation();
     const isCommunityDetailPage = location.pathname.startsWith('/communities/') && location.pathname !== '/communities';
@@ -1248,6 +1253,7 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
     const [hasNewEvent, setHasNewEvent] = useState(true);
     const [isEventFilterMenuOpen, setIsEventFilterMenuOpen] = useState(false);
     const eventFilterMenuRef = useRef<HTMLDivElement>(null);
+    const [selectedInboxRecord, setSelectedInboxRecord] = useState<JoinedCommunityRecord | null>(null);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -1262,31 +1268,33 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
     useEffect(() => {
         if (communityView === 'my-communities') {
             setLoading(true);
-            const timer = setTimeout(() => setLoading(false), 1000);
+            const timer = setTimeout(() => setLoading(false), 500);
             return () => clearTimeout(timer);
         }
     }, [communityView]);
 
     const liveUserCommunities: MyCommunity[] = React.useMemo(() => {
-        if (!memberships || memberships.length === 0) {
+        if (!currentUser?.uid || !joinedCommunities || joinedCommunities.length === 0) {
             return [];
         }
-        return memberships.map(m => {
-            const mock = mockCommunities.find(c => c.id === m.communityId);
+        return joinedCommunities.map(item => {
+            const c = item.community;
+            const roleBadge = item.isOwner ? 'Owner' : item.isAdmin ? 'Admin' : 'Member';
             return {
-                id: m.communityId,
-                name: m.communityName || mock?.name || m.communityId,
-                latestMessage: 'Joined community',
-                timestamp: 'Active',
+                id: item.id,
+                name: c.name || item.id,
+                latestMessage: `${roleBadge} • ${c.category || 'General'}`,
+                timestamp: item.status === 'active' ? 'Active' : 'Pending',
                 hasNotification: false,
-                avatarUrl: m.communityAvatarUrl || mock?.avatarUrl || `https://picsum.photos/seed/${m.communityId}/200`,
-                category: m.communityCategory || mock?.category || 'General',
+                avatarUrl: c.avatarUrl || `https://picsum.photos/seed/${item.id}/200`,
+                category: c.category || 'General',
                 isLiveMembership: true,
             };
         });
-    }, [memberships]);
+    }, [currentUser?.uid, joinedCommunities]);
 
-    const activeMyCommunities = liveUserCommunities.length > 0 ? liveUserCommunities : mockMyCommunities;
+    // For authenticated users, strictly show live user communities. For unauthenticated/guest users, allow mock fallback for testing.
+    const activeMyCommunities = currentUser?.uid ? liveUserCommunities : mockMyCommunities;
 
     const filteredMyCommunities = activeMyCommunities.filter(community => {
         const searchMatch = community.name.toLowerCase().includes(myCommunitiesSearchTerm.toLowerCase());
@@ -1300,50 +1308,159 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
 
     const showOtherElements = !isSearchFocused && communityFilters.searchTerm.trim() === '';
 
+    const isLoadingState = loading || (Boolean(currentUser?.uid) && joinedLoading);
+
     return (
         <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
             <div className="h-full flex flex-col gap-5">
                 {communityView === 'my-communities' ? (
                      <>
-                        <div className="px-4 space-y-3">
-                             <div className="flex items-center justify-between">
-                                <button onClick={() => setCommunityView('leaderboard')} className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors">
-                                    <ArrowLeftIcon className="w-4 h-4" />
-                                    <span>// MY_COMMUNITIES</span>
-                                </button>
+                        <div className="px-4 space-y-4">
+                            <button 
+                                onClick={() => {
+                                    navigate('/communities');
+                                    if (setCommunityView) {
+                                        setCommunityView('leaderboard');
+                                    }
+                                    setSelectedInboxRecord(null);
+                                }} 
+                                className="w-full flex items-center gap-2.5 p-2.5 bg-[#0c0c0e] border border-zinc-800 hover:border-zinc-600 text-zinc-300 hover:text-white font-mono text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer group"
+                            >
+                                <ArrowLeftIcon className="w-4 h-4 flex-shrink-0 text-zinc-400 group-hover:text-white group-hover:-translate-x-0.5 transition-transform" />
+                                <span>// BACK TO COMMUNITIES</span>
+                            </button>
+
+                            <div className="space-y-1">
+                                <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">
+                                    // PRIVATE_INTERACTIONS
+                                </h3>
+                                <p className="text-[11px] font-mono text-zinc-500 leading-relaxed">
+                                    Member-only conversations across your collectives.
+                                </p>
                             </div>
-                            <DomainFilter
-                                domains={communityPageDomains}
-                                selectedDomains={myCommunityDomains}
-                                onSelectionChange={setMyCommunityDomains}
-                                buttonText="Filter by Domain"
-                            />
+
                             <div className="relative">
-                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
                                 <input
                                     type="search"
-                                    placeholder="SEARCH_MY_COMMUNITIES..."
+                                    placeholder="FILTER_INBOXES..."
                                     value={myCommunitiesSearchTerm}
                                     onChange={(e) => setMyCommunitiesSearchTerm(e.target.value)}
-                                    className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
+                                    className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-8 font-mono text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
                                 />
                             </div>
                         </div>
+
                         <div className="px-4 space-y-2 flex-1 overflow-y-auto no-scrollbar">
-                            {loading ? (
+                            {isLoadingState ? (
                                 <>
                                     <MyCommunityCardSkeleton />
                                     <MyCommunityCardSkeleton />
                                     <MyCommunityCardSkeleton />
                                 </>
-                            ) : filteredMyCommunities.length > 0 ? (
-                                filteredMyCommunities.map(community => (
-                                   <MyCommunityCard key={community.id} community={community} />
-                                ))
+                            ) : joinedCommunities.length > 0 ? (
+                                (() => {
+                                    const searchLower = myCommunitiesSearchTerm.trim().toLowerCase();
+                                    const inboxes = joinedCommunities.filter(item => {
+                                        if (!searchLower) return true;
+                                        return (
+                                            item.community.name.toLowerCase().includes(searchLower) ||
+                                            (item.community.handle && item.community.handle.toLowerCase().includes(searchLower))
+                                        );
+                                    });
+
+                                    if (inboxes.length === 0) {
+                                        return (
+                                            <p className="text-center font-mono text-xs text-zinc-600 pt-8">
+                                                // NO_INBOXES_MATCHING_FILTER
+                                            </p>
+                                        );
+                                    }
+
+                                    return inboxes.map(item => {
+                                        const c = item.community;
+                                        const isSelected = selectedInboxRecord?.id === item.id;
+                                        return (
+                                            <div
+                                                key={item.id}
+                                                onClick={() => setSelectedInboxRecord(item)}
+                                                className={`p-3 border transition-colors cursor-pointer group ${
+                                                    isSelected
+                                                        ? 'bg-zinc-900 border-emerald-500/50'
+                                                        : 'bg-[#0c0c0e] border border-zinc-800 hover:border-zinc-700'
+                                                }`}
+                                            >
+                                                <div className="flex items-start gap-2.5">
+                                                    {c.avatarUrl ? (
+                                                        <img
+                                                            src={c.avatarUrl}
+                                                            alt={c.name}
+                                                            onError={handleImageError}
+                                                            className="w-8 h-8 object-cover border border-zinc-800 flex-shrink-0"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-8 h-8 bg-zinc-950 border border-zinc-800 flex items-center justify-center flex-shrink-0">
+                                                            <UsersIcon className="w-4 h-4 text-zinc-500" />
+                                                        </div>
+                                                    )}
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-center justify-between gap-1">
+                                                            <p className="font-mono font-bold text-xs text-white truncate group-hover:text-emerald-400 transition-colors">
+                                                                {c.name}
+                                                            </p>
+                                                            <span className="text-[9px] font-mono text-zinc-500 whitespace-nowrap">
+                                                                {item.status === 'active' ? 'Active' : 'Pending'}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[11px] font-mono text-zinc-400 mt-0.5 truncate">
+                                                            Private community conversations
+                                                        </p>
+                                                        <div className="flex items-center gap-1.5 mt-1.5 text-[9px] font-mono">
+                                                            <span className={`px-1.5 py-0.5 uppercase font-bold tracking-wider ${
+                                                                item.isOwner
+                                                                    ? 'text-emerald-400 bg-emerald-950/40 border border-emerald-500/30'
+                                                                    : item.isAdmin
+                                                                    ? 'text-cyan-400 bg-cyan-950/40 border border-cyan-500/30'
+                                                                    : 'text-zinc-400 bg-zinc-900 border border-zinc-800'
+                                                            }`}>
+                                                                {item.role.toUpperCase()}
+                                                            </span>
+                                                            <span className="text-zinc-600">•</span>
+                                                            <span className="text-zinc-500 flex items-center gap-1">
+                                                                <span className="w-1.5 h-1.5 bg-emerald-400 inline-block"></span>
+                                                                <span>ENCLAVE</span>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()
                             ) : (
-                                <p className="text-center font-mono text-xs text-zinc-600 pt-8">// NO_COMMUNITIES_FOUND</p>
+                                <div className="text-center font-mono py-8 px-2 space-y-3">
+                                    <p className="text-xs text-zinc-500">
+                                        // NO_COMMUNITIES_JOINED
+                                    </p>
+                                    <p className="text-[11px] text-zinc-600 leading-relaxed">
+                                        Join technical collectives to establish private member interaction channels.
+                                    </p>
+                                    <button
+                                        onClick={() => setCommunityView('leaderboard')}
+                                        className="px-3 py-1.5 text-xs font-bold uppercase bg-white text-black hover:bg-zinc-200 border border-white transition-colors"
+                                    >
+                                        EXPLORE COMMUNITIES
+                                    </button>
+                                </div>
                             )}
                         </div>
+
+                        {/* Private interaction modal rendered when an inbox is selected */}
+                        <PrivateCommunityInteractionModal
+                            isOpen={Boolean(selectedInboxRecord)}
+                            onClose={() => setSelectedInboxRecord(null)}
+                            communityRecord={selectedInboxRecord}
+                        />
                     </>
                 ) : (
                     <div className='overflow-y-auto no-scrollbar flex flex-col gap-5'>

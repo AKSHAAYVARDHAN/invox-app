@@ -28,6 +28,7 @@ import {
 import DomainFilter from '../components/ui/DomainFilter';
 import { handleImageError } from '../components/utils/imageUtils';
 import MyCommunityCardSkeleton from '../components/communities/MyCommunityCardSkeleton';
+import MyCommunitiesInteractionHub from '../components/communities/MyCommunitiesInteractionHub';
 import ComingSoonPage from './ComingSoon';
 
 export const mockCommunities: Community[] = [
@@ -115,7 +116,7 @@ const PodiumCard = ({
     onToggleMembership?: (community: Community) => void;
 }) => {
     const navigate = ReactRouterDOM.useNavigate();
-    const displayedMembers = getAdjustedMemberCount(community.members, !!isMember);
+    const displayedMembers = getAdjustedMemberCount(community.members, !!isMember, community);
 
     return (
         <div className="relative bg-[#0c0c0e] p-4 border border-zinc-800 hover:border-zinc-700 transition-all duration-200 mb-4">
@@ -173,7 +174,7 @@ const CommunitySuggestionCard: React.FC<{
     onToggleMembership?: (community: Community) => void;
 }> = ({ community, isMember, isLoading, onToggleMembership }) => {
     const navigate = ReactRouterDOM.useNavigate();
-    const displayedMembers = getAdjustedMemberCount(community.members, !!isMember);
+    const displayedMembers = getAdjustedMemberCount(community.members, !!isMember, community);
 
     return (
         <div className="bg-[#0c0c0e] p-4 border border-zinc-800 hover:border-zinc-700 w-96 flex-shrink-0 flex flex-col h-full min-h-[12rem] transition-colors font-mono">
@@ -238,6 +239,8 @@ const CommunitySearchResultSkeleton = () => (
 
 
 const CommunitiesPage = () => {
+    const navigate = ReactRouterDOM.useNavigate();
+    const location = ReactRouterDOM.useLocation();
     const { currentUser } = useAuth();
     const { isMember, toggleMembership, actionLoadingId } = useCommunityMemberships(currentUser);
     const [firestoreCommunities, setFirestoreCommunities] = useState<Community[]>([]);
@@ -253,6 +256,15 @@ const CommunitiesPage = () => {
     }>();
 
     const { setRightSidebarVariant, communityFilters, setCommunityFilters, communityView, setCommunityView } = outletContext || {};
+
+    // Synchronize URL search params (e.g. ?view=my-communities or ?tab=my-communities) with state
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const viewParam = params.get('view') || params.get('tab');
+        if (viewParam === 'my-communities' && setCommunityView && communityView !== 'my-communities') {
+            setCommunityView('my-communities');
+        }
+    }, [location.search, setCommunityView, communityView]);
 
     // Real-time synchronization with primary Firestore communities collection
     useEffect(() => {
@@ -418,7 +430,12 @@ const CommunitiesPage = () => {
     }
 
     if (communityView === 'my-communities') {
-        return <ComingSoonPage pageName="My Communities" />;
+        return (
+            <MyCommunitiesInteractionHub 
+                onExploreAll={() => setCommunityView && setCommunityView('leaderboard')}
+                onOpenCommunity={(communityId) => navigate(`/communities/${communityId}`)}
+            />
+        );
     }
 
     const sortedCommunities = allCommunities
@@ -528,7 +545,7 @@ const CommunitiesPage = () => {
                 <div ref={leaderboardItemsContainerRef} className="divide-y divide-zinc-900">
                     {restOfLeaderboard.slice(0, visibleCount).map((community, index) => {
                         const memberActive = isMember(community.id);
-                        const displayedMembers = getAdjustedMemberCount(community.members, memberActive);
+                        const displayedMembers = getAdjustedMemberCount(community.members, memberActive, community);
                         return (
                          <div 
                             key={community.id} 

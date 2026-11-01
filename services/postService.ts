@@ -35,6 +35,10 @@ export interface CreatePostInput {
     channelId?: string;
     channelName?: string;
     channelAvatarUrl?: string;
+    communityId?: string;
+    communityName?: string;
+    communityAvatarUrl?: string;
+    communityHandle?: string;
     title?: string;
     oneLine: string;
     content: string;
@@ -69,6 +73,10 @@ export interface PostDocumentData {
     channelId?: string;
     channelName?: string;
     channelAvatarUrl?: string;
+    communityId?: string;
+    communityName?: string;
+    communityAvatarUrl?: string;
+    communityHandle?: string;
     authorId: string;
     author: {
         name: string;
@@ -182,6 +190,10 @@ export const normalizeFirestorePost = (id: string, data: Record<string, any>): P
         channelId: data.channelId || undefined,
         channelName: data.channelName || undefined,
         channelAvatarUrl: data.channelAvatarUrl || undefined,
+        communityId: data.communityId || data.channelId || undefined,
+        communityName: data.communityName || data.channelName || undefined,
+        communityAvatarUrl: data.communityAvatarUrl || data.channelAvatarUrl || undefined,
+        communityHandle: data.communityHandle || undefined,
         authorId: data.authorId || undefined,
         author: {
             name: data.author?.name || 'Invox Member',
@@ -407,6 +419,10 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
         channelId: finalChannelId,
         channelName: finalChannelName,
         channelAvatarUrl: finalChannelAvatar,
+        communityId: input.communityId || null,
+        communityName: input.communityName || null,
+        communityAvatarUrl: input.communityAvatarUrl || null,
+        communityHandle: input.communityHandle || null,
         authorId: currentUser.uid,
         author: {
             name: input.authorProfile?.displayName || currentUser.displayName || 'Invox Member',

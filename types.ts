@@ -100,6 +100,10 @@ export interface Post {
   channelId?: string;
   channelName?: string;
   channelAvatarUrl?: string;
+  communityId?: string;
+  communityName?: string;
+  communityAvatarUrl?: string;
+  communityHandle?: string;
   authorId?: string;
   author: {
     name: string;

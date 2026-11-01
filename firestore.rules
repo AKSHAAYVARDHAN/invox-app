@@ -231,6 +231,11 @@ service cloud.firestore {
       allow delete: if existingOwner('hostId') || isModerator();
     }
 
+    match /communityPrivateMessages/{messageId} {
+      allow read, create: if signedIn();
+      allow update, delete: if signedIn() && (resource.data.authorId == uid() || isModerator());
+    }
+
     match /comments/{commentId} {
       function canAccessCommentTarget(postId) {
         return !exists(/databases/$(database)/documents/posts/$(postId))

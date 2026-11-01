@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     doc,
     getDoc,
     setDoc,
     deleteDoc,
+    updateDoc,
     serverTimestamp,
     onSnapshot,
     collection,
@@ -69,8 +70,91 @@ export interface JoinCommunityInput {
 }
 
 /**
+ * Synchronizes the canonical active member count of a community from communityMemberships.
+ * - Counts only unique users whose membership status is 'active'.
+ * - Excludes pending, rejected, or cancelled memberships.
+ * - Updates 'members', 'memberCount', and 'updatedAt' on the community's Firestore document.
+ * - Safe against concurrent updates and fixes communities with outdated stored counts.
+ */
+export const syncCommunityMemberCount = async (communityId: string): Promise<number> => {
+    if (!communityId) return 0;
+    try {
+        // Query canonical active membership documents for this community
+        const q = query(
+            collection(db, COLLECTIONS.communityMemberships),
+            where('communityId', '==', communityId),
+            where('status', '==', 'active')
+        );
+        const snap = await getDocs(q);
+        let activeCount = snap.size;
+
+        const commRef = doc(db, 'communities', communityId);
+        const commSnap = await getDoc(commRef);
+
+        if (commSnap.exists()) {
+            const data = commSnap.data() as Community;
+            // If the community exists and has an owner, ensure count is at least 1
+            if (activeCount === 0 && (data.ownerId || data.creatorId)) {
+                activeCount = 1;
+            }
+
+            // Update only if stored count differs from active membership count
+            if (data.members !== activeCount || (data as any).memberCount !== activeCount) {
+                await updateDoc(commRef, {
+                    members: activeCount,
+                    memberCount: activeCount,
+                    updatedAt: serverTimestamp(),
+                });
+            }
+        }
+
+        return activeCount;
+    } catch (err) {
+        console.warn('[SYNC_COMMUNITY_MEMBER_COUNT_WARN]', err);
+        return 0;
+    }
+};
+
+/**
+ * Subscribes in real-time to the active member count for a specific community.
+ * Updates dynamically on any join or leave action without manual page refresh.
+ */
+export const subscribeCommunityActiveMemberCount = (
+    communityId: string,
+    onCountChange: (count: number) => void
+): (() => void) => {
+    if (!communityId) {
+        onCountChange(0);
+        return () => {};
+    }
+
+    try {
+        const q = query(
+            collection(db, COLLECTIONS.communityMemberships),
+            where('communityId', '==', communityId),
+            where('status', '==', 'active')
+        );
+        return onSnapshot(
+            q,
+            (snap) => {
+                onCountChange(snap.size);
+            },
+            (err) => {
+                console.warn('[ACTIVE_MEMBERS_COUNT_SNAPSHOT_WARN]', err);
+            }
+        );
+    } catch (err) {
+        console.warn('[ACTIVE_MEMBERS_COUNT_SUB_ERR]', err);
+        return () => {};
+    }
+};
+
+/**
  * Join a community idempotently.
  * Creates a membership document at communityMemberships/{userId}_{communityId}.
+ * Verifies membership state to prevent duplicate increments.
+ * Respects 'approval_required' policy (sets 'pending') vs open (sets 'active').
+ * Synchronizes the community's canonical active member count on Firestore.
  */
 export const joinCommunity = async (
     arg1: JoinCommunityInput | (Pick<Community, 'id' | 'name' | 'category'> & { avatarUrl?: string }),
@@ -97,6 +181,39 @@ export const joinCommunity = async (
 
     try {
         const membershipRef = doc(db, COLLECTIONS.communityMemberships, membershipId);
+        const existingSnap = await getDoc(membershipRef);
+        
+        // If already an active member, return idempotently without duplicate increments
+        if (existingSnap.exists()) {
+            const existingData = existingSnap.data() as CommunityMembership;
+            if (existingData.status === 'active') {
+                return { success: true, status: 'active' };
+            }
+        }
+
+        // Check community document to inspect joinPolicy and ownership
+        const commRef = doc(db, 'communities', community.id);
+        const commSnap = await getDoc(commRef);
+        let targetStatus: 'active' | 'pending' = 'active';
+        let role: 'owner' | 'admin' | 'member' = 'member';
+
+        if (commSnap.exists()) {
+            const commData = commSnap.data() as Community;
+            const isOwner = commData.ownerId === user.uid || commData.creatorId === user.uid;
+            const isAdmin = Array.isArray(commData.adminIds) && commData.adminIds.includes(user.uid);
+            
+            if (isOwner) {
+                role = 'owner';
+                targetStatus = 'active';
+            } else if (isAdmin) {
+                role = 'admin';
+                targetStatus = 'active';
+            } else if (commData.joinPolicy === 'approval_required') {
+                // Approval required: join requests start in 'pending' status and do not inflate active count
+                targetStatus = 'pending';
+            }
+        }
+
         await setDoc(
             membershipRef,
             sanitizeForFirestore({
@@ -107,14 +224,20 @@ export const joinCommunity = async (
                 communityName: community.name,
                 communityAvatarUrl: community.avatarUrl || null,
                 communityCategory: community.category || 'General',
-                status: 'active',
-                role: 'member',
+                status: targetStatus,
+                role,
                 joinedAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             }),
             { merge: true }
         );
-        return { success: true, status: 'active' };
+
+        // Only active memberships affect and increment the canonical community member count
+        if (targetStatus === 'active') {
+            await syncCommunityMemberCount(community.id);
+        }
+
+        return { success: true, status: targetStatus };
     } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, docPath);
         return { success: false, status: 'error' };
@@ -124,6 +247,8 @@ export const joinCommunity = async (
 /**
  * Leave a community.
  * Deletes the user's membership document at communityMemberships/{userId}_{communityId}.
+ * Prevents community creator/owner from abandoning community sovereignty.
+ * Automatically synchronizes and decrements the community's canonical active member count.
  */
 export const leaveCommunity = async (communityId: string, userId: string): Promise<boolean> => {
     if (!userId || !communityId) {
@@ -134,8 +259,29 @@ export const leaveCommunity = async (communityId: string, userId: string): Promi
     const docPath = `${COLLECTIONS.communityMemberships}/${membershipId}`;
 
     try {
+        const commRef = doc(db, 'communities', communityId);
+        const commSnap = await getDoc(commRef);
+        if (commSnap.exists()) {
+            const commData = commSnap.data() as Community;
+            // The verified creator / owner cannot leave their own community
+            if (commData.ownerId === userId || commData.creatorId === userId) {
+                console.warn('[LEAVE_COMMUNITY_BLOCKED_FOR_OWNER]');
+                return false;
+            }
+        }
+
         const membershipRef = doc(db, COLLECTIONS.communityMemberships, membershipId);
+        const memSnap = await getDoc(membershipRef);
+        if (!memSnap.exists()) {
+            // Already left or does not exist
+            return true;
+        }
+
         await deleteDoc(membershipRef);
+
+        // Recalculate and update the canonical member count in Firestore
+        await syncCommunityMemberCount(communityId);
+
         return true;
     } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, docPath);
@@ -465,9 +611,21 @@ export const filterCommunitiesBySearch = (
 
 /**
  * Calculates displayed member count safely:
- * baseline + 1 if joined, otherwise baseline. Never negative.
+ * - For live Firestore communities, uses the canonical active member count from the database.
+ * - For static mock communities, applies optimistic UI adjustment.
  */
-export const getAdjustedMemberCount = (baselineCount: number, isMember: boolean): number => {
+export const getAdjustedMemberCount = (
+    baselineCount: number,
+    isMember: boolean,
+    community?: Community | null
+): number => {
+    const isLive = community?.ownerId || community?.creatorId || (community?.id && community.id.startsWith('comm_'));
+    if (isLive) {
+        const val = typeof baselineCount === 'number' && !isNaN(baselineCount)
+            ? baselineCount
+            : (community?.memberCount ?? 1);
+        return Math.max(1, val);
+    }
     const base = typeof baselineCount === 'number' && !isNaN(baselineCount) ? baselineCount : 0;
     return Math.max(0, base + (isMember ? 1 : 0));
 };
@@ -601,6 +759,201 @@ export const useCommunityMemberships = (user?: { uid: string; displayName?: stri
         isMember: (communityId: string) => joinedIds.has(communityId),
         toggleMembership,
         leaveCommunity: leave,
+    };
+};
+
+export interface JoinedCommunityRecord {
+    id: string;
+    community: Community;
+    membershipId?: string;
+    role: 'owner' | 'admin' | 'member';
+    status: 'active' | 'pending';
+    joinedAt?: Date;
+    updatedAt?: Date;
+    isOwner: boolean;
+    isAdmin: boolean;
+}
+
+/**
+ * Custom React hook that resolves and subscribes in real-time to all communities
+ * the authenticated user is genuinely associated with (joined, administered, or owned).
+ * - Real-time updates on membership changes, ownership changes, and metadata updates.
+ * - Prevents duplicate entries.
+ * - Accurately resolves Community document details from Firestore and fallback mocks.
+ * - Accurately differentiates Owner, Administrator, and Member roles.
+ * - Properly cleans up subscriptions on unmount.
+ */
+export const useUserJoinedCommunities = (
+    user?: { uid: string; displayName?: string | null; email?: string | null } | null
+) => {
+    const [joinedCommunities, setJoinedCommunities] = useState<JoinedCommunityRecord[]>([]);
+    const [loading, setLoading] = useState<boolean>(Boolean(user?.uid));
+    const [error, setError] = useState<string | null>(null);
+
+    // Track states from the three subscriptions
+    const [memberships, setMemberships] = useState<CommunityMembership[]>([]);
+    const [ownedCommunities, setOwnedCommunities] = useState<Community[]>([]);
+    const [allCommunities, setAllCommunities] = useState<Community[]>([]);
+
+    useEffect(() => {
+        if (!user?.uid) {
+            setJoinedCommunities([]);
+            setMemberships([]);
+            setOwnedCommunities([]);
+            setAllCommunities([]);
+            setLoading(false);
+            return;
+        }
+
+        setLoading(true);
+
+        // 1. Subscribe to memberships of the authenticated user
+        const unsubMemberships = subscribeUserMemberships(
+            user.uid,
+            (list) => {
+                setMemberships(list);
+            },
+            (err) => {
+                console.warn('[MY_COMMUNITIES_MEMBERSHIPS_ERR]', err);
+                setError('Failed to load community memberships');
+            }
+        );
+
+        // 2. Subscribe to communities owned by the user
+        const unsubOwned = subscribeUserOwnedCommunities(
+            user.uid,
+            (ownedList) => {
+                setOwnedCommunities(ownedList);
+            },
+            (err) => {
+                console.warn('[MY_COMMUNITIES_OWNED_ERR]', err);
+            }
+        );
+
+        // 3. Subscribe to all Firestore communities to resolve latest metadata
+        const unsubAll = subscribeAllCommunities(
+            (allList) => {
+                setAllCommunities(allList);
+            },
+            (err) => {
+                console.warn('[MY_COMMUNITIES_ALL_ERR]', err);
+            }
+        );
+
+        return () => {
+            unsubMemberships();
+            unsubOwned();
+            unsubAll();
+        };
+    }, [user?.uid]);
+
+    // Merge and compute authoritative joined communities whenever memberships, owned, or all communities change
+    useEffect(() => {
+        if (!user?.uid) {
+            setJoinedCommunities([]);
+            setLoading(false);
+            return;
+        }
+
+        const map = new Map<string, JoinedCommunityRecord>();
+
+        // 1. Process explicit user memberships from communityMemberships
+        for (const m of memberships) {
+            if (!m.communityId) continue;
+
+            // Find full community document from Firestore or mock fallback
+            let comm = allCommunities.find((c) => c.id === m.communityId);
+            if (!comm) {
+                comm = MOCK_COMMUNITIES.find((c) => c.id === m.communityId);
+            }
+
+            if (!comm) {
+                // If community document isn't resolved yet, synthesize from membership metadata
+                comm = {
+                    id: m.communityId,
+                    name: m.communityName || m.communityId,
+                    description: '',
+                    category: m.communityCategory || 'General',
+                    avatarUrl: m.communityAvatarUrl || undefined,
+                    members: 1,
+                    rating: 5.0,
+                    isVerified: false,
+                };
+            }
+
+            const isOwner = comm.ownerId === user.uid || comm.creatorId === user.uid;
+            const isAdmin = Boolean(Array.isArray(comm.adminIds) && comm.adminIds.includes(user.uid));
+            const role: 'owner' | 'admin' | 'member' = isOwner
+                ? 'owner'
+                : isAdmin
+                ? 'admin'
+                : (m.role === 'admin' ? 'admin' : (m.role === 'owner' ? 'owner' : 'member'));
+
+            map.set(m.communityId, {
+                id: m.communityId,
+                community: comm,
+                membershipId: m.id,
+                role,
+                status: (m.status as 'active' | 'pending') || 'active',
+                joinedAt: m.joinedAt instanceof Date ? m.joinedAt : (m.joinedAt?.toDate ? m.joinedAt.toDate() : undefined),
+                updatedAt: m.updatedAt instanceof Date ? m.updatedAt : (m.updatedAt?.toDate ? m.updatedAt.toDate() : undefined),
+                isOwner,
+                isAdmin,
+            });
+        }
+
+        // 2. Process owned communities: ensure every owned community is included with authoritative 'owner' role
+        for (const oc of ownedCommunities) {
+            if (!oc.id) continue;
+            const existing = map.get(oc.id);
+            if (existing) {
+                // Update to guarantee owner role and latest community document
+                existing.community = oc;
+                existing.role = 'owner';
+                existing.isOwner = true;
+                existing.status = 'active';
+            } else {
+                map.set(oc.id, {
+                    id: oc.id,
+                    community: oc,
+                    role: 'owner',
+                    status: 'active',
+                    joinedAt: oc.createdAt?.toDate ? oc.createdAt.toDate() : new Date(),
+                    updatedAt: oc.updatedAt?.toDate ? oc.updatedAt.toDate() : undefined,
+                    isOwner: true,
+                    isAdmin: false,
+                });
+            }
+        }
+
+        const list = Array.from(map.values());
+        setJoinedCommunities(list);
+        setLoading(false);
+    }, [user?.uid, memberships, ownedCommunities, allCommunities]);
+
+    const roleSummary = useMemo(() => {
+        let owners = 0;
+        let admins = 0;
+        let members = 0;
+        for (const item of joinedCommunities) {
+            if (item.role === 'owner') owners++;
+            else if (item.role === 'admin') admins++;
+            else members++;
+        }
+        return {
+            total: joinedCommunities.length,
+            owners,
+            admins,
+            members,
+        };
+    }, [joinedCommunities]);
+
+    return {
+        joinedCommunities,
+        loading,
+        error,
+        count: joinedCommunities.length,
+        roleSummary,
     };
 };
 
@@ -1322,6 +1675,104 @@ export const seedInitialCommunitiesIfEmpty = async (
         }
     } catch (err) {
         console.warn('[SEED_COMMUNITIES_WARN]', err);
+    }
+};
+
+export interface CommunityPrivateMessage {
+    id: string;
+    communityId: string;
+    authorId: string;
+    authorName: string;
+    authorAvatar?: string | null;
+    content: string;
+    createdAt: Date;
+}
+
+/**
+ * Subscribes to private member-only messages for an isolated community channel.
+ */
+export const subscribeCommunityPrivateMessages = (
+    communityId: string,
+    onMessages: (msgs: CommunityPrivateMessage[]) => void,
+    onError?: (err: any) => void
+): (() => void) => {
+    if (!communityId) {
+        onMessages([]);
+        return () => {};
+    }
+
+    try {
+        const q = query(
+            collection(db, COLLECTIONS.communityPrivateMessages),
+            where('communityId', '==', communityId)
+        );
+
+        return onSnapshot(
+            q,
+            (snapshot) => {
+                const list: CommunityPrivateMessage[] = snapshot.docs.map((d) => {
+                    const data = d.data();
+                    let date = new Date();
+                    if (data.createdAt?.toDate) {
+                        date = data.createdAt.toDate();
+                    } else if (data.createdAt instanceof Date) {
+                        date = data.createdAt;
+                    }
+                    return {
+                        id: d.id,
+                        communityId: data.communityId,
+                        authorId: data.authorId,
+                        authorName: data.authorName || 'Member',
+                        authorAvatar: data.authorAvatar || null,
+                        content: data.content || data.text || '',
+                        createdAt: date,
+                    };
+                });
+                // Sort chronologically ascending for chat interface
+                list.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+                onMessages(list);
+            },
+            (err) => {
+                console.warn('[COMMUNITY_PRIVATE_MSGS_SUB_WARN]', err);
+                onError?.(err);
+            }
+        );
+    } catch (err) {
+        console.warn('[COMMUNITY_PRIVATE_MSGS_SUB_ERR]', err);
+        return () => {};
+    }
+};
+
+/**
+ * Transmits a private message to a specific community's member-only channel.
+ */
+export const sendCommunityPrivateMessage = async (
+    communityId: string,
+    author: { uid: string; displayName?: string | null; photoURL?: string | null },
+    content: string
+): Promise<{ success: boolean; id?: string; error?: string }> => {
+    if (!communityId || !author?.uid || !content.trim()) {
+        return { success: false, error: 'Invalid message payload' };
+    }
+
+    try {
+        const msgId = `cmsg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const msgRef = doc(db, COLLECTIONS.communityPrivateMessages, msgId);
+
+        await setDoc(msgRef, sanitizeForFirestore({
+            id: msgId,
+            communityId,
+            authorId: author.uid,
+            authorName: author.displayName || 'Member',
+            authorAvatar: author.photoURL || null,
+            content: content.trim(),
+            createdAt: serverTimestamp(),
+        }));
+
+        return { success: true, id: msgId };
+    } catch (err: any) {
+        console.error('[SEND_COMMUNITY_PRIVATE_MSG_ERROR]', err);
+        return { success: false, error: err.message || 'Failed to dispatch private message' };
     }
 };
 

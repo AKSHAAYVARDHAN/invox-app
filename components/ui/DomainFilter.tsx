@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
     ChevronDownIcon, 
     FireIcon, 
+    FilterIcon,
     CheckIcon,
     MagnifyingGlassIcon,
     ClipboardListIcon,
@@ -23,6 +24,8 @@ interface DomainFilterProps {
     onToggleTrending?: () => void;
     mode?: 'ALL' | 'READ' | 'LISTEN';
     onModeChange?: (mode: 'ALL' | 'READ' | 'LISTEN') => void;
+    singleSelect?: boolean;
+    closeOnSelect?: boolean;
 }
 
 const DomainFilter: React.FC<DomainFilterProps> = ({ 
@@ -30,11 +33,13 @@ const DomainFilter: React.FC<DomainFilterProps> = ({
     onSelectionChange, 
     domains, 
     buttonText = 'DOMAINS',
-    className = '',
+    className = 'mb-4',
     isTrending = false,
     onToggleTrending,
     mode,
-    onModeChange
+    onModeChange,
+    singleSelect = false,
+    closeOnSelect
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -77,6 +82,15 @@ const DomainFilter: React.FC<DomainFilterProps> = ({
     }, [isOpen]);
 
     const handleToggleDomain = useCallback((domainName: string) => {
+        if (singleSelect) {
+            const isCurrentlySelected = selectedDomains.length === 1 && selectedDomains[0].toLowerCase() === domainName.toLowerCase();
+            const newSelection = isCurrentlySelected ? [] : [domainName];
+            onSelectionChange(newSelection);
+            if (closeOnSelect ?? true) {
+                setIsOpen(false);
+            }
+            return;
+        }
         const exists = selectedDomains.includes(domainName);
         let newSelection: string[];
         if (exists) {
@@ -85,11 +99,17 @@ const DomainFilter: React.FC<DomainFilterProps> = ({
             newSelection = [...selectedDomains, domainName];
         }
         onSelectionChange(newSelection);
-    }, [selectedDomains, onSelectionChange]);
+        if (closeOnSelect) {
+            setIsOpen(false);
+        }
+    }, [selectedDomains, onSelectionChange, singleSelect, closeOnSelect]);
 
     const handleSelectAll = useCallback(() => {
         onSelectionChange([]);
-    }, [onSelectionChange]);
+        if (closeOnSelect || singleSelect) {
+            setIsOpen(false);
+        }
+    }, [onSelectionChange, closeOnSelect, singleSelect]);
 
     const handleClear = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
@@ -119,7 +139,7 @@ const DomainFilter: React.FC<DomainFilterProps> = ({
     const showAllOption = !trimmedSearch || 'all domains'.includes(trimmedSearch);
 
     return (
-        <div className={`relative w-full mb-4 ${className}`} ref={dropdownRef}>
+        <div className={`relative w-full ${className}`} ref={dropdownRef}>
             {/* Collapsed Domain Bar Trigger Container */}
             <div
                 className={`group flex items-center justify-between w-full px-4 py-2.5 text-xs font-mono text-left transition-all duration-150 border ${
@@ -237,11 +257,11 @@ const DomainFilter: React.FC<DomainFilterProps> = ({
                         <button
                             type="button"
                             onClick={() => setIsOpen(!isOpen)}
-                            className="flex items-center gap-1 text-zinc-300 font-mono text-[10px] hover:text-white"
+                            className="flex items-center gap-1.5 text-zinc-300 font-mono text-[10px] hover:text-white"
                             title="Toggle domain selector"
                         >
-                            <FireIcon className="w-3.5 h-3.5 text-zinc-400" />
-                            <span className="hidden sm:inline font-bold">ACTIVE</span>
+                            <FilterIcon className="w-3.5 h-3.5 text-zinc-400" />
+                            <span className="font-bold">FILTER</span>
                         </button>
                     ) : (
                         <button
@@ -250,7 +270,7 @@ const DomainFilter: React.FC<DomainFilterProps> = ({
                             className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 font-mono text-[10px]"
                             title="Filter by domain"
                         >
-                            <FireIcon className="w-4 h-4 text-zinc-400" />
+                            <FilterIcon className="w-3.5 h-3.5 text-zinc-400" />
                             <span>FILTER</span>
                         </button>
                     )}
@@ -286,7 +306,7 @@ const DomainFilter: React.FC<DomainFilterProps> = ({
 
                     {/* Sub-bar: Instructions & Clear Action */}
                     <div className="px-3 py-1.5 bg-black/40 border-b border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-500">
-                        <span>// SELECT ONE OR MULTIPLE</span>
+                        <span>{singleSelect ? '// SELECT DOMAIN' : '// SELECT ONE OR MULTIPLE'}</span>
                         {!isAllSelected && (
                             <button
                                 type="button"

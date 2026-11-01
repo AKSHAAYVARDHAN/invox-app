@@ -4,6 +4,7 @@ import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
     subscribeUserOwnedCommunities,
+    syncCommunityMemberCount,
     deleteCommunity 
 } from '../../services/communityService';
 import type { Community } from '../../types';
@@ -57,6 +58,12 @@ export const MyCommunitiesManager: React.FC = () => {
             (communities) => {
                 setOwnedCommunities(communities);
                 setLoading(false);
+                // Synchronize and heal any outdated canonical member counts for owned collectives
+                communities.forEach(c => {
+                    if (c?.id) {
+                        syncCommunityMemberCount(c.id);
+                    }
+                });
             },
             (err) => {
                 console.error('[SUBSCRIBE_OWNED_COMMUNITIES_ERROR]', err);

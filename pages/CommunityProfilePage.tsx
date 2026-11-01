@@ -5,6 +5,8 @@ import {
     subscribeCommunity, 
     useCommunityMemberships, 
     getAdjustedMemberCount,
+    subscribeCommunityActiveMemberCount,
+    syncCommunityMemberCount,
     canUserManageCommunity,
     isCommunityOwner,
     isCommunityAdmin,
@@ -13,13 +15,16 @@ import {
 } from '../services/communityService';
 import type { Community } from '../types';
 import { mockCommunities } from './Communities';
-import { MOCK_COMMUNITIES } from '../services/communitiesDemoData';
+import { MOCK_COMMUNITIES, MOCK_COMMUNITY_EVENTS } from '../services/communitiesDemoData';
 import { 
     UsersIcon, 
     ShieldCheckIcon, 
     StarIcon, 
     ArrowLeftIcon,
-    PencilSquareIcon
+    PencilSquareIcon,
+    ChatIcon,
+    GlobeAltIcon,
+    PlayIcon
 } from '../components/ui/Icons';
 import { handleImageError } from '../components/utils/imageUtils';
 import { EditCollectiveIdentityModal } from '../components/communities/EditCollectiveIdentityModal';
@@ -36,6 +41,7 @@ const formatNumber = (num?: number): string => {
 export const CommunityProfilePage: React.FC = () => {
     const { communityId } = ReactRouterDOM.useParams<{ communityId: string }>();
     const navigate = ReactRouterDOM.useNavigate();
+    const [searchParams, setSearchParams] = ReactRouterDOM.useSearchParams();
     const { currentUser, userProfile } = useAuth();
 
     // Connect to parent layout's context sidebar
@@ -67,8 +73,74 @@ export const CommunityProfilePage: React.FC = () => {
 
     const [community, setCommunity] = useState<Community | null>(initialCommunity);
     const [loading, setLoading] = useState<boolean>(!initialCommunity);
-    const [activeTab, setActiveTab] = useState<CommunityTab>('overview');
+    
+    // Sync activeTab with URL ?tab= query parameter
+    const tabFromUrl = searchParams.get('tab') as CommunityTab | null;
+    const [activeTab, setActiveTab] = useState<CommunityTab>(() => {
+        if (tabFromUrl && ['overview', 'conclave', 'memory', 'influence', 'health'].includes(tabFromUrl)) {
+            return tabFromUrl;
+        }
+        return 'overview';
+    });
+
+    useEffect(() => {
+        if (tabFromUrl && ['overview', 'conclave', 'memory', 'influence', 'health'].includes(tabFromUrl) && tabFromUrl !== activeTab) {
+            setActiveTab(tabFromUrl);
+        }
+    }, [tabFromUrl]);
+
+    const handleTabChange = (newTab: CommunityTab) => {
+        setActiveTab(newTab);
+        setSearchParams(prev => {
+            const next = new URLSearchParams(prev);
+            next.set('tab', newTab);
+            return next;
+        });
+    };
+
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [activeMemberCount, setActiveMemberCount] = useState<number | null>(null);
+
+    // Conclave private discussion board in-memory state
+    const [privateDiscussions, setPrivateDiscussions] = useState<Array<{
+        id: string;
+        authorName: string;
+        authorRole: string;
+        timestamp: string;
+        content: string;
+    }>>([
+        {
+            id: 'pd-1',
+            authorName: 'Alex Mercer',
+            authorRole: 'Admin',
+            timestamp: '1h ago',
+            content: 'Welcome to the private member conclave. Agenda items for the upcoming collective sync are pinned below. Please review beforehand.',
+        },
+        {
+            id: 'pd-2',
+            authorName: 'Marcus Chen',
+            authorRole: 'Member',
+            timestamp: '3h ago',
+            content: 'Excited for this week’s session. Has anyone drafted the preliminary benchmarks for the decentralized pipeline test?',
+        }
+    ]);
+    const [newDiscussionText, setNewDiscussionText] = useState('');
+
+    const handlePostDiscussion = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newDiscussionText.trim()) return;
+        setPrivateDiscussions(prev => [
+            {
+                id: `pd-${Date.now()}`,
+                authorName: currentUser?.displayName || userProfile?.displayName || 'Active Member',
+                authorRole: isCommunityOwner(community, currentUser?.uid) ? 'Owner' : isCommunityAdmin(community, currentUser?.uid) ? 'Admin' : 'Member',
+                timestamp: 'Just now',
+                content: newDiscussionText.trim(),
+            },
+            ...prev
+        ]);
+        setNewDiscussionText('');
+    };
 
     // Existing community membership system integration
     const { isMember, memberships, toggleMembership, leaveCommunity: hookLeaveCommunity, actionLoadingId } = useCommunityMemberships(currentUser);
@@ -88,6 +160,27 @@ export const CommunityProfilePage: React.FC = () => {
     const normalizedGuidelines = useMemo(() => {
         return community?.guidelines ? normalizeGuidelines(community.guidelines) : [];
     }, [community?.guidelines]);
+
+    // Real-time active member count subscription & background synchronization
+    useEffect(() => {
+        if (!communityId) {
+            setActiveMemberCount(null);
+            return;
+        }
+
+        const unsubCount = subscribeCommunityActiveMemberCount(communityId, (count) => {
+            setActiveMemberCount(count);
+        });
+
+        // Ensure canonical active count is persisted on community record
+        syncCommunityMemberCount(communityId).then((synced) => {
+            if (typeof synced === 'number' && synced > 0) {
+                setActiveMemberCount(synced);
+            }
+        });
+
+        return () => unsubCount();
+    }, [communityId]);
 
     useEffect(() => {
         if (!communityId) {
@@ -193,9 +286,12 @@ export const CommunityProfilePage: React.FC = () => {
         );
     }
 
-    // Member count calculation using existing safe adjustment
-    const baselineMembers = community.members || (community as any).memberCount || 0;
-    const displayedMembers = getAdjustedMemberCount(baselineMembers, membershipActive);
+    // Member count calculation: real-time active count for live communities, safe adjustment for mocks
+    const isLive = Boolean(community.ownerId || community.creatorId || (community.id && community.id.startsWith('comm_')));
+    const baselineMembers = community.members ?? (community as any).memberCount ?? 0;
+    const displayedMembers = (activeMemberCount !== null && (activeMemberCount > 0 || isLive))
+        ? activeMemberCount
+        : getAdjustedMemberCount(baselineMembers, membershipActive, community);
 
     // Additional metadata with normalized collective identity structures
     const topics: string[] = (community as any).topics || [];
@@ -349,14 +445,14 @@ export const CommunityProfilePage: React.FC = () => {
             <div className="border-b border-zinc-800 flex items-center gap-1 overflow-x-auto no-scrollbar w-full min-w-0 max-w-full">
                 {[
                     { id: 'overview', label: '01. OVERVIEW & IDENTITY', active: true },
-                    { id: 'conclave', label: '02. CONCLAVE', staged: true },
+                    { id: 'conclave', label: '02. CONCLAVE & PRIVATE SPACE', active: true },
                     { id: 'memory', label: '03. COLLECTIVE MEMORY', staged: true },
                     { id: 'influence', label: '04. MEMBER INFLUENCE', staged: true },
                     { id: 'health', label: '05. COMMUNITY HEALTH', staged: true },
                 ].map((tab) => (
                     <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id as CommunityTab)}
+                        onClick={() => handleTabChange(tab.id as CommunityTab)}
                         className={`px-3 sm:px-4 py-2.5 sm:py-3 font-bold uppercase tracking-wider text-xs whitespace-nowrap transition-all border-b-2 -mb-[1px] flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ${
                             activeTab === tab.id
                                 ? 'border-white text-white bg-zinc-900/40'
@@ -581,14 +677,216 @@ export const CommunityProfilePage: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            ) : activeTab === 'conclave' ? (
+                /* Private Conclave & Member Interaction Hub with strict access verification */
+                !membershipActive && !canManage ? (
+                    /* Access Restricted Barrier for Non-Members */
+                    <div className="bg-[#0c0c0e] border border-red-950/60 p-6 sm:p-12 text-center space-y-4 w-full min-w-0">
+                        <div className="w-12 h-12 mx-auto bg-red-950/40 border border-red-800/80 flex items-center justify-center text-red-400">
+                            <ShieldCheckIcon className="w-6 h-6" />
+                        </div>
+                        <span className="text-[10px] text-red-400 uppercase tracking-widest block font-bold">
+                            // ACCESS_RESTRICTED // PRIVATE_CONCLAVE
+                        </span>
+                        <h3 className="text-base sm:text-lg font-bold text-white uppercase tracking-wide">
+                            VERIFIED MEMBERS ONLY
+                        </h3>
+                        <p className="text-zinc-400 text-xs max-w-md mx-auto leading-relaxed break-words">
+                            The Conclave, internal discussion channels, and private gatherings for <span className="text-white font-bold">{community.name}</span> are strictly restricted to authorized members.
+                        </p>
+                        <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
+                            <button
+                                onClick={handleJoinClick}
+                                disabled={isActionLoading}
+                                className="px-5 py-2.5 bg-white text-black font-bold uppercase hover:bg-zinc-200 transition-colors text-xs"
+                            >
+                                {isActionLoading ? 'JOINING...' : 'JOIN COMMUNITY TO ENTER'}
+                            </button>
+                            <button
+                                onClick={() => handleTabChange('overview')}
+                                className="px-4 py-2.5 bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white uppercase font-bold text-xs transition-colors"
+                            >
+                                Return to Overview
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    /* Authorized Member Conclave Space */
+                    <div className="space-y-6 w-full min-w-0 font-mono">
+                        {/* Security & Access Banner */}
+                        <div className="bg-[#0c0c0e] border border-zinc-800 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-gradient-to-r from-emerald-950/30 via-[#0c0c0e] to-black border-l-4 border-l-emerald-500">
+                            <div className="flex items-center gap-2.5">
+                                <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse flex-shrink-0" />
+                                <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
+                                            // 02. PRIVATE CONCLAVE // AUTHORIZED_MEMBER_SESSION
+                                        </h3>
+                                        <span className="text-[9px] px-1.5 py-0.2 bg-emerald-950/60 border border-emerald-800 text-emerald-300 font-bold uppercase">
+                                            {isCommunityOwner(community, currentUser?.uid) ? 'OWNER / CREATOR' : isCommunityAdmin(community, currentUser?.uid) ? 'ADMINISTRATOR' : 'ACTIVE_MEMBER'}
+                                        </span>
+                                    </div>
+                                    <p className="text-[10px] text-zinc-400 mt-0.5">
+                                        Encrypted internal space for {community.name} • No external public access
+                                    </p>
+                                </div>
+                            </div>
+                            <span className="text-[10px] text-zinc-500 uppercase border border-zinc-800 px-2 py-1 bg-black self-start sm:self-auto">
+                                SECURE_CHANNEL
+                            </span>
+                        </div>
+
+                        {/* Conclave Gatherings & Virtual Rooms */}
+                        <div className="bg-[#0c0c0e] border border-zinc-800 p-4 sm:p-5 space-y-4">
+                            <div className="flex items-center justify-between border-b border-zinc-850 pb-2">
+                                <div className="flex items-center gap-2">
+                                    <PlayIcon className="w-4 h-4 text-emerald-400" />
+                                    <h4 className="font-bold text-white uppercase tracking-wider text-xs sm:text-sm">
+                                        // SCHEDULED_CONCLAVES_&_VIRTUAL_ROOMS
+                                    </h4>
+                                </div>
+                                <span className="text-[10px] text-zinc-500 uppercase">MEMBER_GATHERINGS</span>
+                            </div>
+
+                            <div className="space-y-3 pt-1">
+                                {(MOCK_COMMUNITY_EVENTS.filter(e => e.communityId === community.id).length > 0 
+                                    ? MOCK_COMMUNITY_EVENTS.filter(e => e.communityId === community.id)
+                                    : [
+                                        {
+                                            id: `conclave-${community.id}-1`,
+                                            communityId: community.id,
+                                            communityName: community.name,
+                                            communityAvatarUrl: community.avatarUrl,
+                                            title: `${community.name} Member Assembly & Roadmap Sync`,
+                                            description: `Confidential internal conclave for active members of ${community.name}. Discussion on upcoming collective milestones, resource allocations, and open member Q&A.`,
+                                            format: 'online',
+                                            date: 'THURSDAY, 19:00',
+                                            time: '19:00 UTC',
+                                            timezone: 'UTC',
+                                            location: 'Virtual Conclave Room #1',
+                                            virtualUrl: 'https://meet.google.com/invox-conclave-' + community.id,
+                                            hostName: community.name + ' Council',
+                                            capacity: 100,
+                                            attendeeCount: 38,
+                                            attendeeIds: [],
+                                            status: 'scheduled',
+                                            createdAt: new Date(),
+                                        }
+                                    ]
+                                ).map((gathering) => (
+                                    <div key={gathering.id} className="p-4 bg-black border border-zinc-800 space-y-3">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="px-2 py-0.5 bg-zinc-900 border border-zinc-700 text-emerald-400 text-[10px] uppercase font-bold">
+                                                    {gathering.format}
+                                                </span>
+                                                <span className="text-[11px] text-zinc-400 font-bold">
+                                                    {gathering.date} // {gathering.time}
+                                                </span>
+                                            </div>
+                                            <span className="text-[10px] text-zinc-500">
+                                                ATTENDEES: {gathering.attendeeCount} / {gathering.capacity || 100}
+                                            </span>
+                                        </div>
+
+                                        <div>
+                                            <h5 className="font-bold text-white text-xs sm:text-sm">{gathering.title}</h5>
+                                            <p className="text-zinc-400 text-xs mt-1 leading-relaxed">{gathering.description}</p>
+                                        </div>
+
+                                        <div className="pt-2 flex items-center justify-between border-t border-zinc-850">
+                                            <span className="text-[10px] text-zinc-500">
+                                                HOST: {gathering.hostName || 'Collective Council'}
+                                            </span>
+                                            {gathering.virtualUrl && (
+                                                <a
+                                                    href={gathering.virtualUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="px-3 py-1.5 bg-white text-black font-bold uppercase text-[11px] hover:bg-zinc-200 transition-colors flex items-center gap-1.5"
+                                                >
+                                                    <PlayIcon className="w-3 h-3" />
+                                                    <span>JOIN VIRTUAL ROOM</span>
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Internal Member Discussion Stream */}
+                        <div className="bg-[#0c0c0e] border border-zinc-800 p-4 sm:p-5 space-y-4">
+                            <div className="flex items-center justify-between border-b border-zinc-850 pb-2">
+                                <div className="flex items-center gap-2">
+                                    <ChatIcon className="w-4 h-4 text-zinc-400" />
+                                    <h4 className="font-bold text-white uppercase tracking-wider text-xs sm:text-sm">
+                                        // INTERNAL_MEMBER_DISCUSSIONS
+                                    </h4>
+                                </div>
+                                <span className="text-[10px] text-zinc-500 uppercase">MEMBER_FEED</span>
+                            </div>
+
+                            {/* Quick Discussion Composer */}
+                            <form onSubmit={handlePostDiscussion} className="p-3 bg-black border border-zinc-850 space-y-2">
+                                <label className="text-[10px] text-zinc-400 uppercase tracking-wider block">
+                                    // SHARE_WITH_MEMBERS
+                                </label>
+                                <textarea
+                                    value={newDiscussionText}
+                                    onChange={(e) => setNewDiscussionText(e.target.value)}
+                                    placeholder="Post an encrypted update, proposal thought, or technical query to members..."
+                                    rows={2}
+                                    className="w-full bg-[#0c0c0e] border border-zinc-800 p-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600 font-mono resize-none"
+                                />
+                                <div className="flex justify-end">
+                                    <button
+                                        type="submit"
+                                        disabled={!newDiscussionText.trim()}
+                                        className="px-4 py-1.5 bg-white text-black font-bold uppercase text-[11px] hover:bg-zinc-200 transition-colors disabled:opacity-40"
+                                    >
+                                        POST TO CONCLAVE
+                                    </button>
+                                </div>
+                            </form>
+
+                            {/* Discussion Stream */}
+                            <div className="space-y-2.5 pt-1">
+                                {privateDiscussions.map((item) => (
+                                    <div key={item.id} className="p-3 bg-black border border-zinc-850 space-y-1.5">
+                                        <div className="flex items-center justify-between text-[11px]">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-white">{item.authorName}</span>
+                                                <span className="text-[9px] uppercase px-1 py-0.2 bg-zinc-900 border border-zinc-800 text-zinc-400">
+                                                    {item.authorRole}
+                                                </span>
+                                            </div>
+                                            <span className="text-zinc-600 text-[10px]">{item.timestamp}</span>
+                                        </div>
+                                        <p className="text-zinc-300 text-xs leading-relaxed break-words">{item.content}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Return to Overview Button */}
+                        <div className="pt-2">
+                            <button
+                                onClick={() => handleTabChange('overview')}
+                                className="px-4 py-2 bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white uppercase font-bold text-xs transition-colors"
+                            >
+                                ← Return to Community Overview
+                            </button>
+                        </div>
+                    </div>
+                )
             ) : (
                 /* Staged Pillars Placeholder: Clean architectural slot ready for future tasks */
-                <div className="bg-[#0c0c0e] border border-zinc-800 p-6 sm:p-10 text-center space-y-4 w-full min-w-0">
+                <div className="bg-[#0c0c0e] border border-zinc-800 p-6 sm:p-10 text-center space-y-4 w-full min-w-0 font-mono">
                     <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">
                         // PILLAR_STAGED_FOR_FUTURE_CYCLE
                     </span>
                     <h3 className="text-base sm:text-lg font-bold text-white uppercase tracking-wide">
-                        {activeTab === 'conclave' && '02. CONCLAVE GATHERINGS'}
                         {activeTab === 'memory' && '03. COLLECTIVE MEMORY'}
                         {activeTab === 'influence' && '04. MEMBER INFLUENCE & PROPOSALS'}
                         {activeTab === 'health' && '05. COMMUNITY HEALTH INDICATORS'}
@@ -598,7 +896,7 @@ export const CommunityProfilePage: React.FC = () => {
                     </p>
                     <div className="pt-2">
                         <button
-                            onClick={() => setActiveTab('overview')}
+                            onClick={() => handleTabChange('overview')}
                             className="px-4 py-2 bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white uppercase font-bold text-xs transition-colors"
                         >
                             Return to Overview

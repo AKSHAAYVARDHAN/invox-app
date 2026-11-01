@@ -18,7 +18,7 @@ const formatNumber = (num: number) => {
 };
 
 const CommunityCard: React.FC<CommunityCardProps> = ({ community, isMember, isLoading, onToggleMembership }) => {
-    const displayedMembers = getAdjustedMemberCount(community.members, !!isMember);
+    const displayedMembers = getAdjustedMemberCount(community.members, !!isMember, community);
 
     return (
         <div className="bg-[#0c0c0e] border border-zinc-800 p-4 w-64 flex-shrink-0 hover:border-zinc-700 transition-colors">
