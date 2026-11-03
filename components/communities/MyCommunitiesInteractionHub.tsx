@@ -36,7 +36,6 @@ import {
 } from '../ui/Icons';
 import DomainFilter from '../ui/DomainFilter';
 import { handleImageError } from '../utils/imageUtils';
-import { CreateCommunityPostModal } from './CreateCommunityPostModal';
 import { PrivateCommunityInteractionModal } from './PrivateCommunityInteractionModal';
 import { CommunityFeedCard } from './CommunityFeedCard';
 
@@ -60,6 +59,8 @@ export const MyCommunitiesInteractionHub: React.FC<MyCommunitiesInteractionHubPr
 }) => {
     const { currentUser, userProfile } = useAuth();
     const navigate = ReactRouterDOM.useNavigate();
+    const [searchParams] = ReactRouterDOM.useSearchParams();
+    const location = ReactRouterDOM.useLocation();
 
     const { joinedCommunities, loading: membershipsLoading } = useUserJoinedCommunities(currentUser);
     const [rawFirestorePosts, setRawFirestorePosts] = useState<Post[]>([]);
@@ -75,9 +76,42 @@ export const MyCommunitiesInteractionHub: React.FC<MyCommunitiesInteractionHubPr
     const [dropdownSearch, setDropdownSearch] = useState('');
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // Modals
-    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    // Modals & feedback state
     const [selectedInboxRecord, setSelectedInboxRecord] = useState<JoinedCommunityRecord | null>(null);
+    const [successBanner, setSuccessBanner] = useState<string | null>(null);
+
+    // Sync selected community from query parameters or location state if provided
+    useEffect(() => {
+        const commParam = searchParams.get('community') || searchParams.get('communityId') || (location.state as any)?.communityId;
+        if (commParam && commParam !== selectedCommunityFilter) {
+            setSelectedCommunityFilter(commParam);
+        }
+    }, [searchParams, location.state, selectedCommunityFilter]);
+
+    // Handle post publication success notification when redirected back
+    useEffect(() => {
+        const msg = (location.state as any)?.successMessage;
+        if (msg) {
+            setSuccessBanner(msg);
+            const timer = setTimeout(() => setSuccessBanner(null), 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [location.state]);
+
+    // Navigate to unified detailed publisher under My Space -> Uploads -> Communities
+    const handleOpenCreatePost = () => {
+        const hasSpecificCommunity = selectedCommunityFilter !== 'ALL';
+        const commParam = hasSpecificCommunity ? `&communityId=${encodeURIComponent(selectedCommunityFilter)}` : '';
+        const returnUrl = `/communities?view=my-communities${hasSpecificCommunity ? `&community=${encodeURIComponent(selectedCommunityFilter)}` : ''}`;
+        navigate(`/myspace/uploads?tab=Communities&create=true&from=communities${commParam}`, {
+            state: {
+                from: 'communities',
+                fromCommunities: true,
+                communityId: hasSpecificCommunity ? selectedCommunityFilter : undefined,
+                returnUrl,
+            }
+        });
+    };
 
     // Likes state tracking for snappy feedback
     const [likedPostIds, setLikedPostIds] = useState<Set<string>>(new Set());
@@ -373,6 +407,22 @@ export const MyCommunitiesInteractionHub: React.FC<MyCommunitiesInteractionHubPr
 
     return (
         <div className="space-y-6 font-mono">
+            {/* Global Success Banner */}
+            {successBanner && (
+                <div className="p-3.5 bg-emerald-950/50 border border-emerald-800 text-emerald-300 text-xs flex items-center justify-between animate-fadeIn">
+                    <div className="flex items-center gap-2">
+                        <CheckIcon className="w-4 h-4 text-emerald-400" />
+                        <span className="font-bold uppercase tracking-wider">{successBanner}</span>
+                    </div>
+                    <button
+                        onClick={() => setSuccessBanner(null)}
+                        className="text-emerald-400 hover:text-white ml-2"
+                    >
+                        <CloseIcon className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
                 <div className="space-y-1">
@@ -383,7 +433,7 @@ export const MyCommunitiesInteractionHub: React.FC<MyCommunitiesInteractionHubPr
                 <div className="flex items-center gap-2">
                     {/* Create Post Button */}
                     <button
-                        onClick={() => setIsCreateModalOpen(true)}
+                        onClick={handleOpenCreatePost}
                         disabled={joinedCommunities.length === 0}
                         className="px-4 py-2 font-mono text-xs font-bold uppercase bg-white text-black hover:bg-zinc-200 transition-colors border border-white flex items-center gap-1.5 disabled:opacity-40 disabled:hover:bg-white"
                     >
@@ -649,7 +699,7 @@ export const MyCommunitiesInteractionHub: React.FC<MyCommunitiesInteractionHubPr
                             </button>
                         )}
                         <button
-                            onClick={() => setIsCreateModalOpen(true)}
+                            onClick={handleOpenCreatePost}
                             className="px-5 py-2 font-mono text-xs font-bold uppercase bg-white text-black border border-white hover:bg-zinc-200 transition-colors"
                         >
                             CREATE FIRST POST
@@ -672,17 +722,6 @@ export const MyCommunitiesInteractionHub: React.FC<MyCommunitiesInteractionHubPr
                     ))}
                 </div>
             )}
-
-            {/* Create Post Modal */}
-            <CreateCommunityPostModal
-                isOpen={isCreateModalOpen}
-                onClose={() => setIsCreateModalOpen(false)}
-                joinedCommunities={joinedCommunities}
-                preselectedCommunityId={selectedCommunityFilter !== 'ALL' ? selectedCommunityFilter : undefined}
-                onPostCreated={(newPost) => {
-                    setRawFirestorePosts(prev => [newPost, ...prev]);
-                }}
-            />
 
             {/* Private Interaction Modal */}
             <PrivateCommunityInteractionModal

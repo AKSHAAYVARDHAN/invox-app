@@ -19,7 +19,8 @@ import {
     VolumeOffIcon,
     ArrowsPointingOutIcon,
     ArrowsPointingInIcon,
-    PencilSquareIcon
+    PencilSquareIcon,
+    TrashIcon
 } from '../ui/Icons';
 import { handleImageError } from '../utils/imageUtils';
 import { useFullscreen } from '../hooks/useFullscreen';
@@ -57,10 +58,11 @@ const MediaPlaceholder: React.FC<{ thumbnailUrl?: string; isVideo: boolean }> = 
 interface FeedCardProps {
     post: Post;
     onPostUpdated?: (updated: Post) => void;
+    onDelete?: (postId: string) => void;
     isMySpaceContext?: boolean;
 }
 
-export const FeedCard: React.FC<FeedCardProps> = ({ post, onPostUpdated, isMySpaceContext }) => {
+export const FeedCard: React.FC<FeedCardProps> = ({ post, onPostUpdated, onDelete, isMySpaceContext }) => {
     const { openModal } = useAIAssistant();
     const location = useLocation();
     const navigate = useNavigate();
@@ -68,6 +70,7 @@ export const FeedCard: React.FC<FeedCardProps> = ({ post, onPostUpdated, isMySpa
     const [currentPost, setCurrentPost] = useState<Post>(post);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isContentExpanded, setIsContentExpanded] = useState(false);
 
     useEffect(() => {
         setCurrentPost(post);
@@ -355,13 +358,24 @@ export const FeedCard: React.FC<FeedCardProps> = ({ post, onPostUpdated, isMySpa
                                         <span>Share Post</span>
                                     </button>
                                     {canEdit && (
-                                        <button 
-                                            onClick={() => { setIsEditModalOpen(true); setIsMenuOpen(false); }}
-                                            className="w-full text-left px-3 py-2 text-xs text-white hover:bg-zinc-900 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1"
-                                        >
-                                            <PencilSquareIcon className="w-3.5 h-3.5 text-zinc-400" />
-                                            <span>// EDIT</span>
-                                        </button>
+                                        <>
+                                            <button 
+                                                onClick={() => { setIsEditModalOpen(true); setIsMenuOpen(false); }}
+                                                className="w-full text-left px-3 py-2 text-xs text-white hover:bg-zinc-900 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 mt-1"
+                                            >
+                                                <PencilSquareIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                                <span>// EDIT</span>
+                                            </button>
+                                            {onDelete && (
+                                                <button 
+                                                    onClick={() => { onDelete(currentPost.id); setIsMenuOpen(false); }}
+                                                    className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-950/30 hover:text-red-300 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-850 mt-0.5"
+                                                >
+                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                    <span>// DELETE</span>
+                                                </button>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             )}
@@ -370,9 +384,31 @@ export const FeedCard: React.FC<FeedCardProps> = ({ post, onPostUpdated, isMySpa
                 </div>
 
                 {/* Content */}
-                <div className="mt-3.5">
-                    <p className="text-base font-semibold font-mono text-white tracking-tight">"{currentPost.aiSummary}"</p>
-                    <p className="text-zinc-400 text-xs sm:text-sm mt-2 leading-relaxed font-sans">{currentPost.content}</p>
+                <div className="mt-3.5 space-y-2">
+                    <p className="text-base font-semibold font-mono text-white tracking-tight">
+                        "{currentPost.aiSummary || currentPost.title || currentPost.oneLine || 'Transmission'}"
+                    </p>
+                    {currentPost.content && (
+                        <div>
+                            <p className="text-zinc-400 text-xs sm:text-sm leading-relaxed font-sans whitespace-pre-line">
+                                {currentPost.content.length > 280 && !isContentExpanded
+                                    ? `${currentPost.content.slice(0, 280)}...`
+                                    : currentPost.content}
+                            </p>
+                            {currentPost.content.length > 280 && (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsContentExpanded(prev => !prev);
+                                    }}
+                                    className="text-[11px] font-mono text-zinc-400 hover:text-white underline uppercase tracking-wider mt-1.5 cursor-pointer block"
+                                >
+                                    {isContentExpanded ? '[- SHOW LESS]' : '[+ SHOW MORE]'}
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Media */}

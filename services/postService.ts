@@ -190,9 +190,9 @@ export const normalizeFirestorePost = (id: string, data: Record<string, any>): P
         channelId: data.channelId || undefined,
         channelName: data.channelName || undefined,
         channelAvatarUrl: data.channelAvatarUrl || undefined,
-        communityId: data.communityId || data.channelId || undefined,
-        communityName: data.communityName || data.channelName || undefined,
-        communityAvatarUrl: data.communityAvatarUrl || data.channelAvatarUrl || undefined,
+        communityId: data.communityId || undefined,
+        communityName: data.communityName || undefined,
+        communityAvatarUrl: data.communityAvatarUrl || undefined,
         communityHandle: data.communityHandle || undefined,
         authorId: data.authorId || undefined,
         author: {
@@ -313,6 +313,12 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
     if (!uploadedMediaUrl && uploadedUrls.length > 0) {
         uploadedMediaUrl = uploadedUrls[0];
     }
+    if (uploadedUrls.length === 0 && Array.isArray(input.mediaUrls) && input.mediaUrls.length > 0) {
+        uploadedUrls.push(...input.mediaUrls);
+        if (!uploadedMediaUrl) {
+            uploadedMediaUrl = input.mediaUrls[0];
+        }
+    }
 
     let resolvedPostType = PostType.Feed;
     const inputType = input.type?.toLowerCase();
@@ -350,20 +356,23 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
         }
     }
 
-    // Enforce channel requirement ONLY for actual Feed posts
-    if (resolvedPostType === PostType.Feed && inputType === 'feed' && !input.channelId) {
+    // Identify community-affiliated broadcasts
+    const isCommunityPost = Boolean(input.communityId) || inputType === 'community';
+
+    // Enforce channel requirement ONLY for actual Explore Feed broadcasts (not Community posts)
+    if (resolvedPostType === PostType.Feed && inputType === 'feed' && !input.channelId && !isCommunityPost) {
         throw new Error('A Channel is required before publishing a Feed broadcast. Please select or create a channel.');
     }
 
-    // Moments, Collabs & Showcases never require channel affiliations
+    // Moments, Collabs, Showcases & Community posts never require channel affiliations
     const isCollab = resolvedPostType === PostType.Collab;
     const isShowcase = resolvedPostType === PostType.Showcase;
     const isMoment = resolvedPostType === PostType.Moment;
-    let finalChannelId = (isCollab || isShowcase || isMoment) ? null : (input.channelId || null);
-    let finalChannelName = (isCollab || isShowcase || isMoment) ? null : (input.channelName || null);
-    let finalChannelAvatar = (isCollab || isShowcase || isMoment) ? null : (input.channelAvatarUrl || null);
+    let finalChannelId = (isCollab || isShowcase || isMoment || isCommunityPost) ? null : (input.channelId || null);
+    let finalChannelName = (isCollab || isShowcase || isMoment || isCommunityPost) ? null : (input.channelName || null);
+    let finalChannelAvatar = (isCollab || isShowcase || isMoment || isCommunityPost) ? null : (input.channelAvatarUrl || null);
 
-    if (!isCollab && !isShowcase && !isMoment && input.channelId && (!finalChannelName || !finalChannelAvatar)) {
+    if (!isCollab && !isShowcase && !isMoment && !isCommunityPost && input.channelId && (!finalChannelName || !finalChannelAvatar)) {
         try {
             const ch = await getChannelById(input.channelId);
             if (ch) {

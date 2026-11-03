@@ -3,9 +3,8 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { SparklesIcon, ChevronDownIcon, ClockIcon, CheckIcon, GlobeAltIcon, RadioIcon, CubeIcon } from '../components/ui/Icons';
+import { ChevronDownIcon, ClockIcon, CheckIcon, GlobeAltIcon, RadioIcon, CubeIcon } from '../components/ui/Icons';
 import { useAuth } from '../contexts/AuthContext';
-import { useAIAssistant } from '../contexts/AIAssistantContext';
 import { subscribeToUserPosts } from '../services/postService';
 import { MyCommunitiesManager } from '../components/communities/MyCommunitiesManager';
 import type { Post } from '../types';
@@ -333,7 +332,6 @@ const TimeframeDropdown: React.FC<{ current: Timeframe; onChange: (t: Timeframe)
 
 const MySpacePage = () => {
     const { currentUser } = useAuth();
-    const { openModal } = useAIAssistant();
     const [userPosts, setUserPosts] = useState<Post[]>([]);
     const { setRightSidebarVariant } = ReactRouterDOM.useOutletContext<{
         setRightSidebarVariant: (variant: string) => void;
@@ -398,21 +396,6 @@ const MySpacePage = () => {
             activity: totalUserUploads > 0 ? activityLevel : base.activity
         };
     }, [currentTimeframe, currentUser, userPosts]);
-
-    const handleDeepInsightClick = () => {
-        openModal({
-            id: 'myspace-insight',
-            title: `My Space Analytics Insight (${timeframeLabels[currentTimeframe]})`,
-            content: `User Intelligence Footprint Overview:
-- Total Published Signals: ${currentMetrics.uploads}
-- Network Clarity Score: ${currentMetrics.score}/10
-- Dynamic Activity Flow: ${currentMetrics.activity}
-- Active Timeframe Window: ${timeframeLabels[currentTimeframe]}
-
-Ask anything to synthesize your signals, spot trends in your audience engagement, or generate your next high-impact broadcast idea!`,
-            author: currentUser?.displayName || currentUser?.email || 'Invox Core'
-        });
-    };
 
     useEffect(() => {
         if (setRightSidebarVariant) {
@@ -508,16 +491,6 @@ Ask anything to synthesize your signals, spot trends in your audience engagement
                             tooltipBody="Drives energy and motion. Active engagement increases spiral flow and rotational dynamics."
                             delay="300ms"
                         />
-                    </div>
-                    
-                    <div className="pointer-events-auto flex items-center gap-2">
-                        <button 
-                            onClick={handleDeepInsightClick}
-                            className="flex items-center justify-center gap-2.5 bg-zinc-900/85 hover:bg-zinc-800 backdrop-blur-md border border-zinc-700/80 hover:border-zinc-500 px-6 py-3 text-xs font-mono font-bold uppercase tracking-wider text-white transition-all duration-150 shadow-md group"
-                        >
-                            <SparklesIcon className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
-                            <span>// DEEP_INSIGHT</span>
-                        </button>
                     </div>
                 </div>
             </div>

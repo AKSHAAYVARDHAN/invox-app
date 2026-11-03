@@ -13,7 +13,6 @@ import {
 } from '../../services/communityFeedService';
 import type { Post } from '../../types';
 import CommunityPostCard from './CommunityPostCard';
-import CreateCommunityPostModal from './CreateCommunityPostModal';
 import { CommentSection } from '../feed/CommentSection';
 import FeedCardSkeleton from '../feed/FeedCardSkeleton';
 import { 
@@ -42,6 +41,7 @@ export const MyCommunitiesFeed: React.FC<MyCommunitiesFeedProps> = ({
     const { currentUser } = useAuth();
     const navigate = ReactRouterDOM.useNavigate();
     const [searchParams, setSearchParams] = ReactRouterDOM.useSearchParams();
+    const location = ReactRouterDOM.useLocation();
 
     // Authoritative real-time user memberships
     const { joinedCommunities, loading: membershipsLoading, count: joinedCount } = useUserJoinedCommunities(currentUser);
@@ -57,17 +57,42 @@ export const MyCommunitiesFeed: React.FC<MyCommunitiesFeedProps> = ({
     const [feedLoading, setFeedLoading] = useState<boolean>(true);
     const [feedError, setFeedError] = useState<string | null>(null);
 
-    // Modals
-    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    // Feedback & modals state
+    const [successBanner, setSuccessBanner] = useState<string | null>(null);
     const [activeCommentPost, setActiveCommentPost] = useState<Post | null>(null);
 
     // Sync selected community from URL query param if present (?community=xxx)
     useEffect(() => {
-        const commParam = searchParams.get('community');
+        const commParam = searchParams.get('community') || (location.state as any)?.communityId;
         if (commParam) {
             setSelectedCommunityId(commParam);
         }
-    }, [searchParams]);
+    }, [searchParams, location.state]);
+
+    // Handle post publication success notification when redirected back
+    useEffect(() => {
+        const msg = (location.state as any)?.successMessage;
+        if (msg) {
+            setSuccessBanner(msg);
+            const timer = setTimeout(() => setSuccessBanner(null), 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [location.state]);
+
+    // Navigate to unified detailed publisher under My Space -> Uploads -> Communities
+    const handleOpenCreatePost = () => {
+        const hasSpecificCommunity = selectedCommunityId !== 'ALL';
+        const commParam = hasSpecificCommunity ? `&communityId=${encodeURIComponent(selectedCommunityId)}` : '';
+        const returnUrl = `/communities?view=my-communities${hasSpecificCommunity ? `&community=${encodeURIComponent(selectedCommunityId)}` : ''}`;
+        navigate(`/myspace/uploads?tab=Communities&create=true&from=communities${commParam}`, {
+            state: {
+                from: 'communities',
+                fromCommunities: true,
+                communityId: hasSpecificCommunity ? selectedCommunityId : undefined,
+                returnUrl,
+            }
+        });
+    };
 
     // Update URL param when selected community changes
     const handleSelectCommunity = (commId: string | 'ALL') => {
@@ -168,6 +193,22 @@ export const MyCommunitiesFeed: React.FC<MyCommunitiesFeedProps> = ({
 
     return (
         <div className="space-y-5 font-mono text-xs w-full min-w-0 pb-16">
+            {/* Success notification banner */}
+            {successBanner && (
+                <div className="p-3.5 bg-emerald-950/50 border border-emerald-800 text-emerald-300 text-xs flex items-center justify-between animate-fadeIn">
+                    <div className="flex items-center gap-2">
+                        <CheckIcon className="w-4 h-4 text-emerald-400" />
+                        <span className="font-bold uppercase tracking-wider">{successBanner}</span>
+                    </div>
+                    <button
+                        onClick={() => setSuccessBanner(null)}
+                        className="text-emerald-400 hover:text-white ml-2"
+                    >
+                        <CloseIcon className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
+
             {/* 1. PAGE HEADER */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
                 <div className="space-y-1">
@@ -202,7 +243,7 @@ export const MyCommunitiesFeed: React.FC<MyCommunitiesFeedProps> = ({
                     </div>
 
                     <button
-                        onClick={() => setIsCreateModalOpen(true)}
+                        onClick={handleOpenCreatePost}
                         disabled={joinedCount === 0}
                         className="px-4 py-2 uppercase font-bold text-xs bg-white text-black border border-white hover:bg-zinc-200 transition-colors shadow-sm flex items-center gap-1.5 disabled:opacity-50"
                     >
@@ -301,7 +342,7 @@ export const MyCommunitiesFeed: React.FC<MyCommunitiesFeedProps> = ({
             {/* 3. QUICK COMPOSER CARD */}
             {joinedCommunities.length > 0 && (
                 <div 
-                    onClick={() => setIsCreateModalOpen(true)}
+                    onClick={handleOpenCreatePost}
                     className="bg-[#0c0c0e] border border-zinc-800 hover:border-zinc-700 p-3.5 flex items-center justify-between gap-3 cursor-pointer group transition-colors"
                 >
                     <div className="flex items-center gap-3 min-w-0">
@@ -419,7 +460,7 @@ export const MyCommunitiesFeed: React.FC<MyCommunitiesFeedProps> = ({
                                     SHOW ALL COMMUNITIES
                                 </button>
                                 <button
-                                    onClick={() => setIsCreateModalOpen(true)}
+                                    onClick={handleOpenCreatePost}
                                     className="px-4 py-2 font-mono text-xs font-bold uppercase bg-white text-black border border-white hover:bg-zinc-200 transition-colors"
                                 >
                                     CREATE FIRST POST
@@ -436,7 +477,7 @@ export const MyCommunitiesFeed: React.FC<MyCommunitiesFeedProps> = ({
                             </p>
                             <div className="pt-3">
                                 <button
-                                    onClick={() => setIsCreateModalOpen(true)}
+                                    onClick={handleOpenCreatePost}
                                     className="px-5 py-2 font-mono text-xs font-bold uppercase bg-white text-black border border-white hover:bg-zinc-200 transition-colors"
                                 >
                                     CREATE A POST
@@ -446,15 +487,6 @@ export const MyCommunitiesFeed: React.FC<MyCommunitiesFeedProps> = ({
                     )}
                 </div>
             )}
-
-            {/* CREATE POST MODAL */}
-            <CreateCommunityPostModal
-                isOpen={isCreateModalOpen}
-                onClose={() => setIsCreateModalOpen(false)}
-                joinedCommunities={joinedCommunities}
-                preselectedCommunityId={selectedCommunityId !== 'ALL' ? selectedCommunityId : null}
-                onPostCreated={handlePostCreated}
-            />
 
             {/* INTERACTIVE COMMENTS DRAWER/MODAL */}
             {activeCommentPost && (

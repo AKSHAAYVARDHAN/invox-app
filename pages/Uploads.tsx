@@ -16,15 +16,18 @@ import { useAuth } from '../contexts/AuthContext';
 import { createPost, deletePost, subscribeToUserPosts, isLoopPost, postToLoop, deleteLoopPost } from '../services/postService';
 import { subscribeToUserChannels, deleteChannel } from '../services/channelService';
 import { subscribeToUserPolls, deletePoll } from '../services/pollService';
+import { useUserJoinedCommunities } from '../services/communityService';
+import { CommunitiesUploadHub } from '../components/uploads/CommunitiesUploadHub';
 import { Post, Channel, Poll, PostType, CollabDetails, StreamLoop, LoopCategory } from '../types';
 
-const mainTabs = ['Explore', 'Spotlight', 'Hub'] as const;
+const mainTabs = ['Explore', 'Spotlight', 'Hub', 'Communities'] as const;
 type MainTab = typeof mainTabs[number];
 
 const UploadsPage = () => {
     const { currentUser, userProfile } = useAuth();
     const [searchParams] = ReactRouterDOM.useSearchParams();
     const [activeTab, setActiveTab] = useState<MainTab>('Explore');
+    const { joinedCommunities, loading: joinedCommunitiesLoading } = useUserJoinedCommunities(currentUser);
     const [exploreSubTab, setExploreSubTab] = useState<'Channels' | 'Feeds' | 'Discover'>('Channels');
     const [spotlightSubTab, setSpotlightSubTab] = useState<'Showcase' | 'Collabs'>('Showcase');
     
@@ -197,6 +200,8 @@ const UploadsPage = () => {
             if (subParam === 'Channels' || subParam === 'Feeds' || subParam === 'Discover') {
                 setExploreSubTab(subParam as any);
             }
+        } else if (tabParam === 'Communities') {
+            setActiveTab('Communities');
         }
     }, [searchParams]);
 
@@ -231,9 +236,13 @@ const UploadsPage = () => {
                 } else if (uploadTriggerTarget === 'Showcase' || uploadTriggerTarget === 'Collab') {
                     setActiveTab('Spotlight');
                     setSpotlightSubTab(uploadTriggerTarget === 'Showcase' ? 'Showcase' : 'Collabs');
+                } else if (uploadTriggerTarget === 'Community Post' || uploadTriggerTarget === 'Communities') {
+                    setActiveTab('Communities');
                 }
                 setOverrideContextName(uploadTriggerTarget);
-                setIsModalOpen(true);
+                if (uploadTriggerTarget !== 'Community Post' && uploadTriggerTarget !== 'Communities') {
+                    setIsModalOpen(true);
+                }
             }
             // Clear the trigger after consuming it
             if (setUploadTriggerTarget) {
@@ -259,6 +268,8 @@ const UploadsPage = () => {
                 else if (mySpaceMomentFilter === 'Knacks') name = 'Knack';
                 else name = 'Still';
             }
+        } else if (activeTab === 'Communities') {
+            name = 'Community Post';
         }
         return { name, section };
     };
@@ -378,6 +389,16 @@ const UploadsPage = () => {
 
     const { name, section } = getTargetInfo();
 
+    const userCommunityPosts = useMemo(() => {
+        return userPosts
+            .filter(p => Boolean(p.communityId))
+            .sort((a, b) => {
+                const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+                const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+                return dateB - dateA;
+            });
+    }, [userPosts]);
+
     // Use override if set (from quick access), otherwise use tab-based name
     const currentContextName = overrideContextName || (activeTab === 'Explore' && exploreSubTab === 'Channels' ? 'Feed' : name);
 
@@ -385,6 +406,9 @@ const UploadsPage = () => {
     const filteredItems = useMemo(() => {
         if (activeTab === 'Explore' && exploreSubTab === 'Channels') {
             return [];
+        }
+        if (activeTab === 'Communities') {
+            return userCommunityPosts;
         }
         const targetCategory = name.toLowerCase();
         const seen = new Set<string>();
@@ -694,6 +718,7 @@ const UploadsPage = () => {
     const isCollabView = activeTab === 'Spotlight' && spotlightSubTab === 'Collabs';
     const isHubMomentsView = activeTab === 'Hub' && hubPrimaryTab === 'Moments';
     const isHubLoopsView = activeTab === 'Hub' && hubPrimaryTab === 'Loops';
+    const isCommunitiesView = activeTab === 'Communities';
 
     return (
         <div className="space-y-4">
@@ -719,7 +744,8 @@ const UploadsPage = () => {
                 </div>
 
                 {/* Sub-Tabs Navigation */}
-                <div className="flex border-b border-zinc-800/80 mb-5">
+                {activeTab !== 'Communities' && (
+                    <div className="flex border-b border-zinc-800/80 mb-5">
                     {activeTab === 'Explore' && (
                         <>
                             <button 
@@ -830,6 +856,7 @@ const UploadsPage = () => {
                         </>
                     )}
                 </div>
+                )}
             </div>
 
             {/* CHANNELS SECTION (UNDER EXPLORE) */}
@@ -1545,6 +1572,19 @@ const UploadsPage = () => {
                         </div>
                     )}
                 </div>
+            ) : isCommunitiesView ? (
+                /* COMMUNITIES PUBLISHING INTERFACE */
+                <CommunitiesUploadHub
+                    currentUser={currentUser}
+                    userProfile={userProfile}
+                    joinedCommunities={joinedCommunities}
+                    joinedLoading={joinedCommunitiesLoading}
+                    onPostCreated={(newPost) => {
+                        setUserPosts(prev => [newPost, ...prev]);
+                        setActionSuccess(`Post published to ${newPost.communityName || 'community'} successfully.`);
+                        setTimeout(() => setActionSuccess(null), 4000);
+                    }}
+                />
             ) : (
                 /* OTHER TABS: Explore, Spotlight Showcase, Hub */
                 <div>

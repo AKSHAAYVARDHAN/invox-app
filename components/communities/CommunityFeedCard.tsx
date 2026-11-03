@@ -16,7 +16,9 @@ import {
     ArrowsPointingOutIcon, 
     ArrowsPointingInIcon,
     EllipsisVerticalIcon,
-    UsersIcon
+    UsersIcon,
+    PlusIcon,
+    CheckIcon
 } from '../ui/Icons';
 import { handleImageError } from '../utils/imageUtils';
 import { useFullscreen } from '../hooks/useFullscreen';
@@ -58,6 +60,10 @@ interface CommunityFeedCardProps {
     onOpenCommunity?: (communityId: string) => void;
     initialLiked?: boolean;
     initialSaved?: boolean;
+    isMember?: boolean;
+    onToggleMembership?: (community: { id: string; name: string; category?: string; avatarUrl?: string }) => void;
+    isMembershipLoading?: boolean;
+    showMembershipAction?: boolean;
 }
 
 export const CommunityFeedCard: React.FC<CommunityFeedCardProps> = ({
@@ -66,6 +72,10 @@ export const CommunityFeedCard: React.FC<CommunityFeedCardProps> = ({
     onOpenCommunity,
     initialLiked = false,
     initialSaved = false,
+    isMember = false,
+    onToggleMembership,
+    isMembershipLoading = false,
+    showMembershipAction = false,
 }) => {
     const { currentUser } = useAuth();
     const navigate = ReactRouterDOM.useNavigate();
@@ -348,6 +358,47 @@ export const CommunityFeedCard: React.FC<CommunityFeedCardProps> = ({
                             <span className="px-1.5 py-0.2 text-[9px] uppercase tracking-wider bg-zinc-900 border border-zinc-800 text-zinc-400">
                                 {domainCategory}
                             </span>
+
+                            {/* Membership indicator / Join action */}
+                            {showMembershipAction && post.communityId && (
+                                isMember ? (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 text-[9px] font-mono font-bold uppercase tracking-wider bg-emerald-950/60 border border-emerald-500/40 text-emerald-400">
+                                        <CheckIcon className="w-2.5 h-2.5" />
+                                        <span>JOINED</span>
+                                    </span>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        disabled={isMembershipLoading}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (!currentUser) {
+                                                navigate('/login');
+                                                return;
+                                            }
+                                            if (onToggleMembership && post.communityId) {
+                                                onToggleMembership({
+                                                    id: post.communityId,
+                                                    name: post.communityName || 'Community',
+                                                    category: domainCategory,
+                                                    avatarUrl: post.communityAvatarUrl
+                                                });
+                                            }
+                                        }}
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.2 text-[9px] font-mono font-bold uppercase tracking-wider bg-white text-black hover:bg-zinc-200 border border-white transition-colors cursor-pointer disabled:opacity-50"
+                                        title="Join this community to access member-only channels"
+                                    >
+                                        {isMembershipLoading ? (
+                                            <span>JOINING...</span>
+                                        ) : (
+                                            <>
+                                                <PlusIcon className="w-2.5 h-2.5 stroke-[3]" />
+                                                <span>JOIN</span>
+                                            </>
+                                        )}
+                                    </button>
+                                )
+                            )}
                         </div>
                     </div>
                 </div>
@@ -393,6 +444,32 @@ export const CommunityFeedCard: React.FC<CommunityFeedCardProps> = ({
                                     >
                                         <UsersIcon className="w-3.5 h-3.5 text-zinc-400" />
                                         <span>View Collective</span>
+                                    </button>
+                                )}
+                                {post.communityId && showMembershipAction && !isMember && (
+                                    <button
+                                        type="button"
+                                        disabled={isMembershipLoading}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setIsMenuOpen(false);
+                                            if (!currentUser) {
+                                                navigate('/login');
+                                                return;
+                                            }
+                                            if (onToggleMembership && post.communityId) {
+                                                onToggleMembership({
+                                                    id: post.communityId,
+                                                    name: post.communityName || 'Community',
+                                                    category: domainCategory,
+                                                    avatarUrl: post.communityAvatarUrl
+                                                });
+                                            }
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-emerald-400 hover:bg-zinc-900 uppercase tracking-wider flex items-center gap-2 border-t border-zinc-800/80 cursor-pointer disabled:opacity-50"
+                                    >
+                                        <PlusIcon className="w-3.5 h-3.5" />
+                                        <span>Join Collective</span>
                                     </button>
                                 )}
                             </div>

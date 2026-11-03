@@ -29,7 +29,7 @@ import DomainFilter from '../components/ui/DomainFilter';
 import { handleImageError } from '../components/utils/imageUtils';
 import MyCommunityCardSkeleton from '../components/communities/MyCommunityCardSkeleton';
 import MyCommunitiesInteractionHub from '../components/communities/MyCommunitiesInteractionHub';
-import ComingSoonPage from './ComingSoon';
+import AllCommunitiesFeed from '../components/communities/AllCommunitiesFeed';
 
 export const mockCommunities: Community[] = [
     { id: 'startup-1', name: 'Startup Grind', description: 'Connect with founders, investors, and innovators in the startup ecosystem.', members: 25000, rating: 4.7, category: 'Startup', isVerified: true, avatarUrl: 'https://picsum.photos/seed/startup-grind/200' },
@@ -257,12 +257,16 @@ const CommunitiesPage = () => {
 
     const { setRightSidebarVariant, communityFilters, setCommunityFilters, communityView, setCommunityView } = outletContext || {};
 
-    // Synchronize URL search params (e.g. ?view=my-communities or ?tab=my-communities) with state
+    // Synchronize URL search params (e.g. ?view=my-communities or ?tab=my-communities or ?view=all) with state
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const viewParam = params.get('view') || params.get('tab');
         if (viewParam === 'my-communities' && setCommunityView && communityView !== 'my-communities') {
             setCommunityView('my-communities');
+        } else if (viewParam === 'all' && setCommunityView && communityView !== 'all') {
+            setCommunityView('all');
+        } else if (viewParam === 'leaderboard' && setCommunityView && communityView !== 'leaderboard') {
+            setCommunityView('leaderboard');
         }
     }, [location.search, setCommunityView, communityView]);
 
@@ -426,7 +430,13 @@ const CommunitiesPage = () => {
     }
 
     if (communityView === 'all') {
-        return <ComingSoonPage pageName="All Communities" />;
+        return (
+            <AllCommunitiesFeed 
+                onExploreAll={() => setCommunityView && setCommunityView('leaderboard')}
+                onOpenCommunity={(communityId) => navigate(`/communities/${communityId}`)}
+                initialSearchTerm={communityFilters?.searchTerm || ''}
+            />
+        );
     }
 
     if (communityView === 'my-communities') {

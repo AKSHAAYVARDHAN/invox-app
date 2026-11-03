@@ -1464,7 +1464,7 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                     </>
                 ) : (
                     <div className='overflow-y-auto no-scrollbar flex flex-col gap-5'>
-                        {isCommunityDetailPage && (
+                        {(communityView === 'all' || isCommunityDetailPage) && (
                             <div className="px-4">
                                 <button
                                     onClick={() => {
@@ -1476,7 +1476,7 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                                     className="w-full flex items-center gap-2.5 p-2.5 bg-[#0c0c0e] border border-zinc-800 hover:border-zinc-600 text-zinc-300 hover:text-white font-mono text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer group"
                                 >
                                     <ArrowLeftIcon className="w-4 h-4 flex-shrink-0 text-zinc-400 group-hover:text-white group-hover:-translate-x-0.5 transition-transform" />
-                                    <span>BACK TO COMMUNITIES</span>
+                                    <span>// BACK TO COMMUNITIES</span>
                                 </button>
                             </div>
                         )}
@@ -1500,16 +1500,24 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                                     <div className="space-y-2">
                                         <button
                                             onClick={() => setCommunityView('my-communities')}
-                                            className="w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors"
+                                            className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider border transition-colors cursor-pointer ${
+                                                communityView === 'my-communities'
+                                                    ? 'bg-zinc-900 border-emerald-500/50 text-white font-bold'
+                                                    : 'bg-black border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600'
+                                            }`}
                                         >
-                                            <BookmarkIcon className="w-4 h-4" />
+                                            <BookmarkIcon className={`w-4 h-4 ${communityView === 'my-communities' ? 'text-emerald-400' : 'text-zinc-400'}`} />
                                             <span>MY_COMMUNITIES</span>
                                         </button>
                                         <button
                                              onClick={() => setCommunityView('all')}
-                                             className="w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors"
+                                             className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider border transition-colors cursor-pointer ${
+                                                 communityView === 'all'
+                                                     ? 'bg-zinc-900 border-emerald-500/50 text-white font-bold'
+                                                     : 'bg-black border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600'
+                                             }`}
                                         >
-                                            <GlobeAltIcon className="w-4 h-4" />
+                                            <GlobeAltIcon className={`w-4 h-4 ${communityView === 'all' ? 'text-emerald-400' : 'text-zinc-400'}`} />
                                             <span>ALL_COMMUNITIES</span>
                                         </button>
                                     </div>
@@ -1964,6 +1972,12 @@ const TargetSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onS
                 { name: 'Stills', context: 'Still', icon: PencilIcon },
                 { name: 'Tapes', context: 'Tape', icon: PlayIcon },
                 { name: 'Knacks', context: 'Knack', icon: WrenchScrewdriverIcon },
+            ]
+        },
+        {
+            title: 'Communities',
+            targets: [
+                { name: 'Community Post', context: 'Community Post', icon: UsersIcon },
             ]
         }
     ];
