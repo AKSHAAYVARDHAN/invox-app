@@ -856,7 +856,7 @@ export const CommunitiesUploadHub: React.FC<CommunitiesUploadHubProps> = ({
                         {/* Action Buttons */}
                         <div className="pt-3 border-t border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-3">
                             <span className="text-[10px] text-zinc-500 uppercase tracking-wider">
-                                BROADCASTS WILL APPEAR IN COLLECTIVE & MY COMMUNITIES FEEDS
+                                BROADCASTS WILL APPEAR IN GLOBAL & MY COLLECTIVE FEEDS
                             </span>
 
                             <div className="flex items-center gap-2.5 w-full sm:w-auto">
@@ -944,7 +944,7 @@ export const CommunitiesUploadHub: React.FC<CommunitiesUploadHubProps> = ({
                                         className="bg-black border border-zinc-800 text-white text-xs px-3 py-1.5 outline-none focus:border-zinc-600 font-mono uppercase"
                                     >
                                         <option value="ALL">
-                                            ALL COMMUNITIES ({userCommunityPosts.length})
+                                            ALL COLLECTIVES ({userCommunityPosts.length})
                                         </option>
                                         {distinctPublishedCommunities.map(comm => (
                                             <option key={comm.id} value={comm.id}>

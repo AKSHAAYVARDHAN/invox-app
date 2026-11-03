@@ -139,8 +139,16 @@ const ProtectedLayout = () => {
     const [showPinnedHighlights, setShowPinnedHighlights] = useState(false);
     const [showPinnedProfiles, setShowPinnedProfiles] = useState(false);
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-    const [communityFilters, setCommunityFilters] = useState({ searchTerm: '', domains: [] as string[] });
-    const [communityView, setCommunityView] = useState('leaderboard'); // 'leaderboard', 'my-communities', 'all'
+    const [communityFilters, setCommunityFilters] = useState<{ searchTerm: string; domains: string[] }>({ searchTerm: '', domains: [] });
+    const [communityView, setCommunityView] = useState(() => {
+        if (typeof window !== 'undefined' && window.location.pathname === '/communities') {
+            const params = new URLSearchParams(window.location.search);
+            const viewParam = params.get('view') || params.get('tab');
+            if (viewParam === 'my-communities') return 'my-communities';
+            if (viewParam === 'all') return 'all';
+        }
+        return 'leaderboard';
+    });
     const [hubView, setHubView] = useState('welcome');
     const [hubRightSidebarView, setHubRightSidebarView] = useState('main');
     const [hubConversations, setHubConversations] = useState<HubConversation[]>(initialHubConversations);
@@ -214,6 +222,21 @@ const ProtectedLayout = () => {
             const tabParam = params.get('tab') || params.get('view');
             if (tabParam === 'stream') {
                 setHubView('stream');
+            }
+        }
+    }, [location.pathname, location.search]);
+
+    // Synchronize communityView when navigating within /communities or to /communities
+    useEffect(() => {
+        if (location.pathname === '/communities') {
+            const params = new URLSearchParams(location.search);
+            const viewParam = params.get('view') || params.get('tab');
+            if (viewParam === 'my-communities') {
+                setCommunityView('my-communities');
+            } else if (viewParam === 'all') {
+                setCommunityView('all');
+            } else if (viewParam === 'leaderboard' || !viewParam) {
+                setCommunityView('leaderboard');
             }
         }
     }, [location.pathname, location.search]);

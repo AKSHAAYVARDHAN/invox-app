@@ -257,15 +257,33 @@ const CommunitiesPage = () => {
 
     const { setRightSidebarVariant, communityFilters, setCommunityFilters, communityView, setCommunityView } = outletContext || {};
 
+    const searchParams = new URLSearchParams(location.search);
+    const viewParam = searchParams.get('view') || searchParams.get('tab');
+    const effectiveView = viewParam || communityView;
+
+    const [visitedViews, setVisitedViews] = useState<Set<string>>(() => new Set([effectiveView || 'leaderboard']));
+
+    useEffect(() => {
+        const target = effectiveView || 'leaderboard';
+        setVisitedViews(prev => {
+            if (prev.has(target)) return prev;
+            const next = new Set(prev);
+            next.add(target);
+            return next;
+        });
+    }, [effectiveView]);
+
     // Synchronize URL search params (e.g. ?view=my-communities or ?tab=my-communities or ?view=all) with state
     useEffect(() => {
         const params = new URLSearchParams(location.search);
-        const viewParam = params.get('view') || params.get('tab');
-        if (viewParam === 'my-communities' && setCommunityView && communityView !== 'my-communities') {
+        const viewFromUrl = params.get('view') || params.get('tab');
+        if (viewFromUrl === 'my-communities' && setCommunityView && communityView !== 'my-communities') {
             setCommunityView('my-communities');
-        } else if (viewParam === 'all' && setCommunityView && communityView !== 'all') {
+        } else if (viewFromUrl === 'all' && setCommunityView && communityView !== 'all') {
             setCommunityView('all');
-        } else if (viewParam === 'leaderboard' && setCommunityView && communityView !== 'leaderboard') {
+        } else if (viewFromUrl === 'leaderboard' && setCommunityView && communityView !== 'leaderboard') {
+            setCommunityView('leaderboard');
+        } else if (!viewFromUrl && setCommunityView && communityView !== 'leaderboard') {
             setCommunityView('leaderboard');
         }
     }, [location.search, setCommunityView, communityView]);
@@ -357,7 +375,8 @@ const CommunitiesPage = () => {
         }
     };
 
-    const isSearchView = Boolean(communityFilters && communityFilters.searchTerm && communityFilters.searchTerm.trim() !== '');
+    const isLeaderboardActive = effectiveView !== 'all' && effectiveView !== 'my-communities';
+    const isSearchView = isLeaderboardActive && Boolean(communityFilters && communityFilters.searchTerm && communityFilters.searchTerm.trim() !== '');
 
     const searchOutcome = React.useMemo(() => {
         if (!isSearchView || !communityFilters) {
@@ -376,77 +395,6 @@ const CommunitiesPage = () => {
     }, [isSearchView, allCommunities, communityFilters?.searchTerm]);
 
     const { searchResults = [], searchResultTitle = '', isCategoryMatch = false } = searchOutcome;
-
-    if (isSearchView) {
-        return (
-            <div className="space-y-4">
-                <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <button onClick={handleBackToLeaderboard} className="p-1.5 text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 transition-colors" aria-label="Back to communities">
-                            <ArrowLeftIcon className="w-4 h-4" />
-                        </button>
-                        <div>
-                            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">// SEARCH_RESULTS</span>
-                            <h1 className="text-base font-bold font-mono uppercase text-white">
-                                {searchResultTitle}
-                            </h1>
-                        </div>
-                    </div>
-                    {isCategoryMatch && (
-                        <button className="flex-shrink-0 flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1.5 font-mono text-xs text-zinc-300 uppercase hover:text-white hover:border-zinc-600 transition-colors">
-                            <FilterIcon className="w-4 h-4 text-zinc-500" />
-                            <span>Filter by</span>
-                            <ChevronDownIcon className="w-4 h-4 text-zinc-500" />
-                        </button>
-                    )}
-                </div>
-                <div className="border-t border-zinc-800 my-4" />
-
-                {loading ? (
-                    <div className="space-y-3">
-                        <CommunitySearchResultSkeleton />
-                        <CommunitySearchResultSkeleton />
-                    </div>
-                ) : (searchResults && searchResults.length > 0) ? (
-                    <div>
-                        {searchResults.map(community => (
-                            <React.Fragment key={community.id}>
-                                <PodiumCard 
-                                    community={community} 
-                                    isMember={isMember(community.id)}
-                                    isLoading={actionLoadingId === community.id}
-                                    onToggleMembership={toggleMembership}
-                                />
-                            </React.Fragment>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-center py-16 text-zinc-500 font-mono text-xs border border-dashed border-zinc-800">
-                        <p>NO COMMUNITIES FOUND MATCHING SEARCH DIRECTIVE.</p>
-                    </div>
-                )}
-            </div>
-        );
-    }
-
-    if (communityView === 'all') {
-        return (
-            <AllCommunitiesFeed 
-                onExploreAll={() => setCommunityView && setCommunityView('leaderboard')}
-                onOpenCommunity={(communityId) => navigate(`/communities/${communityId}`)}
-                initialSearchTerm={communityFilters?.searchTerm || ''}
-            />
-        );
-    }
-
-    if (communityView === 'my-communities') {
-        return (
-            <MyCommunitiesInteractionHub 
-                onExploreAll={() => setCommunityView && setCommunityView('leaderboard')}
-                onOpenCommunity={(communityId) => navigate(`/communities/${communityId}`)}
-            />
-        );
-    }
 
     const sortedCommunities = allCommunities
         .filter(community => {
@@ -478,7 +426,90 @@ const CommunitiesPage = () => {
     ];
 
     return (
-        <div className="space-y-6">
+        <div className="relative">
+            {/* Global Collective Feed */}
+            {visitedViews.has('all') && (
+                <div className={effectiveView === 'all' ? 'block' : 'hidden'}>
+                    <AllCommunitiesFeed 
+                        onExploreAll={() => {
+                            navigate('/communities');
+                            if (setCommunityView) {
+                                setCommunityView('leaderboard');
+                            }
+                        }}
+                        onOpenCommunity={(communityId) => navigate(`/communities/${communityId}`)}
+                        initialSearchTerm={communityFilters?.searchTerm || ''}
+                    />
+                </div>
+            )}
+
+            {/* My Collective Feed & Interaction Hub */}
+            {visitedViews.has('my-communities') && (
+                <div className={effectiveView === 'my-communities' ? 'block' : 'hidden'}>
+                    <MyCommunitiesInteractionHub 
+                        onExploreAll={() => {
+                            navigate('/communities?view=all');
+                            if (setCommunityView) {
+                                setCommunityView('all');
+                            }
+                        }}
+                        onOpenCommunity={(communityId) => navigate(`/communities/${communityId}`)}
+                    />
+                </div>
+            )}
+
+            {/* Leaderboard or Search View */}
+            <div className={isLeaderboardActive ? 'block' : 'hidden'}>
+                {isSearchView ? (
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <button onClick={handleBackToLeaderboard} className="p-1.5 text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 transition-colors" aria-label="Back to communities">
+                                    <ArrowLeftIcon className="w-4 h-4" />
+                                </button>
+                                <div>
+                                    <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">// SEARCH_RESULTS</span>
+                                    <h1 className="text-base font-bold font-mono uppercase text-white">
+                                        {searchResultTitle}
+                                    </h1>
+                                </div>
+                            </div>
+                            {isCategoryMatch && (
+                                <button className="flex-shrink-0 flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1.5 font-mono text-xs text-zinc-300 uppercase hover:text-white hover:border-zinc-600 transition-colors">
+                                    <FilterIcon className="w-4 h-4 text-zinc-500" />
+                                    <span>Filter by</span>
+                                    <ChevronDownIcon className="w-4 h-4 text-zinc-500" />
+                                </button>
+                            )}
+                        </div>
+                        <div className="border-t border-zinc-800 my-4" />
+
+                        {loading ? (
+                            <div className="space-y-3">
+                                <CommunitySearchResultSkeleton />
+                                <CommunitySearchResultSkeleton />
+                            </div>
+                        ) : (searchResults && searchResults.length > 0) ? (
+                            <div>
+                                {searchResults.map(community => (
+                                    <React.Fragment key={community.id}>
+                                        <PodiumCard 
+                                            community={community} 
+                                            isMember={isMember(community.id)}
+                                            isLoading={actionLoadingId === community.id}
+                                            onToggleMembership={toggleMembership}
+                                        />
+                                    </React.Fragment>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-16 text-zinc-500 font-mono text-xs border border-dashed border-zinc-800">
+                                <p>NO COMMUNITIES FOUND MATCHING SEARCH DIRECTIVE.</p>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">// INDEX_LEADERBOARD</span>
@@ -639,6 +670,9 @@ const CommunitiesPage = () => {
                     </div>
                   </div>
                 ))}
+            </div>
+                    </div>
+                )}
             </div>
         </div>
     );

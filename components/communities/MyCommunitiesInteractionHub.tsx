@@ -426,8 +426,8 @@ export const MyCommunitiesInteractionHub: React.FC<MyCommunitiesInteractionHubPr
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
                 <div className="space-y-1">
-                    <h1 className="text-xl font-bold uppercase tracking-wide text-white">COMMUNITY FEED</h1>
-                    <p className="text-zinc-400 text-xs">Public conversations from your collectives.</p>
+                    <h1 className="text-xl font-bold uppercase tracking-wide text-white">MY COLLECTIVE</h1>
+                    <p className="text-zinc-400 text-xs">Your communities, conversations and contributions within the collectives you belong to.</p>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -629,7 +629,7 @@ export const MyCommunitiesInteractionHub: React.FC<MyCommunitiesInteractionHubPr
         </div>
 
             {/* Aggregated Feed Stream */}
-            {membershipsLoading || loadingPosts ? (
+            {((membershipsLoading && joinedCommunities.length === 0) || (loadingPosts && aggregatedPosts.length === 0)) ? (
                 <div className="space-y-4">
                     {[1, 2, 3].map((n) => (
                         <div key={n} className="bg-[#0c0c0e] p-5 border border-zinc-800 animate-pulse space-y-3">
@@ -656,7 +656,7 @@ export const MyCommunitiesInteractionHub: React.FC<MyCommunitiesInteractionHubPr
                             // NO_COMMUNITY_MEMBERSHIPS_DETECTED
                         </p>
                         <p className="text-xs text-zinc-500 leading-relaxed">
-                            Join technical collectives in the All Communities discovery view to populate your aggregated public feed and participate in private inboxes.
+                            Join technical collectives in the Global Collective discovery view to populate your aggregated public feed and participate in private inboxes.
                         </p>
                     </div>
                     {onExploreAll && (
@@ -664,7 +664,7 @@ export const MyCommunitiesInteractionHub: React.FC<MyCommunitiesInteractionHubPr
                             onClick={onExploreAll}
                             className="mt-3 px-5 py-2 font-mono text-xs font-bold uppercase bg-white text-black border border-white hover:bg-zinc-200 transition-colors"
                         >
-                            EXPLORE ALL COMMUNITIES
+                            EXPLORE GLOBAL COLLECTIVE
                         </button>
                     )}
                 </div>

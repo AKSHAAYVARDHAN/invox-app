@@ -220,15 +220,109 @@ service cloud.firestore {
       );
     }
 
+    function isCommunityOwnerOrAdmin(communityId) {
+      return signedIn() && exists(/databases/$(database)/documents/communities/$(communityId))
+        && (
+          get(/databases/$(database)/documents/communities/$(communityId)).data.ownerId == uid()
+          || (
+            'adminIds' in get(/databases/$(database)/documents/communities/$(communityId)).data
+            && uid() in get(/databases/$(database)/documents/communities/$(communityId)).data.adminIds
+          )
+        );
+    }
+
     match /conclaveGatherings/{gatheringId} {
       allow read: if signedIn();
-      allow create: if owns('hostId');
+      allow create: if owns('hostId') || isCommunityOwnerOrAdmin(request.resource.data.communityId);
       allow update: if signedIn() && (
         existingOwner('hostId')
+        || isCommunityOwnerOrAdmin(resource.data.communityId)
         || isModerator()
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendeeCount', 'attendeeIds', 'updatedAt'])
       );
-      allow delete: if existingOwner('hostId') || isModerator();
+      allow delete: if existingOwner('hostId') || isCommunityOwnerOrAdmin(resource.data.communityId) || isModerator();
+    }
+
+    match /conclaveEvents/{eventId} {
+      // Draft events are exclusively accessible to organizers, owners, and admins
+      allow read: if signedIn() && (
+        !('eventStatus' in resource.data)
+        || resource.data.eventStatus != 'DRAFT'
+        || resource.data.organizerUid == uid()
+        || resource.data.hostId == uid()
+        || isCommunityOwnerOrAdmin(resource.data.communityId)
+        || isModerator()
+      );
+      allow create: if signedIn() && (
+        owns('organizerUid')
+        || owns('hostId')
+        || isCommunityOwnerOrAdmin(request.resource.data.communityId)
+        || isModerator()
+      );
+      allow update: if signedIn() && (
+        existingOwner('organizerUid')
+        || existingOwner('hostId')
+        || isCommunityOwnerOrAdmin(resource.data.communityId)
+        || isModerator()
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registeredCount', 'attendeeCount', 'attendeeIds', 'updatedAt'])
+      );
+      allow delete: if signedIn() && (
+        // Organizers can delete draft events; published/cancelled events are preserved for history
+        (resource.data.eventStatus == 'DRAFT' && (
+          existingOwner('organizerUid')
+          || existingOwner('hostId')
+          || isCommunityOwnerOrAdmin(resource.data.communityId)
+        ))
+        || isModerator()
+      );
+
+      match /protected/{docId} {
+        allow read: if signedIn() && (
+          isCommunityOwnerOrAdmin(get(/databases/$(database)/documents/conclaveEvents/$(eventId)).data.communityId)
+          || get(/databases/$(database)/documents/conclaveEvents/$(eventId)).data.organizerUid == uid()
+          || (
+            exists(/databases/$(database)/documents/conclaveRegistrations/$(eventId + '_' + uid()))
+            && get(/databases/$(database)/documents/conclaveRegistrations/$(eventId + '_' + uid())).data.status == 'CONFIRMED'
+          )
+          || isModerator()
+        );
+        allow write: if signedIn() && (
+          isCommunityOwnerOrAdmin(get(/databases/$(database)/documents/conclaveEvents/$(eventId)).data.communityId)
+          || get(/databases/$(database)/documents/conclaveEvents/$(eventId)).data.organizerUid == uid()
+          || isModerator()
+        );
+      }
+    }
+
+    match /conclaveRegistrations/{regId} {
+      allow read: if signedIn() && (
+        resource.data.userId == uid()
+        || isCommunityOwnerOrAdmin(resource.data.communityId)
+        || isModerator()
+      );
+      allow create: if signedIn() && request.resource.data.userId == uid();
+      allow update: if signedIn() && (
+        resource.data.userId == uid()
+        || isCommunityOwnerOrAdmin(resource.data.communityId)
+        || isModerator()
+      );
+      allow delete: if signedIn() && (
+        resource.data.userId == uid()
+        || isCommunityOwnerOrAdmin(resource.data.communityId)
+        || isModerator()
+      );
+    }
+
+    match /conclaveAttendance/{attendanceId} {
+      allow read: if signedIn() && (
+        resource.data.userId == uid()
+        || isCommunityOwnerOrAdmin(resource.data.communityId)
+        || isModerator()
+      );
+      allow write: if signedIn() && (
+        isCommunityOwnerOrAdmin(request.resource.data.communityId)
+        || isModerator()
+      );
     }
 
     match /communityPrivateMessages/{messageId} {

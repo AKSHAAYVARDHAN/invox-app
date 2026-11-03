@@ -247,14 +247,14 @@ export const MyCommunitiesDirectory: React.FC<MyCommunitiesDirectoryProps> = ({
                         <button 
                             onClick={onExploreAll}
                             className="p-1.5 text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 transition-colors mr-1"
-                            title="Back to All Communities"
+                            title="Back to Global Collective"
                         >
                             <ArrowLeftIcon className="w-4 h-4" />
                         </button>
                         <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">// PERSONAL_DIRECTORY</span>
                     </div>
-                    <h1 className="text-xl font-bold uppercase tracking-wide text-white">MY COMMUNITIES</h1>
-                    <p className="text-zinc-400 text-xs">Your collectives. Your connections. Your space.</p>
+                    <h1 className="text-xl font-bold uppercase tracking-wide text-white">MY COLLECTIVE</h1>
+                    <p className="text-zinc-400 text-xs">Your communities, conversations and contributions within the collectives you belong to.</p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
@@ -305,7 +305,7 @@ export const MyCommunitiesDirectory: React.FC<MyCommunitiesDirectoryProps> = ({
                             type="search"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder="SEARCH_MY_COMMUNITIES (NAME, HANDLE, TOPIC)..."
+                            placeholder="SEARCH_MY_COLLECTIVE (NAME, HANDLE, TOPIC)..."
                             className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 pr-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
                         />
                         {searchTerm && (

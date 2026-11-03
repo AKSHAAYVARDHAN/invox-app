@@ -1243,8 +1243,11 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
     const { joinedCommunities, loading: joinedLoading } = useUserJoinedCommunities(currentUser);
     const navigate = ReactRouterDOM.useNavigate();
     const location = ReactRouterDOM.useLocation();
+    const searchParams = new URLSearchParams(location.search);
+    const viewFromUrl = searchParams.get('view') || searchParams.get('tab');
+    const activeView = location.pathname === '/communities' && viewFromUrl ? viewFromUrl : communityView;
+
     const isCommunityDetailPage = location.pathname.startsWith('/communities/') && location.pathname !== '/communities';
-    const [loading, setLoading] = useState(false);
     const [myCommunitiesSearchTerm, setMyCommunitiesSearchTerm] = useState('');
     const [myCommunityDomains, setMyCommunityDomains] = useState<string[]>([]);
     const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -1264,14 +1267,6 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
-
-    useEffect(() => {
-        if (communityView === 'my-communities') {
-            setLoading(true);
-            const timer = setTimeout(() => setLoading(false), 500);
-            return () => clearTimeout(timer);
-        }
-    }, [communityView]);
 
     const liveUserCommunities: MyCommunity[] = React.useMemo(() => {
         if (!currentUser?.uid || !joinedCommunities || joinedCommunities.length === 0) {
@@ -1308,12 +1303,12 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
 
     const showOtherElements = !isSearchFocused && communityFilters.searchTerm.trim() === '';
 
-    const isLoadingState = loading || (Boolean(currentUser?.uid) && joinedLoading);
+    const isLoadingState = Boolean(currentUser?.uid) && joinedLoading && joinedCommunities.length === 0;
 
     return (
         <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
             <div className="h-full flex flex-col gap-5">
-                {communityView === 'my-communities' ? (
+                {activeView === 'my-communities' ? (
                      <>
                         <div className="px-4 space-y-4">
                             <button 
@@ -1446,7 +1441,12 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                                         Join technical collectives to establish private member interaction channels.
                                     </p>
                                     <button
-                                        onClick={() => setCommunityView('leaderboard')}
+                                        onClick={() => {
+                                            navigate('/communities');
+                                            if (setCommunityView) {
+                                                setCommunityView('leaderboard');
+                                            }
+                                        }}
                                         className="px-3 py-1.5 text-xs font-bold uppercase bg-white text-black hover:bg-zinc-200 border border-white transition-colors"
                                     >
                                         EXPLORE COMMUNITIES
@@ -1464,7 +1464,7 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                     </>
                 ) : (
                     <div className='overflow-y-auto no-scrollbar flex flex-col gap-5'>
-                        {(communityView === 'all' || isCommunityDetailPage) && (
+                        {(activeView === 'all' || isCommunityDetailPage) && (
                             <div className="px-4">
                                 <button
                                     onClick={() => {
@@ -1496,29 +1496,39 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                         {showOtherElements && (
                             <div className="px-4 space-y-5">
                                 <div className="bg-[#0c0c0e] border border-zinc-800 p-3">
-                                    <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider mb-2">// VIEWS</h3>
+                                    <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider mb-2">// COLLECTIVES</h3>
                                     <div className="space-y-2">
                                         <button
-                                            onClick={() => setCommunityView('my-communities')}
+                                            onClick={() => {
+                                                if (setCommunityView) {
+                                                    setCommunityView('all');
+                                                }
+                                                navigate('/communities?view=all');
+                                            }}
                                             className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider border transition-colors cursor-pointer ${
-                                                communityView === 'my-communities'
+                                                activeView === 'all'
                                                     ? 'bg-zinc-900 border-emerald-500/50 text-white font-bold'
                                                     : 'bg-black border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600'
                                             }`}
                                         >
-                                            <BookmarkIcon className={`w-4 h-4 ${communityView === 'my-communities' ? 'text-emerald-400' : 'text-zinc-400'}`} />
-                                            <span>MY_COMMUNITIES</span>
+                                            <GlobeAltIcon className={`w-4 h-4 ${activeView === 'all' ? 'text-emerald-400' : 'text-zinc-400'}`} />
+                                            <span>GLOBAL_COLLECTIVE</span>
                                         </button>
                                         <button
-                                             onClick={() => setCommunityView('all')}
-                                             className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider border transition-colors cursor-pointer ${
-                                                 communityView === 'all'
-                                                     ? 'bg-zinc-900 border-emerald-500/50 text-white font-bold'
-                                                     : 'bg-black border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600'
-                                             }`}
+                                            onClick={() => {
+                                                if (setCommunityView) {
+                                                    setCommunityView('my-communities');
+                                                }
+                                                navigate('/communities?view=my-communities');
+                                            }}
+                                            className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider border transition-colors cursor-pointer ${
+                                                activeView === 'my-communities'
+                                                    ? 'bg-zinc-900 border-emerald-500/50 text-white font-bold'
+                                                    : 'bg-black border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600'
+                                            }`}
                                         >
-                                            <GlobeAltIcon className={`w-4 h-4 ${communityView === 'all' ? 'text-emerald-400' : 'text-zinc-400'}`} />
-                                            <span>ALL_COMMUNITIES</span>
+                                            <BookmarkIcon className={`w-4 h-4 ${activeView === 'my-communities' ? 'text-emerald-400' : 'text-zinc-400'}`} />
+                                            <span>MY_COLLECTIVE</span>
                                         </button>
                                     </div>
                                 </div>

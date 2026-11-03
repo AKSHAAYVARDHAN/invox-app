@@ -16,7 +16,8 @@ interface Domain {
 
 interface DomainFilterProps {
     selectedDomains: string[];
-    onSelectionChange: (domains: string[]) => void;
+    onSelectionChange?: (domains: string[]) => void;
+    onChange?: (domains: string[]) => void;
     domains: Domain[];
     buttonText?: string;
     className?: string;
@@ -30,7 +31,8 @@ interface DomainFilterProps {
 
 const DomainFilter: React.FC<DomainFilterProps> = ({ 
     selectedDomains, 
-    onSelectionChange, 
+    onSelectionChange,
+    onChange,
     domains, 
     buttonText = 'DOMAINS',
     className = 'mb-4',
@@ -81,11 +83,20 @@ const DomainFilter: React.FC<DomainFilterProps> = ({
         }
     }, [isOpen]);
 
+    const notifySelectionChange = useCallback((newSelection: string[]) => {
+        if (typeof onSelectionChange === 'function') {
+            onSelectionChange(newSelection);
+        }
+        if (typeof onChange === 'function') {
+            onChange(newSelection);
+        }
+    }, [onSelectionChange, onChange]);
+
     const handleToggleDomain = useCallback((domainName: string) => {
         if (singleSelect) {
             const isCurrentlySelected = selectedDomains.length === 1 && selectedDomains[0].toLowerCase() === domainName.toLowerCase();
             const newSelection = isCurrentlySelected ? [] : [domainName];
-            onSelectionChange(newSelection);
+            notifySelectionChange(newSelection);
             if (closeOnSelect ?? true) {
                 setIsOpen(false);
             }
@@ -98,23 +109,23 @@ const DomainFilter: React.FC<DomainFilterProps> = ({
         } else {
             newSelection = [...selectedDomains, domainName];
         }
-        onSelectionChange(newSelection);
+        notifySelectionChange(newSelection);
         if (closeOnSelect) {
             setIsOpen(false);
         }
-    }, [selectedDomains, onSelectionChange, singleSelect, closeOnSelect]);
+    }, [selectedDomains, notifySelectionChange, singleSelect, closeOnSelect]);
 
     const handleSelectAll = useCallback(() => {
-        onSelectionChange([]);
+        notifySelectionChange([]);
         if (closeOnSelect || singleSelect) {
             setIsOpen(false);
         }
-    }, [onSelectionChange, closeOnSelect, singleSelect]);
+    }, [notifySelectionChange, closeOnSelect, singleSelect]);
 
     const handleClear = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
-        onSelectionChange([]);
-    }, [onSelectionChange]);
+        notifySelectionChange([]);
+    }, [notifySelectionChange]);
 
     const isAllSelected = selectedDomains.length === 0;
 

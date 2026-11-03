@@ -427,6 +427,8 @@ export interface ConclaveGathering {
   createdAt?: Date | any;
 }
 
+export * from './services/conclaveTypes';
+
 export interface MyCommunity {
   id: string;
   name: string;

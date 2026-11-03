@@ -7,7 +7,7 @@ import {
     mergeCommunitiesWithMocks 
 } from '../../services/communityService';
 import { subscribeToFeed } from '../../services/postService';
-import { MOCK_COMMUNITY_PUBLIC_POSTS } from '../../services/communitiesDemoData';
+import { MOCK_COMMUNITY_PUBLIC_POSTS, MOCK_COMMUNITIES } from '../../services/communitiesDemoData';
 import { mockCommunities } from '../../pages/Communities';
 import type { Post, Community } from '../../types';
 import { 
@@ -96,9 +96,10 @@ export const AllCommunitiesFeed: React.FC<AllCommunitiesFeedProps> = ({
 
     // Merge communities with mock fallback
     const allCommunities = useMemo(() => {
+        const combinedMocks = [...mockCommunities, ...MOCK_COMMUNITIES];
         return mergeCommunitiesWithMocks(
             firestoreCommunities,
-            mockCommunities,
+            combinedMocks,
             currentUser?.uid,
             isMember
         );
@@ -243,20 +244,64 @@ export const AllCommunitiesFeed: React.FC<AllCommunitiesFeedProps> = ({
 
         // 1. Domain Filter
         if (selectedDomain !== 'ALL') {
-            const targetLower = selectedDomain.toLowerCase();
+            const targetLower = selectedDomain.toLowerCase().trim();
             list = list.filter((p) => {
-                const postDomain = (p.domain || p.category || '').toLowerCase();
-                if (postDomain === targetLower) return true;
+                const postDomain = (p.domain || '').toLowerCase().trim();
+                const postCategory = (p.category || '').toLowerCase().trim();
 
-                // Match with originating community category
-                const commId = (p.communityId || '').toLowerCase();
-                const comm = commId ? communityMap.get(commId) : null;
-                if (comm && (comm.category || '').toLowerCase() === targetLower) {
+                // Direct match on post domain or category
+                if (postDomain === targetLower || postCategory === targetLower) return true;
+
+                // Match with originating community category or domain
+                const commId = (p.communityId || p.channelId || '').toLowerCase().trim();
+                const commName = (p.communityName || '').toLowerCase().trim();
+                const comm = (commId ? communityMap.get(commId) : null)
+                    || (commName ? communityMap.get(commName) : null);
+
+                if (comm) {
+                    const commCategory = (comm.category || '').toLowerCase().trim();
+                    const commDomain = (comm.domain || '').toLowerCase().trim();
+                    if (commCategory === targetLower || commDomain === targetLower) {
+                        return true;
+                    }
+
+                    // Flexible match between synonymous domains
+                    if ((targetLower.includes('startup') || targetLower.includes('entrepreneur')) &&
+                        (commCategory.includes('startup') || commDomain.includes('startup'))) {
+                        return true;
+                    }
+                    if ((targetLower.includes('coding') || targetLower.includes('software')) &&
+                        (commCategory.includes('coding') || commCategory.includes('software') || commDomain.includes('coding') || commDomain.includes('software'))) {
+                        return true;
+                    }
+                    if ((targetLower.includes('artificial') || targetLower === 'ai') &&
+                        (commCategory.includes('artificial') || commCategory === 'ai' || commDomain.includes('artificial') || commDomain === 'ai')) {
+                        return true;
+                    }
+                    if (targetLower.includes('science') && (commCategory.includes('science') || commDomain.includes('science'))) {
+                        return true;
+                    }
+                }
+
+                // Flexible match on post fields
+                if ((targetLower.includes('startup') || targetLower.includes('entrepreneur')) &&
+                    (postDomain.includes('startup') || postCategory.includes('startup'))) {
+                    return true;
+                }
+                if ((targetLower.includes('coding') || targetLower.includes('software')) &&
+                    (postDomain.includes('coding') || postDomain.includes('software') || postCategory.includes('coding') || postCategory.includes('software'))) {
+                    return true;
+                }
+                if ((targetLower.includes('artificial') || targetLower === 'ai') &&
+                    (postDomain.includes('artificial') || postDomain === 'ai' || postCategory.includes('artificial') || postCategory === 'ai')) {
+                    return true;
+                }
+                if (targetLower.includes('science') && (postDomain.includes('science') || postCategory.includes('science'))) {
                     return true;
                 }
 
                 // Match in tags
-                if (Array.isArray(p.tags) && p.tags.some((t) => t.toLowerCase() === targetLower)) {
+                if (Array.isArray(p.tags) && p.tags.some((t) => t.toLowerCase().trim() === targetLower)) {
                     return true;
                 }
 
@@ -363,29 +408,31 @@ export const AllCommunitiesFeed: React.FC<AllCommunitiesFeedProps> = ({
                 <div className="space-y-1">
                     <div className="flex items-center gap-2">
                         <span className="font-mono text-[10px] text-zinc-500 uppercase tracking-widest block">
-                            // GLOBAL_COLLECTIVES_FEED
+                            // GLOBAL_COLLECTIVE_FEED
                         </span>
                         <span className="w-1.5 h-1.5 bg-emerald-400 inline-block animate-pulse"></span>
                     </div>
                     <h1 className="text-lg sm:text-xl font-bold font-mono uppercase text-white tracking-wide flex items-center gap-2.5">
                         <GlobeAltIcon className="w-5 h-5 text-emerald-400" />
-                        <span>ALL COMMUNITIES</span>
+                        <span>GLOBAL COLLECTIVE</span>
                     </h1>
                     <p className="text-xs font-mono text-zinc-400 leading-relaxed max-w-2xl">
-                        Public broadcasts, technical dispatches, and project updates across every INVOX community.
+                        Discover public conversations, ideas and broadcasts from across every collective on INVOX.
                     </p>
                 </div>
             </div>
 
             {/* Separate Domain Filter Bar */}
-            <div className="bg-[#0c0c0e] border border-zinc-800 p-3 sm:p-4">
-                <div className="overflow-x-auto no-scrollbar">
-                    <DomainFilter
-                        domains={dynamicDomainFilterOptions}
-                        selectedDomains={selectedDomain === 'ALL' ? [] : [selectedDomain]}
-                        onChange={handleDomainChange}
-                    />
-                </div>
+            <div className="bg-[#0c0c0e] border border-zinc-800 p-3 sm:p-4 relative z-20">
+                <DomainFilter
+                    domains={dynamicDomainFilterOptions}
+                    selectedDomains={selectedDomain === 'ALL' ? [] : [selectedDomain]}
+                    onSelectionChange={handleDomainChange}
+                    onChange={handleDomainChange}
+                    singleSelect={true}
+                    closeOnSelect={true}
+                    className="mb-0"
+                />
             </div>
 
             {/* Feed Controls: Search + Sort + Stats Bar */}
@@ -460,7 +507,7 @@ export const AllCommunitiesFeed: React.FC<AllCommunitiesFeedProps> = ({
             )}
 
             {/* Feed Stream */}
-            {loadingPosts ? (
+            {loadingPosts && allCommunityPosts.length === 0 ? (
                 <div className="space-y-4">
                     <FeedCardSkeleton />
                     <FeedCardSkeleton />

@@ -217,7 +217,7 @@ export const MyCommunitiesFeed: React.FC<MyCommunitiesFeedProps> = ({
                             <button
                                 onClick={onExploreAll}
                                 className="p-1.5 text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 transition-colors mr-1"
-                                title="View All Communities Leaderboard"
+                                title="View Communities Leaderboard"
                             >
                                 <ArrowLeftIcon className="w-4 h-4" />
                             </button>
@@ -227,10 +227,10 @@ export const MyCommunitiesFeed: React.FC<MyCommunitiesFeedProps> = ({
                         </span>
                     </div>
                     <h1 className="text-xl sm:text-2xl font-bold uppercase tracking-wide text-white">
-                        COMMUNITY FEED
+                        MY COLLECTIVE
                     </h1>
                     <p className="text-zinc-400 text-xs">
-                        Aggregated public broadcasts and signals across all your joined collectives.
+                        Your communities, conversations and contributions within the collectives you belong to.
                     </p>
                 </div>
 
@@ -266,7 +266,7 @@ export const MyCommunitiesFeed: React.FC<MyCommunitiesFeedProps> = ({
                                     : 'bg-black border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
                             }`}
                         >
-                            ALL COMMUNITIES ({filteredFeedPosts.length})
+                            MY COLLECTIVE ({filteredFeedPosts.length})
                         </button>
 
                         {/* Joined Communities Dropdown Filter */}
@@ -332,7 +332,7 @@ export const MyCommunitiesFeed: React.FC<MyCommunitiesFeedProps> = ({
                             onClick={() => handleSelectCommunity('ALL')}
                             className="text-zinc-400 hover:text-white flex items-center gap-1 text-[11px] uppercase transition-colors"
                         >
-                            <span>Return to All Communities</span>
+                            <span>Return to My Collective</span>
                             <CloseIcon className="w-3 h-3" />
                         </button>
                     </div>
@@ -457,7 +457,7 @@ export const MyCommunitiesFeed: React.FC<MyCommunitiesFeedProps> = ({
                                     onClick={() => handleSelectCommunity('ALL')}
                                     className="px-4 py-2 font-mono text-xs font-bold uppercase bg-zinc-900 border border-zinc-700 text-zinc-300 hover:text-white transition-colors"
                                 >
-                                    SHOW ALL COMMUNITIES
+                                    SHOW MY COLLECTIVE
                                 </button>
                                 <button
                                     onClick={handleOpenCreatePost}
