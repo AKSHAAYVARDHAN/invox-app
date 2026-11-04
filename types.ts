@@ -385,6 +385,7 @@ export interface Community {
   governanceModel?: string;
   postPermission?: 'all' | 'admins_only';
   gatheringPermission?: 'all' | 'admins_only';
+  conclaveCreationPermission?: 'ADMINS_ONLY' | 'ALL_MEMBERS';
   milestones?: any[];
   memberCount?: number;
   createdAt?: any;

@@ -1433,6 +1433,7 @@ export interface CreateCommunityInput {
     governanceModel?: string;
     postPermission?: 'all' | 'admins_only';
     gatheringPermission?: 'all' | 'admins_only';
+    conclaveCreationPermission?: 'ADMINS_ONLY' | 'ALL_MEMBERS';
     adminIds?: string[];
 }
 
@@ -1444,6 +1445,7 @@ export const createCommunity = async (
     user: { uid: string; displayName?: string | null; photoURL?: string | null }
 ): Promise<Community> => {
     const newId = `comm_${Date.now()}`;
+    const conclavePermission = payload.conclaveCreationPermission || (payload.gatheringPermission === 'all' ? 'ALL_MEMBERS' : 'ADMINS_ONLY');
     const newComm: Community = {
         id: newId,
         name: payload.name,
@@ -1470,7 +1472,8 @@ export const createCommunity = async (
         joinPolicy: payload.joinPolicy || 'open',
         governanceModel: payload.governanceModel || 'Sovereign Founder',
         postPermission: payload.postPermission || 'all',
-        gatheringPermission: payload.gatheringPermission || 'all',
+        gatheringPermission: conclavePermission === 'ALL_MEMBERS' ? 'all' : 'admins_only',
+        conclaveCreationPermission: conclavePermission,
     };
 
     try {
@@ -1510,6 +1513,7 @@ export interface UpdateCommunityInput {
     governanceModel?: string;
     postPermission?: 'all' | 'admins_only';
     gatheringPermission?: 'all' | 'admins_only';
+    conclaveCreationPermission?: 'ADMINS_ONLY' | 'ALL_MEMBERS';
     adminIds?: string[];
 }
 

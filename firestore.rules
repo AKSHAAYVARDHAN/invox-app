@@ -231,6 +231,23 @@ service cloud.firestore {
         );
     }
 
+    function canCreateConclaveInCommunity(communityId) {
+      return signedIn() && exists(/databases/$(database)/documents/communities/$(communityId))
+        && (
+          isCommunityOwnerOrAdmin(communityId)
+          || (
+            (
+              ('conclaveCreationPermission' in get(/databases/$(database)/documents/communities/$(communityId)).data
+                && get(/databases/$(database)/documents/communities/$(communityId)).data.conclaveCreationPermission == 'ALL_MEMBERS')
+              || ('gatheringPermission' in get(/databases/$(database)/documents/communities/$(communityId)).data
+                && get(/databases/$(database)/documents/communities/$(communityId)).data.gatheringPermission == 'all')
+            )
+            && exists(/databases/$(database)/documents/communityMemberships/$(uid() + '_' + communityId))
+            && get(/databases/$(database)/documents/communityMemberships/$(uid() + '_' + communityId)).data.status == 'active'
+          )
+        );
+    }
+
     match /conclaveGatherings/{gatheringId} {
       allow read: if signedIn();
       allow create: if owns('hostId') || isCommunityOwnerOrAdmin(request.resource.data.communityId);
@@ -253,11 +270,8 @@ service cloud.firestore {
         || isCommunityOwnerOrAdmin(resource.data.communityId)
         || isModerator()
       );
-      allow create: if signedIn() && (
-        owns('organizerUid')
-        || owns('hostId')
-        || isCommunityOwnerOrAdmin(request.resource.data.communityId)
-        || isModerator()
+      allow create: if signedIn() && (owns('organizerUid') || owns('hostId')) && (
+        canCreateConclaveInCommunity(request.resource.data.communityId) || isModerator()
       );
       allow update: if signedIn() && (
         existingOwner('organizerUid')

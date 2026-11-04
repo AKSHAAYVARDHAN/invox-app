@@ -9,6 +9,15 @@ import type { Timestamp } from 'firebase/firestore';
 export type ConclaveEventType = 'ONSITE' | 'VIRTUAL';
 
 /**
+ * Conclave Creation Permission Policy
+ * Configured per-community under Governance.
+ * - ADMINS_ONLY: Only community administrators and owner can create Conclaves (Default)
+ * - ALL_MEMBERS: Any verified community member can create Conclaves
+ */
+export type ConclaveCreationPermission = 'ADMINS_ONLY' | 'ALL_MEMBERS';
+
+
+/**
  * Conclave Event Lifecycle Statuses
  */
 export type ConclaveEventStatus =

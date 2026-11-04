@@ -28,7 +28,8 @@ import type {
     CreateConclaveEventInput,
     UpdateConclaveEventInput,
     ConclaveValidationResult,
-    ConclaveGathering
+    ConclaveGathering,
+    ConclaveCreationPermission,
 } from './conclaveTypes';
 import { MOCK_COMMUNITY_EVENTS } from './communitiesDemoData';
 import { isCommunityOwner, isCommunityAdmin, isCommunityManager } from './communityService';
@@ -100,6 +101,41 @@ export const isConclaveRegistrationAvailable = (
         return { eligible: false, reason: 'Registration capacity has been reached.' };
     }
     return { eligible: true };
+};
+
+/**
+ * Resolves the Conclave creation permission policy for a community.
+ * Default for all newly created and unconfigured communities is 'ADMINS_ONLY'.
+ */
+export const getCommunityConclaveCreationPolicy = (
+    community: Community | null | undefined
+): ConclaveCreationPermission => {
+    if (!community) return 'ADMINS_ONLY';
+    if (community.conclaveCreationPermission === 'ALL_MEMBERS') return 'ALL_MEMBERS';
+    if (community.conclaveCreationPermission === 'ADMINS_ONLY') return 'ADMINS_ONLY';
+    // Backward compatibility with legacy gatheringPermission
+    if (community.gatheringPermission === 'all') return 'ALL_MEMBERS';
+    return 'ADMINS_ONLY';
+};
+
+/**
+ * Checks whether an authenticated user is permitted to create Conclaves in a given community.
+ * - Community Owner & Appointed Administrators can always create Conclaves.
+ * - Non-members can NEVER create Conclaves under any policy.
+ * - Regular active community members can create Conclaves only if community policy is 'ALL_MEMBERS'.
+ */
+export const canUserCreateConclave = (
+    community: Community | null | undefined,
+    uid: string | null | undefined,
+    isMember: boolean
+): boolean => {
+    if (!uid || !community) return false;
+    // Owner and Administrators retain sovereign creation & management authority
+    if (isCommunityManager(community, uid)) return true;
+    // Non-members can never create Conclaves under any policy
+    if (!isMember) return false;
+    // Regular members can create if community governance allows ALL_MEMBERS
+    return getCommunityConclaveCreationPolicy(community) === 'ALL_MEMBERS';
 };
 
 /**
@@ -559,13 +595,14 @@ export const validateConclaveEventInput = (
 export const createConclaveEvent = async (
     input: CreateConclaveEventInput,
     user: { uid: string; displayName?: string | null; photoURL?: string | null },
-    community: Community
+    community: Community,
+    isMember = false
 ): Promise<{ success: boolean; event?: ConclaveEvent; errors?: string[] }> => {
     try {
-        if (!canUserManageConclave(community, null, user.uid)) {
+        if (!canUserCreateConclave(community, user.uid, isMember)) {
             return {
                 success: false,
-                errors: ['UNAUTHORIZED: Only community owners or designated administrators can create Conclaves.']
+                errors: ['UNAUTHORIZED: You do not possess authorization to create Conclaves in this collective.']
             };
         }
 
@@ -578,6 +615,12 @@ export const createConclaveEvent = async (
         const targetStatus: ConclaveEventStatus = input.eventStatus || 'DRAFT';
         const newId = `conclave_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         const eventRef = doc(db, CONCLAVE_COLLECTIONS.events, newId);
+
+        const organizerRole = isCommunityOwner(community, user.uid)
+            ? 'Owner'
+            : isCommunityAdmin(community, user.uid)
+            ? 'Admin'
+            : 'Member';
 
         const eventData: ConclaveEvent = {
             id: newId,
@@ -592,7 +635,7 @@ export const createConclaveEvent = async (
                 uid: user.uid,
                 displayName: user.displayName || 'Council Organizer',
                 avatarUrl: user.photoURL || community.avatarUrl,
-                role: isCommunityOwner(community, user.uid) ? 'Owner' : 'Admin',
+                role: organizerRole,
             },
             startDate: input.startDate,
             startTime: input.startTime,

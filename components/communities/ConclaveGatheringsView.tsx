@@ -29,6 +29,7 @@ import {
     transitionConclaveEventStatus,
     isConclaveRegistrationAvailable,
     validateConclaveEventInput,
+    canUserCreateConclave,
 } from '../../services/conclaveService';
 import type {
     ConclaveEvent,
@@ -82,6 +83,8 @@ export const ConclaveGatheringsView: React.FC<ConclaveGatheringsViewProps> = ({
     canManage,
 }) => {
     const { currentUser, userProfile } = useAuth();
+    const canCreate = canUserCreateConclave(community, currentUser?.uid, isMember);
+    const hasAuthoringRights = canManage || canCreate;
     const [events, setEvents] = useState<ConclaveEvent[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -357,14 +360,14 @@ export const ConclaveGatheringsView: React.FC<ConclaveGatheringsViewProps> = ({
                         <span className="px-2 py-1 bg-cyan-950/40 border border-cyan-800/60 text-cyan-400">
                             {virtualCount} VIRTUAL
                         </span>
-                        {canManage && draftCount > 0 && (
+                        {hasAuthoringRights && draftCount > 0 && (
                             <span className="px-2 py-1 bg-purple-950/40 border border-purple-800/60 text-purple-300">
                                 {draftCount} DRAFT{draftCount > 1 ? 'S' : ''}
                             </span>
                         )}
                     </div>
 
-                    {canManage && (
+                    {canCreate && (
                         <button
                             type="button"
                             onClick={() => {
@@ -459,7 +462,7 @@ export const ConclaveGatheringsView: React.FC<ConclaveGatheringsViewProps> = ({
                         UPCOMING
                     </button>
 
-                    {canManage && (
+                    {hasAuthoringRights && (
                         <button
                             type="button"
                             onClick={() => setViewFilter('DRAFTS')}
@@ -480,7 +483,7 @@ export const ConclaveGatheringsView: React.FC<ConclaveGatheringsViewProps> = ({
                         </button>
                     )}
 
-                    {canManage && (
+                    {hasAuthoringRights && (
                         <button
                             type="button"
                             onClick={() => setViewFilter('MY_EVENTS')}
@@ -846,6 +849,7 @@ export const ConclaveGatheringsView: React.FC<ConclaveGatheringsViewProps> = ({
             {isFormModalOpen && (
                 <ConclaveEventFormModal
                     community={community}
+                    isMember={isMember}
                     initialEvent={editingEvent}
                     onClose={() => {
                         setIsFormModalOpen(false);
@@ -879,7 +883,7 @@ export const ConclaveGatheringsView: React.FC<ConclaveGatheringsViewProps> = ({
                 <ConclaveEventPreviewModal
                     event={previewEvent}
                     community={community}
-                    isOrganizer={canManage}
+                    isOrganizer={canManage || previewEvent.organizerUid === currentUser?.uid}
                     onClose={() => setPreviewEvent(null)}
                     onEdit={() => {
                         setEditingEvent(previewEvent);
@@ -1103,6 +1107,7 @@ const ConclaveEventActionsMenu: React.FC<ConclaveEventActionsMenuProps> = ({
  */
 interface ConclaveEventFormModalProps {
     community: Community;
+    isMember?: boolean;
     initialEvent?: ConclaveEvent | null;
     onClose: () => void;
     onSaved: (event: ConclaveEvent) => void;
@@ -1111,6 +1116,7 @@ interface ConclaveEventFormModalProps {
 
 const ConclaveEventFormModal: React.FC<ConclaveEventFormModalProps> = ({
     community,
+    isMember = false,
     initialEvent,
     onClose,
     onSaved,
@@ -1227,7 +1233,8 @@ const ConclaveEventFormModal: React.FC<ConclaveEventFormModalProps> = ({
                     displayName: currentUser.displayName || userProfile?.displayName || 'Council Organizer',
                     photoURL: currentUser.photoURL || undefined,
                 },
-                community
+                community,
+                isMember
             );
             if (res.success && res.event) {
                 onSaved(res.event);
@@ -1268,7 +1275,8 @@ const ConclaveEventFormModal: React.FC<ConclaveEventFormModalProps> = ({
                     displayName: currentUser.displayName || userProfile?.displayName || 'Council Organizer',
                     photoURL: currentUser.photoURL || undefined,
                 },
-                community
+                community,
+                isMember
             );
             if (res.success && res.event) {
                 onSaved(res.event);

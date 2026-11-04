@@ -168,7 +168,8 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
     // STEP 04: Governance & Membership
     const [governanceModel, setGovernanceModel] = useState<string>('Sovereign Founder');
     const [postPermission, setPostPermission] = useState<'all' | 'admins_only'>('all');
-    const [gatheringPermission, setGatheringPermission] = useState<'all' | 'admins_only'>('all');
+    const [conclaveCreationPermission, setConclaveCreationPermission] = useState<'ADMINS_ONLY' | 'ALL_MEMBERS'>('ADMINS_ONLY');
+    const [gatheringPermission, setGatheringPermission] = useState<'all' | 'admins_only'>('admins_only');
     const [adminInput, setAdminInput] = useState('');
 
     // STEP 05: Appearance & Discovery
@@ -237,7 +238,11 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
             setCustomModerationNote('');
             setGovernanceModel(community.governanceModel || 'Sovereign Founder');
             setPostPermission(community.postPermission || 'all');
-            setGatheringPermission(community.gatheringPermission || 'all');
+            const resolvedConclavePerm: 'ADMINS_ONLY' | 'ALL_MEMBERS' = community.conclaveCreationPermission === 'ALL_MEMBERS'
+                ? 'ALL_MEMBERS'
+                : 'ADMINS_ONLY';
+            setConclaveCreationPermission(resolvedConclavePerm);
+            setGatheringPermission(resolvedConclavePerm === 'ALL_MEMBERS' ? 'all' : 'admins_only');
             setAdminInput(Array.isArray(community.adminIds) ? community.adminIds.join(', ') : '');
             setAvatarUrl(community.avatarUrl || '');
             setBannerUrl(community.bannerUrl || '');
@@ -368,13 +373,15 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
                     guidelines.length !== (community.guidelines?.length || 0) ||
                     JSON.stringify(guidelines.map(g => g.title)) !== JSON.stringify(normalizeGuidelines(community.guidelines).map(g => g.title))
                 );
-            case 'governance':
+            case 'governance': {
+                const origConclavePerm = community.conclaveCreationPermission === 'ALL_MEMBERS' ? 'ALL_MEMBERS' : 'ADMINS_ONLY';
                 return (
                     governanceModel !== (community.governanceModel || 'Sovereign Founder') ||
                     postPermission !== (community.postPermission || 'all') ||
-                    gatheringPermission !== (community.gatheringPermission || 'all') ||
+                    conclaveCreationPermission !== origConclavePerm ||
                     adminInput.trim() !== (community.adminIds || []).join(', ').trim()
                 );
+            }
             case 'appearance':
                 return (
                     avatarUrl.trim() !== (community.avatarUrl || '').trim() ||
@@ -672,7 +679,8 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
                     joinPolicy,
                     governanceModel,
                     postPermission,
-                    gatheringPermission,
+                    gatheringPermission: conclaveCreationPermission === 'ALL_MEMBERS' ? 'all' : 'admins_only',
+                    conclaveCreationPermission,
                     adminIds: adminIdsList,
                 };
 
@@ -715,7 +723,8 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
                     joinPolicy,
                     governanceModel,
                     postPermission,
-                    gatheringPermission,
+                    gatheringPermission: conclaveCreationPermission === 'ALL_MEMBERS' ? 'all' : 'admins_only',
+                    conclaveCreationPermission,
                     adminIds: adminIdsList,
                 };
 
@@ -1683,27 +1692,47 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
                                             </div>
 
                                             <div className="border border-zinc-800 p-3 bg-black/40">
-                                                <label className="block text-zinc-300 uppercase text-[10px] tracking-wider mb-2 font-bold">
-                                                    Conclave Gatherings
-                                                </label>
-                                                <div className="space-y-1.5 text-[11px]">
-                                                    <label className="flex items-center gap-2 cursor-pointer text-zinc-300 hover:text-white">
-                                                        <input
-                                                            type="radio"
-                                                            name="gatheringPermission"
-                                                            checked={gatheringPermission === 'all'}
-                                                            onChange={() => setGatheringPermission('all')}
-                                                        />
-                                                        <span>Any member can host a conclave</span>
+                                                <div className="flex items-center justify-between mb-1.5">
+                                                    <label className="block text-zinc-300 uppercase text-[10px] tracking-wider font-bold">
+                                                        // CONCLAVE GATHERINGS
                                                     </label>
-                                                    <label className="flex items-center gap-2 cursor-pointer text-zinc-300 hover:text-white">
+                                                    <span className="text-[9px] font-mono text-emerald-400 uppercase tracking-wider">[Configurable Policy]</span>
+                                                </div>
+                                                <p className="text-[10px] text-zinc-400 mb-2 font-mono">
+                                                    Who can create Conclaves?
+                                                </p>
+                                                <div className="space-y-2 text-[11px]">
+                                                    <label className="flex items-start gap-2.5 cursor-pointer text-zinc-300 hover:text-white group">
                                                         <input
                                                             type="radio"
-                                                            name="gatheringPermission"
-                                                            checked={gatheringPermission === 'admins_only'}
-                                                            onChange={() => setGatheringPermission('admins_only')}
+                                                            name="conclaveCreationPermission"
+                                                            className="mt-0.5 accent-emerald-500 cursor-pointer"
+                                                            checked={conclaveCreationPermission === 'ADMINS_ONLY'}
+                                                            onChange={() => {
+                                                                setConclaveCreationPermission('ADMINS_ONLY');
+                                                                setGatheringPermission('admins_only');
+                                                            }}
                                                         />
-                                                        <span>Admins only can schedule</span>
+                                                        <div>
+                                                            <span className="font-semibold block text-zinc-200 group-hover:text-white">Admins &amp; Owner Only (Default)</span>
+                                                            <span className="text-[10px] text-zinc-400 block mt-0.5">Only community administrators and the owner can create Conclaves.</span>
+                                                        </div>
+                                                    </label>
+                                                    <label className="flex items-start gap-2.5 cursor-pointer text-zinc-300 hover:text-white group">
+                                                        <input
+                                                            type="radio"
+                                                            name="conclaveCreationPermission"
+                                                            className="mt-0.5 accent-emerald-500 cursor-pointer"
+                                                            checked={conclaveCreationPermission === 'ALL_MEMBERS'}
+                                                            onChange={() => {
+                                                                setConclaveCreationPermission('ALL_MEMBERS');
+                                                                setGatheringPermission('all');
+                                                            }}
+                                                        />
+                                                        <div>
+                                                            <span className="font-semibold block text-zinc-200 group-hover:text-white">All Community Members</span>
+                                                            <span className="text-[10px] text-zinc-400 block mt-0.5">Any verified community member can create Conclaves.</span>
+                                                        </div>
                                                     </label>
                                                 </div>
                                             </div>
@@ -2105,8 +2134,10 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
                                                 <strong className="text-zinc-200 uppercase">{postPermission}</strong>
                                             </div>
                                             <div>
-                                                <span className="text-zinc-600 block uppercase">GATHERINGS</span>
-                                                <strong className="text-zinc-200 uppercase">{gatheringPermission}</strong>
+                                                <span className="text-zinc-600 block uppercase">CONCLAVES</span>
+                                                <strong className="text-zinc-200 uppercase">
+                                                    {conclaveCreationPermission === 'ALL_MEMBERS' ? 'All Members' : 'Admins & Owner'}
+                                                </strong>
                                             </div>
                                         </div>
                                     </div>
