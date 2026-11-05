@@ -80,8 +80,12 @@ export interface ConclaveOnSiteDetails {
     venueName: string;
     address: string;
     city: string;
+    state?: string;
+    country?: string;
+    postalCode?: string;
     coordinates?: ConclaveCoordinates;
     venueInstructions?: string;
+    specialInstructions?: string;
 }
 
 /**
@@ -129,6 +133,7 @@ export interface ConclaveEvent {
     communityAvatarUrl?: string;
     title: string;
     description: string;
+    category?: string;
     eventType: ConclaveEventType;
     organizerUid: string;
     organizerInfo: ConclaveOrganizerInfo;
@@ -150,8 +155,13 @@ export interface ConclaveEvent {
     eventStatus: ConclaveEventStatus;
     registrationStatus: ConclaveRegistrationStatus;
 
+    // Access & Participation
+    accessPolicy?: 'ALL_MEMBERS' | 'ADMINS_ONLY' | 'PUBLIC' | string;
+    participationInstructions?: string;
+
     // Visual Media
     coverImageUrl?: string;
+    promoVideoUrl?: string;
 
     // Audit timestamps
     createdAt: Date | Timestamp | any;
@@ -192,6 +202,7 @@ export interface CreateConclaveEventInput {
     communityAvatarUrl?: string;
     title: string;
     description: string;
+    category?: string;
     eventType: ConclaveEventType;
     startDate: string;
     startTime: string;
@@ -202,6 +213,9 @@ export interface CreateConclaveEventInput {
     timezone: string;
     capacity: number;
     coverImageUrl?: string;
+    promoVideoUrl?: string;
+    accessPolicy?: 'ALL_MEMBERS' | 'ADMINS_ONLY' | 'PUBLIC' | string;
+    participationInstructions?: string;
     eventStatus?: ConclaveEventStatus;
     onSite?: ConclaveOnSiteDetails;
     virtual?: ConclaveVirtualDetails;
@@ -214,6 +228,7 @@ export interface CreateConclaveEventInput {
 export interface UpdateConclaveEventInput {
     title?: string;
     description?: string;
+    category?: string;
     eventType?: ConclaveEventType;
     startDate?: string;
     startTime?: string;
@@ -224,6 +239,9 @@ export interface UpdateConclaveEventInput {
     timezone?: string;
     capacity?: number;
     coverImageUrl?: string;
+    promoVideoUrl?: string;
+    accessPolicy?: 'ALL_MEMBERS' | 'ADMINS_ONLY' | 'PUBLIC' | string;
+    participationInstructions?: string;
     eventStatus?: ConclaveEventStatus;
     registrationStatus?: ConclaveRegistrationStatus;
     onSite?: ConclaveOnSiteDetails;

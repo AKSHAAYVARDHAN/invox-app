@@ -51,8 +51,9 @@ import { useCollabDashboardData } from '../spotlight/useCollabDashboardData';
 import SettingsSidebar from '../settings/SettingsSidebar';
 import { useCommunityMemberships, useUserJoinedCommunities } from '../../services/communityService';
 import type { JoinedCommunityRecord } from '../../services/communityService';
-import { PrivateCommunityInteractionModal } from '../communities/PrivateCommunityInteractionModal';
 import { mockCommunities } from '../../pages/Communities';
+import { subscribeUpcomingConclaveEvents } from '../../services/conclaveService';
+import type { ConclaveEvent } from '../../services/conclaveTypes';
 
 const trendingTopics = [
     { name: '#QuantumLeap', posts: '12.1K posts' },
@@ -184,13 +185,6 @@ const communityPageDomains = [
     { name: 'Business', icon: BriefcaseIcon },
     { name: 'Artificial Intelligence', icon: SparklesIcon },
     { name: 'Idea Exchange', icon: ChatIcon },
-];
-
-
-const mockEvents: Event[] = [
-    { id: 'evt1', title: 'Web3 & The Metaverse', date: 'Dec 01', time: '4:00 PM', timezone: 'PST', communityName: 'Startup Grind', communityAvatarUrl: 'https://picsum.photos/seed/startup-grind/200', eventType: 'Talk', locationType: 'Online' },
-    { id: 'evt2', title: 'Figma Design-a-thon', date: 'Dec 05', time: '9:00 AM', timezone: 'EST', communityName: 'UI/UX Guild', communityAvatarUrl: 'https://picsum.photos/seed/ui-ux-guild/200', eventType: 'Hackathon', locationType: 'Offline' },
-    { id: 'evt3', title: 'Python for Data Science', date: 'Dec 10', time: '11:00 AM', timezone: 'GMT', communityName: 'Pythonic Geeks', communityAvatarUrl: 'https://picsum.photos/seed/pythonic-geeks/200', eventType: 'Meetup', locationType: 'Online' },
 ];
 
 interface RightSidebarProps {
@@ -1245,23 +1239,33 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
     const location = ReactRouterDOM.useLocation();
     const searchParams = new URLSearchParams(location.search);
     const viewFromUrl = searchParams.get('view') || searchParams.get('tab');
-    const activeView = location.pathname === '/communities' && viewFromUrl ? viewFromUrl : communityView;
+    const activeInboxId = searchParams.get('inbox');
+    const activeView = (activeInboxId && !viewFromUrl) ? 'my-communities' : (location.pathname === '/communities' && viewFromUrl ? viewFromUrl : communityView);
 
     const isCommunityDetailPage = location.pathname.startsWith('/communities/') && location.pathname !== '/communities';
     const [myCommunitiesSearchTerm, setMyCommunitiesSearchTerm] = useState('');
     const [myCommunityDomains, setMyCommunityDomains] = useState<string[]>([]);
     const [isSearchFocused, setIsSearchFocused] = useState(false);
     
-    const [eventFilter, setEventFilter] = useState<'All' | 'Online' | 'Offline'>('All');
-    const [hasNewEvent, setHasNewEvent] = useState(true);
-    const [isEventFilterMenuOpen, setIsEventFilterMenuOpen] = useState(false);
-    const eventFilterMenuRef = useRef<HTMLDivElement>(null);
-    const [selectedInboxRecord, setSelectedInboxRecord] = useState<JoinedCommunityRecord | null>(null);
+    const [conclaveEvents, setConclaveEvents] = useState<ConclaveEvent[]>([]);
+    const [conclaveLoading, setConclaveLoading] = useState(true);
+    const [conclaveFormatFilter, setConclaveFormatFilter] = useState<'ALL' | 'ONSITE' | 'VIRTUAL'>('ALL');
+    const [isConclaveFilterOpen, setIsConclaveFilterOpen] = useState(false);
+    const conclaveFilterRef = useRef<HTMLDivElement>(null);
+
+    // Dynamic subscription to real-time Conclave gathering updates
+    useEffect(() => {
+        const unsubscribe = subscribeUpcomingConclaveEvents((events) => {
+            setConclaveEvents(events);
+            setConclaveLoading(false);
+        }, 6);
+        return () => unsubscribe();
+    }, []);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (eventFilterMenuRef.current && !eventFilterMenuRef.current.contains(event.target as Node)) {
-                setIsEventFilterMenuOpen(false);
+            if (conclaveFilterRef.current && !conclaveFilterRef.current.contains(event.target as Node)) {
+                setIsConclaveFilterOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -1297,9 +1301,10 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
         return searchMatch && domainMatch;
     });
 
-    const filteredEvents = mockEvents.filter(e =>
-        eventFilter === 'All' || e.locationType === eventFilter
-    );
+    const filteredConclaveEvents = conclaveEvents.filter(ev => {
+        if (conclaveFormatFilter === 'ALL') return true;
+        return ev.eventType === conclaveFormatFilter;
+    });
 
     const showOtherElements = !isSearchFocused && communityFilters.searchTerm.trim() === '';
 
@@ -1374,14 +1379,21 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
 
                                     return inboxes.map(item => {
                                         const c = item.community;
-                                        const isSelected = selectedInboxRecord?.id === item.id;
+                                        const commId = item.id || c.id;
+                                        const isSelected = activeInboxId?.toLowerCase() === item.id.toLowerCase() || 
+                                                           activeInboxId?.toLowerCase() === c.id.toLowerCase();
                                         return (
                                             <div
                                                 key={item.id}
-                                                onClick={() => setSelectedInboxRecord(item)}
-                                                className={`p-3 border transition-colors cursor-pointer group ${
+                                                onClick={() => {
+                                                    if (setCommunityView && communityView !== 'my-communities') {
+                                                        setCommunityView('my-communities');
+                                                    }
+                                                    navigate(`/communities?view=my-communities&inbox=${commId}`);
+                                                }}
+                                                className={`p-3 border transition-all cursor-pointer group ${
                                                     isSelected
-                                                        ? 'bg-zinc-900 border-emerald-500/50'
+                                                        ? 'bg-zinc-900 border-emerald-500 shadow-md ring-1 ring-emerald-500/20'
                                                         : 'bg-[#0c0c0e] border border-zinc-800 hover:border-zinc-700'
                                                 }`}
                                             >
@@ -1400,7 +1412,9 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                                                     )}
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex items-center justify-between gap-1">
-                                                            <p className="font-mono font-bold text-xs text-white truncate group-hover:text-emerald-400 transition-colors">
+                                                            <p className={`font-mono font-bold text-xs truncate transition-colors ${
+                                                                isSelected ? 'text-emerald-400' : 'text-white group-hover:text-emerald-400'
+                                                            }`}>
                                                                 {c.name}
                                                             </p>
                                                             <span className="text-[9px] font-mono text-zinc-500 whitespace-nowrap">
@@ -1413,18 +1427,25 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                                                         <div className="flex items-center gap-1.5 mt-1.5 text-[9px] font-mono">
                                                             <span className={`px-1.5 py-0.5 uppercase font-bold tracking-wider ${
                                                                 item.isOwner
-                                                                    ? 'text-emerald-400 bg-emerald-950/40 border border-emerald-500/30'
+                                                                    ? 'text-amber-400 bg-amber-950/40 border border-amber-500/30'
                                                                     : item.isAdmin
-                                                                    ? 'text-cyan-400 bg-cyan-950/40 border border-cyan-500/30'
-                                                                    : 'text-zinc-400 bg-zinc-900 border border-zinc-800'
+                                                                    ? 'text-indigo-400 bg-indigo-950/40 border border-indigo-500/30'
+                                                                    : 'text-emerald-400 bg-emerald-950/40 border border-emerald-500/30'
                                                             }`}>
                                                                 {item.role.toUpperCase()}
                                                             </span>
                                                             <span className="text-zinc-600">•</span>
-                                                            <span className="text-zinc-500 flex items-center gap-1">
-                                                                <span className="w-1.5 h-1.5 bg-emerald-400 inline-block"></span>
-                                                                <span>ENCLAVE</span>
-                                                            </span>
+                                                            {isSelected ? (
+                                                                <span className="text-emerald-400 font-bold flex items-center gap-1">
+                                                                    <span className="w-1.5 h-1.5 bg-emerald-400 inline-block animate-pulse"></span>
+                                                                    <span>ACTIVE INBOX</span>
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-zinc-500 flex items-center gap-1">
+                                                                    <span className="w-1.5 h-1.5 bg-emerald-400 inline-block"></span>
+                                                                    <span>ENCLAVE</span>
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1454,17 +1475,10 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                                 </div>
                             )}
                         </div>
-
-                        {/* Private interaction modal rendered when an inbox is selected */}
-                        <PrivateCommunityInteractionModal
-                            isOpen={Boolean(selectedInboxRecord)}
-                            onClose={() => setSelectedInboxRecord(null)}
-                            communityRecord={selectedInboxRecord}
-                        />
                     </>
                 ) : (
                     <div className='overflow-y-auto no-scrollbar flex flex-col gap-5'>
-                        {(activeView === 'all' || isCommunityDetailPage) && (
+                        {(activeView === 'all' || activeView === 'conclave-discovery' || isCommunityDetailPage) && (
                             <div className="px-4">
                                 <button
                                     onClick={() => {
@@ -1536,29 +1550,38 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
 
                                 <div className="bg-[#0c0c0e] border border-zinc-800 flex flex-col">
                                     {/* Header */}
-                                    <div className="flex items-center justify-between p-3.5 border-b border-zinc-800">
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// EVENTS</h3>
-                                            {hasNewEvent && (
-                                                <span className="w-1.5 h-1.5 bg-red-500 inline-block"></span>
-                                            )}
+                                    <div className="p-3.5 border-b border-zinc-800 flex items-start justify-between">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// CONCLAVE UPDATES</h3>
+                                                <span className="w-1.5 h-1.5 bg-emerald-500 inline-block animate-pulse"></span>
+                                            </div>
+                                            <p className="font-mono text-[9px] text-zinc-500 uppercase tracking-wider mt-0.5">
+                                                UPCOMING COMMUNITY GATHERINGS
+                                            </p>
                                         </div>
-                                        <div className="relative" ref={eventFilterMenuRef}>
-                                            <button onClick={() => setIsEventFilterMenuOpen(prev => !prev)} className="p-1 text-zinc-400 hover:text-white transition-colors">
+                                        <div className="relative" ref={conclaveFilterRef}>
+                                            <button 
+                                                onClick={() => setIsConclaveFilterOpen(prev => !prev)} 
+                                                title="Filter Gathering Formats"
+                                                className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer border border-transparent hover:border-zinc-800"
+                                            >
                                                 <EllipsisVerticalIcon className="w-4 h-4" />
                                             </button>
-                                            {isEventFilterMenuOpen && (
-                                                <div className="absolute right-0 mt-1 w-28 bg-[#0c0c0e] border border-zinc-800 z-10 py-1 font-mono text-xs">
-                                                    {(['All', 'Online', 'Offline'] as const).map(filter => (
+                                            {isConclaveFilterOpen && (
+                                                <div className="absolute right-0 mt-1 w-32 bg-[#0c0c0e] border border-zinc-800 z-20 py-1 font-mono text-xs shadow-2xl">
+                                                    {(['ALL', 'ONSITE', 'VIRTUAL'] as const).map(filter => (
                                                         <button
                                                             key={filter}
                                                             onClick={() => {
-                                                                setEventFilter(filter);
-                                                                setIsEventFilterMenuOpen(false);
+                                                                setConclaveFormatFilter(filter);
+                                                                setIsConclaveFilterOpen(false);
                                                             }}
-                                                            className={`w-full text-left px-3 py-1.5 hover:bg-zinc-800 ${eventFilter === filter ? 'text-white font-bold bg-zinc-900' : 'text-zinc-400'}`}
+                                                            className={`w-full text-left px-3 py-1.5 hover:bg-zinc-800 transition-colors ${
+                                                                conclaveFormatFilter === filter ? 'text-white font-bold bg-zinc-900' : 'text-zinc-400'
+                                                            }`}
                                                         >
-                                                            {filter}
+                                                            {filter === 'ALL' ? 'ALL FORMATS' : filter === 'ONSITE' ? 'ON-SITE ONLY' : 'VIRTUAL ONLY'}
                                                         </button>
                                                     ))}
                                                 </div>
@@ -1566,28 +1589,126 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                                         </div>
                                     </div>
                                     
-                                    {/* Event List */}
-                                    <div className="p-3.5 space-y-3">
-                                        {filteredEvents.slice(0, 3).map(event => (
-                                            <div key={event.id} className="flex items-start gap-2.5 border-b border-zinc-900 pb-2.5 last:border-0 last:pb-0">
-                                                <img src={event.communityAvatarUrl} onError={handleImageError} alt={event.communityName} className="w-8 h-8 object-cover border border-zinc-800" />
-                                                <div className="flex-1 overflow-hidden">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <p className="font-mono font-bold text-white text-xs truncate">{event.title}</p>
-                                                        <span className="bg-zinc-800 text-zinc-300 px-1 py-0.2 font-mono text-[9px] uppercase">
-                                                            {event.eventType}
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-[11px] font-mono text-zinc-500 truncate">{event.communityName}</p>
-                                                    <p className="text-[10px] font-mono text-zinc-600">[{event.date} // {event.time}]</p>
-                                                </div>
+                                    {/* Conclave Event List */}
+                                    <div className="p-3 space-y-2.5">
+                                        {conclaveLoading && filteredConclaveEvents.length === 0 ? (
+                                            <div className="py-6 px-3 text-center space-y-2 animate-pulse">
+                                                <div className="h-3 bg-zinc-800/60 w-3/4 mx-auto"></div>
+                                                <div className="h-2 bg-zinc-800/40 w-1/2 mx-auto"></div>
                                             </div>
-                                        ))}
+                                        ) : filteredConclaveEvents.length === 0 ? (
+                                            <div className="py-6 px-3 text-center border border-dashed border-zinc-800/80 bg-zinc-950/40">
+                                                <p className="font-mono text-xs font-bold text-zinc-400 uppercase tracking-wider">NO UPCOMING CONCLAVES</p>
+                                                <p className="font-mono text-[10px] text-zinc-600 mt-1 uppercase">No gatherings currently scheduled</p>
+                                            </div>
+                                        ) : (
+                                            filteredConclaveEvents.slice(0, 3).map(event => {
+                                                const isOnSite = event.eventType === 'ONSITE';
+                                                const isOngoing = event.eventStatus === 'ONGOING';
+                                                const dateDisplay = event.startDate || event.date || 'TBD';
+                                                const timeDisplay = event.startTime || event.time || '';
+                                                const thumbUrl = event.coverImageUrl || event.communityAvatarUrl;
+
+                                                return (
+                                                    <div 
+                                                        key={event.id}
+                                                        onClick={() => {
+                                                            navigate(`/communities/${event.communityId}?tab=02_conclave&eventId=${event.id}`);
+                                                        }}
+                                                        className="group flex items-stretch gap-2.5 p-2 bg-black/40 hover:bg-zinc-900/70 border border-zinc-900 hover:border-zinc-700 transition-all cursor-pointer text-left"
+                                                        role="button"
+                                                        tabIndex={0}
+                                                    >
+                                                        {/* Thumbnail with Fallback and Format Indicator */}
+                                                        <div className="relative w-12 h-14 flex-shrink-0 bg-zinc-900 border border-zinc-800 overflow-hidden flex items-center justify-center">
+                                                            {thumbUrl ? (
+                                                                <img 
+                                                                    src={thumbUrl} 
+                                                                    onError={handleImageError} 
+                                                                    alt={event.title} 
+                                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                                                                />
+                                                            ) : (
+                                                                <div className={`w-full h-full flex flex-col items-center justify-center ${
+                                                                    isOnSite ? 'bg-amber-950/20 text-amber-500' : 'bg-cyan-950/20 text-cyan-400'
+                                                                }`}>
+                                                                    {isOnSite ? (
+                                                                        <MapPinIcon className="w-5 h-5 text-amber-500/80" />
+                                                                    ) : (
+                                                                        <GlobeAltIcon className="w-5 h-5 text-cyan-400/80" />
+                                                                    )}
+                                                                    <span className="font-mono text-[8px] font-bold mt-0.5 tracking-tighter">
+                                                                        {isOnSite ? 'SITE' : 'VIRT'}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                            {/* Format ribbon on thumbnail bottom */}
+                                                            <div className="absolute bottom-0 inset-x-0 bg-black/85 backdrop-blur-[2px] py-0.5 text-center border-t border-zinc-800/80">
+                                                                <span className={`font-mono text-[8px] font-bold tracking-wider ${
+                                                                    isOnSite ? 'text-amber-400' : 'text-cyan-400'
+                                                                }`}>
+                                                                    {isOnSite ? 'ON-SITE' : 'VIRTUAL'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Details */}
+                                                        <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                                                            <div>
+                                                                <div className="flex items-center justify-between gap-1 mb-1">
+                                                                    <span className={`font-mono text-[8px] uppercase tracking-wider font-bold px-1 py-0.2 border ${
+                                                                        isOnSite 
+                                                                            ? 'text-amber-400 border-amber-500/30 bg-amber-500/10' 
+                                                                            : 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10'
+                                                                    }`}>
+                                                                        {isOnSite ? 'ON-SITE' : 'VIRTUAL'}
+                                                                    </span>
+
+                                                                    {isOngoing ? (
+                                                                        <span className="flex items-center gap-1 font-mono text-[8px] text-emerald-400 font-bold uppercase tracking-wider">
+                                                                            <span className="w-1.5 h-1.5 bg-emerald-500 animate-pulse"></span>
+                                                                            LIVE NOW
+                                                                        </span>
+                                                                    ) : event.registrationStatus === 'OPEN' ? (
+                                                                        <span className="font-mono text-[8px] text-zinc-500 uppercase tracking-wider">
+                                                                            OPEN
+                                                                        </span>
+                                                                    ) : null}
+                                                                </div>
+
+                                                                <h4 className="font-mono font-bold text-white text-xs truncate group-hover:text-emerald-400 transition-colors">
+                                                                    {event.title}
+                                                                </h4>
+                                                            </div>
+
+                                                            <div className="mt-1 space-y-0.5">
+                                                                <p className="text-[11px] font-mono text-zinc-400 truncate">
+                                                                    {event.communityName}
+                                                                </p>
+                                                                <p className="text-[10px] font-mono text-zinc-500">
+                                                                    [{dateDisplay}{timeDisplay ? ` // ${timeDisplay}` : ''}]
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                        )}
                                     </div>
 
+                                    {/* Action Footer */}
                                     <div className="p-3 border-t border-zinc-800 bg-black/40">
-                                        <button className="w-full bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider py-1.5 transition-colors">
-                                            VIEW_ALL
+                                        <button 
+                                            onClick={() => {
+                                                navigate('/communities?view=conclave-discovery');
+                                                if (setCommunityView) {
+                                                    setCommunityView('conclave-discovery');
+                                                }
+                                            }}
+                                            className="w-full bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider py-2 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                                        >
+                                            <span>VIEW ALL CONCLAVES</span>
+                                            <span className="text-zinc-500 font-bold">→</span>
                                         </button>
                                     </div>
                                 </div>

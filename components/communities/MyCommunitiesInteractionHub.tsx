@@ -36,8 +36,10 @@ import {
 } from '../ui/Icons';
 import DomainFilter from '../ui/DomainFilter';
 import { handleImageError } from '../utils/imageUtils';
-import { PrivateCommunityInteractionModal } from './PrivateCommunityInteractionModal';
+import { PrivateCommunityInboxView } from './PrivateCommunityInboxView';
 import { CommunityFeedCard } from './CommunityFeedCard';
+import { mockCommunities } from '../../pages/Communities';
+import { MOCK_COMMUNITIES } from '../../services/communitiesDemoData';
 
 const DOMAIN_ICONS: Record<string, React.FC<{ className?: string }>> = {
     'Coding': CodeBracketIcon,
@@ -59,7 +61,7 @@ export const MyCommunitiesInteractionHub: React.FC<MyCommunitiesInteractionHubPr
 }) => {
     const { currentUser, userProfile } = useAuth();
     const navigate = ReactRouterDOM.useNavigate();
-    const [searchParams] = ReactRouterDOM.useSearchParams();
+    const [searchParams, setSearchParams] = ReactRouterDOM.useSearchParams();
     const location = ReactRouterDOM.useLocation();
 
     const { joinedCommunities, loading: membershipsLoading } = useUserJoinedCommunities(currentUser);
@@ -76,9 +78,40 @@ export const MyCommunitiesInteractionHub: React.FC<MyCommunitiesInteractionHubPr
     const [dropdownSearch, setDropdownSearch] = useState('');
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // Modals & feedback state
-    const [selectedInboxRecord, setSelectedInboxRecord] = useState<JoinedCommunityRecord | null>(null);
+    // Feedback state
     const [successBanner, setSuccessBanner] = useState<string | null>(null);
+
+    // Active inbox resolution from query parameter ?inbox=communityId
+    const inboxParam = searchParams.get('inbox');
+    const activeInboxRecord = useMemo(() => {
+        if (!inboxParam) return null;
+        const paramLower = inboxParam.toLowerCase();
+
+        // 1. Check verified joined communities from Firestore
+        const match = joinedCommunities.find(
+            item => item.id.toLowerCase() === paramLower || item.community.id.toLowerCase() === paramLower
+        );
+        if (match) return match;
+
+        // 2. Fallback to mock communities for testing / demo
+        const fallback = mockCommunities.find(c => c.id.toLowerCase() === paramLower) ||
+                         MOCK_COMMUNITIES.find(c => c.id.toLowerCase() === paramLower);
+        if (fallback) {
+            return {
+                id: fallback.id,
+                communityId: fallback.id,
+                userId: currentUser?.uid || 'guest-user',
+                joinedAt: new Date(),
+                status: 'active' as const,
+                role: 'member' as const,
+                isOwner: false,
+                isAdmin: false,
+                community: fallback
+            };
+        }
+
+        return null;
+    }, [inboxParam, joinedCommunities, currentUser?.uid]);
 
     // Sync selected community from query parameters or location state if provided
     useEffect(() => {
@@ -405,6 +438,58 @@ export const MyCommunitiesInteractionHub: React.FC<MyCommunitiesInteractionHubPr
         return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     };
 
+    // If an inbox is selected via right sidebar or direct URL parameter, render dedicated Private Community Inbox View
+    if (inboxParam) {
+        if (activeInboxRecord) {
+            return (
+                <PrivateCommunityInboxView
+                    communityRecord={activeInboxRecord}
+                    onBack={() => {
+                        const next = new URLSearchParams(searchParams);
+                        next.delete('inbox');
+                        setSearchParams(next);
+                    }}
+                    onOpenCommunityProfile={(commId) => {
+                        if (onOpenCommunity) {
+                            onOpenCommunity(commId);
+                        } else {
+                            navigate(`/communities/${commId}`);
+                        }
+                    }}
+                />
+            );
+        }
+
+        if (membershipsLoading) {
+            return (
+                <div className="font-mono p-12 text-center space-y-3 bg-[#0c0c0e] border border-zinc-800">
+                    <div className="w-6 h-6 border-2 border-zinc-800 border-t-emerald-400 animate-spin mx-auto"></div>
+                    <p className="text-xs text-zinc-500 uppercase tracking-widest">// RESOLVING_COMMUNITY_INBOX...</p>
+                </div>
+            );
+        }
+
+        return (
+            <div className="font-mono p-8 text-center space-y-4 bg-[#0c0c0e] border border-zinc-800">
+                <p className="text-xs text-rose-400 font-bold uppercase">// INBOX_NOT_FOUND_OR_UNAUTHORIZED</p>
+                <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                    You may not be an active member of this community, or the collective has been moved.
+                </p>
+                <button
+                    type="button"
+                    onClick={() => {
+                        const next = new URLSearchParams(searchParams);
+                        next.delete('inbox');
+                        setSearchParams(next);
+                    }}
+                    className="px-4 py-2 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-white text-xs uppercase font-bold cursor-pointer"
+                >
+                    Return to Collective Feed
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6 font-mono">
             {/* Global Success Banner */}
@@ -722,13 +807,6 @@ export const MyCommunitiesInteractionHub: React.FC<MyCommunitiesInteractionHubPr
                     ))}
                 </div>
             )}
-
-            {/* Private Interaction Modal */}
-            <PrivateCommunityInteractionModal
-                isOpen={Boolean(selectedInboxRecord)}
-                onClose={() => setSelectedInboxRecord(null)}
-                communityRecord={selectedInboxRecord}
-            />
         </div>
     );
 };

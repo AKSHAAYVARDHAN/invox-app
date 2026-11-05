@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import * as ReactRouterDOM from 'react-router-dom';
 import type { Community } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -14,6 +15,9 @@ import {
     ShieldCheckIcon,
     PencilIcon,
     LockClosedIcon,
+    TrashIcon,
+    EyeIcon,
+    AlertTriangleIcon,
 } from '../ui/Icons';
 import {
     subscribeCommunityConclaveEvents,
@@ -40,30 +44,12 @@ import type {
     ConclaveRegistration,
     ConclaveProtectedAccess,
 } from '../../services/conclaveTypes';
+import { CreateConclaveModal } from './CreateConclaveModal';
 
 // Inline Icons for specific Conclave actions
 const EllipsisIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} aria-hidden="true" focusable="false">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
-    </svg>
-);
-
-const TrashIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} aria-hidden="true" focusable="false">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-    </svg>
-);
-
-const EyeIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} aria-hidden="true" focusable="false">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-);
-
-const AlertTriangleIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} aria-hidden="true" focusable="false">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
     </svg>
 );
 
@@ -102,6 +88,86 @@ export const ConclaveGatheringsView: React.FC<ConclaveGatheringsViewProps> = ({
     const [editingEvent, setEditingEvent] = useState<ConclaveEvent | null>(null);
     const [previewEvent, setPreviewEvent] = useState<ConclaveEvent | null>(null);
     const [cancellingEvent, setCancellingEvent] = useState<ConclaveEvent | null>(null);
+
+    // Deep-linking: auto-open gathering dossier if navigated with eventId
+    const [searchParams, setSearchParams] = ReactRouterDOM.useSearchParams();
+    const eventIdParam = searchParams.get('eventId');
+    const handledEventIdRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (eventIdParam && events.length > 0 && !previewEvent) {
+            if (handledEventIdRef.current !== eventIdParam) {
+                const match = events.find(e => e.id === eventIdParam);
+                if (match) {
+                    handledEventIdRef.current = eventIdParam;
+                    setPreviewEvent(match);
+                }
+            }
+        }
+    }, [eventIdParam, events, previewEvent]);
+
+    // Deep-linking: auto-launch Create Conclave workflow if navigated with create=true
+    const createParam = searchParams.get('create');
+    const handledCreateParamRef = useRef<boolean>(false);
+
+    useEffect(() => {
+        if ((createParam === 'true' || createParam === '1') && canCreate && !handledCreateParamRef.current) {
+            handledCreateParamRef.current = true;
+            setEditingEvent(null);
+            setIsFormModalOpen(true);
+        }
+    }, [createParam, canCreate]);
+
+    const handleCloseFormModal = useCallback(() => {
+        setIsFormModalOpen(false);
+        setEditingEvent(null);
+        setSearchParams(prev => {
+            if (prev.has('create')) {
+                const next = new URLSearchParams(prev);
+                next.delete('create');
+                return next;
+            }
+            return prev;
+        }, { replace: true });
+    }, [setSearchParams]);
+
+    const handleSavedFormModal = useCallback((savedEvent: ConclaveEvent) => {
+        setEvents(prev => {
+            const exists = prev.some(e => e.id === savedEvent.id);
+            if (exists) {
+                return prev.map(e => e.id === savedEvent.id ? savedEvent : e);
+            }
+            return [savedEvent, ...prev];
+        });
+        setIsFormModalOpen(false);
+        setEditingEvent(null);
+        setSearchParams(prev => {
+            if (prev.has('create')) {
+                const next = new URLSearchParams(prev);
+                next.delete('create');
+                return next;
+            }
+            return prev;
+        }, { replace: true });
+        setActionFeedback({
+            type: 'success',
+            message: savedEvent.eventStatus === 'DRAFT'
+                ? `Saved draft "${savedEvent.title}". You can preview, edit, or publish it anytime.`
+                : `Conclave "${savedEvent.title}" is published!`
+        });
+    }, [setSearchParams]);
+
+    const handleClosePreviewModal = useCallback(() => {
+        setPreviewEvent(null);
+        setSearchParams(prev => {
+            if (prev.has('eventId')) {
+                const next = new URLSearchParams(prev);
+                next.delete('eventId');
+                return next;
+            }
+            return prev;
+        }, { replace: true });
+    }, [setSearchParams]);
 
     // Real-time synchronization of Conclave gatherings for this collective
     useEffect(() => {
@@ -352,8 +418,8 @@ export const ConclaveGatheringsView: React.FC<ConclaveGatheringsViewProps> = ({
                     </p>
                 </div>
 
-                <div className="flex items-center gap-3 flex-wrap">
-                    <div className="hidden sm:flex items-center gap-2 text-[10px] font-bold">
+                <div className="flex flex-col items-start md:items-end justify-center gap-2.5 shrink-0">
+                    <div className="flex items-center gap-2 text-[10px] font-bold flex-wrap">
                         <span className="px-2 py-1 bg-amber-950/40 border border-amber-800/60 text-amber-400">
                             {onsiteCount} ON-SITE
                         </span>
@@ -569,165 +635,218 @@ export const ConclaveGatheringsView: React.FC<ConclaveGatheringsViewProps> = ({
                         return (
                             <div
                                 key={event.id}
-                                className={`p-5 bg-[#0c0c0e] border transition-colors space-y-4 ${
+                                className={`p-5 sm:p-6 bg-[#0c0c0e] border transition-colors space-y-4 font-mono ${
                                     isDraft
                                         ? 'border-purple-800/80 bg-purple-950/10'
                                         : isCancelled
-                                        ? 'border-rose-950/70 opacity-80'
+                                        ? 'border-rose-950/70 bg-[#0c0c0e]/80 opacity-80'
                                         : 'border-zinc-800 hover:border-zinc-700'
                                 }`}
                             >
-                                {/* Event Header Row */}
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-850 pb-3">
-                                    <div className="flex items-center gap-2.5 flex-wrap">
-                                        {/* Format Badge */}
+                                {/* A. Event Header Row: Format, Status, Date/Time & Actions Menu */}
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-850/80 pb-3.5">
+                                    {/* Left: Format & Status Badges */}
+                                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                        {/* Format Indicator */}
                                         {isOnsite ? (
-                                            <span className="px-2.5 py-1 bg-amber-950/40 border border-amber-600/70 text-amber-300 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                                                <MapPinIcon className="w-3.5 h-3.5" />
+                                            <span className="px-2.5 py-1 bg-amber-950/40 border border-amber-600/70 text-amber-300 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 shrink-0">
+                                                <MapPinIcon className="w-3.5 h-3.5 text-amber-400" />
                                                 <span>ON-SITE CONCLAVE</span>
                                             </span>
                                         ) : (
-                                            <span className="px-2.5 py-1 bg-cyan-950/40 border border-cyan-600/70 text-cyan-300 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                                                <GlobeAltIcon className="w-3.5 h-3.5" />
+                                            <span className="px-2.5 py-1 bg-cyan-950/40 border border-cyan-600/70 text-cyan-300 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 shrink-0">
+                                                <GlobeAltIcon className="w-3.5 h-3.5 text-cyan-400" />
                                                 <span>VIRTUAL CONCLAVE</span>
                                             </span>
                                         )}
 
                                         {/* Lifecycle Status Badge */}
                                         {isDraft ? (
-                                            <span className="px-2.5 py-0.5 bg-purple-950 border border-purple-500 text-purple-300 text-[10px] uppercase font-bold tracking-wider">
-                                                // DRAFT // UNPUBLISHED
+                                            <span className="px-2 py-0.5 bg-purple-950/60 border border-purple-500/80 text-purple-300 text-[10px] uppercase font-bold tracking-wider shrink-0">
+                                                // DRAFT
                                             </span>
                                         ) : isOngoing ? (
-                                            <span className="px-2 py-0.5 bg-green-950/60 border border-green-500 text-green-300 text-[10px] uppercase font-bold tracking-wider flex items-center gap-1">
-                                                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                                            <span className="px-2 py-0.5 bg-green-950/60 border border-green-500 text-green-300 text-[10px] uppercase font-bold tracking-wider flex items-center gap-1.5 shrink-0">
+                                                <span className="w-1.5 h-1.5 bg-green-400 rounded-none animate-pulse" />
                                                 <span>LIVE NOW</span>
                                             </span>
                                         ) : isCancelled ? (
-                                            <span className="px-2 py-0.5 bg-rose-950/60 border border-rose-800 text-rose-400 text-[10px] uppercase font-bold">
+                                            <span className="px-2 py-0.5 bg-rose-950/60 border border-rose-800 text-rose-400 text-[10px] uppercase font-bold tracking-wider shrink-0">
                                                 CANCELLED
                                             </span>
                                         ) : isCompleted ? (
-                                            <span className="px-2 py-0.5 bg-zinc-900 border border-zinc-800 text-zinc-500 text-[10px] uppercase">
+                                            <span className="px-2 py-0.5 bg-zinc-900 border border-zinc-800 text-zinc-500 text-[10px] uppercase tracking-wider shrink-0">
                                                 COMPLETED
                                             </span>
                                         ) : (
-                                            <span className="px-2 py-0.5 bg-emerald-950/30 border border-emerald-500/40 text-emerald-400 text-[10px] uppercase font-bold">
+                                            <span className="px-2 py-0.5 bg-zinc-900/90 border border-zinc-700/80 text-zinc-300 text-[10px] uppercase font-bold tracking-wider shrink-0">
                                                 SCHEDULED
                                             </span>
                                         )}
 
-                                        {/* Significant Update Badge if date/venue changed */}
+                                        {/* Category if present */}
+                                        {event.category && (
+                                            <span className="text-[11px] text-zinc-400 font-mono hidden sm:inline">
+                                                · {event.category}
+                                            </span>
+                                        )}
+
+                                        {/* Significant Update Badge */}
                                         {event.hasSignificantUpdate && !isCancelled && !isDraft && (
-                                            <span className="px-2 py-0.5 bg-amber-950/40 border border-amber-600/60 text-amber-300 text-[10px] uppercase font-bold flex items-center gap-1">
+                                            <span className="px-2 py-0.5 bg-amber-950/40 border border-amber-600/70 text-amber-300 text-[10px] uppercase font-bold flex items-center gap-1 shrink-0">
                                                 <AlertTriangleIcon className="w-3 h-3 text-amber-400" />
-                                                <span>SCHEDULE/VENUE UPDATED</span>
+                                                <span>UPDATED</span>
                                             </span>
                                         )}
                                     </div>
 
-                                    {/* Date & Time */}
-                                    <div className="flex items-center gap-2 text-xs font-bold text-zinc-300">
-                                        <CalendarDaysIcon className="w-4 h-4 text-zinc-500" />
-                                        <span>{event.startDate || event.date}</span>
-                                        <span className="text-zinc-600">//</span>
-                                        <ClockIcon className="w-4 h-4 text-zinc-500" />
-                                        <span>{event.startTime || event.time} {event.timezone ? `(${event.timezone})` : ''}</span>
+                                    {/* Right: Date & Time + Header Actions Menu Anchor */}
+                                    <div className="flex items-center justify-between md:justify-end gap-2.5 flex-wrap shrink-0">
+                                        {/* Date & Time */}
+                                        <div className="flex items-center gap-1.5 text-xs text-zinc-300 bg-black/50 px-2.5 py-1 border border-zinc-850">
+                                            <CalendarDaysIcon className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
+                                            <span className="font-semibold text-zinc-200">{event.startDate || event.date}</span>
+                                            <span className="text-zinc-600 mx-0.5">//</span>
+                                            <ClockIcon className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
+                                            <span>{event.startTime || event.time} {event.timezone ? `(${event.timezone})` : ''}</span>
+                                        </div>
+
+                                        {/* Actions Menu (Authorized Organizers Only, neatly anchored in header) */}
+                                        {isEventOrganizer && (
+                                            <ConclaveEventActionsMenu
+                                                event={event}
+                                                isOrganizer={Boolean(isEventOrganizer)}
+                                                onPreview={() => setPreviewEvent(event)}
+                                                onEdit={() => {
+                                                    setEditingEvent(event);
+                                                    setIsFormModalOpen(true);
+                                                }}
+                                                onPublish={() => handlePublishDraft(event)}
+                                                onCancel={() => setCancellingEvent(event)}
+                                                onDeleteDraft={() => handleDeleteDraft(event)}
+                                                onTransitionStatus={(status) => handleStatusTransition(event, status)}
+                                            />
+                                        )}
                                     </div>
                                 </div>
 
-                                {/* Title & Description */}
-                                <div className="space-y-1.5">
-                                    <div className="flex items-start justify-between gap-3">
-                                        <h3 className="text-sm sm:text-base font-bold text-white uppercase tracking-wide">
-                                            {event.title}
-                                        </h3>
-
-                                        {/* Event Actions Menu */}
-                                        <ConclaveEventActionsMenu
-                                            event={event}
-                                            isOrganizer={Boolean(isEventOrganizer)}
-                                            onPreview={() => setPreviewEvent(event)}
-                                            onEdit={() => {
-                                                setEditingEvent(event);
-                                                setIsFormModalOpen(true);
-                                            }}
-                                            onPublish={() => handlePublishDraft(event)}
-                                            onCancel={() => setCancellingEvent(event)}
-                                            onDeleteDraft={() => handleDeleteDraft(event)}
-                                            onTransitionStatus={(status) => handleStatusTransition(event, status)}
+                                {/* Cover Image Banner (if available) */}
+                                {event.coverImageUrl && (
+                                    <div className="relative aspect-video max-h-44 w-full overflow-hidden bg-black border border-zinc-850">
+                                        <img
+                                            src={event.coverImageUrl}
+                                            alt={event.title}
+                                            className="w-full h-full object-cover"
                                         />
                                     </div>
+                                )}
 
-                                    <p className="text-xs text-zinc-400 leading-relaxed">
+                                {/* B. Event Information: Title & Description */}
+                                <div className="space-y-1.5">
+                                    <h3 className="text-base sm:text-lg font-bold text-white uppercase tracking-wide leading-snug break-words">
+                                        {event.title}
+                                    </h3>
+                                    <p className="text-xs text-zinc-400 leading-relaxed max-w-4xl break-words">
                                         {event.description}
                                     </p>
                                 </div>
 
-                                {/* Format Details Box (On-Site Venue vs Virtual Platform) */}
-                                <div className="p-3 bg-black/60 border border-zinc-850 text-xs space-y-1.5">
+                                {/* C. Location / Meeting Information Section */}
+                                <div className="bg-black/60 border border-zinc-850 p-3.5 text-xs space-y-2">
                                     {isOnsite ? (
-                                        <div className="space-y-1">
-                                            <div className="flex items-center gap-2 text-amber-300 font-bold">
-                                                <MapPinIcon className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                                                <span>VENUE: {venueDisplay || 'Physical Community Venue'}</span>
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center gap-2 text-amber-300 font-bold uppercase tracking-wide">
+                                                <MapPinIcon className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                                                <span className="text-[10px] text-zinc-500 font-normal">VENUE:</span>
+                                                <span className="text-white font-bold">{venueDisplay || 'Physical Community Venue'}</span>
                                             </div>
-                                            {addressDisplay && (
-                                                <p className="text-zinc-400 text-[11px] pl-5.5">
-                                                    ADDRESS: {addressDisplay} {cityDisplay ? `• ${cityDisplay}` : ''}
-                                                </p>
+                                            {(addressDisplay || cityDisplay) && (
+                                                <div className="pl-6 text-[11px] text-zinc-300 flex items-center gap-1.5 flex-wrap">
+                                                    <span className="text-zinc-500 uppercase text-[10px]">ADDRESS:</span>
+                                                    <span>{addressDisplay || ''}</span>
+                                                    {cityDisplay && <span className="text-zinc-400">· {cityDisplay}</span>}
+                                                </div>
                                             )}
                                             {event.onSite?.venueInstructions && (
-                                                <p className="text-zinc-500 text-[10px] pl-5.5 italic">
-                                                    INSTRUCTIONS: {event.onSite.venueInstructions}
-                                                </p>
+                                                <div className="pl-6 pt-1 text-[11px] text-zinc-400 border-l border-amber-500/30 ml-6 pl-2.5 space-y-0.5">
+                                                    <span className="text-amber-400/90 text-[10px] uppercase font-bold block">INSTRUCTIONS:</span>
+                                                    <p className="leading-relaxed text-zinc-300">{event.onSite.venueInstructions}</p>
+                                                </div>
                                             )}
                                         </div>
                                     ) : (
-                                        <div className="space-y-1">
-                                            <div className="flex items-center gap-2 text-cyan-300 font-bold">
-                                                <GlobeAltIcon className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
-                                                <span>PLATFORM: {platformDisplay}</span>
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center gap-2 text-cyan-300 font-bold uppercase tracking-wide">
+                                                <GlobeAltIcon className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                                                <span className="text-[10px] text-zinc-500 font-normal">PLATFORM:</span>
+                                                <span className="text-white font-bold">{platformDisplay}</span>
                                             </div>
-                                            {event.virtual?.accessInstructions && (
-                                                <p className="text-zinc-400 text-[11px] pl-5.5">
-                                                    INSTRUCTIONS: {event.virtual.accessInstructions}
-                                                </p>
-                                            )}
+                                            <div className="pl-6 text-[11px] text-zinc-400 space-y-1">
+                                                {isUserRegistered || isEventOrganizer ? (
+                                                    <div className="flex items-center gap-2 text-emerald-400 text-[11px]">
+                                                        <CheckIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                                                        <span>ACCESS AUTHORIZED: Secure virtual room link is active in the footer below.</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-2 text-zinc-500 text-[11px]">
+                                                        <LockClosedIcon className="w-3.5 h-3.5 flex-shrink-0 text-zinc-500" />
+                                                        <span>ACCESS RESTRICTED: Direct meeting room link unlocks upon confirmed registration.</span>
+                                                    </div>
+                                                )}
+                                                {event.virtual?.accessInstructions && (
+                                                    <p className="text-zinc-400 text-[11px] pt-0.5">
+                                                        <span className="text-zinc-500 uppercase text-[10px]">SESSION INSTRUCTIONS:</span> {event.virtual.accessInstructions}
+                                                    </p>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
 
-                                    {/* Cancellation Reason if cancelled */}
+                                    {/* Cancellation Notice if cancelled */}
                                     {isCancelled && event.cancellationReason && (
-                                        <div className="pt-2 border-t border-zinc-850/70 text-rose-300 text-[11px]">
-                                            <strong className="text-rose-400">CANCELLATION REASON:</strong> {event.cancellationReason}
+                                        <div className="mt-2 pt-2 border-t border-rose-900/40 text-rose-300 text-[11px] flex items-start gap-1.5">
+                                            <AlertTriangleIcon className="w-3.5 h-3.5 text-rose-400 flex-shrink-0 mt-0.5" />
+                                            <div>
+                                                <strong className="text-rose-400 uppercase">CANCELLATION REASON:</strong>{' '}
+                                                <span>{event.cancellationReason}</span>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
 
-                                {/* Capacity & Registration Progress */}
+                                {/* D. Registration Information & Capacity Progress */}
                                 {!isDraft && (
-                                    <div className="space-y-1.5">
-                                        <div className="flex items-center justify-between text-[11px]">
-                                            <span className="text-zinc-500 flex items-center gap-1.5">
-                                                <UsersIcon className="w-3.5 h-3.5 text-zinc-400" />
-                                                <span>REGISTRATIONS: <strong className="text-white">{registeredCount}</strong> / {capacity}</span>
-                                            </span>
-                                            <span className={`text-[10px] font-bold uppercase ${
-                                                isCancelled
-                                                    ? 'text-zinc-500'
-                                                    : registeredCount >= capacity
-                                                    ? 'text-rose-400'
-                                                    : 'text-emerald-400'
-                                            }`}>
-                                                {isCancelled
-                                                    ? 'REGISTRATIONS_FROZEN'
-                                                    : registeredCount >= capacity
-                                                    ? 'CAPACITY_REACHED'
-                                                    : `${capacity - registeredCount} SPOTS REMAINING`}
-                                            </span>
+                                    <div className="space-y-1.5 bg-black/40 border border-zinc-850 p-3 text-xs">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]">
+                                            <div className="flex items-center gap-1.5 text-zinc-400">
+                                                <UsersIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
+                                                <span className="uppercase text-[10px] text-zinc-500">ATTENDEES:</span>
+                                                <strong className="text-white font-bold">{registeredCount}</strong>
+                                                <span className="text-zinc-600">/</span>
+                                                <span className="text-zinc-400">{capacity}</span>
+                                                <span className="text-zinc-500 text-[10px]">({capacityPercentage}%)</span>
+                                            </div>
+                                            <div>
+                                                <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                                                    isCancelled
+                                                        ? 'text-zinc-500'
+                                                        : registeredCount >= capacity
+                                                        ? 'text-rose-400'
+                                                        : capacityPercentage >= 80
+                                                        ? 'text-amber-400'
+                                                        : 'text-emerald-400'
+                                                }`}>
+                                                    {isCancelled
+                                                        ? 'REGISTRATIONS FROZEN'
+                                                        : registeredCount >= capacity
+                                                        ? 'CAPACITY REACHED (WAITLIST)'
+                                                        : `${capacity - registeredCount} SPOTS REMAINING`}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div className="w-full bg-zinc-900 h-1.5 overflow-hidden">
+
+                                        {/* Progress bar */}
+                                        <div className="w-full bg-zinc-900 h-1.5 overflow-hidden border border-zinc-800">
                                             <div
                                                 className={`h-full transition-all duration-300 ${
                                                     isCancelled
@@ -744,98 +863,117 @@ export const ConclaveGatheringsView: React.FC<ConclaveGatheringsViewProps> = ({
                                     </div>
                                 )}
 
-                                {/* Footer & Interactive Actions */}
-                                <div className="pt-3 border-t border-zinc-850 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                    <div className="text-[10px] text-zinc-500">
-                                        ORGANIZER: <strong className="text-zinc-300">{event.organizerInfo?.displayName || event.hostName || 'Collective Council'}</strong>
-                                        {isDraft && <span className="ml-2 text-purple-400 font-bold">[DRAFT ONLY - NOT DISCOVERABLE]</span>}
+                                {/* E. Event Footer: Organizer Information (Left) & Contextual Actions (Right) */}
+                                <div className="pt-3.5 border-t border-zinc-850 flex flex-col md:flex-row md:items-center justify-between gap-3.5">
+                                    {/* Left: Organizer Info */}
+                                    <div className="flex items-center gap-2 text-xs min-w-0">
+                                        <span className="text-[10px] uppercase text-zinc-500 font-bold tracking-wider shrink-0">ORGANIZER:</span>
+                                        <strong className="text-zinc-200 uppercase font-semibold truncate">
+                                            {event.organizerInfo?.displayName || event.hostName || 'Collective Council'}
+                                        </strong>
+                                        {event.organizerInfo?.role && (
+                                            <span className="text-[9px] px-1.5 py-0.5 bg-zinc-900 border border-zinc-800 text-zinc-400 uppercase shrink-0">
+                                                {event.organizerInfo.role}
+                                            </span>
+                                        )}
+                                        {isDraft && (
+                                            <span className="text-purple-400 font-bold text-[10px] uppercase tracking-wider shrink-0">
+                                                [UNPUBLISHED DRAFT]
+                                            </span>
+                                        )}
                                     </div>
 
-                                    <div className="flex items-center gap-2.5 flex-wrap">
-                                        {/* Draft Quick Action */}
+                                    {/* Right: Contextual Event Actions */}
+                                    <div className="flex items-center gap-2.5 flex-wrap justify-start md:justify-end">
+                                        {/* Draft Quick Actions (for Organizer) */}
                                         {isDraft && isEventOrganizer && (
                                             <div className="flex items-center gap-2">
                                                 <button
                                                     type="button"
                                                     onClick={() => setPreviewEvent(event)}
-                                                    className="px-3 py-1.5 bg-zinc-900 border border-zinc-700 text-zinc-300 hover:text-white uppercase font-bold text-xs transition-colors flex items-center gap-1 cursor-pointer"
+                                                    className="h-8 px-3.5 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white uppercase font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
                                                 >
-                                                    <EyeIcon className="w-3.5 h-3.5" />
+                                                    <EyeIcon className="w-3.5 h-3.5 text-zinc-400" />
                                                     <span>PREVIEW</span>
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => handlePublishDraft(event)}
                                                     disabled={isActionLoading}
-                                                    className="px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-black font-bold uppercase text-xs transition-colors cursor-pointer disabled:opacity-50"
+                                                    className="h-8 px-4 bg-purple-500 hover:bg-purple-400 text-black font-bold uppercase text-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
                                                 >
-                                                    {isActionLoading ? 'PUBLISHING...' : 'PUBLISH GATHERING'}
+                                                    <CheckIcon className="w-3.5 h-3.5" />
+                                                    <span>{isActionLoading ? 'PUBLISHING...' : 'PUBLISH CONCLAVE'}</span>
                                                 </button>
                                             </div>
                                         )}
 
-                                        {/* Published Registration Action (for non-drafts) */}
+                                        {/* Published Event Actions (for Non-Drafts) */}
                                         {!isDraft && (
-                                            isUserRegistered ? (
-                                                <div className="flex items-center gap-2">
-                                                    <span className="px-3 py-1.5 bg-emerald-950/60 border border-emerald-500/60 text-emerald-300 text-xs font-bold flex items-center gap-1.5">
-                                                        <CheckIcon className="w-3.5 h-3.5" />
-                                                        <span>REGISTERED</span>
-                                                    </span>
-                                                    {isPublished && (
+                                            <>
+                                                {/* Virtual Conclave Link Button */}
+                                                {isVirtual && meetingLink && !isCancelled && (
+                                                    isUserRegistered || isEventOrganizer ? (
+                                                        <a
+                                                            href={meetingLink}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="h-8 px-3.5 bg-cyan-950/80 border border-cyan-500/70 hover:border-cyan-400 text-cyan-200 hover:text-white font-bold uppercase text-xs transition-colors flex items-center gap-1.5 shadow-sm"
+                                                        >
+                                                            <PlayIcon className="w-3.5 h-3.5 text-cyan-400" />
+                                                            <span>JOIN VIRTUAL ROOM</span>
+                                                        </a>
+                                                    ) : (
+                                                        <span className="text-[10px] text-zinc-500 font-mono uppercase italic px-2 py-1">
+                                                            [LINK RESERVED FOR PARTICIPANTS]
+                                                        </span>
+                                                    )
+                                                )}
+
+                                                {/* Registration Status / Action */}
+                                                {isUserRegistered ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="h-8 px-3 bg-emerald-950/60 border border-emerald-500/60 text-emerald-300 text-xs font-bold uppercase flex items-center gap-1.5">
+                                                            <CheckIcon className="w-3.5 h-3.5 text-emerald-400" />
+                                                            <span>REGISTERED</span>
+                                                        </span>
+                                                        {isPublished && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleCancelRegistration(event)}
+                                                                disabled={isActionLoading}
+                                                                className="h-8 px-2.5 text-xs text-zinc-400 hover:text-rose-400 border border-zinc-850 hover:border-rose-900/60 bg-black/40 hover:bg-rose-950/20 transition-colors uppercase font-bold cursor-pointer disabled:opacity-50"
+                                                                title="Cancel my registration"
+                                                            >
+                                                                {isActionLoading ? '...' : 'CANCEL REGISTRATION'}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                ) : !canRegister ? (
+                                                    isPrivateCommunity && !isMember && !canManage ? (
                                                         <button
                                                             type="button"
-                                                            onClick={() => handleCancelRegistration(event)}
-                                                            disabled={isActionLoading}
-                                                            className="px-2.5 py-1 text-[11px] text-zinc-500 hover:text-rose-400 transition-colors uppercase cursor-pointer"
+                                                            onClick={onJoinCommunity}
+                                                            className="h-8 px-4 bg-zinc-900 border border-zinc-700 hover:border-white text-zinc-200 hover:text-white uppercase font-bold text-xs transition-colors cursor-pointer shadow-sm"
                                                         >
-                                                            {isActionLoading ? '...' : 'Cancel'}
+                                                            JOIN COLLECTIVE TO REGISTER
                                                         </button>
-                                                    )}
-                                                </div>
-                                            ) : !canRegister ? (
-                                                isPrivateCommunity && !isMember && !canManage ? (
+                                                    ) : (
+                                                        <span className="h-8 px-3.5 bg-zinc-900/80 border border-zinc-800 text-zinc-500 uppercase font-bold text-xs flex items-center justify-center">
+                                                            {isCompleted ? 'GATHERING CONCLUDED' : isCancelled ? 'EVENT CANCELLED' : 'REGISTRATION CLOSED'}
+                                                        </span>
+                                                    )
+                                                ) : (
                                                     <button
                                                         type="button"
-                                                        onClick={onJoinCommunity}
-                                                        className="px-4 py-1.5 bg-zinc-900 border border-zinc-700 hover:border-white text-zinc-300 hover:text-white uppercase font-bold text-xs transition-colors cursor-pointer"
+                                                        onClick={() => handleRegister(event)}
+                                                        disabled={isActionLoading}
+                                                        className="h-8 px-4 bg-white text-black font-bold uppercase text-xs hover:bg-zinc-200 transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
                                                     >
-                                                        JOIN COLLECTIVE TO REGISTER
+                                                        <span>{isActionLoading ? 'REGISTERING...' : 'REGISTER FOR CONCLAVE'}</span>
                                                     </button>
-                                                ) : (
-                                                    <span className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 text-zinc-600 uppercase font-bold text-xs">
-                                                        {isCompleted ? 'GATHERING CONCLUDED' : isCancelled ? 'EVENT CANCELLED' : 'REGISTRATION CLOSED'}
-                                                    </span>
-                                                )
-                                            ) : (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRegister(event)}
-                                                    disabled={isActionLoading}
-                                                    className="px-4 py-1.5 bg-white text-black font-bold uppercase text-xs hover:bg-zinc-200 transition-colors cursor-pointer disabled:opacity-50"
-                                                >
-                                                    {isActionLoading ? 'REGISTERING...' : 'REGISTER FOR CONCLAVE'}
-                                                </button>
-                                            )
-                                        )}
-
-                                        {/* Virtual Conclave Link */}
-                                        {isVirtual && meetingLink && !isDraft && !isCancelled && (
-                                            isUserRegistered || isEventOrganizer ? (
-                                                <a
-                                                    href={meetingLink}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="px-3.5 py-1.5 bg-cyan-950 border border-cyan-500/60 text-cyan-300 hover:text-white hover:border-cyan-400 font-bold uppercase text-xs transition-colors flex items-center gap-1.5"
-                                                >
-                                                    <PlayIcon className="w-3 h-3 text-cyan-400" />
-                                                    <span>JOIN VIRTUAL ROOM</span>
-                                                </a>
-                                            ) : (
-                                                <span className="text-[10px] text-zinc-600 uppercase italic">
-                                                    [REGISTER TO UNLOCK LINK]
-                                                </span>
-                                            )
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 </div>
@@ -847,31 +985,13 @@ export const ConclaveGatheringsView: React.FC<ConclaveGatheringsViewProps> = ({
 
             {/* Event Form Modal (Creation & Editing) */}
             {isFormModalOpen && (
-                <ConclaveEventFormModal
+                <CreateConclaveModal
+                    isOpen={isFormModalOpen}
                     community={community}
                     isMember={isMember}
                     initialEvent={editingEvent}
-                    onClose={() => {
-                        setIsFormModalOpen(false);
-                        setEditingEvent(null);
-                    }}
-                    onSaved={(savedEvent) => {
-                        setEvents(prev => {
-                            const exists = prev.some(e => e.id === savedEvent.id);
-                            if (exists) {
-                                return prev.map(e => e.id === savedEvent.id ? savedEvent : e);
-                            }
-                            return [savedEvent, ...prev];
-                        });
-                        setIsFormModalOpen(false);
-                        setEditingEvent(null);
-                        setActionFeedback({
-                            type: 'success',
-                            message: savedEvent.eventStatus === 'DRAFT'
-                                ? `Saved draft "${savedEvent.title}". You can preview, edit, or publish it anytime.`
-                                : `Conclave "${savedEvent.title}" is published!`
-                        });
-                    }}
+                    onClose={handleCloseFormModal}
+                    onSaved={handleSavedFormModal}
                     onPreview={(draftData) => {
                         setPreviewEvent(draftData as ConclaveEvent);
                     }}
@@ -884,7 +1004,7 @@ export const ConclaveGatheringsView: React.FC<ConclaveGatheringsViewProps> = ({
                     event={previewEvent}
                     community={community}
                     isOrganizer={canManage || previewEvent.organizerUid === currentUser?.uid}
-                    onClose={() => setPreviewEvent(null)}
+                    onClose={handleClosePreviewModal}
                     onEdit={() => {
                         setEditingEvent(previewEvent);
                         setPreviewEvent(null);
@@ -966,135 +1086,134 @@ const ConclaveEventActionsMenu: React.FC<ConclaveEventActionsMenuProps> = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isOpen]);
 
+    // Do not display organizer management actions to unauthorized users
+    if (!isOrganizer) return null;
+
     const isDraft = event.eventStatus === 'DRAFT';
     const isCancelled = event.eventStatus === 'CANCELLED';
     const isOngoing = event.eventStatus === 'ONGOING';
     const isPublished = event.eventStatus === 'PUBLISHED' || (!event.eventStatus && event.status !== 'cancelled' && event.status !== 'completed');
 
     return (
-        <div className="relative" ref={menuRef}>
+        <div className="relative shrink-0" ref={menuRef}>
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="p-1.5 text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-colors cursor-pointer flex items-center gap-1 text-[11px]"
-                title="Conclave Actions"
+                className={`h-7 px-2.5 text-zinc-300 hover:text-white bg-black/60 hover:bg-zinc-900 border transition-colors cursor-pointer flex items-center gap-1.5 text-[10px] font-bold tracking-wider ${
+                    isOpen ? 'border-zinc-400 text-white bg-zinc-900' : 'border-zinc-800 hover:border-zinc-700'
+                }`}
+                title="Organizer Actions"
             >
-                <EllipsisIcon className="w-4 h-4" />
-                <span className="hidden sm:inline uppercase text-[10px] font-bold">// ACTIONS</span>
+                <EllipsisIcon className="w-3.5 h-3.5 text-zinc-400" />
+                <span className="uppercase font-bold tracking-wider">// ACTIONS</span>
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 mt-1 w-48 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono text-xs">
-                    {/* Public or General Actions */}
+                <div className="absolute right-0 top-full mt-1.5 w-52 bg-[#0c0c0e] border border-zinc-800 shadow-2xl py-1 z-30 font-mono text-xs">
+                    <div className="px-3 py-1.5 text-[9px] uppercase text-zinc-500 font-bold border-b border-zinc-850">
+                        // ORGANIZER CONTROLS
+                    </div>
+
+                    {/* Preview */}
                     <button
                         type="button"
                         onClick={() => {
                             setIsOpen(false);
                             onPreview();
                         }}
-                        className="w-full text-left px-3 py-2 text-zinc-300 hover:text-white hover:bg-zinc-900 flex items-center gap-2 cursor-pointer"
+                        className="w-full text-left px-3 py-2 text-zinc-300 hover:text-white hover:bg-zinc-900 flex items-center gap-2 cursor-pointer transition-colors"
                     >
                         <EyeIcon className="w-3.5 h-3.5 text-zinc-400" />
-                        <span>PREVIEW_DOSSIER</span>
+                        <span>PREVIEW DOSSIER</span>
                     </button>
 
-                    {/* Organizer Actions */}
-                    {isOrganizer && (
-                        <>
-                            <div className="border-t border-zinc-850 my-1" />
-                            <div className="px-3 py-1 text-[9px] uppercase text-zinc-500 font-bold">
-                                // ORGANIZER_CONTROLS
-                            </div>
+                    {/* Edit Action */}
+                    {!isCancelled && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsOpen(false);
+                                onEdit();
+                            }}
+                            className="w-full text-left px-3 py-2 text-zinc-300 hover:text-white hover:bg-zinc-900 flex items-center gap-2 cursor-pointer transition-colors"
+                        >
+                            <PencilIcon className="w-3.5 h-3.5 text-amber-400" />
+                            <span>{isDraft ? 'EDIT DRAFT' : 'EDIT CONCLAVE'}</span>
+                        </button>
+                    )}
 
-                            {/* Edit Action */}
-                            {!isCancelled && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setIsOpen(false);
-                                        onEdit();
-                                    }}
-                                    className="w-full text-left px-3 py-2 text-zinc-300 hover:text-white hover:bg-zinc-900 flex items-center gap-2 cursor-pointer"
-                                >
-                                    <PencilIcon className="w-3.5 h-3.5 text-amber-400" />
-                                    <span>{isDraft ? 'EDIT_DRAFT' : 'EDIT_EVENT'}</span>
-                                </button>
-                            )}
+                    {/* Publish Action for Drafts */}
+                    {isDraft && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsOpen(false);
+                                onPublish();
+                            }}
+                            className="w-full text-left px-3 py-2 text-purple-300 hover:text-white hover:bg-purple-950/40 flex items-center gap-2 cursor-pointer font-bold transition-colors"
+                        >
+                            <CheckIcon className="w-3.5 h-3.5 text-purple-400" />
+                            <span>PUBLISH CONCLAVE</span>
+                        </button>
+                    )}
 
-                            {/* Publish Action for Drafts */}
-                            {isDraft && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setIsOpen(false);
-                                        onPublish();
-                                    }}
-                                    className="w-full text-left px-3 py-2 text-purple-300 hover:text-white hover:bg-purple-950/40 flex items-center gap-2 cursor-pointer font-bold"
-                                >
-                                    <CheckIcon className="w-3.5 h-3.5 text-purple-400" />
-                                    <span>PUBLISH_CONCLAVE</span>
-                                </button>
-                            )}
+                    {/* Live Session Control */}
+                    {isPublished && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsOpen(false);
+                                onTransitionStatus('ONGOING');
+                            }}
+                            className="w-full text-left px-3 py-2 text-green-300 hover:text-white hover:bg-green-950/40 flex items-center gap-2 cursor-pointer transition-colors"
+                        >
+                            <PlayIcon className="w-3.5 h-3.5 text-green-400" />
+                            <span>START SESSION (LIVE)</span>
+                        </button>
+                    )}
 
-                            {/* Live Session Control */}
-                            {isPublished && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setIsOpen(false);
-                                        onTransitionStatus('ONGOING');
-                                    }}
-                                    className="w-full text-left px-3 py-2 text-green-300 hover:text-white hover:bg-green-950/40 flex items-center gap-2 cursor-pointer"
-                                >
-                                    <PlayIcon className="w-3.5 h-3.5 text-green-400" />
-                                    <span>START_SESSION (LIVE)</span>
-                                </button>
-                            )}
+                    {isOngoing && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsOpen(false);
+                                onTransitionStatus('COMPLETED');
+                            }}
+                            className="w-full text-left px-3 py-2 text-zinc-300 hover:text-white hover:bg-zinc-900 flex items-center gap-2 cursor-pointer transition-colors"
+                        >
+                            <CheckIcon className="w-3.5 h-3.5 text-zinc-400" />
+                            <span>CONCLUDE SESSION</span>
+                        </button>
+                    )}
 
-                            {isOngoing && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setIsOpen(false);
-                                        onTransitionStatus('COMPLETED');
-                                    }}
-                                    className="w-full text-left px-3 py-2 text-zinc-300 hover:text-white hover:bg-zinc-900 flex items-center gap-2 cursor-pointer"
-                                >
-                                    <CheckIcon className="w-3.5 h-3.5 text-zinc-400" />
-                                    <span>CONCLUDE_SESSION</span>
-                                </button>
-                            )}
+                    {/* Cancellation for Published/Ongoing */}
+                    {!isDraft && !isCancelled && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsOpen(false);
+                                onCancel();
+                            }}
+                            className="w-full text-left px-3 py-2 text-rose-400 hover:text-rose-200 hover:bg-rose-950/40 flex items-center gap-2 cursor-pointer transition-colors border-t border-zinc-850"
+                        >
+                            <AlertTriangleIcon className="w-3.5 h-3.5 text-rose-400" />
+                            <span>CANCEL CONCLAVE</span>
+                        </button>
+                    )}
 
-                            {/* Cancellation for Published/Ongoing */}
-                            {!isDraft && !isCancelled && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setIsOpen(false);
-                                        onCancel();
-                                    }}
-                                    className="w-full text-left px-3 py-2 text-rose-400 hover:text-rose-200 hover:bg-rose-950/40 flex items-center gap-2 cursor-pointer"
-                                >
-                                    <AlertTriangleIcon className="w-3.5 h-3.5 text-rose-400" />
-                                    <span>CANCEL_CONCLAVE</span>
-                                </button>
-                            )}
-
-                            {/* Delete Draft Action (only drafts can be deleted) */}
-                            {isDraft && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setIsOpen(false);
-                                        onDeleteDraft();
-                                    }}
-                                    className="w-full text-left px-3 py-2 text-rose-400 hover:text-rose-200 hover:bg-rose-950/40 flex items-center gap-2 cursor-pointer"
-                                >
-                                    <TrashIcon className="w-3.5 h-3.5 text-rose-400" />
-                                    <span>DELETE_DRAFT</span>
-                                </button>
-                            )}
-                        </>
+                    {/* Delete Draft Action (only drafts can be deleted) */}
+                    {isDraft && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsOpen(false);
+                                onDeleteDraft();
+                            }}
+                            className="w-full text-left px-3 py-2 text-rose-400 hover:text-rose-200 hover:bg-rose-950/40 flex items-center gap-2 cursor-pointer transition-colors border-t border-zinc-850"
+                        >
+                            <TrashIcon className="w-3.5 h-3.5 text-rose-400" />
+                            <span>DELETE DRAFT</span>
+                        </button>
                     )}
                 </div>
             )}
@@ -1103,605 +1222,8 @@ const ConclaveEventActionsMenu: React.FC<ConclaveEventActionsMenuProps> = ({
 };
 
 /**
- * Modal to Create or Edit a Conclave Event with Draft and Publishing Support
+ * Note: Conclave Event Creation & Editing is handled by CreateConclaveModal in ./CreateConclaveModal.tsx
  */
-interface ConclaveEventFormModalProps {
-    community: Community;
-    isMember?: boolean;
-    initialEvent?: ConclaveEvent | null;
-    onClose: () => void;
-    onSaved: (event: ConclaveEvent) => void;
-    onPreview: (draftData: Partial<ConclaveEvent>) => void;
-}
-
-const ConclaveEventFormModal: React.FC<ConclaveEventFormModalProps> = ({
-    community,
-    isMember = false,
-    initialEvent,
-    onClose,
-    onSaved,
-    onPreview,
-}) => {
-    const { currentUser, userProfile } = useAuth();
-    const isEditing = Boolean(initialEvent);
-
-    // Form state initialized with initialEvent or defaults
-    const [eventType, setEventType] = useState<ConclaveEventType>(initialEvent?.eventType || 'ONSITE');
-    const [title, setTitle] = useState(initialEvent?.title || '');
-    const [description, setDescription] = useState(initialEvent?.description || '');
-    const [coverImageUrl, setCoverImageUrl] = useState(initialEvent?.coverImageUrl || '');
-    const [startDate, setStartDate] = useState(initialEvent?.startDate || '');
-    const [startTime, setStartTime] = useState(initialEvent?.startTime || '');
-    const [endDate, setEndDate] = useState(initialEvent?.endDate || '');
-    const [endTime, setEndTime] = useState(initialEvent?.endTime || '');
-    const [timezone, setTimezone] = useState(initialEvent?.timezone || 'UTC');
-    const [capacity, setCapacity] = useState<number>(initialEvent?.capacity ?? 80);
-
-    // Onsite fields
-    const [venueName, setVenueName] = useState(initialEvent?.onSite?.venueName || initialEvent?.location || '');
-    const [address, setAddress] = useState(initialEvent?.onSite?.address || '');
-    const [city, setCity] = useState(initialEvent?.onSite?.city || '');
-    const [lat, setLat] = useState<string>(initialEvent?.onSite?.coordinates?.lat?.toString() || '');
-    const [lng, setLng] = useState<string>(initialEvent?.onSite?.coordinates?.lng?.toString() || '');
-    const [venueInstructions, setVenueInstructions] = useState(initialEvent?.onSite?.venueInstructions || '');
-
-    // Virtual fields
-    const [platform, setPlatform] = useState(initialEvent?.virtual?.platform || 'Google Meet');
-    const [meetingUrl, setMeetingUrl] = useState(initialEvent?.virtual?.meetingUrl || initialEvent?.virtualUrl || '');
-    const [accessInstructions, setAccessInstructions] = useState(initialEvent?.virtual?.accessInstructions || '');
-
-    // Optional Protected Virtual Credentials
-    const [requiresProtectedAccess, setRequiresProtectedAccess] = useState(Boolean(initialEvent?.virtual?.requiresProtectedAccess));
-    const [meetingPassword, setMeetingPassword] = useState('');
-    const [accessCode, setAccessCode] = useState('');
-
-    const [submitting, setSubmitting] = useState(false);
-    const [validationErrors, setValidationErrors] = useState<string[]>([]);
-
-    // Assemble current input payload
-    const getPayload = (targetStatus: ConclaveEventStatus) => {
-        const coords = lat && lng && !isNaN(Number(lat)) && !isNaN(Number(lng))
-            ? { lat: Number(lat), lng: Number(lng) }
-            : undefined;
-
-        const protectedAccess: ConclaveProtectedAccess | undefined = requiresProtectedAccess
-            ? {
-                meetingPassword: meetingPassword.trim() || undefined,
-                accessCode: accessCode.trim() || undefined,
-            }
-            : undefined;
-
-        return {
-            communityId: community.id,
-            communityName: community.name,
-            communityAvatarUrl: community.avatarUrl,
-            title: title.trim(),
-            description: description.trim(),
-            coverImageUrl: coverImageUrl.trim() || undefined,
-            eventType,
-            startDate: startDate.trim(),
-            startTime: startTime.trim(),
-            startTimestamp: Date.now(),
-            endDate: endDate.trim() || undefined,
-            endTime: endTime.trim() || undefined,
-            timezone: timezone.trim() || 'UTC',
-            capacity: Number(capacity) || 100,
-            eventStatus: targetStatus,
-            onSite: eventType === 'ONSITE' ? {
-                venueName: venueName.trim(),
-                address: address.trim(),
-                city: city.trim(),
-                coordinates: coords,
-                venueInstructions: venueInstructions.trim() || undefined,
-            } : undefined,
-            virtual: eventType === 'VIRTUAL' ? {
-                platform: platform.trim(),
-                meetingUrl: meetingUrl.trim(),
-                accessInstructions: accessInstructions.trim() || undefined,
-                requiresProtectedAccess,
-            } : undefined,
-            protectedAccess,
-        };
-    };
-
-    // Save as DRAFT
-    const handleSaveDraft = async () => {
-        if (!currentUser?.uid) return;
-        setSubmitting(true);
-        setValidationErrors([]);
-
-        const payload = getPayload('DRAFT');
-        const validation = validateConclaveEventInput(payload, false, initialEvent);
-        if (!validation.valid) {
-            setValidationErrors(validation.errors);
-            setSubmitting(false);
-            return;
-        }
-
-        if (isEditing && initialEvent) {
-            const res = await updateConclaveEvent(initialEvent.id, payload as UpdateConclaveEventInput, currentUser.uid, community);
-            if (res.success && res.event) {
-                onSaved(res.event);
-            } else {
-                setValidationErrors(res.errors || ['Failed to update draft.']);
-            }
-        } else {
-            const res = await createConclaveEvent(
-                payload as CreateConclaveEventInput,
-                {
-                    uid: currentUser.uid,
-                    displayName: currentUser.displayName || userProfile?.displayName || 'Council Organizer',
-                    photoURL: currentUser.photoURL || undefined,
-                },
-                community,
-                isMember
-            );
-            if (res.success && res.event) {
-                onSaved(res.event);
-            } else {
-                setValidationErrors(res.errors || ['Failed to create draft.']);
-            }
-        }
-        setSubmitting(false);
-    };
-
-    // PUBLISH Immediately
-    const handlePublish = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!currentUser?.uid) return;
-        setSubmitting(true);
-        setValidationErrors([]);
-
-        const payload = getPayload('PUBLISHED');
-        const validation = validateConclaveEventInput(payload, true, initialEvent);
-        if (!validation.valid) {
-            setValidationErrors(validation.errors);
-            setSubmitting(false);
-            return;
-        }
-
-        if (isEditing && initialEvent) {
-            const res = await updateConclaveEvent(initialEvent.id, payload as UpdateConclaveEventInput, currentUser.uid, community);
-            if (res.success && res.event) {
-                onSaved(res.event);
-            } else {
-                setValidationErrors(res.errors || ['Failed to update Conclave event.']);
-            }
-        } else {
-            const res = await createConclaveEvent(
-                payload as CreateConclaveEventInput,
-                {
-                    uid: currentUser.uid,
-                    displayName: currentUser.displayName || userProfile?.displayName || 'Council Organizer',
-                    photoURL: currentUser.photoURL || undefined,
-                },
-                community,
-                isMember
-            );
-            if (res.success && res.event) {
-                onSaved(res.event);
-            } else {
-                setValidationErrors(res.errors || ['Failed to publish Conclave event.']);
-            }
-        }
-        setSubmitting(false);
-    };
-
-    // Preview
-    const handlePreviewClick = () => {
-        const payload = getPayload(initialEvent?.eventStatus || 'DRAFT');
-        onPreview({
-            id: initialEvent?.id || 'preview-temp-id',
-            organizerUid: currentUser?.uid || 'temp-organizer',
-            organizerInfo: {
-                uid: currentUser?.uid || 'temp-organizer',
-                displayName: currentUser?.displayName || 'Council Organizer',
-            },
-            registeredCount: initialEvent?.registeredCount || 0,
-            attendeeIds: initialEvent?.attendeeIds || [],
-            createdAt: new Date(),
-            ...payload,
-        });
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-mono">
-            <div className="bg-[#0c0c0e] border border-zinc-800 w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl">
-                {/* Modal Header */}
-                <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-                    <div>
-                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest block font-bold">
-                            // 02. CONCLAVE EVENT ARCHITECT
-                        </span>
-                        <h3 className="text-sm font-bold text-white uppercase tracking-wide">
-                            {isEditing ? `EDIT CONCLAVE: ${initialEvent?.title}` : 'SCHEDULE NEW CONCLAVE GATHERING'}
-                        </h3>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="p-1.5 text-zinc-500 hover:text-white transition-colors cursor-pointer"
-                    >
-                        <CloseIcon className="w-5 h-5" />
-                    </button>
-                </div>
-
-                {/* Form Body */}
-                <form onSubmit={handlePublish} className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
-                    {/* Validation Errors */}
-                    {validationErrors.length > 0 && (
-                        <div className="p-3 bg-rose-950/40 border border-rose-800 text-rose-300 space-y-1">
-                            <div className="font-bold uppercase text-[11px] flex items-center gap-1.5">
-                                <AlertTriangleIcon className="w-4 h-4 text-rose-400" />
-                                <span>VALIDATION_ERRORS_DETECTED</span>
-                            </div>
-                            <ul className="list-disc list-inside text-[11px] space-y-0.5 text-rose-300">
-                                {validationErrors.map((err, i) => (
-                                    <li key={i}>{err}</li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-
-                    {/* Format Selector Toggle */}
-                    <div className="space-y-1.5">
-                        <label className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider block">
-                            PRIMARY EVENT FORMAT *
-                        </label>
-                        <div className="grid grid-cols-2 gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setEventType('ONSITE')}
-                                className={`p-3 border text-left flex items-center gap-2.5 transition-colors cursor-pointer ${
-                                    eventType === 'ONSITE'
-                                        ? 'bg-amber-950/40 border-amber-500 text-amber-300 font-bold'
-                                        : 'bg-black border-zinc-800 text-zinc-400 hover:text-white'
-                                }`}
-                            >
-                                <MapPinIcon className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                                <div>
-                                    <p className="uppercase text-xs">ON-SITE CONCLAVE</p>
-                                    <p className="text-[10px] text-zinc-500">Physical venue gathering</p>
-                                </div>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setEventType('VIRTUAL')}
-                                className={`p-3 border text-left flex items-center gap-2.5 transition-colors cursor-pointer ${
-                                    eventType === 'VIRTUAL'
-                                        ? 'bg-cyan-950/40 border-cyan-500 text-cyan-300 font-bold'
-                                        : 'bg-black border-zinc-800 text-zinc-400 hover:text-white'
-                                }`}
-                            >
-                                <GlobeAltIcon className="w-4 h-4 text-cyan-400 flex-shrink-0" />
-                                <div>
-                                    <p className="uppercase text-xs">VIRTUAL CONCLAVE</p>
-                                    <p className="text-[10px] text-zinc-500">Remote online session</p>
-                                </div>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Title */}
-                    <div className="space-y-1">
-                        <label className="text-[11px] text-zinc-400 uppercase tracking-wider block">
-                            GATHERING TITLE *
-                        </label>
-                        <input
-                            type="text"
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            placeholder="e.g. Decentralized Computing Lightning Demos & Assembly"
-                            required
-                            className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                        />
-                    </div>
-
-                    {/* Description */}
-                    <div className="space-y-1">
-                        <label className="text-[11px] text-zinc-400 uppercase tracking-wider block">
-                            DESCRIPTION & AGENDA *
-                        </label>
-                        <textarea
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="Outline the agenda, topics, speaker schedule, and preparation guidelines..."
-                            rows={3}
-                            required
-                            className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 resize-none"
-                        />
-                    </div>
-
-                    {/* Cover Image URL */}
-                    <div className="space-y-1">
-                        <label className="text-[11px] text-zinc-400 uppercase tracking-wider block">
-                            COVER IMAGE URL (OPTIONAL)
-                        </label>
-                        <input
-                            type="url"
-                            value={coverImageUrl}
-                            onChange={(e) => setCoverImageUrl(e.target.value)}
-                            placeholder="https://..."
-                            className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 text-xs"
-                        />
-                    </div>
-
-                    {/* Timing & Schedule */}
-                    <div className="p-3 bg-zinc-950 border border-zinc-850 space-y-3">
-                        <p className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider">// SCHEDULE & TIMEZONE</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                            <div className="space-y-1">
-                                <label className="text-[10px] text-zinc-400 uppercase block">START DATE *</label>
-                                <input
-                                    type="text"
-                                    value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
-                                    placeholder="2026-11-28 or FRI, NOV 28"
-                                    required
-                                    className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] text-zinc-400 uppercase block">START TIME *</label>
-                                <input
-                                    type="text"
-                                    value={startTime}
-                                    onChange={(e) => setStartTime(e.target.value)}
-                                    placeholder="18:30"
-                                    required
-                                    className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] text-zinc-400 uppercase block">END DATE (OPTIONAL)</label>
-                                <input
-                                    type="text"
-                                    value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                    placeholder="2026-11-28 or same day"
-                                    className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] text-zinc-400 uppercase block">END TIME (OPTIONAL)</label>
-                                <input
-                                    type="text"
-                                    value={endTime}
-                                    onChange={(e) => setEndTime(e.target.value)}
-                                    placeholder="20:00"
-                                    className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                            <div className="space-y-1">
-                                <label className="text-[10px] text-zinc-400 uppercase block">TIME ZONE *</label>
-                                <input
-                                    type="text"
-                                    value={timezone}
-                                    onChange={(e) => setTimezone(e.target.value)}
-                                    placeholder="UTC, PST, CET, EST..."
-                                    required
-                                    className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] text-zinc-400 uppercase block">
-                                    REGISTRATION CAPACITY * {isEditing && initialEvent?.registeredCount ? `(min: ${initialEvent.registeredCount})` : ''}
-                                </label>
-                                <input
-                                    type="number"
-                                    value={capacity}
-                                    onChange={(e) => setCapacity(Number(e.target.value))}
-                                    min={isEditing ? (initialEvent?.registeredCount || 1) : 1}
-                                    max={2000}
-                                    required
-                                    className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Format-Specific Fields */}
-                    {eventType === 'ONSITE' ? (
-                        <div className="p-3 bg-amber-950/20 border border-amber-900/40 space-y-3">
-                            <p className="text-[11px] font-bold text-amber-300 uppercase">// ON-SITE VENUE SPECIFICATION</p>
-                            <div className="space-y-2">
-                                <div>
-                                    <label className="text-[10px] text-zinc-400 uppercase block">VENUE NAME *</label>
-                                    <input
-                                        type="text"
-                                        value={venueName}
-                                        onChange={(e) => setVenueName(e.target.value)}
-                                        placeholder="e.g. The Innovation Center, Hall A"
-                                        className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    <div>
-                                        <label className="text-[10px] text-zinc-400 uppercase block">FULL STREET ADDRESS *</label>
-                                        <input
-                                            type="text"
-                                            value={address}
-                                            onChange={(e) => setAddress(e.target.value)}
-                                            placeholder="550 Howard St, Suite 400"
-                                            className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] text-zinc-400 uppercase block">CITY *</label>
-                                        <input
-                                            type="text"
-                                            value={city}
-                                            onChange={(e) => setCity(e.target.value)}
-                                            placeholder="San Francisco, CA"
-                                            className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label className="text-[10px] text-zinc-400 uppercase block">LATITUDE (OPTIONAL)</label>
-                                        <input
-                                            type="text"
-                                            value={lat}
-                                            onChange={(e) => setLat(e.target.value)}
-                                            placeholder="37.7749"
-                                            className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] text-zinc-400 uppercase block">LONGITUDE (OPTIONAL)</label>
-                                        <input
-                                            type="text"
-                                            value={lng}
-                                            onChange={(e) => setLng(e.target.value)}
-                                            placeholder="-122.4194"
-                                            className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-[10px] text-zinc-400 uppercase block">ADDITIONAL VENUE INSTRUCTIONS</label>
-                                    <input
-                                        type="text"
-                                        value={venueInstructions}
-                                        onChange={(e) => setVenueInstructions(e.target.value)}
-                                        placeholder="e.g. Check in at northern lobby reception with INVOX member badge"
-                                        className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="p-3 bg-cyan-950/20 border border-cyan-900/40 space-y-3">
-                            <p className="text-[11px] font-bold text-cyan-300 uppercase">// VIRTUAL SESSION SPECIFICATION</p>
-                            <div className="space-y-2">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    <div>
-                                        <label className="text-[10px] text-zinc-400 uppercase block">MEETING PLATFORM *</label>
-                                        <select
-                                            value={platform}
-                                            onChange={(e) => setPlatform(e.target.value)}
-                                            className="w-full bg-black border border-zinc-800 p-2 text-white focus:outline-none focus:border-zinc-500"
-                                        >
-                                            <option value="Google Meet">Google Meet</option>
-                                            <option value="Zoom">Zoom</option>
-                                            <option value="Discord">Discord</option>
-                                            <option value="Microsoft Teams">Microsoft Teams</option>
-                                            <option value="Custom Stream">Custom Stream</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] text-zinc-400 uppercase block">MEETING URL OR ROOM REFERENCE *</label>
-                                        <input
-                                            type="url"
-                                            value={meetingUrl}
-                                            onChange={(e) => setMeetingUrl(e.target.value)}
-                                            placeholder="https://meet.google.com/..."
-                                            className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-[10px] text-zinc-400 uppercase block">MEETING ACCESS INSTRUCTIONS</label>
-                                    <input
-                                        type="text"
-                                        value={accessInstructions}
-                                        onChange={(e) => setAccessInstructions(e.target.value)}
-                                        placeholder="Direct link unlocked for confirmed registrants; audio/video enabled for Q&A"
-                                        className="w-full bg-black border border-zinc-800 p-2 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                                    />
-                                </div>
-
-                                {/* Protected Virtual Meeting Credentials */}
-                                <div className="pt-2 border-t border-cyan-900/40 space-y-2">
-                                    <label className="flex items-center gap-2 cursor-pointer text-cyan-200">
-                                        <input
-                                            type="checkbox"
-                                            checked={requiresProtectedAccess}
-                                            onChange={(e) => setRequiresProtectedAccess(e.target.checked)}
-                                            className="accent-cyan-500"
-                                        />
-                                        <span className="text-[11px] font-bold">ENABLE PROTECTED MEETING CREDENTIALS</span>
-                                    </label>
-                                    {requiresProtectedAccess && (
-                                        <div className="grid grid-cols-2 gap-2 pt-1">
-                                            <div>
-                                                <label className="text-[10px] text-zinc-400 uppercase block">ROOM PASSWORD</label>
-                                                <input
-                                                    type="text"
-                                                    value={meetingPassword}
-                                                    onChange={(e) => setMeetingPassword(e.target.value)}
-                                                    placeholder="Optional Password"
-                                                    className="w-full bg-black border border-zinc-800 p-2 text-white focus:outline-none focus:border-cyan-500 text-xs"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-[10px] text-zinc-400 uppercase block">ACCESS CODE / PIN</label>
-                                                <input
-                                                    type="text"
-                                                    value={accessCode}
-                                                    onChange={(e) => setAccessCode(e.target.value)}
-                                                    placeholder="Optional PIN"
-                                                    className="w-full bg-black border border-zinc-800 p-2 text-white focus:outline-none focus:border-cyan-500 text-xs"
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Modal Footer with Actions */}
-                    <div className="pt-3 border-t border-zinc-850 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={handlePreviewClick}
-                                className="px-3.5 py-2 bg-zinc-900 border border-zinc-700 text-zinc-300 hover:text-white uppercase font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                            >
-                                <EyeIcon className="w-3.5 h-3.5" />
-                                <span>PREVIEW</span>
-                            </button>
-                        </div>
-
-                        <div className="flex items-center gap-2.5 justify-end">
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                className="px-4 py-2 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white uppercase font-bold text-xs transition-colors cursor-pointer"
-                            >
-                                CANCEL
-                            </button>
-
-                            {/* Save Draft Action */}
-                            <button
-                                type="button"
-                                onClick={handleSaveDraft}
-                                disabled={submitting}
-                                className="px-4 py-2 bg-purple-950/60 border border-purple-600 text-purple-200 hover:bg-purple-900 font-bold uppercase text-xs transition-colors cursor-pointer disabled:opacity-50"
-                            >
-                                {submitting ? 'SAVING...' : isEditing && initialEvent?.eventStatus !== 'DRAFT' ? 'SAVE EDITS' : 'SAVE AS DRAFT'}
-                            </button>
-
-                            {/* Publish Action */}
-                            <button
-                                type="submit"
-                                disabled={submitting}
-                                className="px-5 py-2 bg-white text-black font-bold uppercase text-xs hover:bg-zinc-200 transition-colors cursor-pointer disabled:opacity-50"
-                            >
-                                {submitting ? 'PROCESSING...' : isEditing && initialEvent?.eventStatus === 'PUBLISHED' ? 'UPDATE EVENT' : 'PUBLISH CONCLAVE'}
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
 
 /**
  * Conclave Event Preview Modal
@@ -1727,13 +1249,13 @@ const ConclaveEventPreviewModal: React.FC<ConclaveEventPreviewModalProps> = ({
     const isDraft = event.eventStatus === 'DRAFT';
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-mono">
-            <div className="bg-[#0c0c0e] border border-zinc-800 w-full max-w-xl max-h-[92vh] flex flex-col shadow-2xl">
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-mono">
+            <div className="bg-[#0c0c0e] border border-zinc-800 w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl">
                 {/* Header */}
                 <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
                     <div>
                         <span className="text-[10px] text-zinc-500 uppercase tracking-widest block font-bold">
-                            // CONCLAVE EVENT PREVIEW
+                            CONCLAVE EVENT PREVIEW DOSSIER
                         </span>
                         <h3 className="text-sm font-bold text-white uppercase tracking-wide">
                             {isDraft ? '[DRAFT PREVIEW - UNPUBLISHED]' : '[EVENT DOSSIER]'}
@@ -1758,17 +1280,35 @@ const ConclaveEventPreviewModal: React.FC<ConclaveEventPreviewModalProps> = ({
                         </div>
                     )}
 
+                    {/* Cover image if available */}
+                    {event.coverImageUrl && (
+                        <div className="relative aspect-video max-h-52 w-full overflow-hidden bg-black border border-zinc-800">
+                            <img
+                                src={event.coverImageUrl}
+                                alt={event.title}
+                                className="w-full h-full object-cover"
+                            />
+                        </div>
+                    )}
+
                     {/* Format and Status Row */}
                     <div className="flex items-center justify-between border-b border-zinc-850 pb-2 flex-wrap gap-2">
-                        <span className={`px-2.5 py-1 text-xs font-bold uppercase ${
-                            isOnsite
-                                ? 'bg-amber-950/40 border border-amber-500 text-amber-300'
-                                : 'bg-cyan-950/40 border border-cyan-500 text-cyan-300'
-                        }`}>
-                            {isOnsite ? 'ON-SITE CONCLAVE' : 'VIRTUAL CONCLAVE'}
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className={`px-2.5 py-1 text-xs font-bold uppercase ${
+                                isOnsite
+                                    ? 'bg-amber-950/40 border border-amber-500 text-amber-300'
+                                    : 'bg-cyan-950/40 border border-cyan-500 text-cyan-300'
+                            }`}>
+                                {isOnsite ? 'ON-SITE CONCLAVE' : 'VIRTUAL CONCLAVE'}
+                            </span>
+                            {event.category && (
+                                <span className="px-2 py-0.5 bg-zinc-900 border border-zinc-800 text-zinc-300 text-[11px] uppercase">
+                                    {event.category}
+                                </span>
+                            )}
+                        </div>
                         <div className="text-zinc-300 font-bold">
-                            {event.startDate} // {event.startTime} ({event.timezone || 'UTC'})
+                            {event.startDate || event.date} · {event.startTime || event.time} ({event.timezone || 'UTC'})
                         </div>
                     </div>
 
@@ -1782,12 +1322,26 @@ const ConclaveEventPreviewModal: React.FC<ConclaveEventPreviewModalProps> = ({
                         </p>
                     </div>
 
+                    {/* Video Teaser if provided */}
+                    {event.promoVideoUrl && (
+                        <div className="p-3 bg-black border border-zinc-850 space-y-1">
+                            <p className="text-[10px] text-zinc-400 uppercase font-bold">VIDEO TEASER:</p>
+                            <div className="aspect-video max-h-44 overflow-hidden bg-black">
+                                <video src={event.promoVideoUrl} controls className="w-full h-full object-contain" />
+                            </div>
+                        </div>
+                    )}
+
                     {/* Specifics */}
                     <div className="p-3 bg-black border border-zinc-850 space-y-2">
                         {isOnsite ? (
                             <div className="space-y-1">
                                 <p className="text-amber-300 font-bold">VENUE: {event.onSite?.venueName || event.location || 'Pending Venue Specification'}</p>
-                                {event.onSite?.address && <p className="text-zinc-400">ADDRESS: {event.onSite.address} ({event.onSite.city})</p>}
+                                {event.onSite?.address && (
+                                    <p className="text-zinc-400">
+                                        ADDRESS: {event.onSite.address} {event.onSite.city ? `(${event.onSite.city})` : ''}
+                                    </p>
+                                )}
                                 {event.onSite?.venueInstructions && <p className="text-zinc-500 italic">NOTE: {event.onSite.venueInstructions}</p>}
                             </div>
                         ) : (
@@ -1802,7 +1356,9 @@ const ConclaveEventPreviewModal: React.FC<ConclaveEventPreviewModalProps> = ({
                     {/* Capacity Indicator */}
                     <div className="space-y-1">
                         <div className="flex items-center justify-between text-[11px] text-zinc-400">
-                            <span>CAPACITY: <strong>{event.capacity || 100}</strong> MAXIMUM PARTICIPANTS</span>
+                            <span>
+                                CAPACITY: <strong>{event.capacity === 0 || event.capacity === -1 ? 'UNLIMITED' : (event.capacity || 100)}</strong> PARTICIPANTS
+                            </span>
                             <span className="text-emerald-400 uppercase font-bold">REGISTRATION OPEN ONCE PUBLISHED</span>
                         </div>
                     </div>

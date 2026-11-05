@@ -73,8 +73,9 @@ export const CommunityProfilePage: React.FC = () => {
     const [community, setCommunity] = useState<Community | null>(initialCommunity);
     const [loading, setLoading] = useState<boolean>(!initialCommunity);
     
-    // Sync activeTab with URL ?tab= query parameter
-    const tabFromUrl = searchParams.get('tab') as CommunityTab | null;
+    // Sync activeTab with URL ?tab= query parameter (supporting both 'conclave' and '02_conclave')
+    const rawTab = searchParams.get('tab');
+    const tabFromUrl = (rawTab === '02_conclave' ? 'conclave' : rawTab) as CommunityTab | null;
     const [activeTab, setActiveTab] = useState<CommunityTab>(() => {
         if (tabFromUrl && ['overview', 'conclave', 'memory', 'influence', 'health'].includes(tabFromUrl)) {
             return tabFromUrl;

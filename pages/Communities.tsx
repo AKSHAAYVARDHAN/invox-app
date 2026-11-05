@@ -30,6 +30,7 @@ import { handleImageError } from '../components/utils/imageUtils';
 import MyCommunityCardSkeleton from '../components/communities/MyCommunityCardSkeleton';
 import MyCommunitiesInteractionHub from '../components/communities/MyCommunitiesInteractionHub';
 import AllCommunitiesFeed from '../components/communities/AllCommunitiesFeed';
+import { ConclaveDiscoveryView } from '../components/communities/ConclaveDiscoveryView';
 
 export const mockCommunities: Community[] = [
     { id: 'startup-1', name: 'Startup Grind', description: 'Connect with founders, investors, and innovators in the startup ecosystem.', members: 25000, rating: 4.7, category: 'Startup', isVerified: true, avatarUrl: 'https://picsum.photos/seed/startup-grind/200' },
@@ -258,8 +259,12 @@ const CommunitiesPage = () => {
     const { setRightSidebarVariant, communityFilters, setCommunityFilters, communityView, setCommunityView } = outletContext || {};
 
     const searchParams = new URLSearchParams(location.search);
-    const viewParam = searchParams.get('view') || searchParams.get('tab');
-    const effectiveView = viewParam || communityView;
+    const rawViewParam = searchParams.get('view') || searchParams.get('tab');
+    const inboxParam = searchParams.get('inbox');
+    const viewParam = (rawViewParam === 'conclaves' || rawViewParam === 'conclave-discovery')
+        ? 'conclave-discovery'
+        : (inboxParam && !rawViewParam ? 'my-communities' : rawViewParam);
+    const effectiveView = viewParam || (inboxParam ? 'my-communities' : communityView);
 
     const [visitedViews, setVisitedViews] = useState<Set<string>>(() => new Set([effectiveView || 'leaderboard']));
 
@@ -273,17 +278,22 @@ const CommunitiesPage = () => {
         });
     }, [effectiveView]);
 
-    // Synchronize URL search params (e.g. ?view=my-communities or ?tab=my-communities or ?view=all) with state
+    // Synchronize URL search params (e.g. ?view=conclave-discovery, ?view=my-communities, or ?view=all) with state
     useEffect(() => {
         const params = new URLSearchParams(location.search);
-        const viewFromUrl = params.get('view') || params.get('tab');
-        if (viewFromUrl === 'my-communities' && setCommunityView && communityView !== 'my-communities') {
+        const rawParam = params.get('view') || params.get('tab');
+        const viewFromUrl = (rawParam === 'conclaves' || rawParam === 'conclave-discovery') ? 'conclave-discovery' : rawParam;
+        const hasInboxParam = Boolean(params.get('inbox'));
+
+        if ((viewFromUrl === 'my-communities' || (hasInboxParam && !viewFromUrl)) && setCommunityView && communityView !== 'my-communities') {
             setCommunityView('my-communities');
+        } else if (viewFromUrl === 'conclave-discovery' && setCommunityView && communityView !== 'conclave-discovery') {
+            setCommunityView('conclave-discovery');
         } else if (viewFromUrl === 'all' && setCommunityView && communityView !== 'all') {
             setCommunityView('all');
         } else if (viewFromUrl === 'leaderboard' && setCommunityView && communityView !== 'leaderboard') {
             setCommunityView('leaderboard');
-        } else if (!viewFromUrl && setCommunityView && communityView !== 'leaderboard') {
+        } else if (!viewFromUrl && !hasInboxParam && setCommunityView && communityView !== 'leaderboard') {
             setCommunityView('leaderboard');
         }
     }, [location.search, setCommunityView, communityView]);
@@ -375,7 +385,7 @@ const CommunitiesPage = () => {
         }
     };
 
-    const isLeaderboardActive = effectiveView !== 'all' && effectiveView !== 'my-communities';
+    const isLeaderboardActive = effectiveView !== 'all' && effectiveView !== 'my-communities' && effectiveView !== 'conclave-discovery';
     const isSearchView = isLeaderboardActive && Boolean(communityFilters && communityFilters.searchTerm && communityFilters.searchTerm.trim() !== '');
 
     const searchOutcome = React.useMemo(() => {
@@ -454,6 +464,20 @@ const CommunitiesPage = () => {
                             }
                         }}
                         onOpenCommunity={(communityId) => navigate(`/communities/${communityId}`)}
+                    />
+                </div>
+            )}
+
+            {/* Conclave Discovery View */}
+            {visitedViews.has('conclave-discovery') && (
+                <div className={effectiveView === 'conclave-discovery' ? 'block' : 'hidden'}>
+                    <ConclaveDiscoveryView 
+                        onBack={() => {
+                            navigate('/communities');
+                            if (setCommunityView) {
+                                setCommunityView('leaderboard');
+                            }
+                        }}
                     />
                 </div>
             )}

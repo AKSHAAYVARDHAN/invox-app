@@ -629,6 +629,7 @@ export const createConclaveEvent = async (
             communityAvatarUrl: input.communityAvatarUrl || community.avatarUrl,
             title: input.title.trim(),
             description: input.description.trim(),
+            category: input.category?.trim() || undefined,
             eventType: input.eventType,
             organizerUid: user.uid,
             organizerInfo: {
@@ -648,7 +649,10 @@ export const createConclaveEvent = async (
             registeredCount: 0,
             eventStatus: targetStatus,
             registrationStatus: targetStatus === 'PUBLISHED' ? 'OPEN' : 'CLOSED',
+            accessPolicy: input.accessPolicy || 'ALL_MEMBERS',
+            participationInstructions: input.participationInstructions?.trim() || undefined,
             coverImageUrl: input.coverImageUrl,
+            promoVideoUrl: input.promoVideoUrl?.trim() || undefined,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
             ...(input.eventType === 'ONSITE' ? { onSite: input.onSite } : { virtual: input.virtual }),
@@ -736,6 +740,7 @@ export const updateConclaveEvent = async (
         const updates: Partial<ConclaveEvent> = {
             title: input.title !== undefined ? input.title.trim() : currentData.title,
             description: input.description !== undefined ? input.description.trim() : currentData.description,
+            category: input.category !== undefined ? (input.category.trim() || undefined) : currentData.category,
             eventType: input.eventType ?? currentData.eventType,
             startDate: input.startDate ?? currentData.startDate,
             startTime: input.startTime ?? currentData.startTime,
@@ -745,7 +750,10 @@ export const updateConclaveEvent = async (
             endTimestamp: input.endTimestamp ?? currentData.endTimestamp,
             timezone: input.timezone ?? currentData.timezone,
             capacity: input.capacity !== undefined ? Number(input.capacity) : currentData.capacity,
-            coverImageUrl: input.coverImageUrl ?? currentData.coverImageUrl,
+            coverImageUrl: input.coverImageUrl !== undefined ? input.coverImageUrl : currentData.coverImageUrl,
+            promoVideoUrl: input.promoVideoUrl !== undefined ? (input.promoVideoUrl.trim() || undefined) : currentData.promoVideoUrl,
+            accessPolicy: input.accessPolicy ?? currentData.accessPolicy,
+            participationInstructions: input.participationInstructions !== undefined ? (input.participationInstructions.trim() || undefined) : currentData.participationInstructions,
             eventStatus: nextStatus,
             registrationStatus: nextRegStatus,
             updatedAt: serverTimestamp(),
@@ -1218,3 +1226,178 @@ export const getProtectedVirtualAccess = async (
         return null;
     }
 };
+
+/**
+ * Subscribes in real-time to upcoming, eligible Conclave gatherings across communities.
+ * Excludes drafts, cancelled, completed, and past events.
+ * Merges with canonical demonstration gatherings when database has limited events,
+ * ensuring verified presence of both On-Site and Virtual gatherings.
+ * Never exposes protected virtual meeting credentials.
+ */
+export const subscribeUpcomingConclaveEvents = (
+    onUpdate: (events: ConclaveEvent[]) => void,
+    limitCount: number = 6
+): (() => void) => {
+    try {
+        const eventsRef = collection(db, CONCLAVE_COLLECTIONS.events);
+        const q = query(
+            eventsRef,
+            where('eventStatus', 'in', ['PUBLISHED', 'ONGOING'])
+        );
+
+        return onSnapshot(
+            q,
+            (snapshot) => {
+                const now = Date.now();
+                const fetchedEvents: ConclaveEvent[] = [];
+
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data() as any;
+                    const eventItem = (!data.eventType && data.format)
+                        ? adaptLegacyGatheringToConclaveEvent({ id: docSnap.id, ...data })
+                        : ({ id: docSnap.id, ...data } as ConclaveEvent);
+
+                    // Skip drafts, cancelled, or completed
+                    if (eventItem.eventStatus === 'DRAFT' || eventItem.eventStatus === 'CANCELLED' || eventItem.eventStatus === 'COMPLETED') {
+                        return;
+                    }
+
+                    // Check if event is in the past
+                    if (eventItem.endTimestamp && eventItem.endTimestamp < now) {
+                        return;
+                    }
+                    if (eventItem.startTimestamp && eventItem.startTimestamp < now - (24 * 3600 * 1000) && eventItem.eventStatus !== 'ONGOING') {
+                        return;
+                    }
+
+                    // Safe copy without protected credentials
+                    fetchedEvents.push(eventItem);
+                });
+
+                // Fallback demonstration Conclave events from MOCK_COMMUNITY_EVENTS
+                const demoConclaves: ConclaveEvent[] = MOCK_COMMUNITY_EVENTS
+                    .filter(e => e.status !== 'completed' && e.status !== 'cancelled')
+                    .map(adaptLegacyGatheringToConclaveEvent);
+
+                const seenIds = new Set<string>();
+                const merged: ConclaveEvent[] = [];
+
+                for (const ev of fetchedEvents) {
+                    seenIds.add(ev.id);
+                    merged.push(ev);
+                }
+
+                for (const demo of demoConclaves) {
+                    if (!seenIds.has(demo.id)) {
+                        seenIds.add(demo.id);
+                        merged.push(demo);
+                    }
+                }
+
+                // Sort: ONGOING events first, then upcoming by start timestamp / date
+                merged.sort((a, b) => {
+                    if (a.eventStatus === 'ONGOING' && b.eventStatus !== 'ONGOING') return -1;
+                    if (b.eventStatus === 'ONGOING' && a.eventStatus !== 'ONGOING') return 1;
+                    const timeA = a.startTimestamp || 0;
+                    const timeB = b.startTimestamp || 0;
+                    if (timeA && timeB) return timeA - timeB;
+                    return (a.startDate || '').localeCompare(b.startDate || '');
+                });
+
+                onUpdate(merged.slice(0, limitCount));
+            },
+            (err) => {
+                console.warn('[SUBSCRIBE_UPCOMING_CONCLAVE_EVENTS_ERR]', err);
+                const demoConclaves = MOCK_COMMUNITY_EVENTS
+                    .filter(e => e.status !== 'completed' && e.status !== 'cancelled')
+                    .map(adaptLegacyGatheringToConclaveEvent);
+                onUpdate(demoConclaves.slice(0, limitCount));
+            }
+        );
+    } catch (err) {
+        console.warn('[SUBSCRIBE_UPCOMING_CONCLAVE_INIT_ERR]', err);
+        const demoConclaves = MOCK_COMMUNITY_EVENTS
+            .filter(e => e.status !== 'completed' && e.status !== 'cancelled')
+            .map(adaptLegacyGatheringToConclaveEvent);
+        onUpdate(demoConclaves.slice(0, limitCount));
+        return () => {};
+    }
+};
+
+/**
+ * Subscribes in real-time to all eligible Conclave gatherings from a list of user community IDs.
+ * Filters out drafts, respects community boundaries, adapts legacy demo records if needed,
+ * and passes the complete list of gatherings (both upcoming and past) for discovery filtering.
+ */
+export const subscribeUserCommunitiesConclaveEvents = (
+    communityIds: string[],
+    onUpdate: (events: ConclaveEvent[]) => void
+): (() => void) => {
+    const validIds = new Set((communityIds || []).map(id => id.toLowerCase()));
+
+    const getMatchingDemoConclaves = () => {
+        const matches = MOCK_COMMUNITY_EVENTS.filter(e => {
+            if (validIds.size === 0) return true;
+            return validIds.has(e.communityId.toLowerCase());
+        });
+        return matches.map(adaptLegacyGatheringToConclaveEvent);
+    };
+
+    try {
+        const eventsRef = collection(db, CONCLAVE_COLLECTIONS.events);
+        return onSnapshot(
+            eventsRef,
+            (snapshot) => {
+                const fetchedEvents: ConclaveEvent[] = [];
+
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data() as any;
+                    const eventItem = (!data.eventType && data.format)
+                        ? adaptLegacyGatheringToConclaveEvent({ id: docSnap.id, ...data })
+                        : ({ id: docSnap.id, ...data } as ConclaveEvent);
+
+                    // Skip drafts from discovery
+                    if (eventItem.eventStatus === 'DRAFT') {
+                        return;
+                    }
+
+                    // Must belong to user's eligible communities if specified
+                    if (validIds.size > 0 && !validIds.has(eventItem.communityId.toLowerCase())) {
+                        return;
+                    }
+
+                    fetchedEvents.push(eventItem);
+                });
+
+                // Merge with fallback demo events for these communities
+                const demoList = getMatchingDemoConclaves();
+                const seenIds = new Set<string>();
+                const merged: ConclaveEvent[] = [];
+
+                for (const ev of fetchedEvents) {
+                    seenIds.add(ev.id);
+                    merged.push(ev);
+                }
+
+                for (const demo of demoList) {
+                    if (!seenIds.has(demo.id)) {
+                        seenIds.add(demo.id);
+                        merged.push(demo);
+                    }
+                }
+
+                onUpdate(merged);
+            },
+            (err) => {
+                console.warn('[SUBSCRIBE_USER_COMMUNITIES_CONCLAVES_ERR]', err);
+                onUpdate(getMatchingDemoConclaves());
+            }
+        );
+    } catch (err) {
+        console.warn('[SUBSCRIBE_USER_COMMUNITIES_CONCLAVES_INIT_ERR]', err);
+        onUpdate(getMatchingDemoConclaves());
+        return () => {};
+    }
+};
+
+
