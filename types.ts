@@ -157,6 +157,85 @@ export interface Post {
   collabDetails?: CollabDetails;
   isHub?: boolean;
   hubType?: 'moment' | 'loop';
+  voiceType?: CollectiveVoiceType;
+  proposalMeta?: ProposalMeta;
+  pollMeta?: PollMeta;
+  consultationMeta?: ConsultationMeta;
+  decisionMeta?: DecisionMeta;
+}
+
+export type CollectiveVoiceType = 'discussion' | 'proposal' | 'poll' | 'consultation';
+
+export type ProposalStatus =
+  | 'draft'
+  | 'open'
+  | 'under_review'
+  | 'approved'
+  | 'rejected'
+  | 'implemented'
+  | 'withdrawn';
+
+export interface ProposalStatusHistoryEntry {
+  status: ProposalStatus;
+  changedBy: string;
+  changedByName?: string;
+  changedAt: string;
+  note?: string;
+}
+
+export interface ProposalMeta {
+  status: ProposalStatus;
+  category?: string;
+  summary?: string;
+  discussionClosingDate?: string;
+  reviewNotes?: string;
+  rejectionReason?: string;
+  statusHistory?: ProposalStatusHistoryEntry[];
+}
+
+export interface PollOption {
+  id: string;
+  text: string;
+  votes: number;
+}
+
+export interface PollMeta {
+  options: PollOption[];
+  totalVotes: number;
+  expiresAt?: string;
+  hideResultsUntilVoted?: boolean;
+  voterUids?: string[];
+  userVotedOptionId?: string;
+  votesByOption?: Record<string, string[]>;
+}
+
+export interface ConsultationResponse {
+  id: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  submittedAt: string;
+  answers: { promptIndex: number; promptText: string; answerText: string }[];
+}
+
+export interface ConsultationMeta {
+  prompts: string[];
+  deadline?: string;
+  isClosed?: boolean;
+  responseCount: number;
+  summaryOutcome?: string;
+  closedAt?: string;
+  closedBy?: string;
+  responses?: ConsultationResponse[];
+}
+
+export interface DecisionMeta {
+  isRecorded: boolean;
+  outcome: string;
+  responsibleAuthority: string;
+  decisionDate: string;
+  implementationProgress?: number; // 0 to 100
+  notes?: string;
 }
 
 export interface CollabRole {

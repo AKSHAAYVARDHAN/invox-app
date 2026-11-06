@@ -28,6 +28,7 @@ import { handleImageError } from '../components/utils/imageUtils';
 import { EditCollectiveIdentityModal } from '../components/communities/EditCollectiveIdentityModal';
 import { ConclaveGatheringsView } from '../components/communities/ConclaveGatheringsView';
 import { CollectiveMemoryView } from '../components/communities/memory/CollectiveMemoryView';
+import { CollectiveVoiceView } from '../components/communities/voice/CollectiveVoiceView';
 
 type CommunityTab = 'overview' | 'conclave' | 'memory' | 'influence' | 'health';
 
@@ -76,7 +77,12 @@ export const CommunityProfilePage: React.FC = () => {
     
     // Sync activeTab with URL ?tab= query parameter (supporting both 'conclave' and '02_conclave')
     const rawTab = searchParams.get('tab');
-    const tabFromUrl = (rawTab === '02_conclave' ? 'conclave' : rawTab === '03_memory' ? 'memory' : rawTab) as CommunityTab | null;
+    const tabFromUrl = (
+        rawTab === '02_conclave' ? 'conclave' :
+        rawTab === '03_memory' ? 'memory' :
+        (rawTab === 'voice' || rawTab === '04_voice' || rawTab === 'collective_voice') ? 'influence' :
+        rawTab
+    ) as CommunityTab | null;
     const [activeTab, setActiveTab] = useState<CommunityTab>(() => {
         if (tabFromUrl && ['overview', 'conclave', 'memory', 'influence', 'health'].includes(tabFromUrl)) {
             return tabFromUrl;
@@ -408,7 +414,7 @@ export const CommunityProfilePage: React.FC = () => {
                     { id: 'overview', label: '01. OVERVIEW & IDENTITY', active: true },
                     { id: 'conclave', label: '02. CONCLAVE', active: true },
                     { id: 'memory', label: '03. COLLECTIVE MEMORY', active: true },
-                    { id: 'influence', label: '04. MEMBER INFLUENCE', staged: true },
+                    { id: 'influence', label: '04. COLLECTIVE VOICE', active: true },
                     { id: 'health', label: '05. COMMUNITY HEALTH', staged: true },
                 ].map((tab) => (
                     <button
@@ -654,6 +660,13 @@ export const CommunityProfilePage: React.FC = () => {
                     isMember={membershipActive}
                     onOpenConclaveTab={() => handleTabChange('conclave')}
                 />
+            ) : activeTab === 'influence' ? (
+                /* Collective Voice: Sovereign Deliberation, Proposals, Polls & Decisions */
+                <CollectiveVoiceView
+                    community={community}
+                    canManage={canManage}
+                    isMember={membershipActive}
+                />
             ) : (
                 /* Staged Pillars Placeholder: Clean architectural slot ready for future tasks */
                 <div className="bg-[#0c0c0e] border border-zinc-800 p-6 sm:p-10 text-center space-y-4 w-full min-w-0 font-mono">
@@ -661,7 +674,6 @@ export const CommunityProfilePage: React.FC = () => {
                         // PILLAR_STAGED_FOR_FUTURE_CYCLE
                     </span>
                     <h3 className="text-base sm:text-lg font-bold text-white uppercase tracking-wide">
-                        {activeTab === 'influence' && '04. MEMBER INFLUENCE & PROPOSALS'}
                         {activeTab === 'health' && '05. COMMUNITY HEALTH INDICATORS'}
                     </h3>
                     <p className="text-zinc-400 text-xs max-w-lg mx-auto leading-relaxed break-words">

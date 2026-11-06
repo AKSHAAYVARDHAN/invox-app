@@ -21,7 +21,7 @@ import { db, auth } from '../firebase';
 import { COLLECTIONS, createDocument, deleteDocument, FirestoreRecord, getDocument, listDocuments, updateDocument } from './firestoreService';
 import { uploadFile, getStoragePath } from './storageService';
 import { incrementChannelPostCount, decrementChannelPostCount, getChannelById } from './channelService';
-import { Post, PostType, CollabDetails, Project, StreamMoment, StreamLoop, LoopCategory, MusicMeta } from '../types';
+import { Post, PostType, CollabDetails, Project, StreamMoment, StreamLoop, LoopCategory, MusicMeta, CollectiveVoiceType, ProposalMeta, PollMeta, ConsultationMeta, DecisionMeta } from '../types';
 import { generateSummary } from './geminiService';
 import { isMomentsDemoModeEnabled, getFilteredMockMoments } from './momentsDemoData';
 import { getFilteredMockLoops } from './loopsDemoData';
@@ -61,6 +61,11 @@ export interface CreatePostInput {
     tags?: string[];
     visibility?: 'public' | 'unlisted' | 'private';
     collabDetails?: CollabDetails;
+    voiceType?: CollectiveVoiceType;
+    proposalMeta?: ProposalMeta;
+    pollMeta?: PollMeta;
+    consultationMeta?: ConsultationMeta;
+    decisionMeta?: DecisionMeta;
     authorProfile?: {
         displayName?: string;
         username?: string;
@@ -241,6 +246,11 @@ export const normalizeFirestorePost = (id: string, data: Record<string, any>): P
         musicMeta: data.musicMeta || undefined,
         strikes: Number(data.strikeCount ?? data.strikes ?? 0),
         strikeCount: Number(data.strikeCount ?? data.strikes ?? 0),
+        voiceType: data.voiceType || (data.proposalMeta ? 'proposal' : data.pollMeta ? 'poll' : data.consultationMeta ? 'consultation' : undefined),
+        proposalMeta: data.proposalMeta || undefined,
+        pollMeta: data.pollMeta || undefined,
+        consultationMeta: data.consultationMeta || undefined,
+        decisionMeta: data.decisionMeta || undefined,
     };
 };
 
@@ -472,6 +482,11 @@ export const createPost = async (input: CreatePostInput, onUploadProgress?: (pro
         tags: Array.isArray(input.tags) ? input.tags : [],
         visibility: input.visibility || 'public',
         collabDetails: cleanCollabDetails,
+        voiceType: input.voiceType || null,
+        proposalMeta: input.proposalMeta || null,
+        pollMeta: input.pollMeta || null,
+        consultationMeta: input.consultationMeta || null,
+        decisionMeta: input.decisionMeta || null,
     };
 
     const newDocId = await createDocument(COLLECTIONS.posts, postPayload);

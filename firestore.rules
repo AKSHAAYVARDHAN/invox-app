@@ -125,10 +125,12 @@ service cloud.firestore {
       allow update: if signedIn() && (
         (('authorId' in resource.data) && resource.data.authorId == uid())
         || isModerator()
+        // Community Owner or Admin can update proposal lifecycle, decisions, and consultations
+        || (('communityId' in resource.data) && isCommunityOwnerOrAdmin(resource.data.communityId))
         || (
           // Stat/reaction updates on Hub posts require accepted connection
           (!isHubPostData(resource.data) || isAcceptedConnection(resource.data.authorId))
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stats', 'likeCount', 'viewCount', 'commentCount', 'saveCount', 'strikeCount', 'strikes', 'updatedAt'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stats', 'likeCount', 'viewCount', 'commentCount', 'saveCount', 'strikeCount', 'strikes', 'updatedAt', 'pollMeta', 'consultationMeta', 'decisionMeta'])
         )
       );
       allow delete: if signedIn() && ((('authorId' in resource.data) && resource.data.authorId == uid()) || isModerator());

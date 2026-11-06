@@ -236,7 +236,7 @@ export const updateCollectiveMemory = async (
     }
 
     const sanitized = sanitizeForFirestore(patchData);
-    await updateDoc(docRef, sanitized);
+    await setDoc(docRef, sanitized, { merge: true });
 };
 
 /**
@@ -368,6 +368,39 @@ export const pinMemoryAsFeatured = async (
     if (!communityId) throw new Error('Community identifier is required.');
     if (!memoryId) throw new Error('Memory identifier is required.');
 
+    const targetMem = existingMemories?.find((m) => m.id === memoryId);
+
+    // Build comprehensive memory payload so that unpersisted demo records are saved safely
+    const targetPayload: Record<string, any> = targetMem
+        ? {
+              communityId: targetMem.communityId || communityId,
+              communityName: targetMem.communityName || '',
+              title: targetMem.title,
+              description: targetMem.description,
+              category: targetMem.category,
+              date: targetMem.date,
+              year: targetMem.year || extractYearAndMonth(targetMem.date).year,
+              month: targetMem.month || extractYearAndMonth(targetMem.date).month,
+              significance: targetMem.significance || 'standard',
+              status: targetMem.status || 'published',
+              isFeatured: true,
+              coverImageUrl: targetMem.coverImageUrl || '',
+              attachments: targetMem.attachments || [],
+              contributors: targetMem.contributors || [],
+              relatedConclave: targetMem.relatedConclave || null,
+              creatorUid: targetMem.creatorUid || 'community-manager',
+              creatorInfo: targetMem.creatorInfo || {
+                  uid: 'community-manager',
+                  displayName: 'Community Steward',
+                  role: 'Steward',
+              },
+              updatedAt: serverTimestamp(),
+          }
+        : {
+              isFeatured: true,
+              updatedAt: serverTimestamp(),
+          };
+
     try {
         const batch = writeBatch(db);
 
@@ -398,38 +431,41 @@ export const pinMemoryAsFeatured = async (
 
         prevFeaturedIds.forEach((prevId) => {
             const prevRef = doc(db, COLLECTIONS.collectiveMemories, prevId);
-            batch.update(prevRef, {
-                isFeatured: false,
-                updatedAt: serverTimestamp(),
-            });
+            batch.set(
+                prevRef,
+                sanitizeForFirestore({
+                    isFeatured: false,
+                    updatedAt: serverTimestamp(),
+                }),
+                { merge: true }
+            );
         });
 
-        // 2. Pin target memory
+        // 2. Pin target memory (using set with merge so it never errors on unpersisted demo records)
         const targetRef = doc(db, COLLECTIONS.collectiveMemories, memoryId);
-        batch.update(targetRef, {
-            isFeatured: true,
-            updatedAt: serverTimestamp(),
-        });
+        batch.set(targetRef, sanitizeForFirestore(targetPayload), { merge: true });
 
         // 3. Atomically update community-level pointer
         const communityRef = doc(db, 'communities', communityId);
         batch.set(
             communityRef,
-            {
+            sanitizeForFirestore({
                 featuredMemoryId: memoryId,
                 updatedAt: serverTimestamp(),
-            },
+            }),
             { merge: true }
         );
 
         await batch.commit();
     } catch (batchErr) {
         console.warn('[PIN_BATCH_FALLBACK_DIRECT_UPDATE]', batchErr);
-        const targetRef = doc(db, COLLECTIONS.collectiveMemories, memoryId);
-        await updateDoc(targetRef, {
-            isFeatured: true,
-            updatedAt: serverTimestamp(),
-        });
+        try {
+            const targetRef = doc(db, COLLECTIONS.collectiveMemories, memoryId);
+            await setDoc(targetRef, sanitizeForFirestore(targetPayload), { merge: true });
+        } catch (directErr) {
+            console.warn('[PIN_DIRECT_FALLBACK_ERR]', directErr);
+            // Non-blocking fallback: component optimistic state continues smoothly
+        }
     }
 };
 
@@ -450,20 +486,28 @@ export const unpinFeaturedMemory = async (
 
         // 1. Unpin target memory
         const targetRef = doc(db, COLLECTIONS.collectiveMemories, memoryId);
-        batch.update(targetRef, {
-            isFeatured: false,
-            updatedAt: serverTimestamp(),
-        });
+        batch.set(
+            targetRef,
+            sanitizeForFirestore({
+                isFeatured: false,
+                updatedAt: serverTimestamp(),
+            }),
+            { merge: true }
+        );
 
         // 2. Also unpin any other memory that might be flagged as featured
         if (existingMemories) {
             existingMemories
                 .filter((m) => m.communityId === communityId && m.isFeatured && m.id !== memoryId)
                 .forEach((other) => {
-                    batch.update(doc(db, COLLECTIONS.collectiveMemories, other.id), {
-                        isFeatured: false,
-                        updatedAt: serverTimestamp(),
-                    });
+                    batch.set(
+                        doc(db, COLLECTIONS.collectiveMemories, other.id),
+                        sanitizeForFirestore({
+                            isFeatured: false,
+                            updatedAt: serverTimestamp(),
+                        }),
+                        { merge: true }
+                    );
                 });
         }
 
@@ -471,21 +515,29 @@ export const unpinFeaturedMemory = async (
         const communityRef = doc(db, 'communities', communityId);
         batch.set(
             communityRef,
-            {
+            sanitizeForFirestore({
                 featuredMemoryId: null,
                 updatedAt: serverTimestamp(),
-            },
+            }),
             { merge: true }
         );
 
         await batch.commit();
     } catch (batchErr) {
         console.warn('[UNPIN_BATCH_FALLBACK_DIRECT_UPDATE]', batchErr);
-        const targetRef = doc(db, COLLECTIONS.collectiveMemories, memoryId);
-        await updateDoc(targetRef, {
-            isFeatured: false,
-            updatedAt: serverTimestamp(),
-        });
+        try {
+            const targetRef = doc(db, COLLECTIONS.collectiveMemories, memoryId);
+            await setDoc(
+                targetRef,
+                sanitizeForFirestore({
+                    isFeatured: false,
+                    updatedAt: serverTimestamp(),
+                }),
+                { merge: true }
+            );
+        } catch (directErr) {
+            console.warn('[UNPIN_DIRECT_FALLBACK_ERR]', directErr);
+        }
     }
 };
 
