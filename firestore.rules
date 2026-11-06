@@ -260,6 +260,48 @@ service cloud.firestore {
       allow delete: if existingOwner('hostId') || isCommunityOwnerOrAdmin(resource.data.communityId) || isModerator();
     }
 
+    match /collectiveMemories/{memoryId} {
+      // Non-members must not gain access to private community memories
+      // Ordinary signed in users can read public memories or if they are active members / owners / admins
+      allow read: if signedIn() && (
+        (exists(/databases/$(database)/documents/communities/$(resource.data.communityId))
+         && get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.visibility == 'public'
+         && (!('status' in resource.data) || resource.data.status == 'published'))
+        || isCommunityOwnerOrAdmin(resource.data.communityId)
+        || (resource.data.creatorUid == uid())
+        || (exists(/databases/$(database)/documents/communityMemberships/$(uid() + '_' + resource.data.communityId))
+            && get(/databases/$(database)/documents/communityMemberships/$(uid() + '_' + resource.data.communityId)).data.status == 'active')
+      );
+
+      // Create: Owner, admin, or creator who is an active member
+      allow create: if signedIn() && (
+        isCommunityOwnerOrAdmin(request.resource.data.communityId)
+        || (
+          request.resource.data.creatorUid == uid()
+          && exists(/databases/$(database)/documents/communityMemberships/$(uid() + '_' + request.resource.data.communityId))
+          && get(/databases/$(database)/documents/communityMemberships/$(uid() + '_' + request.resource.data.communityId)).data.status == 'active'
+        )
+      );
+
+      // Update / Delete: Community owner, admin, or creator
+      // Only Community Owner, Admin, or Moderator can pin/unpin memories (modify 'isFeatured')
+      allow update: if signedIn() && (
+        isCommunityOwnerOrAdmin(resource.data.communityId)
+        || (
+          resource.data.creatorUid == uid()
+          && request.resource.data.creatorUid == uid()
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isFeatured'])
+        )
+        || isModerator()
+      );
+
+      allow delete: if signedIn() && (
+        isCommunityOwnerOrAdmin(resource.data.communityId)
+        || resource.data.creatorUid == uid()
+        || isModerator()
+      );
+    }
+
     match /conclaveEvents/{eventId} {
       // Draft events are exclusively accessible to organizers, owners, and admins
       allow read: if signedIn() && (

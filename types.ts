@@ -744,3 +744,5 @@ export interface InvoxNotification {
     [key: string]: any;
   };
 }
+
+export * from './services/collectiveMemoryTypes';

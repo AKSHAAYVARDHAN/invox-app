@@ -377,6 +377,18 @@ export const MapPinSolidIcon = ({ className = 'w-6 h-6' }: { className?: string 
     </svg>
 );
 
+export const PinIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} aria-hidden="true" focusable="false">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 0h10.5m-8.25 0l-.75 4.5h7.5l-.75-4.5m-3 4.5v6" />
+    </svg>
+);
+
+export const PinSolidIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true" focusable="false">
+      <path d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 0h10.5m-8.25 0l-.75 4.5h7.5l-.75-4.5m-3 4.5v6" />
+    </svg>
+);
+
 export const BuildingOffice2Icon = ({ className = 'w-6 h-6' }: { className?: string }) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} aria-hidden="true" focusable="false">
       <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6h1.5m-1.5 3h1.5m-1.5 3h1.5M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />

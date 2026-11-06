@@ -38,6 +38,7 @@ export const COLLECTIONS = {
     usernames: 'usernames',
     hubConversations: 'hubConversations',
     communityPrivateMessages: 'communityPrivateMessages',
+    collectiveMemories: 'collectiveMemories',
 } as const;
 
 export type CollectionName = typeof COLLECTIONS[keyof typeof COLLECTIONS];

@@ -1682,6 +1682,20 @@ export const seedInitialCommunitiesIfEmpty = async (
     }
 };
 
+export interface CommunityPrivateAttachment {
+    id: string;
+    name: string;
+    url: string;
+    type: 'image' | 'video' | 'document' | 'audio';
+    size?: number;
+    mimeType?: string;
+}
+
+export interface CommunityVoiceMessage {
+    url: string;
+    duration: number; // in seconds
+}
+
 export interface CommunityPrivateMessage {
     id: string;
     communityId: string;
@@ -1690,6 +1704,8 @@ export interface CommunityPrivateMessage {
     authorAvatar?: string | null;
     content: string;
     createdAt: Date;
+    attachments?: CommunityPrivateAttachment[];
+    voiceMessage?: CommunityVoiceMessage | null;
 }
 
 /**
@@ -1729,6 +1745,8 @@ export const subscribeCommunityPrivateMessages = (
                         authorName: data.authorName || 'Member',
                         authorAvatar: data.authorAvatar || null,
                         content: data.content || data.text || '',
+                        attachments: Array.isArray(data.attachments) ? data.attachments : [],
+                        voiceMessage: data.voiceMessage || null,
                         createdAt: date,
                     };
                 });
@@ -1753,10 +1771,18 @@ export const subscribeCommunityPrivateMessages = (
 export const sendCommunityPrivateMessage = async (
     communityId: string,
     author: { uid: string; displayName?: string | null; photoURL?: string | null },
-    content: string
+    content: string,
+    options?: {
+        attachments?: CommunityPrivateAttachment[];
+        voiceMessage?: CommunityVoiceMessage | null;
+    }
 ): Promise<{ success: boolean; id?: string; error?: string }> => {
-    if (!communityId || !author?.uid || !content.trim()) {
-        return { success: false, error: 'Invalid message payload' };
+    const hasAttachments = Boolean(options?.attachments && options.attachments.length > 0);
+    const hasVoice = Boolean(options?.voiceMessage?.url);
+    const trimmedContent = content?.trim() || '';
+
+    if (!communityId || !author?.uid || (!trimmedContent && !hasAttachments && !hasVoice)) {
+        return { success: false, error: 'Cannot transmit an empty message payload' };
     }
 
     try {
@@ -1769,7 +1795,9 @@ export const sendCommunityPrivateMessage = async (
             authorId: author.uid,
             authorName: author.displayName || 'Member',
             authorAvatar: author.photoURL || null,
-            content: content.trim(),
+            content: trimmedContent,
+            attachments: options?.attachments || [],
+            voiceMessage: options?.voiceMessage || null,
             createdAt: serverTimestamp(),
         }));
 

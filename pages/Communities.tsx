@@ -436,7 +436,7 @@ const CommunitiesPage = () => {
     ];
 
     return (
-        <div className="relative">
+        <div className="relative flex-1 flex flex-col min-h-0 w-full">
             {/* Global Collective Feed */}
             {visitedViews.has('all') && (
                 <div className={effectiveView === 'all' ? 'block' : 'hidden'}>
@@ -455,7 +455,7 @@ const CommunitiesPage = () => {
 
             {/* My Collective Feed & Interaction Hub */}
             {visitedViews.has('my-communities') && (
-                <div className={effectiveView === 'my-communities' ? 'block' : 'hidden'}>
+                <div className={effectiveView === 'my-communities' ? 'flex-1 flex flex-col min-h-0 w-full' : 'hidden'}>
                     <MyCommunitiesInteractionHub 
                         onExploreAll={() => {
                             navigate('/communities?view=all');

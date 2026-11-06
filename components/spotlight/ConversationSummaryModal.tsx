@@ -24,7 +24,7 @@ interface ConversationSummaryModalProps {
     onClose: () => void;
     conversationId: string;
     conversationTitle: string;
-    conversationType: 'inbox' | 'team';
+    conversationType: 'inbox' | 'team' | 'community';
     messages: SummaryMessageItem[];
     currentUser?: { uid: string; displayName?: string | null } | null;
 }

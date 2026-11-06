@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { COLLECTIONS } from './firestoreService';
 import type { SummaryMessageItem } from '../components/spotlight/ConversationSummaryModal';
@@ -271,7 +271,7 @@ export const fetchAuthorizedMessagesForRange = async ({
     fallbackMessages,
 }: {
     conversationId: string;
-    conversationType: 'inbox' | 'team';
+    conversationType: 'inbox' | 'team' | 'community';
     userId?: string;
     preset: SummaryPreset;
     startDate: Date | null;
@@ -288,7 +288,23 @@ export const fetchAuthorizedMessagesForRange = async ({
 
     // Attempt authoritative database retrieval with strict authorization enforcement
     try {
-        if (conversationType === 'inbox') {
+        if (conversationType === 'community') {
+            // Retrieve messages from communityPrivateMessages collection for this specific community
+            const msgsCollectionRef = collection(db, COLLECTIONS.communityPrivateMessages);
+            const q = query(msgsCollectionRef, where('communityId', '==', conversationId));
+            const msgsSnap = await withTimeout(getDocs(q));
+
+            rawMessages = msgsSnap.docs.map((d) => {
+                const data = d.data();
+                return {
+                    id: d.id,
+                    senderId: data.authorId,
+                    senderName: data.authorName || 'Member',
+                    text: data.content || data.text || '',
+                    createdAt: data.createdAt,
+                };
+            });
+        } else if (conversationType === 'inbox') {
             // Verify conversation exists and user is an authorized participant
             const convDocRef = doc(db, COLLECTIONS.messages, conversationId);
             const convSnap = await withTimeout(getDoc(convDocRef));
