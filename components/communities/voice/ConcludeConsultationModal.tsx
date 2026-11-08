@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Post } from '../../../types';
 import { CloseIcon, CheckBadgeIcon } from '../../ui/Icons';
+import { parseInlineMarkdown } from '../../ui/MarkdownRenderer';
 
 interface ConcludeConsultationModalProps {
     isOpen: boolean;
@@ -40,21 +41,22 @@ export const ConcludeConsultationModal: React.FC<ConcludeConsultationModalProps>
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fadeIn">
             <div className="bg-[#0c0c0e] border border-zinc-800 w-full max-w-xl text-white shadow-2xl relative flex flex-col">
                 <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5">
                         <CheckBadgeIcon className="w-5 h-5 text-emerald-400" />
-                        <div>
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono block">
-                                CONSULTATION // CONCLUDE_AND_SYNTHESIZE
+                        <div className="space-y-0.5">
+                            <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-mono block">
+                                CONSULTATION // CONCLUDE & SYNTHESIZE
                             </span>
-                            <h3 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider">
+                            <h3 className="text-base font-semibold text-white font-sans">
                                 Conclude Consultation
                             </h3>
                         </div>
                     </div>
                     <button
+                        type="button"
                         onClick={onClose}
                         className="text-zinc-500 hover:text-white p-1 transition-colors cursor-pointer"
                     >
@@ -62,16 +64,16 @@ export const ConcludeConsultationModal: React.FC<ConcludeConsultationModalProps>
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4 font-mono text-xs">
-                    <div className="p-2.5 bg-zinc-950 border border-zinc-800 text-zinc-300 font-sans text-xs line-clamp-2">
-                        {post.title}
+                <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4 text-xs">
+                    <div className="p-3 bg-zinc-950 border border-zinc-850 text-zinc-200 font-sans text-xs sm:text-sm line-clamp-2 leading-relaxed">
+                        {parseInlineMarkdown(post.title)}
                     </div>
 
-                    <div>
-                        <label className="text-[11px] text-zinc-400 font-bold uppercase block mb-1">
+                    <div className="space-y-1.5">
+                        <label className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider block">
                             Consensus Synthesis Report & Outcome Summary
                         </label>
-                        <p className="text-[10px] text-zinc-500 font-sans mb-2">
+                        <p className="text-[11px] text-zinc-500 font-sans leading-normal">
                             Summarize the core takeaways, member consensus, trade-offs identified, and next steps for the collective.
                         </p>
                         <textarea
@@ -80,29 +82,29 @@ export const ConcludeConsultationModal: React.FC<ConcludeConsultationModalProps>
                             placeholder="State the consensus reached across member submissions..."
                             rows={5}
                             required
-                            className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 font-sans text-xs leading-relaxed"
+                            className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 font-sans text-xs leading-relaxed mt-1"
                         />
                     </div>
 
                     {error && (
-                        <div className="p-2.5 bg-red-950/40 border border-red-800/80 text-red-300 text-xs font-sans">
+                        <div className="p-3 bg-rose-950/30 border border-rose-800/50 text-rose-300 text-xs font-sans">
                             {error}
                         </div>
                     )}
 
-                    <div className="pt-2 flex items-center justify-end gap-2 border-t border-zinc-800">
+                    <div className="pt-3 flex items-center justify-end gap-2 border-t border-zinc-850">
                         <button
                             type="button"
                             onClick={onClose}
                             disabled={submitting}
-                            className="px-4 py-2 border border-zinc-800 text-zinc-400 hover:text-white uppercase font-bold text-xs transition-colors"
+                            className="px-4 py-2 border border-zinc-800 text-zinc-400 hover:text-white uppercase font-mono text-xs transition-colors"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
                             disabled={submitting}
-                            className="px-5 py-2 bg-emerald-500 text-black hover:bg-emerald-400 uppercase font-bold text-xs tracking-wider transition-colors disabled:opacity-50 cursor-pointer"
+                            className="px-5 py-2 bg-emerald-500 text-black hover:bg-emerald-400 uppercase font-mono font-bold text-xs tracking-wider transition-colors disabled:opacity-50 cursor-pointer shadow-sm"
                         >
                             {submitting ? 'Concluding...' : 'Publish Synthesis & Close'}
                         </button>

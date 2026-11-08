@@ -9,7 +9,6 @@ import type {
     PollMeta, 
     ConsultationMeta 
 } from '../../../types';
-import { PostType } from '../../../types';
 import { 
     CloseIcon, 
     ChatIcon, 
@@ -256,19 +255,23 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fadeIn">
             <div className="bg-[#0c0c0e] border border-zinc-800 w-full max-w-2xl text-white shadow-2xl relative flex flex-col max-h-[92vh]">
                 {/* Header */}
                 <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between">
-                    <div>
-                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono block">
-                            04. COLLECTIVE VOICE // NEW_RECORD
-                        </span>
-                        <h3 className="text-base sm:text-lg font-bold text-white uppercase tracking-wider">
-                            Broadcast to {community.name}
+                    <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 bg-amber-400"></span>
+                            <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-mono">
+                                // 04. COLLECTIVE VOICE · BROADCAST
+                            </span>
+                        </div>
+                        <h3 className="text-base sm:text-lg font-semibold text-white font-sans">
+                            Publish to {community.name}
                         </h3>
                     </div>
                     <button
+                        type="button"
                         onClick={onClose}
                         className="text-zinc-500 hover:text-white p-1 transition-colors cursor-pointer"
                     >
@@ -277,12 +280,12 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
                 </div>
 
                 {/* Format Selector Tabs */}
-                <div className="grid grid-cols-4 border-b border-zinc-800 bg-zinc-950 font-mono text-xs">
+                <div className="grid grid-cols-4 border-b border-zinc-850 bg-zinc-950 font-mono text-xs">
                     {[
                         { type: 'discussion' as CollectiveVoiceType, label: 'Discussion', icon: ChatIcon },
                         { type: 'proposal' as CollectiveVoiceType, label: 'Proposal', icon: ShieldCheckIcon },
                         { type: 'poll' as CollectiveVoiceType, label: 'Poll / Vote', icon: TrendingUpIcon },
-                        { type: 'consultation' as CollectiveVoiceType, label: 'Consultation', icon: SparklesIcon, adminOnly: !canManage },
+                        { type: 'consultation' as CollectiveVoiceType, label: 'Consultation', icon: SparklesIcon },
                     ].map((tab) => {
                         const Icon = tab.icon;
                         const isSelected = voiceType === tab.type;
@@ -291,13 +294,13 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
                                 key={tab.type}
                                 type="button"
                                 onClick={() => setVoiceType(tab.type)}
-                                className={`py-3 px-2 sm:px-3 text-center border-b-2 font-bold uppercase transition-all flex flex-col sm:flex-row items-center justify-center gap-1.5 cursor-pointer ${
+                                className={`py-3 px-2 sm:px-3 text-center border-b-2 font-mono uppercase transition-all flex flex-col sm:flex-row items-center justify-center gap-1.5 cursor-pointer ${
                                     isSelected
-                                        ? 'border-white text-white bg-zinc-900/60'
-                                        : 'border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/20'
+                                        ? 'border-white text-white bg-zinc-900/60 font-bold'
+                                        : 'border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/20 font-medium'
                                 }`}
                             >
-                                <Icon className="w-4 h-4 flex-shrink-0" />
+                                <Icon className="w-4 h-4 shrink-0" />
                                 <span className="text-[11px] sm:text-xs truncate">{tab.label}</span>
                             </button>
                         );
@@ -305,33 +308,33 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
                 </div>
 
                 {/* Form Body */}
-                <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 font-mono text-xs">
+                <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 text-xs">
                     {/* Notice if consultation without admin */}
                     {voiceType === 'consultation' && !canManage && (
-                        <div className="p-2.5 bg-amber-950/30 border border-amber-800/60 text-amber-300 text-[11px] font-sans">
+                        <div className="p-2.5 bg-amber-950/20 border border-amber-800/40 text-amber-300 text-xs font-sans">
                             Consultations are standardly launched by community stewards or authorized working groups.
                         </div>
                     )}
 
-                    {/* Format Description Pill */}
-                    <div className="text-[11px] text-zinc-400 font-sans bg-zinc-950/80 border border-zinc-800/80 p-2.5">
+                    {/* Format Description Callout */}
+                    <div className="text-xs text-zinc-400 font-sans bg-zinc-950/60 border border-zinc-850 p-3 leading-relaxed">
                         {voiceType === 'discussion' && (
-                            <span>💡 <strong>Standard Discussion:</strong> Share questions, research findings, architectural trade-offs, and ideas with the collective.</span>
+                            <span><strong>Standard Discussion:</strong> Share research, architecture insights, and technical ideas with the collective.</span>
                         )}
                         {voiceType === 'proposal' && (
-                            <span>🏛️ <strong>Formal Proposal:</strong> Submit a binding proposal for governance, budget allocation, protocol standards, or collective action.</span>
+                            <span><strong>Formal Proposal:</strong> Submit a structured proposal for governance, budget allocation, or protocol standards.</span>
                         )}
                         {voiceType === 'poll' && (
-                            <span>📊 <strong>Community Poll:</strong> Gather instantaneous quorum and sentiment through single-choice voting with duplicate-prevention.</span>
+                            <span><strong>Community Poll:</strong> Gather instantaneous quorum through single-choice voting with duplicate-prevention.</span>
                         )}
                         {voiceType === 'consultation' && (
-                            <span>📋 <strong>Stakeholder Consultation:</strong> Publish structured prompt questions to gather qualitative submissions from members prior to codifying policy.</span>
+                            <span><strong>Stakeholder Consultation:</strong> Publish prompt questions to gather qualitative submissions from members prior to codifying policy.</span>
                         )}
                     </div>
 
                     {/* Title */}
                     <div>
-                        <label className="text-[11px] text-zinc-400 font-bold uppercase block mb-1">
+                        <label className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider block mb-1">
                             {voiceType === 'poll' ? 'Poll Question / Statement *' : voiceType === 'proposal' ? 'Proposal Title / Designation *' : voiceType === 'consultation' ? 'Consultation Theme *' : 'Discussion Topic *'}
                         </label>
                         <input
@@ -348,22 +351,22 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
                                     : 'e.g. Trade-offs in Rust vs Zig for low-latency telemetry'
                             }
                             required
-                            className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-white placeholder-zinc-600 focus:outline-none focus:border-white font-sans text-xs"
+                            className="w-full h-9 bg-zinc-950 border border-zinc-800 px-3 text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 font-sans text-xs"
                         />
                     </div>
 
                     {/* Proposal-specific category & summary */}
                     {voiceType === 'proposal' && (
                         <>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono">
                                 <div>
-                                    <label className="text-[11px] text-zinc-400 font-bold uppercase block mb-1">
+                                    <label className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-1">
                                         Proposal Scope / Category
                                     </label>
                                     <select
                                         value={proposalCategory}
                                         onChange={(e) => setProposalCategory(e.target.value)}
-                                        className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-zinc-200 text-xs focus:outline-none focus:border-white"
+                                        className="w-full h-9 bg-zinc-950 border border-zinc-800 px-3 text-zinc-200 text-xs focus:outline-none focus:border-zinc-600 font-sans"
                                     >
                                         {PROPOSAL_CATEGORIES.map((cat) => (
                                             <option key={cat} value={cat}>
@@ -373,10 +376,10 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-[11px] text-zinc-400 font-bold uppercase block mb-1">
+                                    <label className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-1">
                                         Initial Status
                                     </label>
-                                    <div className="flex items-center gap-3 pt-2">
+                                    <div className="flex items-center gap-4 pt-2 font-sans">
                                         <label className="flex items-center gap-1.5 cursor-pointer text-zinc-300">
                                             <input
                                                 type="radio"
@@ -402,7 +405,7 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
                             </div>
 
                             <div>
-                                <label className="text-[11px] text-zinc-400 font-bold uppercase block mb-1">
+                                <label className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider block mb-1">
                                     Executive Summary (One-liner)
                                 </label>
                                 <input
@@ -410,7 +413,7 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
                                     value={proposalSummary}
                                     onChange={(e) => setProposalSummary(e.target.value)}
                                     placeholder="Brief, high-impact summary of what this proposal achieves..."
-                                    className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-white placeholder-zinc-600 focus:outline-none focus:border-white font-sans text-xs"
+                                    className="w-full h-9 bg-zinc-950 border border-zinc-800 px-3 text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 font-sans text-xs"
                                 />
                             </div>
                         </>
@@ -418,16 +421,16 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
 
                     {/* Poll-specific options and settings */}
                     {voiceType === 'poll' && (
-                        <div className="p-3 bg-zinc-950 border border-zinc-800 space-y-3">
+                        <div className="p-3.5 bg-zinc-950/70 border border-zinc-850 space-y-3 font-mono">
                             <div className="flex items-center justify-between">
-                                <label className="text-[11px] text-zinc-400 font-bold uppercase">
+                                <label className="text-[11px] text-zinc-400 uppercase tracking-wider">
                                     Poll Options ({pollOptions.length} of 8)
                                 </label>
                                 {pollOptions.length < 8 && (
                                     <button
                                         type="button"
                                         onClick={handleAddPollOption}
-                                        className="text-cyan-400 hover:text-cyan-300 text-[11px] uppercase font-bold cursor-pointer"
+                                        className="text-sky-400 hover:text-sky-300 text-[11px] uppercase font-semibold cursor-pointer"
                                     >
                                         + Add Option
                                     </button>
@@ -443,13 +446,13 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
                                             value={opt}
                                             onChange={(e) => handlePollOptionChange(idx, e.target.value)}
                                             placeholder={`Option ${idx + 1}`}
-                                            className="flex-1 bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500 font-sans text-xs"
+                                            className="flex-1 h-8 bg-zinc-900 border border-zinc-800 px-3 text-white placeholder-zinc-500 focus:outline-none focus:border-sky-500 font-sans text-xs"
                                         />
                                         {pollOptions.length > 2 && (
                                             <button
                                                 type="button"
                                                 onClick={() => handleRemovePollOption(idx)}
-                                                className="text-zinc-500 hover:text-red-400 p-1"
+                                                className="text-zinc-500 hover:text-rose-400 p-1"
                                             >
                                                 <TrashIcon className="w-3.5 h-3.5" />
                                             </button>
@@ -458,7 +461,7 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
                                 ))}
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-zinc-800/80">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-zinc-850">
                                 <div>
                                     <label className="text-[10px] text-zinc-400 uppercase block mb-1">
                                         Voting Duration
@@ -466,7 +469,7 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
                                     <select
                                         value={pollDurationDays}
                                         onChange={(e) => setPollDurationDays(Number(e.target.value))}
-                                        className="w-full bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-zinc-200 text-xs"
+                                        className="w-full h-8 bg-zinc-900 border border-zinc-800 px-2.5 text-zinc-200 text-xs font-sans"
                                     >
                                         {POLL_DURATIONS.map((dur) => (
                                             <option key={dur.days} value={dur.days}>
@@ -481,9 +484,9 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
                                         id="hideResultsToggle"
                                         checked={hideResultsUntilVoted}
                                         onChange={(e) => setHideResultsUntilVoted(e.target.checked)}
-                                        className="accent-cyan-500 cursor-pointer"
+                                        className="accent-sky-500 cursor-pointer"
                                     />
-                                    <label htmlFor="hideResultsToggle" className="text-[11px] text-zinc-300 font-sans cursor-pointer">
+                                    <label htmlFor="hideResultsToggle" className="text-xs text-zinc-300 font-sans cursor-pointer">
                                         Hide results until member votes
                                     </label>
                                 </div>
@@ -493,16 +496,16 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
 
                     {/* Consultation-specific prompts */}
                     {voiceType === 'consultation' && (
-                        <div className="p-3 bg-zinc-950 border border-zinc-800 space-y-3">
+                        <div className="p-3.5 bg-zinc-950/70 border border-zinc-850 space-y-3 font-mono">
                             <div className="flex items-center justify-between">
-                                <label className="text-[11px] text-zinc-400 font-bold uppercase">
+                                <label className="text-[11px] text-zinc-400 uppercase tracking-wider">
                                     Prompt Questions For Members ({consultationPrompts.length} of 5)
                                 </label>
                                 {consultationPrompts.length < 5 && (
                                     <button
                                         type="button"
                                         onClick={handleAddPrompt}
-                                        className="text-cyan-400 hover:text-cyan-300 text-[11px] uppercase font-bold cursor-pointer"
+                                        className="text-purple-400 hover:text-purple-300 text-[11px] uppercase font-semibold cursor-pointer"
                                     >
                                         + Add Question
                                     </button>
@@ -512,19 +515,19 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
                             <div className="space-y-2">
                                 {consultationPrompts.map((prompt, idx) => (
                                     <div key={idx} className="flex items-start gap-2">
-                                        <span className="text-zinc-500 text-xs mt-2 w-4">Q{idx + 1}.</span>
+                                        <span className="text-zinc-500 text-xs mt-1.5 w-5">Q{idx + 1}.</span>
                                         <input
                                             type="text"
                                             value={prompt}
                                             onChange={(e) => handlePromptChange(idx, e.target.value)}
                                             placeholder={`Prompt Question ${idx + 1} (e.g. What uptime threshold is acceptable?)`}
-                                            className="flex-1 bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500 font-sans text-xs"
+                                            className="flex-1 h-8 bg-zinc-900 border border-zinc-800 px-3 text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 font-sans text-xs"
                                         />
                                         {consultationPrompts.length > 1 && (
                                             <button
                                                 type="button"
                                                 onClick={() => handleRemovePrompt(idx)}
-                                                className="text-zinc-500 hover:text-red-400 p-1 mt-1.5"
+                                                className="text-zinc-500 hover:text-rose-400 p-1 mt-1"
                                             >
                                                 <TrashIcon className="w-3.5 h-3.5" />
                                             </button>
@@ -533,14 +536,14 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
                                 ))}
                             </div>
 
-                            <div className="pt-2 border-t border-zinc-800/80">
+                            <div className="pt-2 border-t border-zinc-850">
                                 <label className="text-[10px] text-zinc-400 uppercase block mb-1">
                                     Consultation Deadline
                                 </label>
                                 <select
                                     value={consultationDeadlineDays}
                                     onChange={(e) => setConsultationDeadlineDays(Number(e.target.value))}
-                                    className="w-full sm:w-1/2 bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-zinc-200 text-xs"
+                                    className="w-full sm:w-1/2 h-8 bg-zinc-900 border border-zinc-800 px-2.5 text-zinc-200 text-xs font-sans"
                                 >
                                     <option value={3}>3 Days</option>
                                     <option value={7}>7 Days (Recommended)</option>
@@ -553,7 +556,7 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
 
                     {/* Main Content Body */}
                     <div>
-                        <label className="text-[11px] text-zinc-400 font-bold uppercase block mb-1">
+                        <label className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider block mb-1">
                             {voiceType === 'proposal' ? 'Proposal Specification & Motivation *' : voiceType === 'poll' ? 'Background Context (Optional)' : voiceType === 'consultation' ? 'Consultation Background & Objective *' : 'Discussion Content *'}
                         </label>
                         <textarea
@@ -570,26 +573,26 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
                             }
                             rows={voiceType === 'poll' ? 3 : 6}
                             required={voiceType !== 'poll'}
-                            className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-white placeholder-zinc-600 focus:outline-none focus:border-white font-sans text-xs leading-relaxed"
+                            className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 font-sans text-xs leading-relaxed"
                         />
                     </div>
 
                     {/* Media URL & Tags */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono">
                         <div>
-                            <label className="text-[11px] text-zinc-400 font-bold uppercase block mb-1">
-                                Optional Media / Reference URL
+                            <label className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-1">
+                                Optional Media URL
                             </label>
                             <input
                                 type="url"
                                 value={mediaUrl}
                                 onChange={(e) => setMediaUrl(e.target.value)}
                                 placeholder="https://example.com/spec.png"
-                                className="w-full bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-white placeholder-zinc-600 focus:outline-none focus:border-white font-sans text-xs"
+                                className="w-full h-8 bg-zinc-950 border border-zinc-800 px-3 text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 font-sans text-xs"
                             />
                         </div>
                         <div>
-                            <label className="text-[11px] text-zinc-400 font-bold uppercase block mb-1">
+                            <label className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-1">
                                 Tags (comma-separated)
                             </label>
                             <input
@@ -597,31 +600,31 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
                                 value={tagsInput}
                                 onChange={(e) => setTagsInput(e.target.value)}
                                 placeholder="Governance, Treasury, Rust"
-                                className="w-full bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-white placeholder-zinc-600 focus:outline-none focus:border-white font-sans text-xs"
+                                className="w-full h-8 bg-zinc-950 border border-zinc-800 px-3 text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 font-sans text-xs"
                             />
                         </div>
                     </div>
 
                     {error && (
-                        <div className="p-2.5 bg-red-950/40 border border-red-800/80 text-red-300 text-xs font-sans">
+                        <div className="p-3 bg-rose-950/30 border border-rose-800/50 text-rose-300 text-xs font-sans">
                             {error}
                         </div>
                     )}
 
                     {/* Footer */}
-                    <div className="pt-3 flex items-center justify-end gap-2 border-t border-zinc-800">
+                    <div className="pt-3 flex items-center justify-end gap-2 border-t border-zinc-850">
                         <button
                             type="button"
                             onClick={onClose}
                             disabled={submitting}
-                            className="px-4 py-2 border border-zinc-800 text-zinc-400 hover:text-white uppercase font-bold text-xs transition-colors"
+                            className="px-4 py-2 border border-zinc-800 text-zinc-400 hover:text-white uppercase font-mono text-xs transition-colors"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
                             disabled={submitting}
-                            className="px-6 py-2 bg-white text-black hover:bg-zinc-200 uppercase font-bold text-xs tracking-wider transition-colors disabled:opacity-50 cursor-pointer"
+                            className="px-5 py-2 bg-white text-black hover:bg-zinc-200 uppercase font-mono font-bold text-xs tracking-wider transition-colors disabled:opacity-50 cursor-pointer shadow-sm"
                         >
                             {submitting ? 'Publishing...' : `Publish ${voiceType === 'proposal' ? 'Proposal' : voiceType === 'poll' ? 'Poll' : voiceType === 'consultation' ? 'Consultation' : 'Discussion'}`}
                         </button>
