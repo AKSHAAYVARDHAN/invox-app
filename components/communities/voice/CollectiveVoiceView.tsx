@@ -228,45 +228,47 @@ export const CollectiveVoiceView: React.FC<CollectiveVoiceViewProps> = ({
                 1. REDESIGNED MAIN HEADER & INTEGRATED DASHBOARD BANNER
                ========================================================================= */}
             <div className="bg-[#0c0c0e] border border-zinc-800 w-full overflow-hidden">
-                {/* Top Section: Title, Description, and Structured Actions */}
-                <div className="p-5 sm:p-6 pb-5 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                {/* Top Section: Eyebrow, Title, Description, and Structured Actions */}
+                <div className="p-4 sm:p-6 pb-5 flex flex-col gap-4">
                     {/* Title & Description */}
-                    <div className="space-y-1.5 max-w-2xl">
-                        <div className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 bg-amber-400"></span>
-                            <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-zinc-400">
-                                // 04. COLLECTIVE VOICE
-                            </span>
-                            <span className="text-zinc-600 font-mono text-[10px]">·</span>
-                            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+                    <div className="space-y-1.5 w-full min-w-0">
+                        <div className="flex items-center flex-wrap gap-x-2 sm:gap-x-2.5 gap-y-1 min-w-0">
+                            <div className="inline-flex items-center gap-1.5 sm:gap-2 whitespace-nowrap shrink-0">
+                                <span className="w-1.5 h-1.5 bg-amber-400 shrink-0" aria-hidden="true"></span>
+                                <span className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider sm:tracking-widest text-zinc-400 whitespace-nowrap">
+                                    // 04. COLLECTIVE VOICE
+                                </span>
+                            </div>
+                            <span className="text-zinc-600 font-mono text-[10px] shrink-0" aria-hidden="true">·</span>
+                            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider whitespace-nowrap shrink-0">
                                 SOVEREIGN GOVERNANCE
                             </span>
                         </div>
                         <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight font-sans">
                             Collective Voice
                         </h2>
-                        <p className="text-xs sm:text-sm text-zinc-400 font-sans leading-relaxed">
+                        <p className="text-xs sm:text-sm text-zinc-400 font-sans leading-relaxed max-w-2xl">
                             Deliberate on community initiatives, vote on active polls, submit feedback to stakeholder consultations, and track formal decisions.
                         </p>
                     </div>
 
                     {/* Structured Action Toolbar */}
-                    <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full">
                         <button
                             type="button"
                             onClick={() => openCreateWithFormat('proposal')}
-                            className="h-9 px-3 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-700 text-xs font-mono uppercase font-semibold text-zinc-300 hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer"
+                            className="flex-1 min-w-fit h-9 px-3 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-700 text-xs font-mono uppercase font-semibold text-zinc-300 hover:text-white transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
                         >
-                            <ShieldCheckIcon className="w-3.5 h-3.5 text-amber-400" />
+                            <ShieldCheckIcon className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                             <span>+ Proposal</span>
                         </button>
 
                         <button
                             type="button"
                             onClick={() => openCreateWithFormat('poll')}
-                            className="h-9 px-3 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-700 text-xs font-mono uppercase font-semibold text-zinc-300 hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer"
+                            className="flex-1 min-w-fit h-9 px-3 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-700 text-xs font-mono uppercase font-semibold text-zinc-300 hover:text-white transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
                         >
-                            <TrendingUpIcon className="w-3.5 h-3.5 text-sky-400" />
+                            <TrendingUpIcon className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                             <span>+ Poll</span>
                         </button>
 
@@ -274,9 +276,9 @@ export const CollectiveVoiceView: React.FC<CollectiveVoiceViewProps> = ({
                             <button
                                 type="button"
                                 onClick={() => openCreateWithFormat('consultation')}
-                                className="h-9 px-3 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-700 text-xs font-mono uppercase font-semibold text-zinc-300 hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer"
+                                className="flex-1 min-w-fit h-9 px-3 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-700 text-xs font-mono uppercase font-semibold text-zinc-300 hover:text-white transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
                             >
-                                <SparklesIcon className="w-3.5 h-3.5 text-purple-400" />
+                                <SparklesIcon className="w-3.5 h-3.5 text-purple-400 shrink-0" />
                                 <span>+ Consultation</span>
                             </button>
                         )}
@@ -284,9 +286,9 @@ export const CollectiveVoiceView: React.FC<CollectiveVoiceViewProps> = ({
                         <button
                             type="button"
                             onClick={() => openCreateWithFormat('discussion')}
-                            className="h-9 px-4 bg-white hover:bg-zinc-200 text-black font-mono text-xs uppercase font-bold tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+                            className="flex-1 min-w-fit h-9 px-4 bg-white hover:bg-zinc-200 text-black font-mono text-xs uppercase font-bold tracking-wider transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer shadow-sm"
                         >
-                            <ChatIcon className="w-3.5 h-3.5" />
+                            <ChatIcon className="w-3.5 h-3.5 shrink-0" />
                             <span>Broadcast Voice</span>
                         </button>
                     </div>
