@@ -227,6 +227,7 @@ export const joinCommunity = async (
                 status: targetStatus,
                 role,
                 joinedAt: serverTimestamp(),
+                leftAt: null,
                 updatedAt: serverTimestamp(),
             }),
             { merge: true }
@@ -246,7 +247,9 @@ export const joinCommunity = async (
 
 /**
  * Leave a community.
- * Deletes the user's membership document at communityMemberships/{userId}_{communityId}.
+ * Transitions the user's membership document at communityMemberships/{userId}_{communityId}
+ * to soft-departure (`status: 'left'`, `leftAt: serverTimestamp()`) so Community Health
+ * churn telemetry retains an anonymized departure timestamp while preserving re-join capability.
  * Prevents community creator/owner from abandoning community sovereignty.
  * Automatically synchronizes and decrements the community's canonical active member count.
  */
@@ -272,25 +275,29 @@ export const leaveCommunity = async (communityId: string, userId: string): Promi
 
         const membershipRef = doc(db, COLLECTIONS.communityMemberships, membershipId);
         const memSnap = await getDoc(membershipRef);
-        if (!memSnap.exists()) {
+        if (!memSnap.exists() || memSnap.data()?.status === 'left') {
             // Already left or does not exist
             return true;
         }
 
-        await deleteDoc(membershipRef);
+        await updateDoc(membershipRef, {
+            status: 'left',
+            leftAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
 
         // Recalculate and update the canonical member count in Firestore
         await syncCommunityMemberCount(communityId);
 
         return true;
     } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, docPath);
+        handleFirestoreError(error, OperationType.UPDATE, docPath);
         return false;
     }
 };
 
 /**
- * Check if the user is a member of the given community.
+ * Check if the user is an active member of the given community.
  */
 export const checkCommunityMembership = async (communityId: string, userId: string): Promise<boolean> => {
     if (!userId || !communityId) {
@@ -303,7 +310,7 @@ export const checkCommunityMembership = async (communityId: string, userId: stri
     try {
         const membershipRef = doc(db, COLLECTIONS.communityMemberships, membershipId);
         const snap = await getDoc(membershipRef);
-        return snap.exists();
+        return snap.exists() && snap.data()?.status === 'active';
     } catch (error) {
         handleFirestoreError(error, OperationType.GET, docPath);
         return false;
@@ -331,21 +338,24 @@ export const subscribeUserMemberships = (
     return onSnapshot(
         q,
         (snapshot) => {
-            const list: CommunityMembership[] = snapshot.docs.map((d) => {
-                const data = d.data();
-                return {
-                    id: d.id,
-                    userId: data.userId,
-                    communityId: data.communityId,
-                    communityName: data.communityName || '',
-                    communityAvatarUrl: data.communityAvatarUrl || null,
-                    communityCategory: data.communityCategory || '',
-                    role: data.role || 'member',
-                    status: data.status || 'active',
-                    joinedAt: data.joinedAt?.toDate ? data.joinedAt.toDate() : new Date(),
-                    updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : undefined,
-                };
-            });
+            const list: CommunityMembership[] = snapshot.docs
+                .filter((d) => d.data()?.status !== 'left')
+                .map((d) => {
+                    const data = d.data();
+                    return {
+                        id: d.id,
+                        userId: data.userId,
+                        communityId: data.communityId,
+                        communityName: data.communityName || '',
+                        communityAvatarUrl: data.communityAvatarUrl || null,
+                        communityCategory: data.communityCategory || '',
+                        role: data.role || 'member',
+                        status: data.status || 'active',
+                        joinedAt: data.joinedAt?.toDate ? data.joinedAt.toDate() : new Date(),
+                        leftAt: data.leftAt?.toDate ? data.leftAt.toDate() : undefined,
+                        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : undefined,
+                    };
+                });
             onUpdate(list);
         },
         (err) => {

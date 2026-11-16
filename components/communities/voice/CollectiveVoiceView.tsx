@@ -5,7 +5,9 @@ import {
     castPollVote, 
     updateProposalStatus, 
     submitConsultationResponse, 
-    concludeConsultation 
+    concludeConsultation,
+    getVoiceVoterId,
+    registerVoicePostInCache
 } from '../../../services/collectiveVoiceService';
 import { CollectiveVoiceCard } from './CollectiveVoiceCard';
 import { CreateCollectiveVoiceModal } from './CreateCollectiveVoiceModal';
@@ -69,15 +71,14 @@ export const CollectiveVoiceView: React.FC<CollectiveVoiceViewProps> = ({
 
     // Handlers
     const handleVote = async (postId: string, optionId: string) => {
-        if (!currentUser) return;
-        try {
-            await castPollVote(community.id, postId, optionId, {
-                uid: currentUser.uid,
-                displayName: currentUser.displayName,
-            });
-        } catch (err) {
-            console.error('[POLL_VOTE_ERR]', err);
-        }
+        const voter = currentUser
+            ? { uid: currentUser.uid, displayName: currentUser.displayName }
+            : { uid: getVoiceVoterId(), displayName: 'Guest Member' };
+
+        const updatedPost = await castPollVote(community.id, postId, optionId, voter);
+        setPosts((prev) =>
+            prev.map((p) => (p.id === postId ? updatedPost : p))
+        );
     };
 
     const handleConfirmStatus = async (
@@ -530,7 +531,8 @@ export const CollectiveVoiceView: React.FC<CollectiveVoiceViewProps> = ({
                 canManage={canManage}
                 initialVoiceType={initialVoiceType}
                 onCreated={(newPost) => {
-                    setPosts((prev) => [newPost, ...prev]);
+                    registerVoicePostInCache(community.id, newPost);
+                    setPosts((prev) => [newPost, ...prev.filter((p) => p.id !== newPost.id)]);
                 }}
             />
 

@@ -191,6 +191,17 @@ service cloud.firestore {
         resource.data.creatorId == uid() ||
         isModerator()
       );
+
+      // Private anonymized Community Health aggregate snapshots:
+      // Strictly restricted to community owner/creator or explicit community admins.
+      // Regular members and non-members have zero read/write access.
+      match /healthSnapshots/{snapshotId} {
+        allow get, list: if isCommunityOwnerOrAdmin(communityId) || isModerator();
+        allow create, update: if isValidCommunityHealthId(snapshotId)
+          && isCommunityOwnerOrAdmin(communityId)
+          && isValidCommunityHealthSnapshot(request.resource.data, communityId);
+        allow delete: if isCommunityOwnerOrAdmin(communityId) || isModerator();
+      }
     }
 
     match /communityMemberships/{membershipId} {
@@ -222,10 +233,69 @@ service cloud.firestore {
       );
     }
 
+    function isValidCommunityHealthId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidHealthNumberOrNull(val) {
+      return val == null || (val is number && val >= 0);
+    }
+
+    function isValidCommunityHealthSnapshot(data, communityId) {
+      return data.keys().hasAll([
+          'id',
+          'communityId',
+          'periodKey',
+          'generatedBy',
+          'generatedAt',
+          'activeMembersCount',
+          'totalContributions',
+          'insightsCount',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'communityId',
+          'periodKey',
+          'generatedBy',
+          'generatedAt',
+          'activeMembersCount',
+          'activeContributorRate',
+          'totalContributions',
+          'pollVoterTurnout',
+          'newMemberActivationRate',
+          'contributionConcentrationIndex',
+          'returningContributorRetention',
+          'multiPillarParticipationRate',
+          'insightsCount',
+          'updatedAt'
+        ])
+        && data.id is string && data.id in ['7d', '30d', '90d']
+        && data.periodKey is string && data.periodKey in ['7d', '30d', '90d']
+        && data.id == data.periodKey
+        && data.communityId is string && data.communityId == communityId && data.communityId.size() <= 128
+        && data.generatedBy is string && data.generatedBy == uid() && data.generatedBy.size() <= 128
+        && data.generatedAt is string && data.generatedAt.size() <= 64
+        && data.activeMembersCount is int && data.activeMembersCount >= 0
+        && data.totalContributions is int && data.totalContributions >= 0
+        && data.insightsCount is int && data.insightsCount >= 0
+        && isValidHealthNumberOrNull(data.get('activeContributorRate', null))
+        && isValidHealthNumberOrNull(data.get('pollVoterTurnout', null))
+        && isValidHealthNumberOrNull(data.get('newMemberActivationRate', null))
+        && isValidHealthNumberOrNull(data.get('contributionConcentrationIndex', null))
+        && isValidHealthNumberOrNull(data.get('returningContributorRetention', null))
+        && isValidHealthNumberOrNull(data.get('multiPillarParticipationRate', null))
+        && data.updatedAt == request.time;
+    }
+
     function isCommunityOwnerOrAdmin(communityId) {
       return signedIn() && exists(/databases/$(database)/documents/communities/$(communityId))
         && (
           get(/databases/$(database)/documents/communities/$(communityId)).data.ownerId == uid()
+          || (
+            'creatorId' in get(/databases/$(database)/documents/communities/$(communityId)).data
+            && get(/databases/$(database)/documents/communities/$(communityId)).data.creatorId == uid()
+          )
           || (
             'adminIds' in get(/databases/$(database)/documents/communities/$(communityId)).data
             && uid() in get(/databases/$(database)/documents/communities/$(communityId)).data.adminIds

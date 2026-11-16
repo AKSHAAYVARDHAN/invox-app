@@ -354,6 +354,29 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "description"]
+    },
+    "CommunityHealthSnapshot": {
+      "title": "CommunityHealthSnapshot",
+      "description": "Anonymized aggregate Community Health snapshot strictly restricted to community owners and authorized administrators.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "enum": ["7d", "30d", "90d"] },
+        "communityId": { "type": "string" },
+        "periodKey": { "type": "string", "enum": ["7d", "30d", "90d"] },
+        "generatedBy": { "type": "string" },
+        "generatedAt": { "type": "string", "format": "date-time" },
+        "activeMembersCount": { "type": "number" },
+        "activeContributorRate": { "type": "number" },
+        "totalContributions": { "type": "number" },
+        "pollVoterTurnout": { "type": "number" },
+        "newMemberActivationRate": { "type": "number" },
+        "contributionConcentrationIndex": { "type": "number" },
+        "returningContributorRetention": { "type": "number" },
+        "multiPillarParticipationRate": { "type": "number" },
+        "insightsCount": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "communityId", "periodKey", "generatedBy", "generatedAt", "activeMembersCount", "totalContributions", "insightsCount", "updatedAt"]
     }
   },
   "firestore": {
@@ -420,6 +443,10 @@
     "/communities/{communityId}": {
       "schema": "Community",
       "description": "Technical and domain communities with Collective Identity documents."
+    },
+    "/communities/{communityId}/healthSnapshots/{snapshotId}": {
+      "schema": "CommunityHealthSnapshot",
+      "description": "Private anonymized Community Health aggregate snapshots accessible exclusively to community owners and authorized administrators."
     },
     "/hubConversations/{conversationId}": {
       "schema": "HubConversation",

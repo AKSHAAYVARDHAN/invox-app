@@ -2,24 +2,21 @@ import {
     collection, 
     query, 
     where, 
-    orderBy, 
     onSnapshot, 
     doc, 
     getDoc, 
     updateDoc, 
-    serverTimestamp,
-    setDoc
+    runTransaction,
+    serverTimestamp
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { COLLECTIONS } from './firestoreService';
-import { normalizeFirestorePost, createPost, CreatePostInput } from './postService';
+import { normalizeFirestorePost } from './postService';
 import type { 
     Post, 
-    CollectiveVoiceType, 
     ProposalStatus, 
     ProposalMeta, 
     PollMeta, 
-    PollOption, 
     ConsultationMeta, 
     ConsultationResponse, 
     DecisionMeta 
@@ -29,6 +26,98 @@ import { PostType } from '../types';
 const NOW = Date.now();
 const ONE_HOUR = 3600 * 1000;
 const ONE_DAY = 24 * ONE_HOUR;
+
+const VOICE_POLL_STORAGE_PREFIX = 'invox_voice_poll_state_';
+const GUEST_VOTER_KEY = 'invox_guest_voter_id';
+
+/**
+ * Returns a stable voter identifier for unauthenticated preview/guest sessions.
+ */
+export const getVoiceVoterId = (explicitUid?: string | null): string => {
+    if (explicitUid) return explicitUid;
+    if (auth.currentUser?.uid) return auth.currentUser.uid;
+    try {
+        if (typeof localStorage !== 'undefined') {
+            let guestId = localStorage.getItem(GUEST_VOTER_KEY);
+            if (!guestId) {
+                guestId = 'guest_' + Math.random().toString(36).substring(2, 10);
+                localStorage.setItem(GUEST_VOTER_KEY, guestId);
+            }
+            return guestId;
+        }
+    } catch {
+        // Ignore storage errors
+    }
+    return 'guest_anon';
+};
+
+/**
+ * Computes which option (if any) a specific user voted for based on `votesByOption`.
+ */
+export const getUserVotedOptionFromPoll = (poll: PollMeta | undefined, voterUid: string): string | undefined => {
+    if (!poll) return undefined;
+    if (poll.votesByOption) {
+        for (const [optId, uids] of Object.entries(poll.votesByOption)) {
+            if (Array.isArray(uids) && uids.includes(voterUid)) {
+                return optId;
+            }
+        }
+    }
+    return undefined;
+};
+
+/**
+ * Hydrates a PollMeta object with the current user's vote derived from `votesByOption`
+ * (and persisted sample state from localStorage if applicable).
+ */
+const hydratePollMeta = (postId: string, poll: PollMeta | undefined): PollMeta | undefined => {
+    if (!poll) return undefined;
+
+    let merged: PollMeta = { ...poll };
+
+    // Rehydrate persisted local poll state for sample/offline polls across refreshes
+    if (postId.startsWith('voice-') && typeof localStorage !== 'undefined') {
+        try {
+            const raw = localStorage.getItem(`${VOICE_POLL_STORAGE_PREFIX}${postId}`);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && Array.isArray(parsed.options) && parsed.options.length === poll.options.length) {
+                    merged = {
+                        ...merged,
+                        options: parsed.options,
+                        totalVotes: typeof parsed.totalVotes === 'number'
+                            ? parsed.totalVotes
+                            : parsed.options.reduce((sum: number, o: any) => sum + (Number(o.votes) || 0), 0),
+                        voterUids: Array.isArray(parsed.voterUids) ? parsed.voterUids : merged.voterUids,
+                        votesByOption: parsed.votesByOption && typeof parsed.votesByOption === 'object'
+                            ? parsed.votesByOption
+                            : merged.votesByOption,
+                    };
+                }
+            }
+        } catch {
+            // Ignore malformed local storage
+        }
+    }
+
+    const activeUid = getVoiceVoterId();
+    const userChoice = getUserVotedOptionFromPoll(merged, activeUid);
+
+    return {
+        ...merged,
+        userVotedOptionId: userChoice,
+    };
+};
+
+const persistLocalVoicePollState = (postId: string, pollMeta: PollMeta) => {
+    if (typeof localStorage === 'undefined') return;
+    try {
+        const { userVotedOptionId: _omit, ...storable } = pollMeta;
+        localStorage.setItem(`${VOICE_POLL_STORAGE_PREFIX}${postId}`, JSON.stringify(storable));
+    } catch {
+        // Ignore quota/storage errors
+    }
+};
 
 /**
  * Rich initial sample posts for Collective Voice demonstrating the 4 core formats:
@@ -193,7 +282,7 @@ Cast your vote below. One vote per member; voting closes in 5 days. Live results
         commentCount: 19,
         type: PostType.Feed,
         voiceType: 'poll',
-        pollMeta: {
+        pollMeta: hydratePollMeta(`voice-poll-${communityId}-3`, {
             options: [
                 { id: 'opt-rust-wasm', text: 'Rust & WebAssembly Native Tooling', votes: 47 },
                 { id: 'opt-distributed-ai', text: 'Distributed Local AI & Edge Inferencing', votes: 72 },
@@ -204,7 +293,7 @@ Cast your vote below. One vote per member; voting closes in 5 days. Live results
             expiresAt: new Date(NOW + 5 * ONE_DAY).toISOString(),
             hideResultsUntilVoted: false,
             voterUids: ['mock-voter-1', 'mock-voter-2']
-        }
+        })
     },
     {
         id: `voice-consult-${communityId}-4`,
@@ -293,8 +382,32 @@ What strategies has your team used to balance consensus strictness against edge 
     }
 ];
 
-// In-memory cache for optimistic updates across the session
+// In-memory cache & active listeners for reactive updates across the session
 const localVoicePostsCache = new Map<string, Post[]>();
+const communitySubscribers = new Map<string, Set<(posts: Post[]) => void>>();
+
+const notifyCommunitySubscribers = (communityId: string, posts: Post[]) => {
+    const subs = communitySubscribers.get(communityId);
+    if (!subs) return;
+    subs.forEach((cb) => {
+        try {
+            cb(posts);
+        } catch (err) {
+            console.warn('[VOICE_SUB_NOTIFY_ERR]', err);
+        }
+    });
+};
+
+/**
+ * Registers a newly created Collective Voice post in the local cache and notifies subscribers.
+ */
+export const registerVoicePostInCache = (communityId: string, newPost: Post) => {
+    const existing = localVoicePostsCache.get(communityId) || [];
+    const filtered = existing.filter((p) => p.id !== newPost.id);
+    const next = [newPost, ...filtered];
+    localVoicePostsCache.set(communityId, next);
+    notifyCommunitySubscribers(communityId, next);
+};
 
 /**
  * Subscribes to Collective Voice posts for a community.
@@ -306,46 +419,64 @@ export const subscribeCommunityVoicePosts = (
     communityName = 'The Collective',
     onUpdate: (posts: Post[]) => void
 ): (() => void) => {
-    // If cached in-memory, broadcast immediately
+    if (!communitySubscribers.has(communityId)) {
+        communitySubscribers.set(communityId, new Set());
+    }
+    communitySubscribers.get(communityId)!.add(onUpdate);
+
+    // Rehydrate cached or sample posts immediately
     if (localVoicePostsCache.has(communityId)) {
-        onUpdate(localVoicePostsCache.get(communityId)!);
+        const rehydrated = localVoicePostsCache.get(communityId)!.map((p) =>
+            p.pollMeta ? { ...p, pollMeta: hydratePollMeta(p.id, p.pollMeta) } : p
+        );
+        localVoicePostsCache.set(communityId, rehydrated);
+        onUpdate(rehydrated);
     } else {
         const samples = getSampleVoicePosts(communityId, communityName);
         localVoicePostsCache.set(communityId, samples);
         onUpdate(samples);
     }
 
+    let unsubFirestore: (() => void) | null = null;
     try {
         const postsRef = collection(db, COLLECTIONS.posts);
+        // Query without composite orderBy to avoid missing-index errors; sorted client-side below
         const q = query(
             postsRef,
-            where('communityId', '==', communityId),
-            orderBy('createdAt', 'desc')
+            where('communityId', '==', communityId)
         );
 
-        const unsubscribe = onSnapshot(
+        unsubFirestore = onSnapshot(
             q,
             (snapshot) => {
+                const samples = localVoicePostsCache.get(communityId) || getSampleVoicePosts(communityId, communityName);
                 if (snapshot.empty) {
-                    const fallback = localVoicePostsCache.get(communityId) || getSampleVoicePosts(communityId, communityName);
-                    localVoicePostsCache.set(communityId, fallback);
-                    onUpdate(fallback);
+                    const rehydratedSamples = samples.map((p) =>
+                        p.pollMeta ? { ...p, pollMeta: hydratePollMeta(p.id, p.pollMeta) } : p
+                    );
+                    localVoicePostsCache.set(communityId, rehydratedSamples);
+                    notifyCommunitySubscribers(communityId, rehydratedSamples);
                     return;
                 }
 
-                const firestorePosts = snapshot.docs.map(docSnap => normalizeFirestorePost(docSnap.id, docSnap.data()));
-                
-                // Merge real posts with existing sample records that aren't yet in Firestore
-                const currentCache = localVoicePostsCache.get(communityId) || [];
+                const firestorePosts = snapshot.docs.map(docSnap => {
+                    const normalized = normalizeFirestorePost(docSnap.id, docSnap.data());
+                    return normalized.pollMeta
+                        ? { ...normalized, pollMeta: hydratePollMeta(normalized.id, normalized.pollMeta) }
+                        : normalized;
+                });
+
                 const mergedMap = new Map<string, Post>();
 
-                // Real posts take priority
+                // Real Firestore posts take priority
                 firestorePosts.forEach(p => mergedMap.set(p.id, p));
 
-                // Retain sample posts if desired so the demo remains rich
-                currentCache.forEach(sample => {
+                // Retain sample posts so existing demo content remains populated
+                samples.forEach(sample => {
                     if (!mergedMap.has(sample.id)) {
-                        mergedMap.set(sample.id, sample);
+                        mergedMap.set(sample.id, sample.pollMeta
+                            ? { ...sample, pollMeta: hydratePollMeta(sample.id, sample.pollMeta) }
+                            : sample);
                     }
                 });
 
@@ -356,7 +487,7 @@ export const subscribeCommunityVoicePosts = (
                 });
 
                 localVoicePostsCache.set(communityId, sorted);
-                onUpdate(sorted);
+                notifyCommunitySubscribers(communityId, sorted);
             },
             (error) => {
                 console.warn('[COLLECTIVE_VOICE_QUERY_WARN] Falling back to local cache:', error);
@@ -364,19 +495,24 @@ export const subscribeCommunityVoicePosts = (
                 onUpdate(cached);
             }
         );
-
-        return unsubscribe;
     } catch (e) {
         console.warn('[COLLECTIVE_VOICE_SUB_ERR]', e);
         const cached = localVoicePostsCache.get(communityId) || getSampleVoicePosts(communityId, communityName);
         onUpdate(cached);
-        return () => {};
     }
+
+    return () => {
+        communitySubscribers.get(communityId)?.delete(onUpdate);
+        if (unsubFirestore) {
+            unsubFirestore();
+        }
+    };
 };
 
 /**
  * Casts a vote on a community poll.
- * Idempotent: checks user UID to prevent duplicate voting, or updates vote if changing selection.
+ * Validates selection & expiration, prevents duplicate voting by the same user,
+ * supports atomic updates on Firestore documents, and persists sample polls locally.
  */
 export const castPollVote = async (
     communityId: string,
@@ -384,88 +520,144 @@ export const castPollVote = async (
     optionId: string,
     currentUser: { uid: string; displayName?: string | null }
 ): Promise<Post> => {
-    const cachedPosts = localVoicePostsCache.get(communityId) || [];
-    const postIndex = cachedPosts.findIndex(p => p.id === postId);
-    const existingPost = postIndex !== -1 ? cachedPosts[postIndex] : null;
+    if (!optionId) {
+        throw new Error('Please select a poll option before voting.');
+    }
+
+    const voterUid = getVoiceVoterId(currentUser?.uid);
+    const cachedPosts = [...(localVoicePostsCache.get(communityId) || [])];
+    let postIndex = cachedPosts.findIndex(p => p.id === postId);
+    let existingPost = postIndex !== -1 ? cachedPosts[postIndex] : null;
+
+    // Fallback to direct Firestore read if post isn't in local cache yet
+    if (!existingPost && !postId.startsWith('voice-')) {
+        const postSnap = await getDoc(doc(db, COLLECTIONS.posts, postId));
+        if (postSnap.exists()) {
+            existingPost = normalizeFirestorePost(postSnap.id, postSnap.data());
+        }
+    }
 
     if (!existingPost || !existingPost.pollMeta) {
         throw new Error('Poll record not found.');
     }
 
-    const poll = existingPost.pollMeta;
-    const voterUids = Array.isArray(poll.voterUids) ? [...poll.voterUids] : [];
-    const votesByOption = poll.votesByOption ? { ...poll.votesByOption } : {};
+    const isSamplePoll = postId.startsWith('voice-');
 
-    // Determine if user has already voted
-    let previousOptionId: string | undefined = poll.userVotedOptionId;
-    if (!previousOptionId) {
-        for (const [optId, uids] of Object.entries(votesByOption)) {
-            if (uids.includes(currentUser.uid)) {
-                previousOptionId = optId;
-                break;
+    const computeNextPollMeta = (poll: PollMeta): { changed: boolean; nextPollMeta: PollMeta } => {
+        if (poll.expiresAt && new Date(poll.expiresAt).getTime() <= Date.now()) {
+            throw new Error('This poll has already concluded.');
+        }
+
+        const optionExists = poll.options.some(opt => opt.id === optionId);
+        if (!optionExists) {
+            throw new Error('Selected poll option is invalid.');
+        }
+
+        // Copy & normalize votesByOption
+        const rawVotesByOption = poll.votesByOption || {};
+        const votesByOption: Record<string, string[]> = {};
+        let previousOptionId: string | undefined;
+
+        for (const opt of poll.options) {
+            const list = Array.isArray(rawVotesByOption[opt.id]) ? rawVotesByOption[opt.id] : [];
+            const deduped = Array.from(new Set(list));
+            if (deduped.includes(voterUid)) {
+                previousOptionId = opt.id;
             }
+            votesByOption[opt.id] = deduped;
         }
-    }
 
-    if (previousOptionId === optionId) {
-        // Already voted for this option
-        return existingPost;
-    }
-
-    // Update options vote counts
-    const updatedOptions = poll.options.map(opt => {
-        let newVotes = opt.votes;
-        if (opt.id === previousOptionId && newVotes > 0) {
-            newVotes -= 1;
+        // Prevent duplicate vote on the same option
+        if (previousOptionId === optionId) {
+            return {
+                changed: false,
+                nextPollMeta: {
+                    ...poll,
+                    votesByOption,
+                    userVotedOptionId: optionId,
+                },
+            };
         }
-        if (opt.id === optionId) {
-            newVotes += 1;
+
+        // Remove voter from any previous option and add to selected option
+        for (const opt of poll.options) {
+            votesByOption[opt.id] = (votesByOption[opt.id] || []).filter(uid => uid !== voterUid);
         }
-        return { ...opt, votes: newVotes };
-    });
+        votesByOption[optionId] = [...(votesByOption[optionId] || []), voterUid];
 
-    // Update votesByOption
-    if (previousOptionId && votesByOption[previousOptionId]) {
-        votesByOption[previousOptionId] = votesByOption[previousOptionId].filter(uid => uid !== currentUser.uid);
-    }
-    votesByOption[optionId] = [...(votesByOption[optionId] || []), currentUser.uid];
+        const updatedOptions = poll.options.map(opt => {
+            let newVotes = Number(opt.votes) || 0;
+            if (previousOptionId && opt.id === previousOptionId && newVotes > 0) {
+                newVotes -= 1;
+            }
+            if (opt.id === optionId) {
+                newVotes += 1;
+            }
+            return { ...opt, votes: newVotes };
+        });
 
-    if (!voterUids.includes(currentUser.uid)) {
-        voterUids.push(currentUser.uid);
-    }
+        const voterUids = Array.from(
+            new Set([...(Array.isArray(poll.voterUids) ? poll.voterUids : []), voterUid])
+        );
 
-    const updatedPollMeta: PollMeta = {
-        ...poll,
-        options: updatedOptions,
-        totalVotes: updatedOptions.reduce((acc, curr) => acc + curr.votes, 0),
-        voterUids,
-        votesByOption,
-        userVotedOptionId: optionId,
+        const nextPollMeta: PollMeta = {
+            ...poll,
+            options: updatedOptions,
+            totalVotes: updatedOptions.reduce((acc, curr) => acc + (Number(curr.votes) || 0), 0),
+            voterUids,
+            votesByOption,
+            userVotedOptionId: optionId,
+        };
+
+        return { changed: true, nextPollMeta };
     };
+
+    let finalPollMeta: PollMeta;
+
+    if (!isSamplePoll) {
+        if (!auth.currentUser) {
+            throw new Error('Please sign in to submit your vote on this community poll.');
+        }
+        const postRef = doc(db, COLLECTIONS.posts, postId);
+        finalPollMeta = await runTransaction(db, async (tx) => {
+            const snap = await tx.get(postRef);
+            if (!snap.exists()) {
+                throw new Error('Poll record no longer exists.');
+            }
+            const freshPost = normalizeFirestorePost(snap.id, snap.data());
+            if (!freshPost.pollMeta) {
+                throw new Error('Poll metadata missing.');
+            }
+            const { changed, nextPollMeta } = computeNextPollMeta(freshPost.pollMeta);
+            if (changed) {
+                // Never persist per-viewer userVotedOptionId onto shared Firestore doc
+                const { userVotedOptionId: _omit, ...firestorePollMeta } = nextPollMeta;
+                tx.update(postRef, {
+                    pollMeta: firestorePollMeta,
+                    updatedAt: serverTimestamp(),
+                });
+            }
+            return nextPollMeta;
+        });
+    } else {
+        const { nextPollMeta } = computeNextPollMeta(existingPost.pollMeta);
+        finalPollMeta = nextPollMeta;
+        persistLocalVoicePollState(postId, finalPollMeta);
+    }
 
     const updatedPost: Post = {
         ...existingPost,
-        pollMeta: updatedPollMeta,
+        pollMeta: finalPollMeta,
         updatedAt: new Date(),
     };
 
     if (postIndex !== -1) {
         cachedPosts[postIndex] = updatedPost;
-        localVoicePostsCache.set(communityId, [...cachedPosts]);
+    } else {
+        cachedPosts.unshift(updatedPost);
     }
-
-    // Attempt Firestore persistence if document exists
-    if (!postId.startsWith('voice-')) {
-        try {
-            const postRef = doc(db, COLLECTIONS.posts, postId);
-            await updateDoc(postRef, {
-                pollMeta: updatedPollMeta,
-                updatedAt: serverTimestamp(),
-            });
-        } catch (e) {
-            console.warn('[CAST_VOTE_FIRESTORE_WARN] Updated in-memory, Firestore update notice:', e);
-        }
-    }
+    localVoicePostsCache.set(communityId, cachedPosts);
+    notifyCommunitySubscribers(communityId, cachedPosts);
 
     return updatedPost;
 };
@@ -532,8 +724,10 @@ export const updateProposalStatus = async (
     };
 
     if (postIndex !== -1) {
-        cachedPosts[postIndex] = updatedPost;
-        localVoicePostsCache.set(communityId, [...cachedPosts]);
+        const next = [...cachedPosts];
+        next[postIndex] = updatedPost;
+        localVoicePostsCache.set(communityId, next);
+        notifyCommunitySubscribers(communityId, next);
     }
 
     if (!postId.startsWith('voice-')) {
@@ -605,8 +799,10 @@ export const submitConsultationResponse = async (
     };
 
     if (postIndex !== -1) {
-        cachedPosts[postIndex] = updatedPost;
-        localVoicePostsCache.set(communityId, [...cachedPosts]);
+        const next = [...cachedPosts];
+        next[postIndex] = updatedPost;
+        localVoicePostsCache.set(communityId, next);
+        notifyCommunitySubscribers(communityId, next);
     }
 
     if (!postId.startsWith('voice-')) {
@@ -656,8 +852,10 @@ export const concludeConsultation = async (
     };
 
     if (postIndex !== -1) {
-        cachedPosts[postIndex] = updatedPost;
-        localVoicePostsCache.set(communityId, [...cachedPosts]);
+        const next = [...cachedPosts];
+        next[postIndex] = updatedPost;
+        localVoicePostsCache.set(communityId, next);
+        notifyCommunitySubscribers(communityId, next);
     }
 
     if (!postId.startsWith('voice-')) {
@@ -712,8 +910,10 @@ export const recordDecisionOnPost = async (
     };
 
     if (postIndex !== -1) {
-        cachedPosts[postIndex] = updatedPost;
-        localVoicePostsCache.set(communityId, [...cachedPosts]);
+        const next = [...cachedPosts];
+        next[postIndex] = updatedPost;
+        localVoicePostsCache.set(communityId, next);
+        notifyCommunitySubscribers(communityId, next);
     }
 
     if (!postId.startsWith('voice-')) {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { Post, ProposalStatus } from '../../../types';
 import { 
     HeartIcon, 
@@ -12,6 +12,7 @@ import {
 } from '../../ui/Icons';
 import { handleImageError } from '../../utils/imageUtils';
 import { toggleLikePost, toggleBookmarkPost } from '../../../services/postService';
+import { getUserVotedOptionFromPoll, getVoiceVoterId } from '../../../services/collectiveVoiceService';
 import { useAuth } from '../../../contexts/AuthContext';
 import { MarkdownRenderer, parseInlineMarkdown } from '../../ui/MarkdownRenderer';
 
@@ -66,12 +67,32 @@ export const CollectiveVoiceCard: React.FC<CollectiveVoiceCardProps> = ({
     const [showHistory, setShowHistory] = useState(false);
     const [showResponses, setShowResponses] = useState(false);
     const [votingOptionId, setVotingOptionId] = useState<string | null>(null);
+    const [voteError, setVoteError] = useState<string | null>(null);
 
     const voiceType = post.voiceType || (post.proposalMeta ? 'proposal' : post.pollMeta ? 'poll' : post.consultationMeta ? 'consultation' : 'discussion');
     const proposal = post.proposalMeta;
     const poll = post.pollMeta;
     const consultation = post.consultationMeta;
     const decision = post.decisionMeta;
+
+    const voterKey = useMemo(() => getVoiceVoterId(currentUser?.uid), [currentUser?.uid]);
+    const derivedUserVote = useMemo(() => {
+        if (!poll) return null;
+        return getUserVotedOptionFromPoll(poll, voterKey) || poll.userVotedOptionId || null;
+    }, [poll, voterKey]);
+
+    const [selectedOptionId, setSelectedOptionId] = useState<string | null>(derivedUserVote);
+
+    useEffect(() => {
+        if (votingOptionId !== null) return;
+        setSelectedOptionId(derivedUserVote);
+    }, [derivedUserVote, votingOptionId]);
+
+    const isPollExpired = useMemo(() => {
+        if (!poll?.expiresAt) return false;
+        const expTime = new Date(poll.expiresAt).getTime();
+        return !isNaN(expTime) && expTime <= Date.now();
+    }, [poll?.expiresAt]);
 
     const handleLike = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -110,10 +131,20 @@ export const CollectiveVoiceCard: React.FC<CollectiveVoiceCardProps> = ({
     };
 
     const handleVoteOption = async (optionId: string) => {
-        if (!isMember && !canManage) return;
+        if (!optionId || isPollExpired || votingOptionId !== null) return;
+        const activeSelection = selectedOptionId ?? derivedUserVote;
+        if (activeSelection === optionId) {
+            return;
+        }
+        const previousSelection = activeSelection;
+        setVoteError(null);
+        setSelectedOptionId(optionId);
         setVotingOptionId(optionId);
         try {
             await onVote(post.id, optionId);
+        } catch (err: any) {
+            setSelectedOptionId(previousSelection);
+            setVoteError(err?.message || 'Unable to submit your vote.');
         } finally {
             setVotingOptionId(null);
         }
@@ -169,10 +200,11 @@ export const CollectiveVoiceCard: React.FC<CollectiveVoiceCardProps> = ({
     };
 
     // Poll calculations
-    const pollTotalVotes = poll?.totalVotes || (poll?.options?.reduce((a, b) => a + b.votes, 0) ?? 0);
+    const pollTotalVotes = poll?.totalVotes ?? (poll?.options?.reduce((a, b) => a + b.votes, 0) ?? 0);
+    const activeVotedOptionId = selectedOptionId ?? derivedUserVote;
     const userHasVoted = Boolean(
-        poll?.userVotedOptionId ||
-        (currentUser && poll?.voterUids?.includes(currentUser.uid))
+        activeVotedOptionId ||
+        (voterKey && poll?.voterUids?.includes(voterKey))
     );
     const shouldShowPollResults = userHasVoted || !poll?.hideResultsUntilVoted;
 
@@ -328,21 +360,24 @@ export const CollectiveVoiceCard: React.FC<CollectiveVoiceCardProps> = ({
                 {/* Interactive Poll Options */}
                 {voiceType === 'poll' && poll && (
                     <div className="space-y-2.5 pt-0.5">
-                        <div className="space-y-2">
+                        <div className="space-y-2" role="radiogroup" aria-label={post.title}>
                             {poll.options.map((opt) => {
                                 const percent = pollTotalVotes > 0
                                     ? Math.round((opt.votes / pollTotalVotes) * 100)
                                     : 0;
-                                const isUserChoice = poll.userVotedOptionId === opt.id ||
-                                    (currentUser && poll.votesByOption?.[opt.id]?.includes(currentUser.uid));
+                                const isUserChoice = activeVotedOptionId === opt.id;
 
                                 return (
                                     <button
                                         key={opt.id}
                                         type="button"
+                                        role="radio"
+                                        aria-checked={isUserChoice}
                                         onClick={() => handleVoteOption(opt.id)}
-                                        disabled={!isMember && !canManage}
-                                        className={`w-full relative overflow-hidden text-left p-3 border transition-all text-xs cursor-pointer ${
+                                        disabled={isPollExpired || votingOptionId !== null}
+                                        className={`w-full relative overflow-hidden text-left p-3 border transition-all text-xs ${
+                                            isPollExpired ? 'cursor-default' : 'cursor-pointer'
+                                        } ${
                                             isUserChoice
                                                 ? 'border-sky-500/60 bg-sky-950/20'
                                                 : 'border-zinc-800/90 bg-zinc-950/60 hover:border-zinc-700'
@@ -351,14 +386,14 @@ export const CollectiveVoiceCard: React.FC<CollectiveVoiceCardProps> = ({
                                         {/* Background percentage fill bar */}
                                         {shouldShowPollResults && (
                                             <div
-                                                className={`absolute inset-y-0 left-0 transition-all duration-500 ${
+                                                className={`absolute inset-y-0 left-0 pointer-events-none transition-all duration-500 ${
                                                     isUserChoice ? 'bg-sky-900/30' : 'bg-zinc-850/60'
                                                 }`}
                                                 style={{ width: `${percent}%` }}
                                             />
                                         )}
 
-                                        <div className="relative z-10 flex items-center justify-between gap-3">
+                                        <div className="relative z-10 flex items-center justify-between gap-3 pointer-events-none">
                                             <div className="flex items-center gap-2.5 font-sans text-zinc-200">
                                                 <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
                                                     isUserChoice ? 'border-sky-400 bg-sky-500' : 'border-zinc-650'
@@ -384,6 +419,11 @@ export const CollectiveVoiceCard: React.FC<CollectiveVoiceCardProps> = ({
                                 );
                             })}
                         </div>
+                        {voteError && (
+                            <p className="text-[11px] text-rose-400 font-mono">
+                                {voteError}
+                            </p>
+                        )}
 
                         {/* Quiet Poll Metadata */}
                         <div className="flex items-center justify-between text-[11px] text-zinc-500 font-mono pt-1 border-t border-zinc-850">

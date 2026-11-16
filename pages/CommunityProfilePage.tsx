@@ -29,6 +29,7 @@ import { EditCollectiveIdentityModal } from '../components/communities/EditColle
 import { ConclaveGatheringsView } from '../components/communities/ConclaveGatheringsView';
 import { CollectiveMemoryView } from '../components/communities/memory/CollectiveMemoryView';
 import { CollectiveVoiceView } from '../components/communities/voice/CollectiveVoiceView';
+import { CommunityHealthView } from '../components/communities/health/CommunityHealthView';
 
 type CommunityTab = 'overview' | 'conclave' | 'memory' | 'influence' | 'health';
 
@@ -81,6 +82,7 @@ export const CommunityProfilePage: React.FC = () => {
         rawTab === '02_conclave' ? 'conclave' :
         rawTab === '03_memory' ? 'memory' :
         (rawTab === 'voice' || rawTab === '04_voice' || rawTab === 'collective_voice') ? 'influence' :
+        rawTab === '05_health' ? 'health' :
         rawTab
     ) as CommunityTab | null;
     const [activeTab, setActiveTab] = useState<CommunityTab>(() => {
@@ -415,7 +417,7 @@ export const CommunityProfilePage: React.FC = () => {
                     { id: 'conclave', label: '02. CONCLAVE', active: true },
                     { id: 'memory', label: '03. COLLECTIVE MEMORY', active: true },
                     { id: 'influence', label: '04. COLLECTIVE VOICE', active: true },
-                    { id: 'health', label: '05. COMMUNITY HEALTH', staged: true },
+                    { id: 'health', label: '05. COMMUNITY HEALTH', active: true },
                 ].map((tab) => (
                     <button
                         key={tab.id}
@@ -427,11 +429,6 @@ export const CommunityProfilePage: React.FC = () => {
                         }`}
                     >
                         <span>{tab.label}</span>
-                        {tab.staged && (
-                            <span className="text-[9px] px-1.5 py-0.2 bg-zinc-900 border border-zinc-800 text-zinc-500 font-normal">
-                                UPCOMING
-                            </span>
-                        )}
                     </button>
                 ))}
             </div>
@@ -668,26 +665,12 @@ export const CommunityProfilePage: React.FC = () => {
                     isMember={membershipActive}
                 />
             ) : (
-                /* Staged Pillars Placeholder: Clean architectural slot ready for future tasks */
-                <div className="bg-[#0c0c0e] border border-zinc-800 p-6 sm:p-10 text-center space-y-4 w-full min-w-0 font-mono">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">
-                        // PILLAR_STAGED_FOR_FUTURE_CYCLE
-                    </span>
-                    <h3 className="text-base sm:text-lg font-bold text-white uppercase tracking-wide">
-                        {activeTab === 'health' && '05. COMMUNITY HEALTH INDICATORS'}
-                    </h3>
-                    <p className="text-zinc-400 text-xs max-w-lg mx-auto leading-relaxed break-words">
-                        This pillar is architected for this community collective and will be implemented in a dedicated upcoming development task without requiring any page redesign.
-                    </p>
-                    <div className="pt-2">
-                        <button
-                            onClick={() => handleTabChange('overview')}
-                            className="px-4 py-2 bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white uppercase font-bold text-xs transition-colors cursor-pointer"
-                        >
-                            Return to Overview
-                        </button>
-                    </div>
-                </div>
+                /* Community Health: Owner & Administrator Diagnostics Dashboard */
+                <CommunityHealthView
+                    community={community}
+                    canManage={canManage}
+                    onReturnToOverview={() => handleTabChange('overview')}
+                />
             )}
 
             {/* Collective Identity Editor Modal */}

@@ -480,8 +480,9 @@ export interface CommunityMembership {
   communityAvatarUrl?: string | null;
   communityCategory?: string;
   role?: 'member' | 'moderator' | 'organizer' | 'founder' | string;
-  status: 'active' | 'pending' | 'rejected' | string;
+  status: 'active' | 'pending' | 'rejected' | 'left' | string;
   joinedAt: Date | any;
+  leftAt?: Date | any;
   updatedAt?: Date | any;
 }
 

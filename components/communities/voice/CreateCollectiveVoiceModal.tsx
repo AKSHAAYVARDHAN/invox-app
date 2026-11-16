@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { createPost } from '../../../services/postService';
 import type { 
@@ -55,6 +55,12 @@ export const CreateCollectiveVoiceModal: React.FC<CreateCollectiveVoiceModalProp
 }) => {
     const { currentUser, userProfile } = useAuth();
     const [voiceType, setVoiceType] = useState<CollectiveVoiceType>(initialVoiceType);
+
+    useEffect(() => {
+        if (isOpen) {
+            setVoiceType(initialVoiceType);
+        }
+    }, [isOpen, initialVoiceType]);
 
     // Common fields
     const [title, setTitle] = useState('');
