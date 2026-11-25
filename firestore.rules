@@ -422,12 +422,17 @@ service cloud.firestore {
 
     // Canonical accepted (mutual) connection check between current user and target user
     function isAcceptedConnection(targetUserId) {
-      return signedIn() && (
-        targetUserId == uid() ||
-        (exists(/databases/$(database)/documents/follows/$(uid())_$(targetUserId))
-         && exists(/databases/$(database)/documents/follows/$(targetUserId)_$(uid())))
-      );
-    }
+  let currentFollowId = uid() + '_' + targetUserId;
+  let reverseFollowId = targetUserId + '_' + uid();
+
+  return signedIn() && (
+    targetUserId == uid() ||
+    (
+      exists(/databases/$(database)/documents/follows/$(currentFollowId))
+      && exists(/databases/$(database)/documents/follows/$(reverseFollowId))
+    )
+  );
+}
 
     // Identifies whether post document is Hub content (Moments or Loops)
     function isHubPostData(data) {
