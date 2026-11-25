@@ -2431,7 +2431,7 @@ export const HubConversationsView: React.FC<HubConversationsViewProps> = ({
                                             <div className="p-3 border-t border-zinc-800 bg-zinc-950/60">
                                                 <button
                                                     type="button"
-                                                    onClick={handleLeaveOrDisbandCrew}
+                                                    onClick={handleLeaveCrew}
                                                     className="w-full py-1.5 px-3 border border-red-900/60 hover:border-red-600 bg-red-950/20 hover:bg-red-950/50 text-red-400 text-xs uppercase tracking-wider font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                                                 >
                                                     {activeCrew.ownerId === currentUser?.uid ? (

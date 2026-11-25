@@ -21,9 +21,13 @@ import { handleImageError } from '../utils/imageUtils';
 import { useFullscreen } from '../hooks/useFullscreen';
 import AspectRatioBox from '../ui/AspectRatioBox';
 import ImageZoomModal from '../ui/ImageZoomModal';
+import { sanitizeExternalUrl } from '../../utils/urlSanitizer';
+import { normalizeTrendzDomainSlug } from '../../utils/trendzDomains';
+import { useTrendzEngagement } from '../../contexts/TrendzEngagementContext';
+import type { TrendViewModel } from '../../services/trendzService';
 
 interface TrendzDetailProps {
-    trend: Trend;
+    trend: Trend | TrendViewModel;
     onBack: () => void;
 }
 
@@ -34,6 +38,22 @@ const formatNumber = (num: number) => {
 };
 
 const TrendzDetail: React.FC<TrendzDetailProps> = ({ trend, onBack }) => {
+    const {
+        isDomainFollowed,
+        isDomainPending,
+        toggleFollowDomain,
+        isTrendBookmarked,
+        isBookmarkPending,
+        toggleBookmark,
+        isTrendUpvoted,
+        isUpvotePending,
+        toggleUpvote,
+        trackTrendView,
+        getDisplayStats,
+        actionError,
+        clearActionError,
+    } = useTrendzEngagement();
+
     const videoRef = useRef<HTMLVideoElement>(null);
     const videoContainerRef = useRef<HTMLDivElement>(null);
     const isVideo = trend.mediaType === 'video';
@@ -49,6 +69,43 @@ const TrendzDetail: React.FC<TrendzDetailProps> = ({ trend, onBack }) => {
     const { isFullscreen, toggleFullscreen } = useFullscreen(videoContainerRef);
     const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
 
+    const safeTitle = trend.title || 'Untitled Trend';
+    const safeFullContent = trend.fullContent || trend.summary || '';
+    const safePublisher = trend.details?.publishedBy || 'INVOX Desk';
+    const safePublishedOn = trend.details?.publishedOn || 'RECENT';
+    const safeDomainName = trend.domain?.name || 'General';
+    const resolvedDomainSlug =
+        ('domainSlug' in trend ? trend.domainSlug : null) ||
+        normalizeTrendzDomainSlug(safeDomainName) ||
+        'technology';
+
+    const viewModelTrend: TrendViewModel =
+        'domainSlug' in trend
+            ? trend
+            : {
+                  ...trend,
+                  domainSlug: resolvedDomainSlug,
+                  tags: [],
+                  searchKeywords: [],
+                  momentumScore: 0,
+                  relatedTrendIds: [],
+                  keyTakeaways: [],
+                  status: 'published',
+                  publishedAtMs: Date.now(),
+              };
+
+    const displayStats = getDisplayStats(viewModelTrend);
+    const safeLikes = displayStats.likes;
+    const safeViews = displayStats.views;
+    const safeComments = displayStats.comments;
+
+    const domainFollowed = isDomainFollowed(resolvedDomainSlug);
+    const domainPending = isDomainPending(resolvedDomainSlug);
+    const bookmarked = isTrendBookmarked(trend.id);
+    const bookmarkPending = isBookmarkPending(trend.id);
+    const upvoted = isTrendUpvoted(trend.id);
+    const upvotePending = isUpvotePending(trend.id);
+
     const togglePlayPause = (e?: React.MouseEvent) => {
         e?.stopPropagation();
         if (videoRef.current) {
@@ -59,6 +116,20 @@ const TrendzDetail: React.FC<TrendzDetailProps> = ({ trend, onBack }) => {
             }
         }
     };
+
+    useEffect(() => {
+        setIsPlaying(false);
+        setProgress(0);
+        setDuration(0);
+        setZoomedImageUrl(null);
+    }, [trend.id]);
+
+    // Record deduplicated per-user view for live published trends
+    useEffect(() => {
+        if (!viewModelTrend.isFallback) {
+            void trackTrendView(viewModelTrend);
+        }
+    }, [viewModelTrend.id, viewModelTrend.isFallback, trackTrendView]);
 
     useEffect(() => {
         if (videoRef.current) {
@@ -158,7 +229,7 @@ const TrendzDetail: React.FC<TrendzDetailProps> = ({ trend, onBack }) => {
                     className={`mb-4 bg-black border border-zinc-800 group ${isVideo ? 'cursor-pointer' : 'cursor-zoom-in'}`}
                     onMouseEnter={() => setIsControlsVisible(true)}
                     onMouseLeave={() => setIsControlsVisible(false)}
-                    onClick={isVideo ? togglePlayPause : () => setZoomedImageUrl(trend.mediaUrl)}
+                    onClick={isVideo ? togglePlayPause : () => trend.mediaUrl && setZoomedImageUrl(trend.mediaUrl)}
                 >
                     {trend.mediaType === 'video' ? (
                         <>
@@ -240,30 +311,89 @@ const TrendzDetail: React.FC<TrendzDetailProps> = ({ trend, onBack }) => {
                     )}
                 </AspectRatioBox>
 
-                <h1 className="text-xl sm:text-2xl font-bold font-mono text-white mb-3 uppercase tracking-tight">{trend.title}</h1>
-                <p className="text-zinc-400 text-sm sm:text-base leading-relaxed mb-6 font-sans">{trend.fullContent}</p>
+                <h1 className="text-xl sm:text-2xl font-bold font-mono text-white mb-3 uppercase tracking-tight">{safeTitle}</h1>
+                <p className="text-zinc-400 text-sm sm:text-base leading-relaxed mb-6 font-sans whitespace-pre-line">{safeFullContent}</p>
+
+                {(viewModelTrend.whyItMatters || viewModelTrend.keyTakeaways.length > 0) && (
+                    <div className="mb-6 bg-black border border-zinc-800 p-4 space-y-4">
+                        {viewModelTrend.whyItMatters && (
+                            <div>
+                                <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider mb-1.5">// WHY_IT_MATTERS</h3>
+                                <p className="text-zinc-400 text-sm leading-relaxed font-sans">{viewModelTrend.whyItMatters}</p>
+                            </div>
+                        )}
+                        {viewModelTrend.keyTakeaways.length > 0 && (
+                            <div className={viewModelTrend.whyItMatters ? 'pt-3 border-t border-zinc-900' : ''}>
+                                <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider mb-2">// KEY_TAKEAWAYS</h3>
+                                <ul className="space-y-1.5 text-sm text-zinc-300 font-sans">
+                                    {viewModelTrend.keyTakeaways.map((point, idx) => (
+                                        <li key={idx} className="flex items-start gap-2">
+                                            <span className="font-mono text-zinc-500 text-xs mt-0.5">[{String(idx + 1).padStart(2, '0')}]</span>
+                                            <span>{point}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {actionError && (
+                    <div className="mb-4 bg-black border border-zinc-700 px-3.5 py-2.5 flex items-center justify-between gap-3 font-mono text-xs">
+                        <span className="text-zinc-300">// ERROR: {actionError}</span>
+                        <button
+                            type="button"
+                            onClick={clearActionError}
+                            className="text-zinc-400 hover:text-white uppercase text-[10px] shrink-0"
+                        >
+                            [DISMISS]
+                        </button>
+                    </div>
+                )}
 
                 <div className="border border-zinc-800 bg-zinc-900/30 px-4 py-2.5 flex justify-between items-center mb-6 font-mono text-xs text-zinc-400">
-                    <button className="flex items-center gap-1.5 hover:text-white transition-colors" aria-label="Upvote trend">
+                    <button
+                        type="button"
+                        onClick={() => void toggleUpvote(viewModelTrend)}
+                        disabled={upvotePending}
+                        aria-pressed={upvoted}
+                        aria-label={upvoted ? 'Remove upvote' : 'Upvote trend'}
+                        className={`flex items-center gap-1.5 px-2 py-1 border transition-colors disabled:opacity-50 ${
+                            upvoted
+                                ? 'border-zinc-600 bg-zinc-900 text-white font-bold'
+                                : 'border-transparent hover:border-zinc-800 hover:text-white'
+                        }`}
+                    >
                         <ArrowUpIcon className="w-4 h-4" />
-                        <span>{formatNumber(trend.stats.likes)}</span>
+                        <span>{formatNumber(safeLikes)}</span>
                     </button>
-                    <div className="flex items-center gap-1.5 text-zinc-500" role="status" aria-label={`${formatNumber(trend.stats.views)} views`}>
+                    <div className="flex items-center gap-1.5 text-zinc-500" role="status" aria-label={`${formatNumber(safeViews)} views`}>
                         <TrendingUpIcon className="w-4 h-4" />
-                        <span>{formatNumber(trend.stats.views)}</span>
+                        <span>{formatNumber(safeViews)}</span>
                     </div>
-                    <button className="flex items-center gap-1.5 hover:text-white transition-colors" aria-label="View comments">
+                    <div className="flex items-center gap-1.5 text-zinc-500" aria-label={`${formatNumber(safeComments)} comments`}>
                         <EqualsInCircleIcon className="w-4 h-4" />
-                        <span>{formatNumber(trend.stats.comments)}</span>
-                    </button>
-                    <button className="p-1 hover:text-white transition-colors" aria-label="Listen">
+                        <span>{formatNumber(safeComments)}</span>
+                    </div>
+                    <button type="button" className="p-1 hover:text-white transition-colors" aria-label="Listen">
                         <SoundWaveIcon className="w-4 h-4" />
                     </button>
-                    <button className="p-1 hover:text-white transition-colors" aria-label="Share trend">
+                    <button type="button" className="p-1 hover:text-white transition-colors" aria-label="Share trend">
                         <ForwardIcon className="w-4 h-4" />
                     </button>
-                    <button className="p-1 hover:text-white transition-colors" aria-label="Save trend">
-                        <BookmarkIcon className="w-4 h-4" />
+                    <button
+                        type="button"
+                        onClick={() => void toggleBookmark(viewModelTrend)}
+                        disabled={bookmarkPending}
+                        aria-pressed={bookmarked}
+                        aria-label={bookmarked ? 'Remove bookmark' : 'Save trend'}
+                        className={`p-1 border transition-colors disabled:opacity-50 ${
+                            bookmarked
+                                ? 'border-zinc-600 bg-zinc-900 text-white'
+                                : 'border-transparent hover:border-zinc-800 hover:text-white'
+                        }`}
+                    >
+                        <BookmarkIcon className={`w-4 h-4 ${bookmarked ? 'fill-current' : ''}`} />
                     </button>
                 </div>
 
@@ -271,16 +401,42 @@ const TrendzDetail: React.FC<TrendzDetailProps> = ({ trend, onBack }) => {
                     <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider mb-3">// TELEMETRY_DETAILS</h3>
                     <div className="space-y-2.5 font-mono text-xs">
                         <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
+                            <span className="text-zinc-500">DOMAIN:</span>
+                            <div className="flex items-center gap-2.5">
+                                <span className="text-white font-semibold uppercase">{safeDomainName}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => void toggleFollowDomain(resolvedDomainSlug)}
+                                    disabled={domainPending}
+                                    aria-pressed={domainFollowed}
+                                    className={`px-2 py-0.5 text-[10px] uppercase tracking-wider border transition-colors disabled:opacity-50 ${
+                                        domainFollowed
+                                            ? 'bg-zinc-900 text-white border-zinc-600 font-bold'
+                                            : 'text-zinc-400 border-zinc-800 hover:border-zinc-600 hover:text-white'
+                                    }`}
+                                >
+                                    {domainPending ? '...' : domainFollowed ? 'FOLLOWING' : '+ FOLLOW'}
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
                             <span className="text-zinc-500">PUBLISHED_BY:</span>
-                            <span className="text-white font-semibold">{trend.details.publishedBy}</span>
+                            <span className="text-white font-semibold">{safePublisher}</span>
                         </div>
                         <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
                             <span className="text-zinc-500">DATE:</span>
-                            <span className="text-white font-semibold">{trend.details.publishedOn}</span>
+                            <span className="text-white font-semibold">{safePublishedOn}</span>
                         </div>
                         <div className="flex items-center justify-between">
                             <span className="text-zinc-500">SOURCE:</span>
-                            <a href={trend.details.link} target="_blank" rel="noopener noreferrer" className="text-zinc-300 underline hover:text-white truncate max-w-[200px] sm:max-w-xs">{trend.details.link}</a>
+                            {(() => {
+                                const safeSourceUrl = sanitizeExternalUrl(trend.details?.link);
+                                return safeSourceUrl ? (
+                                    <a href={safeSourceUrl} target="_blank" rel="noopener noreferrer" className="text-zinc-300 underline hover:text-white truncate max-w-[200px] sm:max-w-xs">{safeSourceUrl}</a>
+                                ) : (
+                                    <span className="text-zinc-500 truncate max-w-[200px] sm:max-w-xs">UNAVAILABLE</span>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>

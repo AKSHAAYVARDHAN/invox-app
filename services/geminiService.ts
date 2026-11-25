@@ -1,15 +1,47 @@
+import { auth } from "../firebase";
 
-import type { Content } from "@google/genai";
+export interface GeminiContentPart {
+    text: string;
+}
+
+export interface GeminiChatContent {
+    role: 'user' | 'model';
+    parts: GeminiContentPart[];
+}
+
+export interface CardContext {
+    id?: string;
+    title: string;
+    content: string;
+    author: string;
+    domain?: string;
+    publishedOn?: string;
+    sourceUrl?: string;
+}
+
+async function getAuthenticatedJsonHeaders(): Promise<Record<string, string>> {
+    const user = auth.currentUser;
+    if (!user) {
+        throw new Error('Authentication required. Please sign in to use Spark AI.');
+    }
+    const idToken = await user.getIdToken();
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`,
+    };
+}
 
 export const generateFeedPost = async (idea: string): Promise<{ title: string; body: string; hashtags: string[]; imagePrompt: string } | null> => {
     try {
+        const headers = await getAuthenticatedJsonHeaders();
         const response = await fetch('/api/gemini/feed-post', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({ idea }),
         });
         if (!response.ok) {
-            throw new Error(`Server returned HTTP ${response.status}`);
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error || `Server returned HTTP ${response.status}`);
         }
         return await response.json();
     } catch (error) {
@@ -25,9 +57,10 @@ export const generateChatSummary = async (
     if (!transcript.trim()) {
         return "The chat is empty. Nothing to summarize.";
     }
+    const headers = await getAuthenticatedJsonHeaders();
     const response = await fetch('/api/gemini/chat-summary', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
             transcript,
             title: options?.title,
@@ -45,14 +78,15 @@ export const generateChatSummary = async (
 
 export const generateSummary = async (text: string): Promise<string> => {
     try {
+        const headers = await getAuthenticatedJsonHeaders();
         const response = await fetch('/api/gemini/summary', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({ text }),
         });
         if (!response.ok) {
             const err = await response.json().catch(() => ({}));
-            return err.summary || "Could not generate summary.";
+            return err.summary || err.error || "Could not generate summary.";
         }
         const data = await response.json();
         return data.summary || "Could not generate summary.";
@@ -62,17 +96,11 @@ export const generateSummary = async (text: string): Promise<string> => {
     }
 };
 
-interface CardContext {
-    title: string;
-    content: string;
-    author: string;
-}
-
 export const getAIChatResponseStream = (
-    history: Content[],
+    history: GeminiChatContent[],
     context: CardContext | null,
     useSearch: boolean,
-    onChunk: (chunk: { text: string; sources?: any[] }) => void,
+    onChunk: (chunk: { text: string; sources?: Array<{ uri: string; title?: string }> }) => void,
     onError: (error: string) => void,
     onComplete: () => void
 ): { cancel: () => void } => {
@@ -81,11 +109,10 @@ export const getAIChatResponseStream = (
 
     const runStream = async () => {
         try {
+            const headers = await getAuthenticatedJsonHeaders();
             const response = await fetch('/api/gemini/chat-stream', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers,
                 body: JSON.stringify({
                     history,
                     context,

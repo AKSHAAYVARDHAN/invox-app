@@ -9,8 +9,9 @@ import {
 } from '../../types';
 import { SECTION_KEYS, DEFAULT_SECTIONS_CONFIG } from '../../services/platformConfigService';
 import { migrateExistingUsernames } from '../../services/usernameService';
+import { TrendzPipelinePanel } from '../../components/admin/TrendzPipelinePanel';
 
-type AdminTab = 'sections' | 'overview' | 'settings';
+type AdminTab = 'sections' | 'trendz' | 'overview' | 'settings';
 
 interface StatusOption {
     value: SectionStatus;
@@ -368,6 +369,26 @@ export const AdminPage: React.FC = () => {
                                         <span>Overview</span>
                                     </div>
                                 </button>
+
+                                <button
+                                    onClick={() => {
+                                        setActiveTab('trendz');
+                                        setIsMobileSidebarOpen(false);
+                                    }}
+                                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-none text-sm font-medium transition-all duration-150 border ${
+                                        activeTab === 'trendz'
+                                            ? 'bg-zinc-900 text-white border-zinc-700 font-semibold'
+                                            : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60 border-transparent hover:border-zinc-800'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <svg className="w-4 h-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                        </svg>
+                                        <span>Trendz Pipeline</span>
+                                    </div>
+                                    <span className="text-[10px] font-mono text-zinc-500">AI</span>
+                                </button>
                             </nav>
                         </div>
 
@@ -698,6 +719,11 @@ export const AdminPage: React.FC = () => {
                                 })}
                             </div>
                         </div>
+                    )}
+
+                    {/* TAB: TRENDZ INTELLIGENCE PIPELINE */}
+                    {activeTab === 'trendz' && (
+                        <TrendzPipelinePanel onStatusMessage={(msg) => setStatusMessage(msg)} />
                     )}
 
                     {/* TAB 2: OVERVIEW */}

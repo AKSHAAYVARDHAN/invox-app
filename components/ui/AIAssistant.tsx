@@ -32,6 +32,7 @@ import { getAIChatResponseStream } from '../../services/geminiService';
 import { useAIAssistant, type ChatMessage, type Conversation } from '../../contexts/AIAssistantContext';
 import { useFullscreen } from '../hooks/useFullscreen';
 import { useAuth } from '../../contexts/AuthContext';
+import { sanitizeExternalUrl, getSafeHostname } from '../../utils/urlSanitizer';
 
 declare global {
     interface Window {
@@ -170,6 +171,7 @@ const ChatHistorySidebar = () => {
     const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
     const [renamingId, setRenamingId] = useState<string | null>(null);
     const [renameValue, setRenameValue] = useState("");
+    const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -207,9 +209,25 @@ const ChatHistorySidebar = () => {
         setRenamingId(null);
     };
 
+    useEffect(() => {
+        if (!pendingDelete) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setPendingDelete(null);
+            }
+        };
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+    }, [pendingDelete]);
+
     const handleDelete = (id: string, title: string) => {
-        if (window.confirm(`Delete chat session "${title}"? This action cannot be undone.`)) {
-            deleteConversation(id);
+        setPendingDelete({ id, title });
+    };
+
+    const confirmDelete = () => {
+        if (pendingDelete) {
+            deleteConversation(pendingDelete.id);
+            setPendingDelete(null);
         }
     };
     
@@ -326,6 +344,53 @@ const ChatHistorySidebar = () => {
                     </>
                 )}
             </div>
+            {pendingDelete && (
+                <div
+                    className="fixed inset-0 z-[70] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="delete-spark-session-title"
+                    onClick={() => setPendingDelete(null)}
+                >
+                    <div
+                        className="w-full max-w-sm bg-[#0c0c0e] border border-zinc-800 shadow-2xl p-5 font-mono"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                            <h3 id="delete-spark-session-title" className="text-xs font-bold text-white uppercase tracking-wider">
+                                // CONFIRM_DELETE_SESSION
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => setPendingDelete(null)}
+                                className="p-1 text-zinc-500 hover:text-white transition-colors"
+                                aria-label="Close confirmation dialog"
+                            >
+                                <CloseIcon className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <p className="mt-3 text-xs text-zinc-400 leading-relaxed">
+                            Delete chat session <span className="text-white font-semibold">"{pendingDelete.title}"</span>? This action cannot be undone.
+                        </p>
+                        <div className="mt-5 flex items-center justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setPendingDelete(null)}
+                                className="px-3 py-1.5 text-xs uppercase tracking-wider border border-zinc-800 bg-[#09090b] text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors"
+                            >
+                                CANCEL
+                            </button>
+                            <button
+                                type="button"
+                                onClick={confirmDelete}
+                                className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider border border-red-800 bg-red-950/60 text-red-300 hover:bg-red-900/70 hover:text-white transition-colors"
+                            >
+                                DELETE
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -588,7 +653,7 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
             const controller = getAIChatResponseStream(
                 historyForRegeneration,
                 activeConversation.context,
-                false,
+                useSearch,
                 (chunk) => appendChunkToLastMessage(chunk),
                 (error) => appendChunkToLastMessage({ text: error }),
                 () => {
@@ -634,8 +699,11 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
             const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
             if (linkMatch) {
                 const linkText = linkMatch[1];
-                const url = linkMatch[2];
-                return <a key={index} href={url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline underline-offset-2">{linkText}</a>;
+                const safeUrl = sanitizeExternalUrl(linkMatch[2]);
+                if (!safeUrl) {
+                    return <span key={index} className="text-zinc-300">{linkText}</span>;
+                }
+                return <a key={index} href={safeUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline underline-offset-2">{linkText}</a>;
             }
             if (part.startsWith('#')) {
                 return (
@@ -806,7 +874,7 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
                                     {activeConversation?.context ? `// CONTEXT: ${activeConversation.context.title}` : '// SPARK_INTELLIGENCE'}
                                 </h2>
                                 <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[9px] font-mono font-bold bg-[#18181b] border border-zinc-800 text-zinc-400">
-                                    GEMINI_FLASH
+                                    GEMINI_4
                                 </span>
                            </div>
                         </div>
@@ -918,23 +986,36 @@ export const AIChatModal = ({ onClose }: { onClose: () => void; }) => {
                                                         {isStreamingMessage && (
                                                             <span className="inline-block w-2 h-3.5 bg-emerald-400 animate-pulse ml-1 align-middle"></span>
                                                         )}
-                                                         {msg.sources && msg.sources.length > 0 && (
-                                                            <div className="mt-3.5 pt-3 border-t border-zinc-800">
-                                                                <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 font-mono">// SOURCES_RETRIEVED</h4>
-                                                                <ol className="text-xs space-y-1 font-mono">
-                                                                    {msg.sources.map((source, idx) => (
-                                                                        source && (
+                                                         {msg.sources && msg.sources.length > 0 && (() => {
+                                                            const safeSources = msg.sources
+                                                                .map((source) => {
+                                                                    const safeUri = sanitizeExternalUrl(source?.uri);
+                                                                    if (!safeUri) return null;
+                                                                    return {
+                                                                        uri: safeUri,
+                                                                        title: source?.title || getSafeHostname(safeUri) || safeUri,
+                                                                    };
+                                                                })
+                                                                .filter((s): s is { uri: string; title: string } => s !== null);
+
+                                                            if (safeSources.length === 0) return null;
+
+                                                            return (
+                                                                <div className="mt-3.5 pt-3 border-t border-zinc-800">
+                                                                    <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 font-mono">// SOURCES_RETRIEVED</h4>
+                                                                    <ol className="text-xs space-y-1 font-mono">
+                                                                        {safeSources.map((source, idx) => (
                                                                             <li key={source.uri || idx} className="flex items-start gap-1.5 text-zinc-400">
                                                                                 <span className="text-zinc-600">{idx + 1}.</span>
                                                                                 <a href={source.uri} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline truncate" title={source.uri}>
-                                                                                    {source.title || (source.uri && new URL(source.uri).hostname)}
+                                                                                    {source.title}
                                                                                 </a>
                                                                             </li>
-                                                                        )
-                                                                    ))}
-                                                                </ol>
-                                                            </div>
-                                                        )}
+                                                                        ))}
+                                                                    </ol>
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 )}
                                             </div>

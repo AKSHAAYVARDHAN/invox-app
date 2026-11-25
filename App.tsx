@@ -34,6 +34,7 @@ import GoForItFilterModal from './components/spotlight/GoForItFilterModal';
 import { usePullToRefresh } from './components/hooks/usePullToRefresh';
 import PullToRefreshIndicator from './components/ui/PullToRefreshIndicator';
 import { AIAssistantProvider, useAIAssistant, FilterProvider } from './contexts/AIAssistantContext';
+import { TrendzEngagementProvider } from './contexts/TrendzEngagementContext';
 import type { HubConversation, Message, SectionId } from './types';
 
 
@@ -141,13 +142,21 @@ const ProtectedLayout = () => {
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [communityFilters, setCommunityFilters] = useState<{ searchTerm: string; domains: string[] }>({ searchTerm: '', domains: [] });
     const [communityView, setCommunityView] = useState(() => {
-        if (typeof window !== 'undefined' && window.location.pathname === '/communities') {
-            const params = new URLSearchParams(window.location.search);
-            const viewParam = params.get('view') || params.get('tab');
-            if (viewParam === 'my-communities') return 'my-communities';
-            if (viewParam === 'all') return 'all';
+        if (typeof window !== 'undefined') {
+            const hashPath = window.location.hash ? window.location.hash.replace(/^#/, '') : '';
+            const [pathPart, searchPart] = hashPath
+                ? hashPath.split('?')
+                : [window.location.pathname, window.location.search.replace(/^\?/, '')];
+            if (pathPart === '/communities') {
+                const params = new URLSearchParams(searchPart || '');
+                const viewParam = params.get('view') || params.get('tab');
+                const hasInboxParam = Boolean(params.get('inbox'));
+                if (viewParam === 'my-communities' || (hasInboxParam && !viewParam)) return 'my-communities';
+                if (viewParam === 'conclave-discovery' || viewParam === 'conclaves') return 'conclave-discovery';
+                if (viewParam === 'leaderboard') return 'leaderboard';
+            }
         }
-        return 'leaderboard';
+        return 'all';
     });
     const [hubView, setHubView] = useState('welcome');
     const [hubRightSidebarView, setHubRightSidebarView] = useState('main');
@@ -167,6 +176,7 @@ const ProtectedLayout = () => {
     // Quick access content creation trigger
     const [uploadTriggerTarget, setUploadTriggerTarget] = useState<string | null>(null);
     const [discoverSearchTerm, setDiscoverSearchTerm] = useState<string>('');
+    const [trendzSearchQuery, setTrendzSearchQuery] = useState<string>('');
 
     const { isModalOpen, openModal } = useAIAssistant();
 
@@ -231,12 +241,15 @@ const ProtectedLayout = () => {
         if (location.pathname === '/communities') {
             const params = new URLSearchParams(location.search);
             const viewParam = params.get('view') || params.get('tab');
-            if (viewParam === 'my-communities') {
+            const hasInboxParam = Boolean(params.get('inbox'));
+            if (viewParam === 'my-communities' || (hasInboxParam && !viewParam)) {
                 setCommunityView('my-communities');
-            } else if (viewParam === 'all') {
-                setCommunityView('all');
-            } else if (viewParam === 'leaderboard' || !viewParam) {
+            } else if (viewParam === 'conclave-discovery' || viewParam === 'conclaves') {
+                setCommunityView('conclave-discovery');
+            } else if (viewParam === 'leaderboard') {
                 setCommunityView('leaderboard');
+            } else if (viewParam === 'all' || !viewParam) {
+                setCommunityView('all');
             }
         }
     }, [location.pathname, location.search]);
@@ -250,6 +263,9 @@ const ProtectedLayout = () => {
     }, []);
 
     const pageTitle = useMemo(() => {
+        if (location.pathname.startsWith('/trendz')) {
+            return 'Trendz';
+        }
         if (location.pathname.startsWith('/communities')) {
             return 'Communities';
         }
@@ -306,7 +322,9 @@ const ProtectedLayout = () => {
         uploadTriggerTarget,
         setUploadTriggerTarget,
         discoverSearchTerm,
-        setDiscoverSearchTerm
+        setDiscoverSearchTerm,
+        trendzSearchQuery,
+        setTrendzSearchQuery
     }), [
         setRightSidebarVariant, 
         activityFilter, 
@@ -341,7 +359,9 @@ const ProtectedLayout = () => {
         uploadTriggerTarget,
         setUploadTriggerTarget,
         discoverSearchTerm,
-        setDiscoverSearchTerm
+        setDiscoverSearchTerm,
+        trendzSearchQuery,
+        setTrendzSearchQuery
     ]);
 
     return (
@@ -366,6 +386,8 @@ const ProtectedLayout = () => {
                         setActivityFilter={setActivityFilter} 
                         discoverSearchTerm={discoverSearchTerm}
                         setDiscoverSearchTerm={setDiscoverSearchTerm}
+                        trendzSearchQuery={trendzSearchQuery}
+                        setTrendzSearchQuery={setTrendzSearchQuery}
                         followedDomainsFilter={followedDomainsFilter}
                         setFollowedDomainsFilter={setFollowedDomainsFilter}
                         spotlightBrowseState={spotlightBrowseState}
@@ -487,6 +509,8 @@ const MainAppRoutes = () => (
             <ReactRouterDOM.Route path="/" element={<DefaultPlatformRedirect />} />
             <ReactRouterDOM.Route path="/explore" element={<SectionRouteGuard sectionId="explore"><ExplorePage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/trendz" element={<SectionRouteGuard sectionId="trendz"><TrendzPage /></SectionRouteGuard>} />
+            <ReactRouterDOM.Route path="/trendz/saved" element={<SectionRouteGuard sectionId="trendz"><TrendzPage /></SectionRouteGuard>} />
+            <ReactRouterDOM.Route path="/trendz/:trendId" element={<SectionRouteGuard sectionId="trendz"><TrendzPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/spotlight" element={<SectionRouteGuard sectionId="spotlight"><SpotlightPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/spotlight/project/:projectId" element={<SectionRouteGuard sectionId="spotlight"><ProjectDetailsPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/communities" element={<SectionRouteGuard sectionId="communities"><CommunitiesPage /></SectionRouteGuard>} />
@@ -519,18 +543,20 @@ function App() {
   return (
     <ReactRouterDOM.HashRouter>
         <AuthProvider>
-            <NotificationProvider>
-                <PlatformConfigProvider>
-                    <FilterProvider>
-                        <AIAssistantProvider>
-                            <div id="main-app-wrapper">
-                                <AppRoutes />
-                            </div>
-                            <AIChatManager />
-                        </AIAssistantProvider>
-                    </FilterProvider>
-                </PlatformConfigProvider>
-            </NotificationProvider>
+            <TrendzEngagementProvider>
+                <NotificationProvider>
+                    <PlatformConfigProvider>
+                        <FilterProvider>
+                            <AIAssistantProvider>
+                                <div id="main-app-wrapper">
+                                    <AppRoutes />
+                                </div>
+                                <AIChatManager />
+                            </AIAssistantProvider>
+                        </FilterProvider>
+                    </PlatformConfigProvider>
+                </NotificationProvider>
+            </TrendzEngagementProvider>
         </AuthProvider>
     </ReactRouterDOM.HashRouter>
   );

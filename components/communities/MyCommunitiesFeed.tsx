@@ -25,7 +25,8 @@ import {
     SparklesIcon,
     CloseIcon,
     FireIcon,
-    GlobeAltIcon
+    GlobeAltIcon,
+    CheckIcon
 } from '../ui/Icons';
 import { handleImageError } from '../utils/imageUtils';
 

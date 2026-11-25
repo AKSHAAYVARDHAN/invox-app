@@ -16,6 +16,7 @@
         "savedProjectCount": { "type": "number" },
         "savedOpportunityCount": { "type": "number" },
         "reputation": { "type": "number" },
+        "followedTrendDomains": { "type": "array", "description": "Canonical Trendz domain slugs followed by the user" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "email", "role"]
@@ -247,14 +248,27 @@
     },
     "Bookmark": {
       "title": "Bookmark",
-      "description": "User saved project or post bookmark reference.",
+      "description": "User saved project, post, or trend bookmark reference.",
       "type": "object",
       "properties": {
-        "userId": { "type": "string", "description": "User UID who bookmarked the project" },
-        "postId": { "type": "string", "description": "Target post or project ID" },
+        "userId": { "type": "string", "description": "User UID who bookmarked the target" },
+        "postId": { "type": "string", "description": "Target post or project ID (legacy/post bookmarks)" },
+        "targetType": { "type": "string", "enum": ["post", "project", "poll", "trendz"], "description": "Target collection type" },
+        "targetId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "Target document ID" },
+        "domainSlug": {
+          "type": "string",
+          "enum": ["technology", "health-care", "trading", "stock-market", "design", "finance", "science", "gaming", "art", "automotive", "space"],
+          "description": "Canonical Trendz domain slug for saved trend records"
+        },
+        "trendTitle": { "type": "string", "maxLength": 240, "description": "Saved trend title snapshot for graceful deleted/unpublished handling" },
+        "trendSummary": { "type": "string", "maxLength": 500, "description": "Saved trend summary snapshot" },
+        "trendPublisher": { "type": "string", "maxLength": 160, "description": "Saved trend publisher snapshot" },
+        "trendPublishedOn": { "type": "string", "maxLength": 32, "description": "Saved trend publication date snapshot" },
+        "trendMediaUrl": { "type": "string", "maxLength": 2048, "description": "Sanitized media URL snapshot" },
+        "trendMediaType": { "type": "string", "enum": ["image", "video"], "description": "Saved trend media type snapshot" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["userId", "postId"]
+      "required": ["userId"]
     },
     "Follow": {
       "title": "Follow",
@@ -377,6 +391,218 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "communityId", "periodKey", "generatedBy", "generatedAt", "activeMembersCount", "totalContributions", "insightsCount", "updatedAt"]
+    },
+    "TrendRecord": {
+      "title": "TrendRecord",
+      "description": "Serializable, source-grounded industry trend record stored in /trendz/{trendId}.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "slug": { "type": "string", "maxLength": 160, "pattern": "^[a-z0-9\\-]+$" },
+        "status": { "type": "string", "enum": ["draft", "published", "archived", "flagged"] },
+        "domainSlug": {
+          "type": "string",
+          "enum": ["technology", "health-care", "trading", "stock-market", "design", "finance", "science", "gaming", "art", "automotive", "space"]
+        },
+        "domain": { "type": "string", "maxLength": 80 },
+        "category": { "type": "string", "maxLength": 80 },
+        "tags": { "type": "array", "description": "Up to 10 normalized topic tags" },
+        "searchKeywords": { "type": "array", "description": "Up to 40 lowercased search tokens" },
+        "title": { "type": "string", "minLength": 3, "maxLength": 240 },
+        "summary": { "type": "string", "minLength": 10, "maxLength": 1200 },
+        "fullContent": { "type": "string", "minLength": 10, "maxLength": 20000 },
+        "keyTakeaways": { "type": "array", "description": "Up to 10 verified bullet takeaways" },
+        "source": { "type": "object", "description": "Verified publisher attribution (name, domain, url, urlHash, author, credibilityTier)" },
+        "additionalSources": { "type": "array", "description": "Up to 10 merged corroborating sources" },
+        "publishedAt": { "type": "string", "format": "date-time" },
+        "discoveredAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "media": { "type": "object", "description": "Serializable media metadata (type, url, thumbnailUrl, overlayUrl, origin, attribution, storagePath)" },
+        "momentumScore": { "type": "number" },
+        "relatedTrendIds": { "type": "array", "description": "Up to 10 related trend IDs" },
+        "stats": { "type": "object", "description": "Server-maintained engagement counters (likes, views, comments, saves, shares)" },
+        "schemaVersion": { "type": "number" },
+        "aiModel": { "type": "string", "maxLength": 100 },
+        "contentHash": { "type": "string", "maxLength": 128 },
+        "language": { "type": "string", "maxLength": 16 },
+        "region": { "type": "string", "maxLength": 64 },
+        "whyItMatters": { "type": "string", "maxLength": 1200 },
+        "sourceRetrievedAt": { "type": "string", "format": "date-time" },
+        "ingestionRunId": { "type": "string", "maxLength": 128 },
+        "ingestionItemId": { "type": "string", "maxLength": 128 },
+        "reviewedBy": { "type": "string", "maxLength": 128 },
+        "reviewedAt": { "type": "string", "format": "date-time" },
+        "groundingStatus": { "type": "string", "enum": ["verified", "needs_review"] }
+      },
+      "required": [
+        "id",
+        "slug",
+        "status",
+        "domainSlug",
+        "domain",
+        "category",
+        "tags",
+        "searchKeywords",
+        "title",
+        "summary",
+        "fullContent",
+        "keyTakeaways",
+        "source",
+        "publishedAt",
+        "discoveredAt",
+        "createdAt",
+        "updatedAt",
+        "media",
+        "momentumScore",
+        "relatedTrendIds",
+        "stats",
+        "schemaVersion"
+      ]
+    },
+    "Like": {
+      "title": "Like",
+      "description": "User upvote/like reaction record supporting posts, polls, and trendz.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "postId": { "type": "string" },
+        "targetType": { "type": "string", "enum": ["post", "poll", "trendz"] },
+        "targetId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "domainSlug": {
+          "type": "string",
+          "enum": ["technology", "health-care", "trading", "stock-market", "design", "finance", "science", "gaming", "art", "automotive", "space"]
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "createdAt"]
+    },
+    "TrendView": {
+      "title": "TrendView",
+      "description": "Private per-user deduplicated Trendz view record stored under /users/{userId}/trendViews/{trendId}.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "trendId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "Published trend document ID" },
+        "domainSlug": {
+          "type": "string",
+          "enum": ["technology", "health-care", "trading", "stock-market", "design", "finance", "science", "gaming", "art", "automotive", "space"]
+        },
+        "viewedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "trendId", "domainSlug", "viewedAt"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "User comment or insight attached to posts or trendz.",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string" },
+        "targetType": { "type": "string" },
+        "targetId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "text": { "type": "string", "maxLength": 4000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "text", "createdAt"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "User moderation report flagging inaccurate or policy-violating content including trends.",
+      "type": "object",
+      "properties": {
+        "reporterId": { "type": "string" },
+        "targetType": { "type": "string" },
+        "targetId": { "type": "string" },
+        "reason": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["reporterId", "targetType", "targetId", "reason", "createdAt"]
+    },
+    "SparkConversation": {
+      "title": "SparkConversation",
+      "description": "Per-user contextual Spark AI conversation persisted under /users/{userId}/sparkConversations/{conversationId}.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "contextType": { "type": "string", "enum": ["general", "trendz", "post", "project"] },
+        "contextId": { "type": "string", "maxLength": 128 },
+        "isPinned": { "type": "boolean" },
+        "messages": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "messages", "updatedAt"]
+    },
+    "TrendSource": {
+      "title": "TrendSource",
+      "description": "Registry of verified Trendz discovery providers and feed metadata (admin/moderator access only).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 160 },
+        "type": { "type": "string", "enum": ["rss", "api"] },
+        "enabled": { "type": "boolean" },
+        "supportedDomains": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "type"]
+    },
+    "TrendIngestionRun": {
+      "title": "TrendIngestionRun",
+      "description": "Traceable Trendz AI intelligence pipeline execution log (admin/moderator access only).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["running", "completed", "partial_failure", "failed"] },
+        "triggeredBy": { "type": "string", "maxLength": 128 },
+        "triggerMode": { "type": "string", "enum": ["manual", "single_url", "scheduled"] },
+        "domains": { "type": "array" },
+        "windowHours": { "type": "number" },
+        "maxItemsPerDomain": { "type": "number" },
+        "providerIds": { "type": "array" },
+        "counts": { "type": "object" },
+        "errors": { "type": "array" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "status", "triggeredBy", "triggerMode", "domains", "windowHours", "maxItemsPerDomain", "providerIds", "counts", "errors", "startedAt"]
+    },
+    "TrendIngestionItem": {
+      "title": "TrendIngestionItem",
+      "description": "Staged Trendz discovery & AI-processed editorial review item progressing through DISCOVERED -> PUBLISHED/REJECTED/FAILED (admin/moderator access only).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "runId": { "type": "string", "maxLength": 128 },
+        "stage": {
+          "type": "string",
+          "enum": ["DISCOVERED", "VALIDATING", "VALIDATED", "PROCESSING", "PENDING_REVIEW", "APPROVED", "PUBLISHED", "REJECTED", "FAILED"]
+        },
+        "stageHistory": { "type": "array" },
+        "domainSlug": {
+          "type": "string",
+          "enum": ["technology", "health-care", "trading", "stock-market", "design", "finance", "science", "gaming", "art", "automotive", "space"]
+        },
+        "providerId": { "type": "string", "maxLength": 80 },
+        "providerName": { "type": "string", "maxLength": 120 },
+        "source": { "type": "object" },
+        "corroboratingSources": { "type": "array" },
+        "aiDraft": { "type": "object" },
+        "media": { "type": "object" },
+        "retryCount": { "type": "number" },
+        "failureStage": { "type": "string" },
+        "failureReason": { "type": "string" },
+        "publishedTrendId": { "type": "string" },
+        "reviewedBy": { "type": "string" },
+        "rejectionReason": { "type": "string" },
+        "createdAtIso": { "type": "string", "format": "date-time" },
+        "updatedAtIso": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "runId", "stage", "stageHistory", "domainSlug", "providerId", "providerName", "source", "corroboratingSources", "media", "retryCount", "createdAtIso", "updatedAtIso"]
     }
   },
   "firestore": {
@@ -455,6 +681,42 @@
     "/hubConversations/{conversationId}/messages/{messageId}": {
       "schema": "HubMessage",
       "description": "Messages sent within Hub conversations."
+    },
+    "/trendz/{trendId}": {
+      "schema": "TrendRecord",
+      "description": "Source-grounded industry trend records readable by signed-in users when published. Editorial writes are moderator/backend-only; signed-in users may only perform atomic +1/-1 stats updates paired with deterministic engagement records."
+    },
+    "/users/{userId}/sparkConversations/{conversationId}": {
+      "schema": "SparkConversation",
+      "description": "Private per-user Spark AI contextual chat sessions."
+    },
+    "/users/{userId}/trendViews/{trendId}": {
+      "schema": "TrendView",
+      "description": "Private per-user deduplicated Trendz view records used for view counting and personalization."
+    },
+    "/likes/{likeId}": {
+      "schema": "Like",
+      "description": "User upvotes and likes across posts, polls, and trends (deterministic IDs prevent duplicate upvotes)."
+    },
+    "/comments/{commentId}": {
+      "schema": "Comment",
+      "description": "User discussions and insights across posts and trends."
+    },
+    "/reports/{reportId}": {
+      "schema": "Report",
+      "description": "User-submitted content reports for moderator review."
+    },
+    "/trendSources/{sourceId}": {
+      "schema": "TrendSource",
+      "description": "Admin/moderator-only Trendz discovery source registry."
+    },
+    "/trendIngestionRuns/{runId}": {
+      "schema": "TrendIngestionRun",
+      "description": "Admin/moderator-only Trendz ingestion run logs and metrics."
+    },
+    "/trendIngestionItems/{itemId}": {
+      "schema": "TrendIngestionItem",
+      "description": "Admin/moderator-only staged Trendz editorial review queue separate from published /trendz."
     }
   }
 }

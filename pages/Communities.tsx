@@ -264,12 +264,12 @@ const CommunitiesPage = () => {
     const viewParam = (rawViewParam === 'conclaves' || rawViewParam === 'conclave-discovery')
         ? 'conclave-discovery'
         : (inboxParam && !rawViewParam ? 'my-communities' : rawViewParam);
-    const effectiveView = viewParam || (inboxParam ? 'my-communities' : communityView);
+    const effectiveView = viewParam || (inboxParam ? 'my-communities' : (communityView || 'all'));
 
-    const [visitedViews, setVisitedViews] = useState<Set<string>>(() => new Set([effectiveView || 'leaderboard']));
+    const [visitedViews, setVisitedViews] = useState<Set<string>>(() => new Set([effectiveView || 'all']));
 
     useEffect(() => {
-        const target = effectiveView || 'leaderboard';
+        const target = effectiveView || 'all';
         setVisitedViews(prev => {
             if (prev.has(target)) return prev;
             const next = new Set(prev);
@@ -278,7 +278,7 @@ const CommunitiesPage = () => {
         });
     }, [effectiveView]);
 
-    // Synchronize URL search params (e.g. ?view=conclave-discovery, ?view=my-communities, or ?view=all) with state
+    // Synchronize URL search params (e.g. ?view=conclave-discovery, ?view=my-communities, ?view=leaderboard, or ?view=all) with state
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const rawParam = params.get('view') || params.get('tab');
@@ -289,12 +289,10 @@ const CommunitiesPage = () => {
             setCommunityView('my-communities');
         } else if (viewFromUrl === 'conclave-discovery' && setCommunityView && communityView !== 'conclave-discovery') {
             setCommunityView('conclave-discovery');
-        } else if (viewFromUrl === 'all' && setCommunityView && communityView !== 'all') {
-            setCommunityView('all');
         } else if (viewFromUrl === 'leaderboard' && setCommunityView && communityView !== 'leaderboard') {
             setCommunityView('leaderboard');
-        } else if (!viewFromUrl && !hasInboxParam && setCommunityView && communityView !== 'leaderboard') {
-            setCommunityView('leaderboard');
+        } else if ((viewFromUrl === 'all' || (!viewFromUrl && !hasInboxParam)) && setCommunityView && communityView !== 'all') {
+            setCommunityView('all');
         }
     }, [location.search, setCommunityView, communityView]);
 
@@ -385,7 +383,7 @@ const CommunitiesPage = () => {
         }
     };
 
-    const isLeaderboardActive = effectiveView !== 'all' && effectiveView !== 'my-communities' && effectiveView !== 'conclave-discovery';
+    const isLeaderboardActive = effectiveView === 'leaderboard';
     const isSearchView = isLeaderboardActive && Boolean(communityFilters && communityFilters.searchTerm && communityFilters.searchTerm.trim() !== '');
 
     const searchOutcome = React.useMemo(() => {
@@ -442,7 +440,7 @@ const CommunitiesPage = () => {
                 <div className={effectiveView === 'all' ? 'block' : 'hidden'}>
                     <AllCommunitiesFeed 
                         onExploreAll={() => {
-                            navigate('/communities');
+                            navigate('/communities?view=leaderboard');
                             if (setCommunityView) {
                                 setCommunityView('leaderboard');
                             }
@@ -475,7 +473,7 @@ const CommunitiesPage = () => {
                         onBack={() => {
                             navigate('/communities');
                             if (setCommunityView) {
-                                setCommunityView('leaderboard');
+                                setCommunityView('all');
                             }
                         }}
                     />

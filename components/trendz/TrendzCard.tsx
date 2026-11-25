@@ -1,6 +1,6 @@
 
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { Trend } from '../../types';
 import {
     ArrowUpIcon,
@@ -25,11 +25,24 @@ import { useLazyLoad } from '../hooks/useLazyLoad';
 import AspectRatioBox from '../ui/AspectRatioBox';
 import ImageZoomModal from '../ui/ImageZoomModal';
 import { useAIAssistant } from '../../contexts/AIAssistantContext';
+import { useTrendzEngagement } from '../../contexts/TrendzEngagementContext';
+import { sanitizeExternalUrl } from '../../utils/urlSanitizer';
+import { normalizeTrendzDomainSlug } from '../../utils/trendzDomains';
+import type { PersonalizedTrendReason, TrendViewModel } from '../../services/trendzService';
 
 interface TrendzCardProps {
-    trend: Trend;
+    trend: Trend | TrendViewModel;
     onClick: () => void;
+    personalizationReason?: PersonalizedTrendReason;
 }
+
+const REASON_LABELS: Record<PersonalizedTrendReason, string> = {
+    FOLLOWED_DOMAIN: 'FOLLOWED_DOMAIN',
+    SAVED_DOMAIN_MATCH: 'BASED_ON_SAVES',
+    UPVOTED_DOMAIN_MATCH: 'BASED_ON_UPVOTES',
+    RECENT_INTEREST: 'RECENT_INTEREST',
+    HIGH_MOMENTUM: 'HIGH_MOMENTUM',
+};
 
 const formatNumber = (num: number) => {
     if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
@@ -53,8 +66,21 @@ const MediaPlaceholder: React.FC<{ thumbnailUrl?: string; isVideo: boolean }> = 
     return <div className="w-full h-full bg-gray-700"></div>;
 };
 
-const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick }) => {
+const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick, personalizationReason }) => {
     const { openModal } = useAIAssistant();
+    const {
+        isDomainFollowed,
+        isDomainPending,
+        toggleFollowDomain,
+        isTrendBookmarked,
+        isBookmarkPending,
+        toggleBookmark,
+        isTrendUpvoted,
+        isUpvotePending,
+        toggleUpvote,
+        getDisplayStats,
+    } = useTrendzEngagement();
+
     const isVideo = trend.mediaType === 'video';
     const videoRef = useRef<HTMLVideoElement>(null);
     const videoContainerRef = useRef<HTMLDivElement>(null);
@@ -71,14 +97,78 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick }) => {
     const { isFullscreen, toggleFullscreen } = useFullscreen(videoContainerRef);
     const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
     const [mediaContainerRef, isVisible] = useLazyLoad<HTMLDivElement>();
-    
+
+    const setMediaBoxRef = useCallback(
+        (node: HTMLDivElement | null) => {
+            (mediaContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+            (videoContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+        },
+        [mediaContainerRef]
+    );
+
+    const safeTitle = trend.title || 'Untitled Trend';
+    const safeSummary = trend.summary || trend.fullContent || '';
+    const safeFullContent = trend.fullContent || trend.summary || '';
+    const safePublisher = trend.details?.publishedBy || 'INVOX Desk';
+    const safeDomainName = trend.domain?.name || 'General';
+    const resolvedDomainSlug =
+        ('domainSlug' in trend ? trend.domainSlug : null) ||
+        normalizeTrendzDomainSlug(safeDomainName) ||
+        'technology';
+
+    const viewModelTrend: TrendViewModel =
+        'domainSlug' in trend
+            ? trend
+            : {
+                  ...trend,
+                  domainSlug: resolvedDomainSlug,
+                  tags: [],
+                  searchKeywords: [],
+                  momentumScore: 0,
+                  relatedTrendIds: [],
+                  keyTakeaways: [],
+                  status: 'published',
+                  publishedAtMs: Date.now(),
+              };
+
+    const displayStats = getDisplayStats(viewModelTrend);
+    const safeLikes = displayStats.likes;
+    const safeViews = displayStats.views;
+    const safeComments = displayStats.comments;
+    const hasExpandableContent = Boolean(safeFullContent && safeFullContent !== safeSummary);
+
+    const domainFollowed = isDomainFollowed(resolvedDomainSlug);
+    const domainPending = isDomainPending(resolvedDomainSlug);
+    const bookmarked = isTrendBookmarked(trend.id);
+    const bookmarkPending = isBookmarkPending(trend.id);
+    const upvoted = isTrendUpvoted(trend.id);
+    const upvotePending = isUpvotePending(trend.id);
+
+    const handleFollowDomainClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        void toggleFollowDomain(resolvedDomainSlug);
+    };
+
+    const handleUpvoteClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        void toggleUpvote(viewModelTrend);
+    };
+
+    const handleBookmarkClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        void toggleBookmark(viewModelTrend);
+    };
+
     const handleAIAssistantClick = (e: React.MouseEvent) => {
         e.stopPropagation();
         openModal({
             id: trend.id,
-            title: trend.title,
-            content: trend.fullContent,
-            author: trend.details.publishedBy
+            title: safeTitle,
+            content: safeFullContent,
+            author: safePublisher,
+            domain: safeDomainName,
+            publishedOn: trend.details?.publishedOn,
+            sourceUrl: sanitizeExternalUrl(trend.details?.link) || undefined,
         });
     };
 
@@ -186,13 +276,35 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick }) => {
                         <div className="w-8 h-8 rounded-none bg-zinc-900 flex items-center justify-center border border-zinc-700">
                             <trend.domain.icon className="w-4 h-4 text-zinc-300" />
                         </div>
-                        <div>
-                            <p className="font-mono text-xs font-bold text-white uppercase tracking-wider">{trend.details.publishedBy}</p>
-                            <p className="font-mono text-[10px] text-zinc-500">// DOMAIN: {trend.domain.name.toUpperCase()}</p>
+                        <div className="min-w-0">
+                            <p className="font-mono text-xs font-bold text-white uppercase tracking-wider truncate">{safePublisher}</p>
+                            <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                                <p className="font-mono text-[10px] text-zinc-500">// DOMAIN: {safeDomainName.toUpperCase()}</p>
+                                {personalizationReason && (
+                                    <span className="font-mono text-[10px] text-zinc-400">
+                                        · {REASON_LABELS[personalizationReason]}
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <div className="flex items-center gap-2 text-zinc-400">
+                        <button
+                            type="button"
+                            onClick={handleFollowDomainClick}
+                            disabled={domainPending}
+                            aria-pressed={domainFollowed}
+                            aria-label={domainFollowed ? `Unfollow ${safeDomainName}` : `Follow ${safeDomainName}`}
+                            className={`px-2 py-1 font-mono text-[10px] uppercase tracking-wider border transition-colors disabled:opacity-50 ${
+                                domainFollowed
+                                    ? 'bg-zinc-900 text-white border-zinc-600 font-bold hover:border-zinc-500'
+                                    : 'bg-zinc-900/40 text-zinc-400 border-zinc-800/80 hover:border-zinc-600 hover:text-white'
+                            }`}
+                        >
+                            {domainPending ? '...' : domainFollowed ? 'FOLLOWING' : '+ FOLLOW'}
+                        </button>
                         <button 
+                            type="button"
                             onClick={onClick} 
                             className="p-1.5 border border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-800 hover:text-white transition-colors" 
                             aria-label="View trend details"
@@ -200,6 +312,7 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick }) => {
                             <InformationCircleIcon className="w-4 h-4" />
                         </button>
                         <button 
+                            type="button"
                             onClick={handleAIAssistantClick} 
                             className="p-1.5 border border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-800 hover:text-white transition-colors" 
                             aria-label="AI summary"
@@ -207,6 +320,7 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick }) => {
                             <SparklesIcon className="w-4 h-4" />
                         </button>
                         <button 
+                            type="button"
                             className="p-1.5 border border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-800 hover:text-white transition-colors" 
                             aria-label="More options"
                         >
@@ -217,24 +331,36 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick }) => {
 
                 {/* Content */}
                 <div className="mt-3.5">
-                    <h2 className="text-base font-semibold font-mono text-white tracking-tight">"{trend.title}"</h2>
-                    <p className="text-zinc-400 text-xs sm:text-sm mt-2 leading-relaxed font-sans">
-                        {showFullContent ? trend.fullContent : trend.summary}
-                        {' '}
-                        <button onClick={() => setShowFullContent(prev => !prev)} className="text-white font-mono text-xs uppercase underline ml-1 hover:text-zinc-300">
-                            {showFullContent ? '[LESS]' : '[MORE]'}
+                    <h2 className="text-base font-semibold font-mono text-white tracking-tight">
+                        <button
+                            type="button"
+                            onClick={onClick}
+                            className="text-left hover:text-zinc-300 transition-colors cursor-pointer focus:outline-none focus-visible:underline"
+                        >
+                            "{safeTitle}"
                         </button>
+                    </h2>
+                    <p className="text-zinc-400 text-xs sm:text-sm mt-2 leading-relaxed font-sans">
+                        {showFullContent ? safeFullContent : safeSummary}
+                        {hasExpandableContent && (
+                            <>
+                                {' '}
+                                <button onClick={() => setShowFullContent(prev => !prev)} className="text-white font-mono text-xs uppercase underline ml-1 hover:text-zinc-300">
+                                    {showFullContent ? '[LESS]' : '[MORE]'}
+                                </button>
+                            </>
+                        )}
                     </p>
                 </div>
 
                 {/* Media */}
                 <AspectRatioBox
-                    ref={mediaContainerRef}
+                    ref={setMediaBoxRef}
                     ratio="video"
                     className={`mt-3.5 border border-zinc-800 group bg-black ${!isVisible || (isVideo ? 'cursor-pointer' : 'cursor-zoom-in')}`}
                     onMouseEnter={() => setIsControlsVisible(true)}
                     onMouseLeave={() => setIsControlsVisible(false)}
-                    onClick={isVisible ? (isVideo ? togglePlayPause : () => setZoomedImageUrl(trend.mediaUrl)) : undefined}
+                    onClick={isVisible ? (isVideo ? togglePlayPause : () => trend.mediaUrl && setZoomedImageUrl(trend.mediaUrl)) : undefined}
                 >
                     {isVisible ? (
                         isVideo ? (
@@ -314,21 +440,50 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick }) => {
 
                 {/* Action Bar */}
                 <div className="mt-4 border-t border-zinc-800/80 pt-3 flex justify-between items-center font-mono text-xs text-zinc-400">
-                    <button className="flex items-center gap-1.5 px-2 py-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors">
+                    <button
+                        type="button"
+                        onClick={handleUpvoteClick}
+                        disabled={upvotePending}
+                        aria-pressed={upvoted}
+                        aria-label={upvoted ? 'Remove upvote' : 'Upvote trend'}
+                        className={`flex items-center gap-1.5 px-2 py-1 border transition-colors disabled:opacity-50 ${
+                            upvoted
+                                ? 'border-zinc-600 bg-zinc-900 text-white font-bold'
+                                : 'border-transparent hover:border-zinc-800 hover:text-white'
+                        }`}
+                    >
                         <ArrowUpIcon className="w-4 h-4" />
-                        <span>{formatNumber(trend.stats.likes)}</span>
+                        <span>{formatNumber(safeLikes)}</span>
                     </button>
-                    <div className="flex items-center gap-1.5 px-2 py-1 text-zinc-500">
+                    <div className="flex items-center gap-1.5 px-2 py-1 text-zinc-500" aria-label={`${formatNumber(safeViews)} views`}>
                         <TrendingUpIcon className="w-4 h-4" />
-                        <span>{formatNumber(trend.stats.views)}</span>
+                        <span>{formatNumber(safeViews)}</span>
                     </div>
-                    <button className="flex items-center gap-1.5 px-2 py-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors">
+                    <button
+                        type="button"
+                        onClick={onClick}
+                        className="flex items-center gap-1.5 px-2 py-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors"
+                        aria-label="View trend details"
+                    >
                         <ChatBubbleBottomCenterTextIcon className="w-4 h-4" />
-                        <span>{formatNumber(trend.stats.comments)}</span>
+                        <span>{formatNumber(safeComments)}</span>
                     </button>
-                    <button className="p-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors"><SoundWaveIcon className="w-4 h-4" /></button>
-                    <button className="p-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors"><ForwardIcon className="w-4 h-4" /></button>
-                    <button className="p-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors"><BookmarkIcon className="w-4 h-4" /></button>
+                    <button type="button" className="p-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors" aria-label="Listen"><SoundWaveIcon className="w-4 h-4" /></button>
+                    <button type="button" className="p-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors" aria-label="Share trend"><ForwardIcon className="w-4 h-4" /></button>
+                    <button
+                        type="button"
+                        onClick={handleBookmarkClick}
+                        disabled={bookmarkPending}
+                        aria-pressed={bookmarked}
+                        aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark trend'}
+                        className={`p-1 border transition-colors disabled:opacity-50 ${
+                            bookmarked
+                                ? 'border-zinc-600 bg-zinc-900 text-white'
+                                : 'border-transparent hover:border-zinc-800 hover:text-white'
+                        }`}
+                    >
+                        <BookmarkIcon className={`w-4 h-4 ${bookmarked ? 'fill-current' : ''}`} />
+                    </button>
                 </div>
             </div>
             <ImageZoomModal 

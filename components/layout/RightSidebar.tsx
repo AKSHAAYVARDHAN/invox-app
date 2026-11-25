@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import type { Trend, MyCommunity, Event, HubConversation, InvoxUser } from '../../types';
+import type { MyCommunity, Event, HubConversation, InvoxUser } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
+import { useFilters } from '../../contexts/AIAssistantContext';
 import { subscribeFollowedProfiles } from '../../services/connectionService';
 import GoForItFilterModal from '../spotlight/GoForItFilterModal';
 import { 
@@ -42,7 +43,9 @@ import {
     CloseIcon,
     PlayIcon,
     WrenchScrewdriverIcon,
-    CheckBadgeIcon
+    CheckBadgeIcon,
+    TrophyIcon,
+    ChevronRightIcon
 } from '../ui/Icons';
 import { handleImageError } from '../utils/imageUtils';
 import MyCommunityCardSkeleton from '../communities/MyCommunityCardSkeleton';
@@ -54,6 +57,13 @@ import type { JoinedCommunityRecord } from '../../services/communityService';
 import { mockCommunities } from '../../pages/Communities';
 import { subscribeUpcomingConclaveEvents } from '../../services/conclaveService';
 import type { ConclaveEvent } from '../../services/conclaveTypes';
+import {
+    TRENDZ_DOMAINS,
+    getTrendzDomainBySlug,
+    normalizeTrendzDomainSlug,
+} from '../../utils/trendzDomains';
+import { fetchMomentumTrends, type TrendViewModel } from '../../services/trendzService';
+import { useTrendzEngagement } from '../../contexts/TrendzEngagementContext';
 
 const trendingTopics = [
     { name: '#QuantumLeap', posts: '12.1K posts' },
@@ -115,60 +125,6 @@ const trackedChannels = [
     { id: '5', name: 'Market Movers', avatarUrl: 'https://picsum.photos/seed/market/200', category: 'Finance', isLive: false },
 ];
 
-const mockTrends: Trend[] = [
-    {
-        id: '1',
-        domain: { name: 'Health Care', icon: ShieldCheckIcon, isFollowed: true },
-        title: "Super Skin Heals Wounds 90% In 4 Hours",
-        summary: "Super skin, an advanced wound-healing technology, accelerates recovery by 90% within just 4 hours and fully repairs the tissue in 24, ensuring faster and more effective healing.",
-        fullContent: "Super skin, an advanced wound-healing technology, accelerates recovery by 90% within just 4 hours and fully repairs the tissue in 24, ensuring faster and more effective healing.",
-        mediaUrl: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?q=80&w=2070&auto=format&fit=crop',
-        mediaType: 'image',
-        mediaOverlayUrl: 'https://images.unsplash.com/photo-1612536539035-1a8335aa8823?q=80&w=1974&auto=format&fit=crop',
-        stats: { likes: 87200, views: 42300000, comments: 11200 },
-        details: {
-            publishedBy: 'MedTech',
-            publishedOn: '11-03-2025',
-            link: 'https://x.com/Akshaay_24'
-        },
-        createdAt: new Date(),
-    },
-    {
-        id: '2',
-        domain: { name: 'Health Care', icon: ShieldCheckIcon, isFollowed: true },
-        title: "AI Achieved 99% Accuracy Detecting Cancer",
-        summary: "A Global Team Of Scientist Created An AI Model That Can Now Detect Cancer With 99.2% Accuracy Beating Even Doctors And Current Tools.",
-        fullContent: "A Global Team Of Scientist Created An AI Model That Can Now Detect Cancer With 99.2% Accuracy Beating Even Doctors And Current Tools.",
-        mediaUrl: 'https://images.unsplash.com/photo-1554734867-bf3c00a49371?q=80&w=2070&auto=format&fit=crop',
-        mediaType: 'image',
-        mediaOverlayUrl: 'https://images.unsplash.com/photo-1526253752538-345100688942?q=80&w=2070&auto=format&fit=crop',
-        stats: { likes: 95600, views: 51200000, comments: 15800 },
-        details: {
-            publishedBy: 'AI Forward',
-            publishedOn: '10-03-2025',
-            link: 'https://x.com/Invox'
-        },
-        createdAt: new Date(),
-    },
-    {
-        id: '3',
-        domain: { name: 'Technology', icon: CodeBracketIcon, isFollowed: true },
-        title: "Quantum Computing Achieves New Milestone",
-        summary: "Researchers have successfully maintained quantum coherence for a record-breaking duration.",
-        fullContent: "In a significant leap for quantum computing, researchers at a leading institute have successfully maintained quantum coherence in a qubit system.",
-        mediaUrl: 'https://images.unsplash.com/photo-1617854818583-09e7f077a156?q=80&w=2070&auto=format&fit=crop',
-        mediaType: 'image',
-        mediaOverlayUrl: 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?q=80&w=1964&auto=format&fit=crop',
-        stats: { likes: 120000, views: 65000000, comments: 25000 },
-        details: {
-            publishedBy: 'Tech Frontiers',
-            publishedOn: '09-03-2025',
-            link: 'https://x.com/Invox'
-        },
-        createdAt: new Date(),
-    }
-];
-
 const mockMyCommunities: MyCommunity[] = [
     { id: 'mc1', name: 'Startup Grind', latestMessage: 'Just hit 25k members!', timestamp: '2h ago', hasNotification: true, avatarUrl: 'https://picsum.photos/seed/startup-grind/200', category: 'Startup' },
     { id: 'mc2', name: 'UI/UX Guild', latestMessage: 'Anyone have thoughts on the new Figma update?', timestamp: '5h ago', hasNotification: false, avatarUrl: 'https://picsum.photos/seed/ui-ux-guild/200', category: 'Design' },
@@ -216,6 +172,8 @@ interface RightSidebarProps {
     setUploadTriggerTarget?: (target: string | null) => void;
     discoverSearchTerm?: string;
     setDiscoverSearchTerm?: (term: string) => void;
+    trendzSearchQuery?: string;
+    setTrendzSearchQuery?: (query: string) => void;
     collabManagementView?: 'incoming' | 'active' | 'my_applications' | 'inbox' | 'teams' | null;
     setCollabManagementView?: (view: 'incoming' | 'active' | 'my_applications' | 'inbox' | 'teams' | null) => void;
     spotlightIsBrowsing?: boolean;
@@ -361,28 +319,79 @@ const DiscoverSidebar: React.FC<Pick<RightSidebarProps, 'activityFilter' | 'setA
 };
 
 
-const TrendzSidebar: React.FC<Pick<RightSidebarProps, 'followedDomainsFilter' | 'setFollowedDomainsFilter'>> = ({ followedDomainsFilter, setFollowedDomainsFilter }) => {
+const TrendzSidebar: React.FC<
+    Pick<
+        RightSidebarProps,
+        'followedDomainsFilter' | 'setFollowedDomainsFilter' | 'trendzSearchQuery' | 'setTrendzSearchQuery'
+    >
+> = ({ followedDomainsFilter, setFollowedDomainsFilter, trendzSearchQuery = '', setTrendzSearchQuery }) => {
     const [isFollowedView, setIsFollowedView] = useState(false);
-    
+    const [momentumTrends, setMomentumTrends] = useState<TrendViewModel[]>([]);
+    const [momentumLoading, setMomentumLoading] = useState(true);
+    const [momentumError, setMomentumError] = useState<string | null>(null);
+    const [reloadTick, setReloadTick] = useState(0);
+
+    const navigate = ReactRouterDOM.useNavigate();
+    const location = ReactRouterDOM.useLocation();
+    const { domainSelections, setDomainSelection } = useFilters();
+    const {
+        isAuthenticated,
+        preferencesLoading,
+        preferencesError,
+        actionError,
+        clearActionError,
+        refreshEngagement,
+        followedDomainSlugs,
+        isDomainPending,
+        toggleFollowDomain,
+        bookmarkRecords,
+    } = useTrendzEngagement();
+
     const formatNumber = (num: number) => {
         if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
         if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
         return num;
     };
 
-    const trendingItems = mockTrends.slice(0, 3).map(trend => ({
-        id: trend.id,
-        title: trend.title,
-        source: trend.details.publishedBy,
-        timestamp: trend.details.publishedOn,
-        upvotes: formatNumber(trend.stats.likes),
-        imageUrl: trend.thumbnailUrl || trend.mediaUrl
-    }));
-    
-    const followedDomains = [
-        { name: 'Health Care', icon: ShieldCheckIcon },
-        { name: 'Technology', icon: CodeBracketIcon },
-    ];
+    useEffect(() => {
+        let isActive = true;
+        setMomentumLoading(true);
+        setMomentumError(null);
+
+        fetchMomentumTrends(5)
+            .then((items) => {
+                if (!isActive) return;
+                setMomentumTrends(items);
+                setMomentumLoading(false);
+            })
+            .catch((err) => {
+                if (!isActive) return;
+                console.error('[TRENDZ_MOMENTUM_LOAD_ERROR]', err);
+                setMomentumTrends([]);
+                setMomentumError('Unable to load live momentum signals.');
+                setMomentumLoading(false);
+            });
+
+        return () => {
+            isActive = false;
+        };
+    }, [reloadTick]);
+
+    const followedSlugSet = new Set(followedDomainSlugs);
+    const followedDomains = followedDomainSlugs
+        .map((slug) => getTrendzDomainBySlug(slug))
+        .filter((d): d is NonNullable<typeof d> => Boolean(d));
+    const discoverDomains = TRENDZ_DOMAINS.filter((d) => !followedSlugSet.has(d.slug));
+
+    const activeDomainSlugs = new Set(
+        (domainSelections.trendz || [])
+            .map((name) => normalizeTrendzDomainSlug(name))
+            .filter((slug): slug is NonNullable<typeof slug> => Boolean(slug))
+    );
+
+    const isSavedViewActive =
+        location.pathname === '/trendz/saved' ||
+        new URLSearchParams(location.search).get('view') === 'saved';
 
     useEffect(() => {
         if (followedDomainsFilter) {
@@ -392,7 +401,62 @@ const TrendzSidebar: React.FC<Pick<RightSidebarProps, 'followedDomainsFilter' | 
 
     const handleBackFromFollowed = () => {
         setIsFollowedView(false);
+        if (followedDomainsFilter) {
+            setFollowedDomainsFilter(null);
+            setDomainSelection('trendz', []);
+        }
+    };
+
+    const handleSelectFollowedDomain = (domainName: string) => {
+        const targetSlug = normalizeTrendzDomainSlug(domainName);
+        const isSoleActive =
+            targetSlug !== null && activeDomainSlugs.size === 1 && activeDomainSlugs.has(targetSlug);
+
+        if (isSoleActive) {
+            setFollowedDomainsFilter(null);
+            setDomainSelection('trendz', []);
+        } else {
+            setFollowedDomainsFilter(domainName);
+            setDomainSelection('trendz', [domainName]);
+        }
+
+        if (location.pathname !== '/trendz' || isSavedViewActive) {
+            navigate('/trendz');
+        }
+    };
+
+    const handleToggleDomainFollowInSidebar = async (slug: string, name: string) => {
+        const wasFollowed = followedSlugSet.has(slug as any);
+        const ok = await toggleFollowDomain(slug);
+        if (ok && wasFollowed && followedDomainsFilter === name) {
+            setFollowedDomainsFilter(null);
+            setDomainSelection('trendz', []);
+        }
+    };
+
+    const handleSidebarSearchChange = (value: string) => {
+        setTrendzSearchQuery?.(value);
+        if (location.pathname !== '/trendz') {
+            navigate('/trendz');
+        }
+    };
+
+    const handleOpenMomentumTrend = (trendId: string) => {
+        navigate(`/trendz/${encodeURIComponent(trendId)}`);
+    };
+
+    const handleViewAllMomentum = () => {
         setFollowedDomainsFilter(null);
+        setDomainSelection('trendz', []);
+        setTrendzSearchQuery?.('');
+        navigate('/trendz?sort=momentum');
+    };
+
+    const handleOpenSavedTrends = () => {
+        setIsFollowedView(false);
+        setFollowedDomainsFilter(null);
+        setDomainSelection('trendz', []);
+        navigate('/trendz/saved');
     };
 
     return (
@@ -406,30 +470,143 @@ const TrendzSidebar: React.FC<Pick<RightSidebarProps, 'followedDomainsFilter' | 
                                 <input
                                     type="search"
                                     placeholder="SEARCH_TRENDZ..."
+                                    value={trendzSearchQuery}
+                                    onChange={(e) => handleSidebarSearchChange(e.target.value)}
                                     className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
                                 />
                             </div>
                             <div className="flex items-center justify-between">
-                                <button onClick={handleBackFromFollowed} className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors">
+                                <button type="button" onClick={handleBackFromFollowed} className="flex items-center gap-2 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors">
                                     <ArrowLeftIcon className="w-4 h-4" />
                                     <span>// FOLLOWED_DOMAINS</span>
                                 </button>
+                                <span className="font-mono text-[10px] text-zinc-500">
+                                    [{followedDomains.length}]
+                                </span>
                             </div>
                         </div>
-                        <div className="bg-[#0c0c0e] border border-zinc-800 p-3 mx-4">
-                            <div className="space-y-2">
-                                {followedDomains.map(domain => (
-                                    <button
-                                        key={domain.name}
-                                        onClick={() => setFollowedDomainsFilter(domain.name)}
-                                        className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border ${followedDomainsFilter === domain.name ? 'bg-[#18181d] text-white border-zinc-700 font-bold' : 'bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600'}`}
-                                    >
-                                        <domain.icon className="w-4 h-4" />
-                                        <span>{domain.name}</span>
-                                    </button>
-                                ))}
+
+                        {(preferencesError || actionError) && (
+                            <div className="mx-4 bg-[#0c0c0e] border border-zinc-700 p-3 font-mono text-[11px] space-y-2">
+                                <p className="text-zinc-300 leading-relaxed">
+                                    // {actionError || preferencesError}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    {preferencesError && (
+                                        <button
+                                            type="button"
+                                            onClick={() => void refreshEngagement()}
+                                            className="px-2 py-0.5 border border-zinc-700 text-white text-[10px] uppercase hover:border-zinc-500"
+                                        >
+                                            RETRY
+                                        </button>
+                                    )}
+                                    {actionError && (
+                                        <button
+                                            type="button"
+                                            onClick={clearActionError}
+                                            className="px-2 py-0.5 border border-zinc-800 text-zinc-400 hover:text-white text-[10px] uppercase"
+                                        >
+                                            DISMISS
+                                        </button>
+                                    )}
+                                </div>
                             </div>
+                        )}
+
+                        <div className="bg-[#0c0c0e] border border-zinc-800 p-3 mx-4 space-y-3">
+                            {!isAuthenticated ? (
+                                <div className="py-2 font-mono text-xs space-y-1.5">
+                                    <p className="text-white uppercase tracking-wider">// SIGN_IN_REQUIRED</p>
+                                    <p className="text-[11px] text-zinc-500 leading-relaxed">
+                                        Sign in to follow domains and sync preferences across sessions.
+                                    </p>
+                                </div>
+                            ) : preferencesLoading ? (
+                                <div className="space-y-2 animate-pulse">
+                                    {[0, 1, 2].map((idx) => (
+                                        <div key={idx} className="h-9 bg-zinc-900 border border-zinc-800" />
+                                    ))}
+                                </div>
+                            ) : followedDomains.length === 0 ? (
+                                <div className="py-2 font-mono text-xs space-y-1.5">
+                                    <p className="text-white uppercase tracking-wider">// NO_FOLLOWED_DOMAINS</p>
+                                    <p className="text-[11px] text-zinc-500 leading-relaxed">
+                                        Follow domains below to filter quickly and personalize your For You stream.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {followedDomains.map((domain) => {
+                                        const isActive =
+                                            followedDomainsFilter === domain.name ||
+                                            activeDomainSlugs.has(domain.slug);
+                                        const pending = isDomainPending(domain.slug);
+                                        return (
+                                            <div key={domain.slug} className="flex items-stretch gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleSelectFollowedDomain(domain.name)}
+                                                    className={`flex-1 flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider transition-colors border min-w-0 ${
+                                                        isActive
+                                                            ? 'bg-[#18181d] text-white border-zinc-700 font-bold'
+                                                            : 'bg-black/60 text-zinc-300 border-zinc-800/90 hover:border-zinc-600'
+                                                    }`}
+                                                >
+                                                    <domain.icon className="w-4 h-4 shrink-0" />
+                                                    <span className="truncate">{domain.name}</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleToggleDomainFollowInSidebar(domain.slug, domain.name)}
+                                                    disabled={pending}
+                                                    aria-label={`Unfollow ${domain.name}`}
+                                                    title={`Unfollow ${domain.name}`}
+                                                    className="px-2.5 border border-zinc-800/90 bg-black/60 text-zinc-500 hover:text-white hover:border-zinc-600 font-mono text-xs transition-colors disabled:opacity-50"
+                                                >
+                                                    {pending ? '…' : '×'}
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
+
+                        {isAuthenticated && discoverDomains.length > 0 && (
+                            <div className="bg-[#0c0c0e] border border-zinc-800 p-3 mx-4">
+                                <h4 className="font-mono text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2.5">
+                                    // ADD_DOMAINS
+                                </h4>
+                                <div className="space-y-1.5">
+                                    {discoverDomains.map((domain) => {
+                                        const pending = isDomainPending(domain.slug);
+                                        return (
+                                            <div
+                                                key={domain.slug}
+                                                className="flex items-center justify-between gap-2 p-2 border border-zinc-800/70 bg-black/40"
+                                            >
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <domain.icon className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                                                    <span className="font-mono text-[11px] text-zinc-300 uppercase tracking-wider truncate">
+                                                        {domain.name}
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleToggleDomainFollowInSidebar(domain.slug, domain.name)}
+                                                    disabled={pending}
+                                                    aria-label={`Follow ${domain.name}`}
+                                                    className="px-2 py-0.5 border border-zinc-800 hover:border-zinc-500 text-zinc-400 hover:text-white font-mono text-[10px] uppercase tracking-wider transition-colors disabled:opacity-50 shrink-0"
+                                                >
+                                                    {pending ? '...' : '+ FOLLOW'}
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                     </>
                 ) : (
                     <>
@@ -439,16 +616,44 @@ const TrendzSidebar: React.FC<Pick<RightSidebarProps, 'followedDomainsFilter' | 
                                 <input
                                     type="search"
                                     placeholder="SEARCH_TRENDZ..."
+                                    value={trendzSearchQuery}
+                                    onChange={(e) => handleSidebarSearchChange(e.target.value)}
                                     className="w-full bg-[#0c0c0e] border border-zinc-800 p-2.5 pl-9 font-mono text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
                                 />
                             </div>
                             <button
+                                type="button"
                                 onClick={() => setIsFollowedView(true)}
                                 className="w-full flex items-center justify-between bg-[#0c0c0e] border border-zinc-800 p-2.5 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider transition-colors"
                             >
                                 <div className="flex items-center gap-2">
+                                    <FilterIcon className="w-4 h-4 text-zinc-500" />
+                                    <span>
+                                        // FOLLOWED_DOMAINS
+                                        {!preferencesLoading && followedDomains.length > 0
+                                            ? ` [${followedDomains.length}]`
+                                            : ''}
+                                    </span>
+                                </div>
+                                <span className="text-zinc-600">&gt;&gt;</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleOpenSavedTrends}
+                                className={`w-full flex items-center justify-between border p-2.5 font-mono text-xs uppercase tracking-wider transition-colors ${
+                                    isSavedViewActive
+                                        ? 'bg-[#18181d] border-zinc-600 text-white font-bold'
+                                        : 'bg-[#0c0c0e] border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600'
+                                }`}
+                            >
+                                <div className="flex items-center gap-2">
                                     <BookmarkIcon className="w-4 h-4 text-zinc-500" />
-                                    <span>// FOLLOWED_DOMAINS</span>
+                                    <span>
+                                        // SAVED_TRENDS
+                                        {!preferencesLoading && bookmarkRecords.length > 0
+                                            ? ` [${bookmarkRecords.length}]`
+                                            : ''}
+                                    </span>
                                 </div>
                                 <span className="text-zinc-600">&gt;&gt;</span>
                             </button>
@@ -458,33 +663,81 @@ const TrendzSidebar: React.FC<Pick<RightSidebarProps, 'followedDomainsFilter' | 
                             <div className="bg-[#0c0c0e] border border-zinc-800 mx-4 flex flex-col">
                                 <div className="flex items-center justify-between p-3.5 border-b border-zinc-800">
                                     <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">// MOMENTUM_NOW</h3>
-                                    <EllipsisVerticalIcon className="w-4 h-4 text-zinc-500 cursor-pointer hover:text-white transition-colors" />
+                                    <button
+                                        type="button"
+                                        onClick={() => setReloadTick(prev => prev + 1)}
+                                        className="text-zinc-500 hover:text-white transition-colors"
+                                        aria-label="Refresh momentum signals"
+                                        title="Refresh momentum signals"
+                                    >
+                                        <EllipsisVerticalIcon className="w-4 h-4" />
+                                    </button>
                                 </div>
 
                                 <div className="p-3.5 space-y-4">
-                                    {trendingItems.map((item) => (
-                                        <div key={item.id} className="flex items-start gap-3 group cursor-pointer">
-                                            <div className="relative flex-shrink-0">
-                                                <img 
-                                                    src={item.imageUrl} 
-                                                    onError={handleImageError} 
-                                                    alt={item.title} 
-                                                    className="w-10 h-10 object-cover border border-zinc-800" 
-                                                />
+                                    {momentumLoading ? (
+                                        [0, 1, 2].map((idx) => (
+                                            <div key={idx} className="flex items-start gap-3 animate-pulse">
+                                                <div className="w-10 h-10 bg-zinc-900 border border-zinc-800 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0 space-y-1.5">
+                                                    <div className="h-3 w-4/5 bg-zinc-800" />
+                                                    <div className="h-2.5 w-1/2 bg-zinc-900" />
+                                                    <div className="h-2 w-2/3 bg-zinc-900" />
+                                                </div>
                                             </div>
-                                            <div className="flex-1 min-w-0 flex flex-col justify-center space-y-0.5">
-                                                <p className="font-mono font-bold text-white text-xs truncate group-hover:text-zinc-200 transition-colors">
-                                                    {item.title}
-                                                </p>
-                                                <p className="text-[11px] text-zinc-500 font-mono">{item.source}</p>
-                                                <p className="text-[10px] text-zinc-600 font-mono">[{item.timestamp} // {item.upvotes} UPVOTES]</p>
-                                            </div>
+                                        ))
+                                    ) : momentumError ? (
+                                        <div className="py-3 space-y-2 font-mono text-xs">
+                                            <p className="text-zinc-400">// SIGNALS_UNAVAILABLE</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setReloadTick(prev => prev + 1)}
+                                                className="px-2.5 py-1 border border-zinc-800 bg-black text-zinc-300 hover:text-white hover:border-zinc-600 text-[10px] uppercase tracking-wider transition-colors"
+                                            >
+                                                RETRY
+                                            </button>
                                         </div>
-                                    ))}
+                                    ) : momentumTrends.length === 0 ? (
+                                        <div className="py-3 font-mono text-xs text-zinc-500 space-y-1">
+                                            <p className="text-zinc-400">// NO_LIVE_SIGNALS</p>
+                                            <p className="text-[11px] text-zinc-600">Published trends ranked by momentum will appear here.</p>
+                                        </div>
+                                    ) : (
+                                        momentumTrends.map((trend) => (
+                                            <button
+                                                key={trend.id}
+                                                type="button"
+                                                onClick={() => handleOpenMomentumTrend(trend.id)}
+                                                className="w-full text-left flex items-start gap-3 group cursor-pointer focus:outline-none"
+                                            >
+                                                <div className="relative flex-shrink-0">
+                                                    <img 
+                                                        src={trend.thumbnailUrl || trend.mediaUrl} 
+                                                        onError={handleImageError} 
+                                                        alt={trend.title} 
+                                                        className="w-10 h-10 object-cover border border-zinc-800" 
+                                                    />
+                                                </div>
+                                                <div className="flex-1 min-w-0 flex flex-col justify-center space-y-0.5">
+                                                    <p className="font-mono font-bold text-white text-xs truncate group-hover:text-zinc-200 transition-colors">
+                                                        {trend.title}
+                                                    </p>
+                                                    <p className="text-[11px] text-zinc-500 font-mono truncate">{trend.details.publishedBy}</p>
+                                                    <p className="text-[10px] text-zinc-600 font-mono">
+                                                        [{trend.details.publishedOn} // {formatNumber(trend.stats.likes)} UPVOTES]
+                                                    </p>
+                                                </div>
+                                            </button>
+                                        ))
+                                    )}
                                 </div>
 
                                 <div className="p-3 border-t border-zinc-800 bg-black/40">
-                                    <button className="w-full bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider py-1.5 transition-colors">
+                                    <button
+                                        type="button"
+                                        onClick={handleViewAllMomentum}
+                                        className="w-full bg-black border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600 font-mono text-xs uppercase tracking-wider py-1.5 transition-colors"
+                                    >
                                         VIEW_ALL
                                     </button>
                                 </div>
@@ -1240,7 +1493,11 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
     const searchParams = new URLSearchParams(location.search);
     const viewFromUrl = searchParams.get('view') || searchParams.get('tab');
     const activeInboxId = searchParams.get('inbox');
-    const activeView = (activeInboxId && !viewFromUrl) ? 'my-communities' : (location.pathname === '/communities' && viewFromUrl ? viewFromUrl : communityView);
+    const activeView = (activeInboxId && !viewFromUrl)
+        ? 'my-communities'
+        : (location.pathname === '/communities'
+            ? (viewFromUrl === 'conclaves' ? 'conclave-discovery' : (viewFromUrl || 'all'))
+            : communityView);
 
     const isCommunityDetailPage = location.pathname.startsWith('/communities/') && location.pathname !== '/communities';
     const [myCommunitiesSearchTerm, setMyCommunitiesSearchTerm] = useState('');
@@ -1309,20 +1566,33 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
     const showOtherElements = !isSearchFocused && communityFilters.searchTerm.trim() === '';
 
     const isLoadingState = Boolean(currentUser?.uid) && joinedLoading && joinedCommunities.length === 0;
+    const isLeaderboardActive =
+        !isCommunityDetailPage &&
+        location.pathname === '/communities' &&
+        !activeInboxId &&
+        activeView === 'leaderboard';
+    const isGlobalCollectiveActive =
+        !isCommunityDetailPage &&
+        location.pathname === '/communities' &&
+        !activeInboxId &&
+        activeView === 'all';
+    const isMyCollectiveActive =
+        !isCommunityDetailPage &&
+        location.pathname === '/communities' &&
+        activeView === 'my-communities';
 
     return (
         <aside className="hidden lg:block w-80 xl:w-[340px] flex-shrink-0 border-l border-zinc-800 bg-[#09090b] h-screen sticky top-0 py-6">
             <div className="h-full flex flex-col gap-5">
-                {activeView === 'my-communities' ? (
+                {activeView === 'my-communities' && !isCommunityDetailPage ? (
                      <>
                         <div className="px-4 space-y-4">
                             <button 
                                 onClick={() => {
                                     navigate('/communities');
                                     if (setCommunityView) {
-                                        setCommunityView('leaderboard');
+                                        setCommunityView('all');
                                     }
-                                    setSelectedInboxRecord(null);
                                 }} 
                                 className="w-full flex items-center gap-2.5 p-2.5 bg-[#0c0c0e] border border-zinc-800 hover:border-zinc-600 text-zinc-300 hover:text-white font-mono text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer group"
                             >
@@ -1465,7 +1735,7 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                                         onClick={() => {
                                             navigate('/communities');
                                             if (setCommunityView) {
-                                                setCommunityView('leaderboard');
+                                                setCommunityView('all');
                                             }
                                         }}
                                         className="px-3 py-1.5 text-xs font-bold uppercase bg-white text-black hover:bg-zinc-200 border border-white transition-colors"
@@ -1478,13 +1748,13 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                     </>
                 ) : (
                     <div className='overflow-y-auto no-scrollbar flex flex-col gap-5'>
-                        {(activeView === 'all' || activeView === 'conclave-discovery' || isCommunityDetailPage) && (
+                        {(activeView === 'leaderboard' || activeView === 'conclave-discovery' || isCommunityDetailPage) && (
                             <div className="px-4">
                                 <button
                                     onClick={() => {
                                         navigate('/communities');
                                         if (setCommunityView) {
-                                            setCommunityView('leaderboard');
+                                            setCommunityView('all');
                                         }
                                     }}
                                     className="w-full flex items-center gap-2.5 p-2.5 bg-[#0c0c0e] border border-zinc-800 hover:border-zinc-600 text-zinc-300 hover:text-white font-mono text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer group"
@@ -1509,23 +1779,71 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
 
                         {showOtherElements && (
                             <div className="px-4 space-y-5">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (setCommunityFilters && communityFilters.searchTerm) {
+                                            setCommunityFilters(prev => ({ ...prev, searchTerm: '' }));
+                                        }
+                                        if (setCommunityView && communityView !== 'leaderboard') {
+                                            setCommunityView('leaderboard');
+                                        }
+                                        if (location.pathname !== '/communities' || searchParams.get('view') !== 'leaderboard') {
+                                            navigate('/communities?view=leaderboard');
+                                        }
+                                    }}
+                                    aria-current={isLeaderboardActive ? 'page' : undefined}
+                                    className={`w-full flex items-center justify-between gap-3 text-left p-3 border transition-colors cursor-pointer group ${
+                                        isLeaderboardActive
+                                            ? 'bg-zinc-900 border-emerald-500/50 text-white'
+                                            : 'bg-[#0c0c0e] border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                        <div
+                                            className={`w-8 h-8 flex-shrink-0 flex items-center justify-center border transition-colors ${
+                                                isLeaderboardActive
+                                                    ? 'bg-black border-emerald-500/40 text-emerald-400'
+                                                    : 'bg-black border-zinc-800 text-zinc-400 group-hover:text-white group-hover:border-zinc-700'
+                                            }`}
+                                        >
+                                            <TrophyIcon className="w-4 h-4" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <span className="block font-mono text-xs font-bold text-white uppercase tracking-wider truncate">
+                                                // LEADERBOARD
+                                            </span>
+                                            <span className="block font-mono text-[9px] text-zinc-500 uppercase tracking-wider mt-0.5 truncate">
+                                                TOP RANKED COMMUNITIES
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <ChevronRightIcon
+                                        className={`w-4 h-4 flex-shrink-0 transition-transform group-hover:translate-x-0.5 ${
+                                            isLeaderboardActive ? 'text-emerald-400' : 'text-zinc-500 group-hover:text-white'
+                                        }`}
+                                    />
+                                </button>
+
                                 <div className="bg-[#0c0c0e] border border-zinc-800 p-3">
                                     <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider mb-2">// COLLECTIVES</h3>
                                     <div className="space-y-2">
                                         <button
                                             onClick={() => {
-                                                if (setCommunityView) {
+                                                if (setCommunityView && communityView !== 'all') {
                                                     setCommunityView('all');
                                                 }
-                                                navigate('/communities?view=all');
+                                                if (!isGlobalCollectiveActive) {
+                                                    navigate('/communities?view=all');
+                                                }
                                             }}
                                             className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider border transition-colors cursor-pointer ${
-                                                activeView === 'all'
+                                                isGlobalCollectiveActive
                                                     ? 'bg-zinc-900 border-emerald-500/50 text-white font-bold'
                                                     : 'bg-black border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600'
                                             }`}
                                         >
-                                            <GlobeAltIcon className={`w-4 h-4 ${activeView === 'all' ? 'text-emerald-400' : 'text-zinc-400'}`} />
+                                            <GlobeAltIcon className={`w-4 h-4 ${isGlobalCollectiveActive ? 'text-emerald-400' : 'text-zinc-400'}`} />
                                             <span>GLOBAL_COLLECTIVE</span>
                                         </button>
                                         <button
@@ -1536,12 +1854,12 @@ const CommunitiesSidebar: React.FC<Pick<RightSidebarProps, 'communityFilters' | 
                                                 navigate('/communities?view=my-communities');
                                             }}
                                             className={`w-full flex items-center gap-2.5 text-left p-2.5 font-mono text-xs uppercase tracking-wider border transition-colors cursor-pointer ${
-                                                activeView === 'my-communities'
+                                                isMyCollectiveActive
                                                     ? 'bg-zinc-900 border-emerald-500/50 text-white font-bold'
                                                     : 'bg-black border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-600'
                                             }`}
                                         >
-                                            <BookmarkIcon className={`w-4 h-4 ${activeView === 'my-communities' ? 'text-emerald-400' : 'text-zinc-400'}`} />
+                                            <BookmarkIcon className={`w-4 h-4 ${isMyCollectiveActive ? 'text-emerald-400' : 'text-zinc-400'}`} />
                                             <span>MY_COLLECTIVE</span>
                                         </button>
                                     </div>
@@ -2240,7 +2558,14 @@ const RightSidebar: React.FC<RightSidebarProps> = ({ variant, ...props }) => {
                     />
                 );
             case 'trendz':
-                return <TrendzSidebar followedDomainsFilter={props.followedDomainsFilter} setFollowedDomainsFilter={props.setFollowedDomainsFilter} />;
+                return (
+                    <TrendzSidebar
+                        followedDomainsFilter={props.followedDomainsFilter}
+                        setFollowedDomainsFilter={props.setFollowedDomainsFilter}
+                        trendzSearchQuery={props.trendzSearchQuery}
+                        setTrendzSearchQuery={props.setTrendzSearchQuery}
+                    />
+                );
             case 'spotlight-showcase':
             case 'spotlight-collabs':
             case 'spotlight':

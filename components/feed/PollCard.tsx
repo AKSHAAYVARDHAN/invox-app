@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import type { Poll } from '../../types';
+import type { Poll, PollOption } from '../../types';
 import {
     SparklesIcon,
     CheckBadgeIcon,

@@ -109,6 +109,25 @@ service firebase.storage {
       allow delete: if signedIn() && userId == request.auth.uid;
     }
 
+    function isTrendzModerator() {
+      return signedIn() && (
+        (request.auth.token.email_verified == true
+          && request.auth.token.email in ['akshaayvardhans@gmail.com'])
+        || (firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+          && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['admin', 'moderator'])
+      );
+    }
+
+    // ── Trendz Media (verified thumbnails & AI-generated editorial visuals) ──
+    // Signed-in users may read; only verified admins/moderators (or backend Admin SDK) may upload images <= 10 MB.
+    match /trendzMedia/{trendId}/{fileName} {
+      allow read: if signedIn();
+      allow create, update: if isTrendzModerator()
+        && isImage()
+        && underSize(10 * 1024 * 1024);
+      allow delete: if isTrendzModerator();
+    }
+
     // ── Catch-all: deny everything else ──────────────────────────────────
     match /{allPaths=**} {
       allow read, write: if false;

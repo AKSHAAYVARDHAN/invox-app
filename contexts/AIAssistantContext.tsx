@@ -2,19 +2,22 @@
 
 
 import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback, useMemo } from 'react';
-import type { Content } from "@google/genai";
+import type { GeminiChatContent } from '../services/geminiService';
 
 export interface CardContext {
     id: string;
     title: string;
     content: string;
     author: string;
+    domain?: string;
+    publishedOn?: string;
+    sourceUrl?: string;
 }
 
-export interface ChatMessage extends Content {
+export interface ChatMessage extends GeminiChatContent {
     role: 'user' | 'model';
     parts: { text: string }[];
-    sources?: any[];
+    sources?: Array<{ uri: string; title?: string }>;
 }
 
 export interface Conversation {

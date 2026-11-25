@@ -1,4 +1,6 @@
 import React from 'react';
+import type { Timestamp } from 'firebase/firestore';
+import type { TrendzDomainSlug } from './utils/trendzDomains';
 
 export interface User {
   uid: string;
@@ -31,6 +33,7 @@ export interface InvoxUser extends User {
   coverPhotoURL: string | null;
   skills: string[];
   interests: string[];
+  followedTrendDomains?: TrendzDomainSlug[];
   links: ProfileLink[];
   location: string;
   website: string;
@@ -420,6 +423,243 @@ export interface Trend {
     link: string;
   };
   createdAt: Date;
+}
+
+export type TrendStatus = 'draft' | 'published' | 'archived' | 'flagged';
+
+export type TrendSourceCredibilityTier = 'primary' | 'reputable' | 'trade';
+
+export type TrendMediaOrigin = 'source_og' | 'ai_generated' | 'domain_fallback';
+
+export interface TrendSourceAttribution {
+  name: string;
+  domain: string;
+  url: string;
+  urlHash: string;
+  author?: string;
+  credibilityTier: TrendSourceCredibilityTier;
+}
+
+export interface TrendAdditionalSource {
+  name: string;
+  url: string;
+  publishedAt: Timestamp;
+}
+
+export interface TrendMedia {
+  type: 'image' | 'video';
+  url: string;
+  thumbnailUrl?: string;
+  overlayUrl?: string;
+  origin: TrendMediaOrigin;
+  attribution?: string;
+  storagePath?: string;
+}
+
+export interface TrendStats {
+  likes: number;
+  views: number;
+  comments: number;
+  saves: number;
+  shares: number;
+}
+
+/**
+ * Production Firestore-serializable schema for /trendz/{trendId}.
+ * Contains zero React components or non-serializable values; UI resolves domain icons
+ * via utils/trendzDomains.ts using domainSlug.
+ */
+export interface TrendRecord {
+  id: string;
+  slug: string;
+  status: TrendStatus;
+
+  // Classification & discoverability
+  domainSlug: TrendzDomainSlug;
+  domain: string;
+  category: string;
+  tags: string[];
+  searchKeywords: string[];
+
+  // Grounded editorial content
+  title: string;
+  summary: string;
+  fullContent: string;
+  keyTakeaways: string[];
+
+  // Verified publisher & provenance
+  source: TrendSourceAttribution;
+  additionalSources?: TrendAdditionalSource[];
+
+  // Firestore Timestamps separating original publication vs. discovery/ingestion
+  publishedAt: Timestamp;
+  discoveredAt: Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+
+  // Media & attribution
+  media: TrendMedia;
+
+  // Ranking & related signals
+  momentumScore: number;
+  relatedTrendIds: string[];
+
+  // Server-maintained engagement aggregates
+  stats: TrendStats;
+
+  // Extensible pipeline metadata
+  schemaVersion: number;
+  aiModel?: string;
+  contentHash?: string;
+  language?: string;
+  region?: string;
+
+  // Phase 05 source provenance & editorial audit fields (optional for backward compatibility)
+  whyItMatters?: string;
+  sourceRetrievedAt?: Timestamp;
+  ingestionRunId?: string;
+  ingestionItemId?: string;
+  reviewedBy?: string;
+  reviewedAt?: Timestamp;
+  groundingStatus?: 'verified' | 'needs_review';
+}
+
+export type TrendIngestionStage =
+  | 'DISCOVERED'
+  | 'VALIDATING'
+  | 'VALIDATED'
+  | 'PROCESSING'
+  | 'PENDING_REVIEW'
+  | 'APPROVED'
+  | 'PUBLISHED'
+  | 'REJECTED'
+  | 'FAILED';
+
+export type TrendSourceProviderType = 'rss' | 'api';
+
+export type TrendEvidenceStatus = 'sufficient' | 'insufficient';
+
+export interface TrendSourceProviderSummary {
+  id: string;
+  name: string;
+  type: TrendSourceProviderType;
+  configured: boolean;
+  status: 'ready' | 'needs_configuration';
+  requiredEnvVars: string[];
+  supportedDomains: TrendzDomainSlug[];
+  rateLimitPerMinute: number;
+  description: string;
+}
+
+export interface TrendCorroboratingSource {
+  name: string;
+  domain: string;
+  url: string;
+  urlHash: string;
+  publishedAtIso: string;
+  title?: string;
+  providerId?: string;
+}
+
+export interface TrendIngestionStageEntry {
+  stage: TrendIngestionStage;
+  timestamp: string;
+  note?: string;
+}
+
+export interface TrendIngestionAiDraft {
+  title: string;
+  summary: string;
+  fullContent: string;
+  whyItMatters: string;
+  keyTakeaways: string[];
+  domainSlug: TrendzDomainSlug;
+  domain: string;
+  category: string;
+  tags: string[];
+  searchKeywords: string[];
+  relatedTrendIds: string[];
+  momentumScore: number;
+  slug: string;
+  aiModel: string;
+  evidenceStatus: TrendEvidenceStatus;
+  unsupportedClaimWarnings: string[];
+  needsReviewReason?: string;
+}
+
+export interface TrendIngestionSourceSnapshot {
+  name: string;
+  domain: string;
+  originalUrl: string;
+  canonicalUrl: string;
+  urlHash: string;
+  author?: string;
+  credibilityTier: TrendSourceCredibilityTier;
+  publishedAtIso: string;
+  retrievedAtIso: string;
+  rawTitle: string;
+  sanitizedExcerpt: string;
+  contentHash: string;
+  ogImageUrl?: string;
+  httpStatus?: number;
+}
+
+export interface TrendIngestionItem {
+  id: string;
+  runId: string;
+  stage: TrendIngestionStage;
+  stageHistory: TrendIngestionStageEntry[];
+  domainSlug: TrendzDomainSlug;
+  providerId: string;
+  providerName: string;
+  source: TrendIngestionSourceSnapshot;
+  corroboratingSources: TrendCorroboratingSource[];
+  duplicateOfTrendId?: string;
+  duplicateOfItemId?: string;
+  aiDraft?: TrendIngestionAiDraft;
+  media: TrendMedia;
+  mediaFallbackUsed?: boolean;
+  mediaNote?: string;
+  retryCount: number;
+  failureStage?: TrendIngestionStage;
+  failureReason?: string;
+  publishedTrendId?: string;
+  reviewedBy?: string;
+  reviewedByEmail?: string;
+  reviewedAtIso?: string;
+  rejectionReason?: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface TrendIngestionRunCounts {
+  discovered: number;
+  validated: number;
+  duplicatesMerged: number;
+  processed: number;
+  pendingReview: number;
+  published: number;
+  rejected: number;
+  failed: number;
+}
+
+export interface TrendIngestionRun {
+  id: string;
+  status: 'running' | 'completed' | 'partial_failure' | 'failed';
+  triggeredBy: string;
+  triggeredByEmail?: string;
+  triggerMode: 'manual' | 'single_url' | 'scheduled';
+  domains: TrendzDomainSlug[];
+  windowHours: number;
+  maxItemsPerDomain: number;
+  providerIds: string[];
+  counts: TrendIngestionRunCounts;
+  errors: string[];
+  startedAt: string;
+  completedAt?: string;
+  updatedAt?: any;
 }
 
 export type CommunityRole = 'owner' | 'admin' | 'member';

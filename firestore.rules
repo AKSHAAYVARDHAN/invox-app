@@ -2,6 +2,10 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
     function signedIn() {
       return request.auth != null;
     }
@@ -25,12 +29,387 @@ service cloud.firestore {
     }
 
     function isModerator() {
-      return hasRole('moderator') || hasRole('admin');
+      return hasRole('moderator') || isAdmin();
     }
 
     function isAdmin() {
       return (signedIn() && exists(userPath(uid())) && currentUser().role == 'admin')
-        || (signedIn() && request.auth.token.email in ['akshaayvardhans@gmail.com']);
+        || (signedIn()
+            && request.auth.token.email_verified == true
+            && request.auth.token.email in ['akshaayvardhans@gmail.com']);
+    }
+
+    function isValidTrendId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidHttpUrl(url) {
+      return url is string && url.size() > 0 && url.size() <= 2048 && url.matches('^https?://.+');
+    }
+
+    function isValidTrendDomainSlug(slug) {
+      return slug is string && slug in [
+        'technology',
+        'health-care',
+        'trading',
+        'stock-market',
+        'design',
+        'finance',
+        'science',
+        'gaming',
+        'art',
+        'automotive',
+        'space'
+      ];
+    }
+
+    function isValidFollowedTrendDomains(data) {
+      return !('followedTrendDomains' in data)
+        || (
+          data.followedTrendDomains is list
+          && data.followedTrendDomains.size() <= 20
+          && data.followedTrendDomains.hasOnly([
+            'technology',
+            'health-care',
+            'trading',
+            'stock-market',
+            'design',
+            'finance',
+            'science',
+            'gaming',
+            'art',
+            'automotive',
+            'space'
+          ])
+        );
+    }
+
+    function isValidTrendStats(stats) {
+      return stats is map
+        && stats.keys().hasAll(['likes', 'views', 'comments', 'saves', 'shares'])
+        && stats.keys().hasOnly(['likes', 'views', 'comments', 'saves', 'shares'])
+        && stats.likes is int && stats.likes >= 0
+        && stats.views is int && stats.views >= 0
+        && stats.comments is int && stats.comments >= 0
+        && stats.saves is int && stats.saves >= 0
+        && stats.shares is int && stats.shares >= 0;
+    }
+
+    function isValidTrendSource(source) {
+      return source is map
+        && source.keys().hasAll(['name', 'domain', 'url', 'urlHash', 'credibilityTier'])
+        && source.keys().hasOnly(['name', 'domain', 'url', 'urlHash', 'author', 'credibilityTier'])
+        && source.name is string && source.name.size() > 0 && source.name.size() <= 160
+        && source.domain is string && source.domain.size() > 0 && source.domain.size() <= 255
+        && isValidHttpUrl(source.url)
+        && source.urlHash is string && source.urlHash.size() >= 16 && source.urlHash.size() <= 128
+        && source.credibilityTier in ['primary', 'reputable', 'trade']
+        && (!('author' in source) || (source.author is string && source.author.size() <= 160));
+    }
+
+    function isValidTrendMedia(media) {
+      return media is map
+        && media.keys().hasAll(['type', 'url', 'origin'])
+        && media.keys().hasOnly(['type', 'url', 'thumbnailUrl', 'overlayUrl', 'origin', 'attribution', 'storagePath'])
+        && media.type in ['image', 'video']
+        && isValidHttpUrl(media.url)
+        && media.origin in ['source_og', 'ai_generated', 'domain_fallback']
+        && (!('thumbnailUrl' in media) || isValidHttpUrl(media.thumbnailUrl))
+        && (!('overlayUrl' in media) || (media.overlayUrl is string && media.overlayUrl.size() <= 2048))
+        && (!('attribution' in media) || (media.attribution is string && media.attribution.size() <= 300))
+        && (!('storagePath' in media) || (media.storagePath is string && media.storagePath.size() <= 512));
+    }
+
+    function isValidTrendRecord(data, trendId) {
+      return data.keys().hasAll([
+          'id',
+          'slug',
+          'status',
+          'domainSlug',
+          'domain',
+          'category',
+          'tags',
+          'searchKeywords',
+          'title',
+          'summary',
+          'fullContent',
+          'keyTakeaways',
+          'source',
+          'publishedAt',
+          'discoveredAt',
+          'createdAt',
+          'updatedAt',
+          'media',
+          'momentumScore',
+          'relatedTrendIds',
+          'stats',
+          'schemaVersion'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'slug',
+          'status',
+          'domainSlug',
+          'domain',
+          'category',
+          'tags',
+          'searchKeywords',
+          'title',
+          'summary',
+          'fullContent',
+          'keyTakeaways',
+          'source',
+          'additionalSources',
+          'publishedAt',
+          'discoveredAt',
+          'createdAt',
+          'updatedAt',
+          'media',
+          'momentumScore',
+          'relatedTrendIds',
+          'stats',
+          'schemaVersion',
+          'aiModel',
+          'contentHash',
+          'language',
+          'region',
+          'whyItMatters',
+          'sourceRetrievedAt',
+          'ingestionRunId',
+          'ingestionItemId',
+          'reviewedBy',
+          'reviewedAt',
+          'groundingStatus'
+        ])
+        && data.id is string && data.id == trendId && isValidTrendId(data.id)
+        && data.slug is string && data.slug.size() > 0 && data.slug.size() <= 160 && data.slug.matches('^[a-z0-9\\-]+$')
+        && data.status is string && data.status in ['draft', 'published', 'archived', 'flagged']
+        && isValidTrendDomainSlug(data.domainSlug)
+        && data.domain is string && data.domain.size() > 0 && data.domain.size() <= 80
+        && data.category is string && data.category.size() > 0 && data.category.size() <= 80
+        && data.tags is list && data.tags.size() <= 10 && (data.tags.size() == 0 || data.tags[0] is string)
+        && data.searchKeywords is list && data.searchKeywords.size() <= 40 && (data.searchKeywords.size() == 0 || data.searchKeywords[0] is string)
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 240
+        && data.summary is string && data.summary.size() >= 10 && data.summary.size() <= 1200
+        && data.fullContent is string && data.fullContent.size() >= 10 && data.fullContent.size() <= 20000
+        && data.keyTakeaways is list && data.keyTakeaways.size() <= 10 && (data.keyTakeaways.size() == 0 || data.keyTakeaways[0] is string)
+        && isValidTrendSource(data.source)
+        && (!('additionalSources' in data) || (data.additionalSources is list && data.additionalSources.size() <= 10))
+        && data.publishedAt is timestamp
+        && data.discoveredAt is timestamp
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && isValidTrendMedia(data.media)
+        && data.momentumScore is number && data.momentumScore >= 0
+        && data.relatedTrendIds is list && data.relatedTrendIds.size() <= 10 && (data.relatedTrendIds.size() == 0 || data.relatedTrendIds[0] is string)
+        && isValidTrendStats(data.stats)
+        && data.schemaVersion is int && data.schemaVersion >= 1
+        && (!('aiModel' in data) || (data.aiModel is string && data.aiModel.size() <= 100))
+        && (!('contentHash' in data) || (data.contentHash is string && data.contentHash.size() <= 128))
+        && (!('language' in data) || (data.language is string && data.language.size() <= 16))
+        && (!('region' in data) || (data.region is string && data.region.size() <= 64))
+        && (!('whyItMatters' in data) || (data.whyItMatters is string && data.whyItMatters.size() <= 1200))
+        && (!('sourceRetrievedAt' in data) || data.sourceRetrievedAt is timestamp)
+        && (!('ingestionRunId' in data) || (data.ingestionRunId is string && data.ingestionRunId.size() <= 128))
+        && (!('ingestionItemId' in data) || (data.ingestionItemId is string && data.ingestionItemId.size() <= 128))
+        && (!('reviewedBy' in data) || (data.reviewedBy is string && data.reviewedBy.size() <= 128))
+        && (!('reviewedAt' in data) || data.reviewedAt is timestamp)
+        && (!('groundingStatus' in data) || (data.groundingStatus is string && data.groundingStatus in ['verified', 'needs_review']));
+    }
+
+    function isValidTrendIngestionStage(stage) {
+      return stage is string && stage in [
+        'DISCOVERED',
+        'VALIDATING',
+        'VALIDATED',
+        'PROCESSING',
+        'PENDING_REVIEW',
+        'APPROVED',
+        'PUBLISHED',
+        'REJECTED',
+        'FAILED'
+      ];
+    }
+
+    function isValidTrendIngestionRun(data, runId) {
+      return data.keys().hasAll([
+          'id',
+          'status',
+          'triggeredBy',
+          'triggerMode',
+          'domains',
+          'windowHours',
+          'maxItemsPerDomain',
+          'providerIds',
+          'counts',
+          'errors',
+          'startedAt'
+        ])
+        && data.id is string && data.id == runId && isValidTrendId(data.id)
+        && data.status is string && data.status in ['running', 'completed', 'partial_failure', 'failed']
+        && data.triggeredBy is string && data.triggeredBy.size() > 0 && data.triggeredBy.size() <= 128
+        && data.triggerMode is string && data.triggerMode in ['manual', 'single_url', 'scheduled']
+        && data.domains is list && data.domains.size() <= 20
+        && data.windowHours is number && data.windowHours >= 1 && data.windowHours <= 720
+        && data.maxItemsPerDomain is int && data.maxItemsPerDomain >= 1 && data.maxItemsPerDomain <= 25
+        && data.providerIds is list && data.providerIds.size() <= 20
+        && data.counts is map
+        && data.errors is list && data.errors.size() <= 100
+        && data.startedAt is string && data.startedAt.size() <= 64;
+    }
+
+    function isValidTrendIngestionItem(data, itemId) {
+      return data.keys().hasAll([
+          'id',
+          'runId',
+          'stage',
+          'stageHistory',
+          'domainSlug',
+          'providerId',
+          'providerName',
+          'source',
+          'corroboratingSources',
+          'media',
+          'retryCount',
+          'createdAtIso',
+          'updatedAtIso'
+        ])
+        && data.id is string && data.id == itemId && isValidTrendId(data.id)
+        && data.runId is string && isValidTrendId(data.runId)
+        && isValidTrendIngestionStage(data.stage)
+        && data.stageHistory is list && data.stageHistory.size() <= 40
+        && isValidTrendDomainSlug(data.domainSlug)
+        && data.providerId is string && data.providerId.size() > 0 && data.providerId.size() <= 80
+        && data.providerName is string && data.providerName.size() > 0 && data.providerName.size() <= 120
+        && data.source is map
+        && data.corroboratingSources is list && data.corroboratingSources.size() <= 15
+        && isValidTrendMedia(data.media)
+        && data.retryCount is int && data.retryCount >= 0 && data.retryCount <= 20
+        && data.createdAtIso is string && data.createdAtIso.size() <= 64
+        && data.updatedAtIso is string && data.updatedAtIso.size() <= 64;
+    }
+
+    function isPublishedTrend(trendId) {
+      return isValidTrendId(trendId)
+        && exists(/databases/$(database)/documents/trendz/$(trendId))
+        && get(/databases/$(database)/documents/trendz/$(trendId)).data.status == 'published';
+    }
+
+    function isValidTrendLikeDoc(data, likeId) {
+      return data.keys().hasAll(['userId', 'targetType', 'targetId', 'domainSlug', 'createdAt'])
+        && data.keys().hasOnly(['userId', 'targetType', 'targetId', 'domainSlug', 'createdAt'])
+        && data.userId == uid()
+        && data.targetType == 'trendz'
+        && isValidTrendId(data.targetId)
+        && likeId == uid() + '_trendz_' + data.targetId
+        && isValidTrendDomainSlug(data.domainSlug)
+        && data.createdAt == request.time;
+    }
+
+    function isValidTrendBookmarkDoc(data, bookmarkId) {
+      return data.keys().hasAll([
+          'userId',
+          'targetType',
+          'targetId',
+          'domainSlug',
+          'trendTitle',
+          'trendSummary',
+          'trendPublisher',
+          'trendPublishedOn',
+          'trendMediaUrl',
+          'trendMediaType',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'userId',
+          'targetType',
+          'targetId',
+          'domainSlug',
+          'trendTitle',
+          'trendSummary',
+          'trendPublisher',
+          'trendPublishedOn',
+          'trendMediaUrl',
+          'trendMediaType',
+          'createdAt'
+        ])
+        && data.userId == uid()
+        && data.targetType == 'trendz'
+        && isValidTrendId(data.targetId)
+        && bookmarkId == uid() + '_trendz_' + data.targetId
+        && isValidTrendDomainSlug(data.domainSlug)
+        && data.trendTitle is string && data.trendTitle.size() > 0 && data.trendTitle.size() <= 240
+        && data.trendSummary is string && data.trendSummary.size() <= 500
+        && data.trendPublisher is string && data.trendPublisher.size() > 0 && data.trendPublisher.size() <= 160
+        && data.trendPublishedOn is string && data.trendPublishedOn.size() <= 32
+        && data.trendMediaUrl is string && data.trendMediaUrl.size() <= 2048
+        && data.trendMediaType in ['image', 'video']
+        && data.createdAt == request.time;
+    }
+
+    function isValidTrendViewDoc(data, userId, trendId) {
+      return data.keys().hasAll(['userId', 'trendId', 'domainSlug', 'viewedAt'])
+        && data.keys().hasOnly(['userId', 'trendId', 'domainSlug', 'viewedAt'])
+        && userId == uid()
+        && data.userId == uid()
+        && isValidTrendId(trendId)
+        && data.trendId == trendId
+        && isValidTrendDomainSlug(data.domainSlug)
+        && data.viewedAt == request.time;
+    }
+
+    function isValidTrendEngagementStatsUpdate(trendId) {
+      return signedIn()
+        && isValidTrendId(trendId)
+        && resource.data.status == 'published'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stats'])
+        && isValidTrendStats(request.resource.data.stats)
+        && request.resource.data.stats.comments == resource.data.stats.comments
+        && request.resource.data.stats.shares == resource.data.stats.shares
+        && (
+          // Atomic upvote create (+1)
+          (
+            request.resource.data.stats.likes == resource.data.stats.likes + 1
+            && request.resource.data.stats.saves == resource.data.stats.saves
+            && request.resource.data.stats.views == resource.data.stats.views
+            && !exists(/databases/$(database)/documents/likes/$(uid() + '_trendz_' + trendId))
+            && existsAfter(/databases/$(database)/documents/likes/$(uid() + '_trendz_' + trendId))
+          )
+          // Atomic upvote delete (-1, clamped >= 0)
+          || (
+            ((resource.data.stats.likes > 0 && request.resource.data.stats.likes == resource.data.stats.likes - 1)
+              || (resource.data.stats.likes == 0 && request.resource.data.stats.likes == 0))
+            && request.resource.data.stats.saves == resource.data.stats.saves
+            && request.resource.data.stats.views == resource.data.stats.views
+            && exists(/databases/$(database)/documents/likes/$(uid() + '_trendz_' + trendId))
+            && !existsAfter(/databases/$(database)/documents/likes/$(uid() + '_trendz_' + trendId))
+          )
+          // Atomic bookmark create (+1)
+          || (
+            request.resource.data.stats.saves == resource.data.stats.saves + 1
+            && request.resource.data.stats.likes == resource.data.stats.likes
+            && request.resource.data.stats.views == resource.data.stats.views
+            && !exists(/databases/$(database)/documents/bookmarks/$(uid() + '_trendz_' + trendId))
+            && existsAfter(/databases/$(database)/documents/bookmarks/$(uid() + '_trendz_' + trendId))
+          )
+          // Atomic bookmark delete (-1, clamped >= 0)
+          || (
+            ((resource.data.stats.saves > 0 && request.resource.data.stats.saves == resource.data.stats.saves - 1)
+              || (resource.data.stats.saves == 0 && request.resource.data.stats.saves == 0))
+            && request.resource.data.stats.likes == resource.data.stats.likes
+            && request.resource.data.stats.views == resource.data.stats.views
+            && exists(/databases/$(database)/documents/bookmarks/$(uid() + '_trendz_' + trendId))
+            && !existsAfter(/databases/$(database)/documents/bookmarks/$(uid() + '_trendz_' + trendId))
+          )
+          // Atomic first-time user view (+1, deduplicated via /users/{uid}/trendViews/{trendId})
+          || (
+            request.resource.data.stats.views == resource.data.stats.views + 1
+            && request.resource.data.stats.likes == resource.data.stats.likes
+            && request.resource.data.stats.saves == resource.data.stats.saves
+            && !exists(/databases/$(database)/documents/users/$(uid())/trendViews/$(trendId))
+            && existsAfter(/databases/$(database)/documents/users/$(uid())/trendViews/$(trendId))
+          )
+        );
     }
 
     function owns(field) {
@@ -78,12 +457,31 @@ service cloud.firestore {
       allow create: if signedIn()
         && userId == uid()
         && request.resource.data.uid == uid()
-        && request.resource.data.role == 'user';
-      allow update: if isAdmin() || (signedIn() && userId == uid() && !protectedUserFieldsChanged());
+        && request.resource.data.role == 'user'
+        && isValidFollowedTrendDomains(request.resource.data);
+      allow update: if isAdmin() || (
+        signedIn()
+        && userId == uid()
+        && !protectedUserFieldsChanged()
+        && isValidFollowedTrendDomains(request.resource.data)
+      );
       allow delete: if isAdmin();
 
       match /sparkConversations/{conversationId} {
-        allow read, write: if signedIn() && userId == uid();
+        allow get, create, update, delete: if signedIn() && userId == uid() && isValidTrendId(conversationId);
+        allow list: if signedIn() && userId == uid();
+      }
+
+      match /trendViews/{trendId} {
+        allow get: if signedIn() && userId == uid() && isValidTrendId(trendId);
+        allow list: if signedIn() && userId == uid() && resource.data.userId == uid();
+        allow create: if signedIn()
+          && userId == uid()
+          && isValidTrendId(trendId)
+          && isValidTrendViewDoc(request.resource.data, userId, trendId)
+          && isPublishedTrend(trendId);
+        allow update: if false;
+        allow delete: if signedIn() && userId == uid() && isValidTrendId(trendId);
       }
     }
 
@@ -160,8 +558,60 @@ service cloud.firestore {
     }
 
     match /trendz/{trendId} {
-      allow read: if signedIn();
-      allow write: if isModerator();
+      // Signed-in users can read published trends; moderators/admins may also inspect drafts/archived/flagged items.
+      allow get: if signedIn() && isValidTrendId(trendId) && (resource.data.status == 'published' || isModerator());
+      allow list: if signedIn() && (resource.data.status == 'published' || isModerator());
+
+      // Publishing and editorial updates are strictly restricted to moderators/admins (and trusted backend Admin SDK).
+      // Regular users have zero write permissions; client-side updates cannot tamper with immutable fields or engagement aggregates.
+      allow create: if isModerator()
+        && isValidTrendId(trendId)
+        && isValidTrendRecord(request.resource.data, trendId)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if (
+        isModerator()
+        && isValidTrendId(trendId)
+        && isValidTrendRecord(request.resource.data, trendId)
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.discoveredAt == resource.data.discoveredAt
+        && request.resource.data.updatedAt == request.time
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'id',
+          'createdAt',
+          'discoveredAt',
+          'stats',
+          'momentumScore'
+        ])
+      ) || isValidTrendEngagementStatsUpdate(trendId);
+
+      allow delete: if isAdmin() && isValidTrendId(trendId);
+    }
+
+    // Trendz ingestion registries & editorial review queue — strictly restricted to admins/moderators.
+    // Ordinary users have zero read or write access to unreviewed sources, pipeline runs, or review items.
+    match /trendSources/{sourceId} {
+      allow read: if isModerator();
+      allow create, update: if isModerator() && isValidTrendId(sourceId);
+      allow delete: if isAdmin() && isValidTrendId(sourceId);
+    }
+
+    match /trendIngestionRuns/{runId} {
+      allow read: if isModerator();
+      allow create, update: if isModerator()
+        && isValidTrendId(runId)
+        && isValidTrendIngestionRun(request.resource.data, runId);
+      allow delete: if isAdmin() && isValidTrendId(runId);
+    }
+
+    match /trendIngestionItems/{itemId} {
+      allow read: if isModerator();
+      allow create, update: if isModerator()
+        && isValidTrendId(itemId)
+        && isValidTrendIngestionItem(request.resource.data, itemId);
+      allow delete: if isAdmin() && isValidTrendId(itemId);
     }
 
     match /communities/{communityId} {
@@ -473,15 +923,43 @@ service cloud.firestore {
     }
 
     match /likes/{likeId} {
-      allow read: if signedIn();
-      allow create: if owns('userId');
+      allow get: if signedIn() && (
+        (resource != null && resource.data.userId == uid())
+        || (resource == null && likeId.size() > uid().size() && likeId[0:uid().size() + 1] == uid() + '_')
+      );
+      allow list: if signedIn() && resource.data.userId == uid();
+      allow create: if signedIn() && (
+        (
+          ('targetType' in request.resource.data && request.resource.data.targetType == 'trendz')
+          && isValidTrendLikeDoc(request.resource.data, likeId)
+          && isPublishedTrend(request.resource.data.targetId)
+        )
+        || (
+          !('targetType' in request.resource.data && request.resource.data.targetType == 'trendz')
+          && owns('userId')
+        )
+      );
       allow delete: if existingOwner('userId') || isModerator();
       allow update: if false;
     }
 
     match /bookmarks/{bookmarkId} {
-      allow read: if signedIn() && resource.data.userId == uid();
-      allow create: if owns('userId');
+      allow get: if signedIn() && (
+        (resource != null && resource.data.userId == uid())
+        || (resource == null && bookmarkId.size() > uid().size() && bookmarkId[0:uid().size() + 1] == uid() + '_')
+      );
+      allow list: if signedIn() && resource.data.userId == uid();
+      allow create: if signedIn() && (
+        (
+          ('targetType' in request.resource.data && request.resource.data.targetType == 'trendz')
+          && isValidTrendBookmarkDoc(request.resource.data, bookmarkId)
+          && isPublishedTrend(request.resource.data.targetId)
+        )
+        || (
+          !('targetType' in request.resource.data && request.resource.data.targetType == 'trendz')
+          && owns('userId')
+        )
+      );
       allow delete: if existingOwner('userId') || isModerator();
       allow update: if false;
     }
