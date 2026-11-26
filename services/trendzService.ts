@@ -10,7 +10,6 @@ import {
     serverTimestamp,
     startAfter,
     Timestamp,
-    updateDoc,
     where,
     type DocumentData,
     type QueryConstraint,
@@ -1079,6 +1078,8 @@ const USERS_COLLECTION = 'users';
 const LIKES_COLLECTION = 'likes';
 const BOOKMARKS_COLLECTION = 'bookmarks';
 const TREND_VIEWS_SUBCOLLECTION = 'trendViews';
+const TRENDZ_PREFERENCES_SUBCOLLECTION = 'trendzPreferences';
+const TRENDZ_DOMAIN_PREFERENCES_DOC_ID = 'domains';
 const TRENDZ_TARGET_TYPE = 'trendz' as const;
 
 export interface TrendBookmarkRecord {
@@ -1195,10 +1196,38 @@ export function normalizeFollowedTrendDomains(raw: unknown): TrendzDomainSlug[] 
 }
 
 /**
- * Reads the authenticated user's followed Trendz domain slugs from users/{userId}.
+ * Returns the canonical private Firestore document path for a user's followed Trendz domains.
+ */
+export function getUserTrendzDomainPreferencesPath(userId: string): string {
+    const cleanUid = assertValidUserId(userId);
+    return `${USERS_COLLECTION}/${cleanUid}/${TRENDZ_PREFERENCES_SUBCOLLECTION}/${TRENDZ_DOMAIN_PREFERENCES_DOC_ID}`;
+}
+
+function getUserTrendzDomainPreferencesRef(cleanUid: string) {
+    return doc(
+        db,
+        USERS_COLLECTION,
+        cleanUid,
+        TRENDZ_PREFERENCES_SUBCOLLECTION,
+        TRENDZ_DOMAIN_PREFERENCES_DOC_ID
+    );
+}
+
+/**
+ * Reads the authenticated user's followed Trendz domain slugs from the private owner-only
+ * document users/{userId}/trendzPreferences/domains, falling back gracefully to legacy
+ * users/{userId}.followedTrendDomains if the private preferences document has not yet been initialized.
  */
 export async function fetchUserFollowedTrendDomains(userId: string): Promise<TrendzDomainSlug[]> {
     const cleanUid = assertValidUserId(userId);
+    const prefRef = getUserTrendzDomainPreferencesRef(cleanUid);
+    const prefSnap = await getDoc(prefRef);
+
+    if (prefSnap.exists()) {
+        return normalizeFollowedTrendDomains(prefSnap.data()?.followedDomains);
+    }
+
+    // Legacy Phase 04 fallback for accounts that followed domains before migration
     const userSnap = await getDoc(doc(db, USERS_COLLECTION, cleanUid));
     if (!userSnap.exists()) {
         return [];
@@ -1207,7 +1236,8 @@ export async function fetchUserFollowedTrendDomains(userId: string): Promise<Tre
 }
 
 /**
- * Persists a validated, deduplicated list of followed Trendz domains on users/{userId}.
+ * Persists a validated, deduplicated list of followed Trendz domains in the private owner-only
+ * document users/{userId}/trendzPreferences/domains using a Firestore transaction.
  */
 export async function setUserFollowedTrendDomains(
     userId: string,
@@ -1215,16 +1245,32 @@ export async function setUserFollowedTrendDomains(
 ): Promise<TrendzDomainSlug[]> {
     const cleanUid = assertValidUserId(userId);
     const normalized = normalizeFollowedTrendDomains(domainSlugs);
-    const userRef = doc(db, USERS_COLLECTION, cleanUid);
-    await updateDoc(userRef, {
-        followedTrendDomains: normalized,
+    const prefRef = getUserTrendzDomainPreferencesRef(cleanUid);
+
+    return runTransaction(db, async (tx) => {
+        const prefSnap = await tx.get(prefRef);
+        if (prefSnap.exists()) {
+            tx.update(prefRef, {
+                userId: cleanUid,
+                followedDomains: normalized,
+                updatedAt: serverTimestamp(),
+            });
+        } else {
+            tx.set(prefRef, {
+                userId: cleanUid,
+                followedDomains: normalized,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
+        }
+        return normalized;
     });
-    return normalized;
 }
 
 /**
  * Follows a canonical Trendz domain for the authenticated user using a Firestore transaction
- * so duplicate entries cannot be created by concurrent requests.
+ * on users/{userId}/trendzPreferences/domains so duplicate entries cannot be created by
+ * concurrent requests.
  */
 export async function followTrendDomain(
     userId: string,
@@ -1236,24 +1282,43 @@ export async function followTrendDomain(
         throw new Error('Invalid Trendz domain.');
     }
 
+    const prefRef = getUserTrendzDomainPreferencesRef(cleanUid);
     const userRef = doc(db, USERS_COLLECTION, cleanUid);
+
     return runTransaction(db, async (tx) => {
+        const prefSnap = await tx.get(prefRef);
+        if (prefSnap.exists()) {
+            const current = normalizeFollowedTrendDomains(prefSnap.data()?.followedDomains);
+            if (current.includes(slug)) {
+                return current;
+            }
+            const next = normalizeFollowedTrendDomains([...current, slug]);
+            tx.update(prefRef, {
+                userId: cleanUid,
+                followedDomains: next,
+                updatedAt: serverTimestamp(),
+            });
+            return next;
+        }
+
         const userSnap = await tx.get(userRef);
-        if (!userSnap.exists()) {
-            throw new Error('User profile not found. Please refresh and sign in again.');
-        }
-        const current = normalizeFollowedTrendDomains(userSnap.data()?.followedTrendDomains);
-        if (current.includes(slug)) {
-            return current;
-        }
-        const next = normalizeFollowedTrendDomains([...current, slug]);
-        tx.update(userRef, { followedTrendDomains: next });
+        const legacy = userSnap.exists()
+            ? normalizeFollowedTrendDomains(userSnap.data()?.followedTrendDomains)
+            : [];
+        const next = normalizeFollowedTrendDomains([...legacy, slug]);
+        tx.set(prefRef, {
+            userId: cleanUid,
+            followedDomains: next,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
         return next;
     });
 }
 
 /**
- * Unfollows a canonical Trendz domain for the authenticated user using a Firestore transaction.
+ * Unfollows a canonical Trendz domain for the authenticated user using a Firestore transaction
+ * on users/{userId}/trendzPreferences/domains.
  */
 export async function unfollowTrendDomain(
     userId: string,
@@ -1265,18 +1330,36 @@ export async function unfollowTrendDomain(
         throw new Error('Invalid Trendz domain.');
     }
 
+    const prefRef = getUserTrendzDomainPreferencesRef(cleanUid);
     const userRef = doc(db, USERS_COLLECTION, cleanUid);
+
     return runTransaction(db, async (tx) => {
+        const prefSnap = await tx.get(prefRef);
+        if (prefSnap.exists()) {
+            const current = normalizeFollowedTrendDomains(prefSnap.data()?.followedDomains);
+            if (!current.includes(slug)) {
+                return current;
+            }
+            const next = current.filter((item) => item !== slug);
+            tx.update(prefRef, {
+                userId: cleanUid,
+                followedDomains: next,
+                updatedAt: serverTimestamp(),
+            });
+            return next;
+        }
+
         const userSnap = await tx.get(userRef);
-        if (!userSnap.exists()) {
-            throw new Error('User profile not found. Please refresh and sign in again.');
-        }
-        const current = normalizeFollowedTrendDomains(userSnap.data()?.followedTrendDomains);
-        if (!current.includes(slug)) {
-            return current;
-        }
-        const next = current.filter((item) => item !== slug);
-        tx.update(userRef, { followedTrendDomains: next });
+        const legacy = userSnap.exists()
+            ? normalizeFollowedTrendDomains(userSnap.data()?.followedTrendDomains)
+            : [];
+        const next = legacy.filter((item) => item !== slug);
+        tx.set(prefRef, {
+            userId: cleanUid,
+            followedDomains: next,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
         return next;
     });
 }

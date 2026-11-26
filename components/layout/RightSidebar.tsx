@@ -333,6 +333,7 @@ const TrendzSidebar: React.FC<
 
     const navigate = ReactRouterDOM.useNavigate();
     const location = ReactRouterDOM.useLocation();
+    const { currentUser } = useAuth();
     const { domainSelections, setDomainSelection } = useFilters();
     const {
         isAuthenticated,
@@ -343,7 +344,8 @@ const TrendzSidebar: React.FC<
         refreshEngagement,
         followedDomainSlugs,
         isDomainPending,
-        toggleFollowDomain,
+        followDomain,
+        unfollowDomain,
         bookmarkRecords,
     } = useTrendzEngagement();
 
@@ -399,6 +401,18 @@ const TrendzSidebar: React.FC<
         }
     }, [followedDomainsFilter]);
 
+    // Clear sidebar followed-domain filter state whenever the authenticated user changes or signs out
+    const prevAuthUidRef = useRef<string | null>(currentUser?.uid ?? null);
+    useEffect(() => {
+        const nextUid = currentUser?.uid ?? null;
+        if (prevAuthUidRef.current !== nextUid) {
+            prevAuthUidRef.current = nextUid;
+            setIsFollowedView(false);
+            setFollowedDomainsFilter(null);
+            setDomainSelection('trendz', []);
+        }
+    }, [currentUser?.uid, setFollowedDomainsFilter, setDomainSelection]);
+
     const handleBackFromFollowed = () => {
         setIsFollowedView(false);
         if (followedDomainsFilter) {
@@ -425,10 +439,13 @@ const TrendzSidebar: React.FC<
         }
     };
 
-    const handleToggleDomainFollowInSidebar = async (slug: string, name: string) => {
-        const wasFollowed = followedSlugSet.has(slug as any);
-        const ok = await toggleFollowDomain(slug);
-        if (ok && wasFollowed && followedDomainsFilter === name) {
+    const handleFollowDomainInSidebar = async (slug: string) => {
+        await followDomain(slug);
+    };
+
+    const handleUnfollowDomainInSidebar = async (slug: string, name: string) => {
+        const ok = await unfollowDomain(slug);
+        if (ok && (followedDomainsFilter === name || (activeDomainSlugs.size === 1 && activeDomainSlugs.has(slug as any)))) {
             setFollowedDomainsFilter(null);
             setDomainSelection('trendz', []);
         }
@@ -558,7 +575,7 @@ const TrendzSidebar: React.FC<
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() => void handleToggleDomainFollowInSidebar(domain.slug, domain.name)}
+                                                    onClick={() => void handleUnfollowDomainInSidebar(domain.slug, domain.name)}
                                                     disabled={pending}
                                                     aria-label={`Unfollow ${domain.name}`}
                                                     title={`Unfollow ${domain.name}`}
@@ -594,7 +611,7 @@ const TrendzSidebar: React.FC<
                                                 </div>
                                                 <button
                                                     type="button"
-                                                    onClick={() => void handleToggleDomainFollowInSidebar(domain.slug, domain.name)}
+                                                    onClick={() => void handleFollowDomainInSidebar(domain.slug)}
                                                     disabled={pending}
                                                     aria-label={`Follow ${domain.name}`}
                                                     className="px-2 py-0.5 border border-zinc-800 hover:border-zinc-500 text-zinc-400 hover:text-white font-mono text-[10px] uppercase tracking-wider transition-colors disabled:opacity-50 shrink-0"
@@ -630,7 +647,7 @@ const TrendzSidebar: React.FC<
                                     <FilterIcon className="w-4 h-4 text-zinc-500" />
                                     <span>
                                         // FOLLOWED_DOMAINS
-                                        {!preferencesLoading && followedDomains.length > 0
+                                        {!preferencesLoading && isAuthenticated
                                             ? ` [${followedDomains.length}]`
                                             : ''}
                                     </span>

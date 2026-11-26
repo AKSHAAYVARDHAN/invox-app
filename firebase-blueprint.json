@@ -492,6 +492,21 @@
       },
       "required": ["userId", "trendId", "domainSlug", "viewedAt"]
     },
+    "TrendzDomainPreferences": {
+      "title": "TrendzDomainPreferences",
+      "description": "Private per-user followed Trendz domain preferences stored under /users/{userId}/trendzPreferences/domains (strictly owner-only read and write).",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "followedDomains": {
+          "type": "array",
+          "description": "Deduplicated list of canonical Trendz domain slugs followed by the user"
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "followedDomains", "updatedAt"]
+    },
     "Comment": {
       "title": "Comment",
       "description": "User comment or insight attached to posts or trendz.",
@@ -693,6 +708,10 @@
     "/users/{userId}/trendViews/{trendId}": {
       "schema": "TrendView",
       "description": "Private per-user deduplicated Trendz view records used for view counting and personalization."
+    },
+    "/users/{userId}/trendzPreferences/{prefId}": {
+      "schema": "TrendzDomainPreferences",
+      "description": "Private per-user Trendz domain-following preferences strictly scoped to the authenticated owner for both reads and writes."
     },
     "/likes/{likeId}": {
       "schema": "Like",
