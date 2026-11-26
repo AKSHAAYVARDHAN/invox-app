@@ -194,16 +194,25 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
         setPreferencesLoading(false);
     }, []);
 
-    // Strict user isolation: reset & reload whenever authenticated user changes
+    // Strict user isolation: reset & reload whenever authenticated user changes.
+    // Guard: do not fire while authLoading is true — the Firebase Auth token has not
+    // propagated to Firestore yet, which causes a permission-denied error on getDoc.
     useEffect(() => {
+        if (authLoading) {
+            // Auth state is still resolving; do not attempt Firestore reads yet.
+            return;
+        }
         setStatsOverrides({});
         setActionError(null);
         void loadUserEngagement(uid);
-    }, [uid, loadUserEngagement]);
+    }, [uid, authLoading, loadUserEngagement]);
 
     const refreshEngagement = useCallback(async () => {
+        if (authLoading) {
+            return;
+        }
         await loadUserEngagement(uid);
-    }, [uid, loadUserEngagement]);
+    }, [uid, authLoading, loadUserEngagement]);
 
     const clearActionError = useCallback(() => {
         setActionError(null);
