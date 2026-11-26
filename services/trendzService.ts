@@ -1213,6 +1213,16 @@ function getUserTrendzDomainPreferencesRef(cleanUid: string) {
     );
 }
 
+function readFollowedDomainsFromPrefDoc(raw: DocumentData | undefined): TrendzDomainSlug[] {
+    if (!raw || typeof raw !== 'object') {
+        return [];
+    }
+    const field = Array.isArray(raw.followedDomainSlugs)
+        ? raw.followedDomainSlugs
+        : raw.followedDomains;
+    return normalizeFollowedTrendDomains(field);
+}
+
 /**
  * Reads the authenticated user's followed Trendz domain slugs from the private owner-only
  * document users/{userId}/trendzPreferences/domains, falling back gracefully to legacy
@@ -1224,7 +1234,7 @@ export async function fetchUserFollowedTrendDomains(userId: string): Promise<Tre
     const prefSnap = await getDoc(prefRef);
 
     if (prefSnap.exists()) {
-        return normalizeFollowedTrendDomains(prefSnap.data()?.followedDomains);
+        return readFollowedDomainsFromPrefDoc(prefSnap.data());
     }
 
     // Legacy Phase 04 fallback for accounts that followed domains before migration
@@ -1249,19 +1259,15 @@ export async function setUserFollowedTrendDomains(
 
     return runTransaction(db, async (tx) => {
         const prefSnap = await tx.get(prefRef);
+        const payload = {
+            uid: cleanUid,
+            followedDomainSlugs: normalized,
+            updatedAt: serverTimestamp(),
+        };
         if (prefSnap.exists()) {
-            tx.update(prefRef, {
-                userId: cleanUid,
-                followedDomains: normalized,
-                updatedAt: serverTimestamp(),
-            });
+            tx.set(prefRef, payload);
         } else {
-            tx.set(prefRef, {
-                userId: cleanUid,
-                followedDomains: normalized,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-            });
+            tx.set(prefRef, payload);
         }
         return normalized;
     });
@@ -1288,14 +1294,14 @@ export async function followTrendDomain(
     return runTransaction(db, async (tx) => {
         const prefSnap = await tx.get(prefRef);
         if (prefSnap.exists()) {
-            const current = normalizeFollowedTrendDomains(prefSnap.data()?.followedDomains);
+            const current = readFollowedDomainsFromPrefDoc(prefSnap.data());
             if (current.includes(slug)) {
                 return current;
             }
             const next = normalizeFollowedTrendDomains([...current, slug]);
-            tx.update(prefRef, {
-                userId: cleanUid,
-                followedDomains: next,
+            tx.set(prefRef, {
+                uid: cleanUid,
+                followedDomainSlugs: next,
                 updatedAt: serverTimestamp(),
             });
             return next;
@@ -1307,9 +1313,8 @@ export async function followTrendDomain(
             : [];
         const next = normalizeFollowedTrendDomains([...legacy, slug]);
         tx.set(prefRef, {
-            userId: cleanUid,
-            followedDomains: next,
-            createdAt: serverTimestamp(),
+            uid: cleanUid,
+            followedDomainSlugs: next,
             updatedAt: serverTimestamp(),
         });
         return next;
@@ -1336,14 +1341,14 @@ export async function unfollowTrendDomain(
     return runTransaction(db, async (tx) => {
         const prefSnap = await tx.get(prefRef);
         if (prefSnap.exists()) {
-            const current = normalizeFollowedTrendDomains(prefSnap.data()?.followedDomains);
+            const current = readFollowedDomainsFromPrefDoc(prefSnap.data());
             if (!current.includes(slug)) {
                 return current;
             }
             const next = current.filter((item) => item !== slug);
-            tx.update(prefRef, {
-                userId: cleanUid,
-                followedDomains: next,
+            tx.set(prefRef, {
+                uid: cleanUid,
+                followedDomainSlugs: next,
                 updatedAt: serverTimestamp(),
             });
             return next;
@@ -1355,9 +1360,8 @@ export async function unfollowTrendDomain(
             : [];
         const next = legacy.filter((item) => item !== slug);
         tx.set(prefRef, {
-            userId: cleanUid,
-            followedDomains: next,
-            createdAt: serverTimestamp(),
+            uid: cleanUid,
+            followedDomainSlugs: next,
             updatedAt: serverTimestamp(),
         });
         return next;
@@ -1764,7 +1768,9 @@ export async function fetchUserTrendViews(userId: string): Promise<TrendViewReco
         }
         return records;
     } catch {
-        const fallbackSnap = await getDocs(query(viewsRef, limit(100)));
+        const fallbackSnap = await getDocs(
+            query(viewsRef, where('userId', '==', cleanUid), limit(100))
+        );
         const records: TrendViewRecord[] = [];
         for (const docSnap of fallbackSnap.docs) {
             const raw = docSnap.data();

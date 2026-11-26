@@ -43,6 +43,8 @@ interface TrendzEngagementContextValue {
     followedDomainSlugs: TrendzDomainSlug[];
     isDomainFollowed: (rawDomain: string) => boolean;
     isDomainPending: (rawDomain: string) => boolean;
+    followDomain: (rawDomain: string) => Promise<boolean>;
+    unfollowDomain: (rawDomain: string) => Promise<boolean>;
     toggleFollowDomain: (rawDomain: string) => Promise<boolean>;
 
     // Bookmarks
@@ -89,7 +91,7 @@ function formatFirebaseActionError(err: any, fallbackMessage: string): string {
 }
 
 export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { currentUser, userProfile, loading: authLoading } = useAuth();
+    const { currentUser, loading: authLoading } = useAuth();
     const uid = currentUser?.uid || null;
 
     const [followedDomainSlugs, setFollowedDomainSlugs] = useState<TrendzDomainSlug[]>([]);
@@ -109,17 +111,9 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
     const loadSeqRef = useRef(0);
     const activeUidRef = useRef<string | null>(uid);
     activeUidRef.current = uid;
-
-    // Keep followed domains synchronized with real-time AuthContext userProfile snapshot
-    useEffect(() => {
-        if (!uid) {
-            setFollowedDomainSlugs([]);
-            return;
-        }
-        if (userProfile && userProfile.uid === uid && Array.isArray(userProfile.followedTrendDomains)) {
-            setFollowedDomainSlugs(normalizeFollowedTrendDomains(userProfile.followedTrendDomains));
-        }
-    }, [uid, userProfile]);
+    const pendingDomainsRef = useRef<Set<string>>(new Set());
+    const followedDomainSlugsRef = useRef<TrendzDomainSlug[]>(followedDomainSlugs);
+    followedDomainSlugsRef.current = followedDomainSlugs;
 
     const loadUserEngagement = useCallback(async (targetUid: string | null) => {
         const seq = ++loadSeqRef.current;
@@ -156,8 +150,11 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
         const errors: string[] = [];
 
         if (domainsRes.status === 'fulfilled') {
+            followedDomainSlugsRef.current = domainsRes.value;
             setFollowedDomainSlugs(domainsRes.value);
         } else {
+            followedDomainSlugsRef.current = [];
+            setFollowedDomainSlugs([]);
             errors.push('followed domains');
             console.error('[TRENDZ_LOAD_DOMAINS_ERROR]', domainsRes.reason);
         }
@@ -202,7 +199,17 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
             // Auth state is still resolving; do not attempt Firestore reads yet.
             return;
         }
+        followedDomainSlugsRef.current = [];
+        pendingDomainsRef.current = new Set();
+        setFollowedDomainSlugs([]);
+        setBookmarkRecords([]);
+        setUpvoteRecords([]);
+        setViewRecords([]);
         setStatsOverrides({});
+        setPendingDomains(new Set());
+        setPendingBookmarks(new Set());
+        setPendingUpvotes(new Set());
+        setPreferencesError(null);
         setActionError(null);
         void loadUserEngagement(uid);
     }, [uid, authLoading, loadUserEngagement]);
@@ -266,8 +273,8 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
         [pendingUpvotes]
     );
 
-    const toggleFollowDomain = useCallback(
-        async (rawDomain: string): Promise<boolean> => {
+    const mutateDomainFollow = useCallback(
+        async (rawDomain: string, intent: 'follow' | 'unfollow' | 'toggle'): Promise<boolean> => {
             if (!uid) {
                 setActionError('Sign in to follow or unfollow Trendz domains.');
                 return false;
@@ -277,18 +284,31 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
                 setActionError('Invalid Trendz domain selected.');
                 return false;
             }
-            if (pendingDomains.has(slug)) {
+            if (pendingDomainsRef.current.has(slug)) {
                 return false;
             }
 
-            const wasFollowed = followedDomainSet.has(slug);
-            const previous = followedDomainSlugs;
-            const optimisticNext = wasFollowed
-                ? previous.filter((item) => item !== slug)
-                : normalizeFollowedTrendDomains([...previous, slug]);
+            const previous = followedDomainSlugsRef.current;
+            const currentlyFollowed = previous.includes(slug);
+            const shouldFollow =
+                intent === 'follow' ? true : intent === 'unfollow' ? false : !currentlyFollowed;
+
+            if (shouldFollow && currentlyFollowed) {
+                return true;
+            }
+            if (!shouldFollow && !currentlyFollowed) {
+                return true;
+            }
+
+            const optimisticNext = shouldFollow
+                ? normalizeFollowedTrendDomains([...previous, slug])
+                : previous.filter((item) => item !== slug);
 
             setActionError(null);
+            followedDomainSlugsRef.current = optimisticNext;
             setFollowedDomainSlugs(optimisticNext);
+
+            pendingDomainsRef.current.add(slug);
             setPendingDomains((prev) => {
                 const next = new Set(prev);
                 next.add(slug);
@@ -296,27 +316,30 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
             });
 
             try {
-                const persisted = wasFollowed
-                    ? await unfollowTrendDomain(uid, slug)
-                    : await followTrendDomain(uid, slug);
+                const persisted = shouldFollow
+                    ? await followTrendDomain(uid, slug)
+                    : await unfollowTrendDomain(uid, slug);
 
                 if (activeUidRef.current === uid) {
+                    followedDomainSlugsRef.current = persisted;
                     setFollowedDomainSlugs(persisted);
                 }
                 return true;
             } catch (err) {
                 console.error('[TRENDZ_FOLLOW_DOMAIN_ERROR]', err);
                 if (activeUidRef.current === uid) {
+                    followedDomainSlugsRef.current = previous;
                     setFollowedDomainSlugs(previous);
                     setActionError(
                         formatFirebaseActionError(
                             err,
-                            `Failed to ${wasFollowed ? 'unfollow' : 'follow'} ${formatTrendzDomainName(slug)}.`
+                            `Failed to ${shouldFollow ? 'follow' : 'unfollow'} ${formatTrendzDomainName(slug)}.`
                         )
                     );
                 }
                 return false;
             } finally {
+                pendingDomainsRef.current.delete(slug);
                 setPendingDomains((prev) => {
                     const next = new Set(prev);
                     next.delete(slug);
@@ -324,7 +347,22 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
                 });
             }
         },
-        [uid, pendingDomains, followedDomainSet, followedDomainSlugs]
+        [uid]
+    );
+
+    const followDomain = useCallback(
+        (rawDomain: string) => mutateDomainFollow(rawDomain, 'follow'),
+        [mutateDomainFollow]
+    );
+
+    const unfollowDomain = useCallback(
+        (rawDomain: string) => mutateDomainFollow(rawDomain, 'unfollow'),
+        [mutateDomainFollow]
+    );
+
+    const toggleFollowDomain = useCallback(
+        (rawDomain: string) => mutateDomainFollow(rawDomain, 'toggle'),
+        [mutateDomainFollow]
     );
 
     const toggleBookmark = useCallback(
@@ -637,6 +675,8 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
             followedDomainSlugs,
             isDomainFollowed,
             isDomainPending,
+            followDomain,
+            unfollowDomain,
             toggleFollowDomain,
             bookmarkRecords,
             bookmarkedTrendIds,
@@ -666,6 +706,8 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
             followedDomainSlugs,
             isDomainFollowed,
             isDomainPending,
+            followDomain,
+            unfollowDomain,
             toggleFollowDomain,
             bookmarkRecords,
             bookmarkedTrendIds,

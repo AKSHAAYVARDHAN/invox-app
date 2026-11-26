@@ -497,15 +497,14 @@
       "description": "Private per-user followed Trendz domain preferences stored under /users/{userId}/trendzPreferences/domains (strictly owner-only read and write).",
       "type": "object",
       "properties": {
-        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
-        "followedDomains": {
+        "uid": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "followedDomainSlugs": {
           "type": "array",
           "description": "Deduplicated list of canonical Trendz domain slugs followed by the user"
         },
-        "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["userId", "followedDomains", "updatedAt"]
+      "required": ["uid", "followedDomainSlugs", "updatedAt"]
     },
     "Comment": {
       "title": "Comment",
