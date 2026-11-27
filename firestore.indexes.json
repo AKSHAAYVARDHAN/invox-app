@@ -211,6 +211,14 @@
         { "fieldPath": "stage", "order": "ASCENDING" },
         { "fieldPath": "updatedAtIso", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "trendzAiConversations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "trendId", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

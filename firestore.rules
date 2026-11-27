@@ -507,6 +507,155 @@ service cloud.firestore {
           && request.resource.data.updatedAt == request.time;
         allow delete: if signedIn() && userId == uid() && docId == 'domains';
       }
+
+      function trendzAiConversationPath(conversationId) {
+        return /databases/$(database)/documents/users/$(userId)/trendzAiConversations/$(conversationId);
+      }
+
+      function isValidTrendAiConversationDoc(data, conversationId) {
+        return data.keys().hasAll([
+            'id', 'userId', 'trendId', 'trendTitle', 'trendDomainSlug',
+            'trendDomainName', 'trendPublisher', 'title', 'lastMessagePreview',
+            'messageCount', 'memorySummary', 'summarizedMessageCount',
+            'createdAt', 'updatedAt'
+          ])
+          && data.keys().hasOnly([
+            'id', 'userId', 'trendId', 'trendTitle', 'trendDomainSlug',
+            'trendDomainName', 'trendPublisher', 'title', 'lastMessagePreview',
+            'messageCount', 'memorySummary', 'summarizedMessageCount',
+            'createdAt', 'updatedAt'
+          ])
+          && data.id == conversationId
+          && data.userId == userId
+          && isValidTrendId(data.trendId)
+          && data.trendTitle is string && data.trendTitle.size() > 0 && data.trendTitle.size() <= 240
+          && isValidTrendDomainSlug(data.trendDomainSlug)
+          && data.trendDomainName is string && data.trendDomainName.size() > 0 && data.trendDomainName.size() <= 80
+          && data.trendPublisher is string && data.trendPublisher.size() > 0 && data.trendPublisher.size() <= 160
+          && data.title is string && data.title.size() > 0 && data.title.size() <= 140
+          && data.lastMessagePreview is string && data.lastMessagePreview.size() <= 240
+          && data.messageCount is int && data.messageCount >= 0 && data.messageCount <= 1000
+          && data.memorySummary is string && data.memorySummary.size() <= 3000
+          && data.summarizedMessageCount is int && data.summarizedMessageCount >= 0 && data.summarizedMessageCount <= data.messageCount
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      function isValidTrendAiGroundingMap(g) {
+        return g is map
+          && g.keys().hasAll([
+            'verificationStatus', 'verificationScope', 'excerptCompleteness',
+            'evidenceSufficiency', 'evidenceWarnings', 'isSimulated', 'sourceAttribution'
+          ])
+          && g.keys().hasOnly([
+            'verificationStatus', 'verificationScope', 'excerptCompleteness',
+            'evidenceSufficiency', 'evidenceWarnings', 'isSimulated', 'sourceAttribution'
+          ])
+          && g.verificationStatus in ['verified', 'unavailable', 'unverified']
+          && g.verificationScope == 'url_reachability_only'
+          && g.excerptCompleteness in ['full_excerpt', 'truncated', 'unavailable']
+          && g.evidenceSufficiency in ['strong', 'partial', 'limited']
+          && g.evidenceWarnings is list && g.evidenceWarnings.size() <= 8
+          && g.isSimulated is bool
+          && g.sourceAttribution is map
+          && g.sourceAttribution.keys().hasAll(['publisherName', 'sourceDomain', 'originalUrl', 'canonicalUrl'])
+          && g.sourceAttribution.keys().hasOnly(['publisherName', 'sourceDomain', 'originalUrl', 'canonicalUrl'])
+          && g.sourceAttribution.publisherName is string && g.sourceAttribution.publisherName.size() > 0 && g.sourceAttribution.publisherName.size() <= 160
+          && (g.sourceAttribution.sourceDomain == null || (g.sourceAttribution.sourceDomain is string && g.sourceAttribution.sourceDomain.size() <= 255))
+          && (g.sourceAttribution.originalUrl == null || isValidHttpUrl(g.sourceAttribution.originalUrl))
+          && (g.sourceAttribution.canonicalUrl == null || isValidHttpUrl(g.sourceAttribution.canonicalUrl));
+      }
+
+      function isValidTrendAiEvidenceAssessment(ea) {
+        return ea is map
+          && ea.keys().hasAll([
+            'groundingBasis', 'citedSourceCount', 'citedEditorialCount',
+            'retrievedEvidenceCount', 'hasDirectSourceExcerpts'
+          ])
+          && ea.keys().hasOnly([
+            'groundingBasis', 'citedSourceCount', 'citedEditorialCount',
+            'retrievedEvidenceCount', 'hasDirectSourceExcerpts'
+          ])
+          && ea.groundingBasis in ['source_cited', 'editorial_cited', 'source_available_uncited', 'limited_evidence']
+          && ea.citedSourceCount is int && ea.citedSourceCount >= 0 && ea.citedSourceCount <= 16
+          && ea.citedEditorialCount is int && ea.citedEditorialCount >= 0 && ea.citedEditorialCount <= 16
+          && ea.retrievedEvidenceCount is int && ea.retrievedEvidenceCount >= 0 && ea.retrievedEvidenceCount <= 16
+          && ea.hasDirectSourceExcerpts is bool;
+      }
+
+      function isValidTrendAiMessageDoc(data, conversationId, messageId) {
+        return data.keys().hasAll([
+            'id', 'conversationId', 'userId', 'trendId', 'role',
+            'text', 'status', 'sequence', 'createdAt'
+          ])
+          && data.keys().hasOnly([
+            'id', 'conversationId', 'userId', 'trendId', 'role',
+            'text', 'status', 'sequence', 'clientMessageId', 'model',
+            'grounding', 'citations', 'evidenceAssessment', 'createdAt'
+          ])
+          && data.id == messageId
+          && data.conversationId == conversationId
+          && data.userId == userId
+          && isValidTrendId(data.trendId)
+          && data.role in ['user', 'assistant']
+          && data.text is string && data.text.size() > 0 && data.text.size() <= 16000
+          && data.status in ['complete', 'partial', 'error']
+          && data.sequence is int && data.sequence >= 0 && data.sequence <= 10000
+          && (!('clientMessageId' in data) || (data.clientMessageId is string && data.clientMessageId.size() > 0 && data.clientMessageId.size() <= 128))
+          && (!('model' in data) || (data.model is string && data.model.size() > 0 && data.model.size() <= 100))
+          && (!('grounding' in data) || isValidTrendAiGroundingMap(data.grounding))
+          && (!('citations' in data) || (data.citations is list && data.citations.size() <= 8))
+          && (!('evidenceAssessment' in data) || isValidTrendAiEvidenceAssessment(data.evidenceAssessment))
+          && data.createdAt is timestamp;
+      }
+
+      match /trendzAiConversations/{conversationId} {
+        allow get: if signedIn() && userId == uid() && isValidTrendId(conversationId);
+        allow list: if signedIn() && userId == uid();
+        allow create: if signedIn()
+          && userId == uid()
+          && isValidTrendId(conversationId)
+          && isValidTrendAiConversationDoc(request.resource.data, conversationId)
+          && isPublishedTrend(request.resource.data.trendId);
+        allow update: if signedIn()
+          && userId == uid()
+          && isValidTrendId(conversationId)
+          && isValidTrendAiConversationDoc(request.resource.data, conversationId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.trendId == resource.data.trendId
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if signedIn() && userId == uid() && isValidTrendId(conversationId);
+
+        match /messages/{messageId} {
+          allow get: if signedIn()
+            && userId == uid()
+            && isValidTrendId(conversationId)
+            && isValidTrendId(messageId)
+            && exists(trendzAiConversationPath(conversationId))
+            && get(trendzAiConversationPath(conversationId)).data.userId == uid();
+          allow list: if signedIn()
+            && userId == uid()
+            && isValidTrendId(conversationId)
+            && exists(trendzAiConversationPath(conversationId))
+            && get(trendzAiConversationPath(conversationId)).data.userId == uid();
+          allow create: if signedIn()
+            && userId == uid()
+            && isValidTrendId(conversationId)
+            && isValidTrendId(messageId)
+            && exists(trendzAiConversationPath(conversationId))
+            && get(trendzAiConversationPath(conversationId)).data.userId == uid()
+            && request.resource.data.trendId == get(trendzAiConversationPath(conversationId)).data.trendId
+            && isValidTrendAiMessageDoc(request.resource.data, conversationId, messageId);
+          allow update: if false;
+          allow delete: if signedIn()
+            && userId == uid()
+            && isValidTrendId(conversationId)
+            && isValidTrendId(messageId)
+            && (!exists(trendzAiConversationPath(conversationId))
+                || get(trendzAiConversationPath(conversationId)).data.userId == uid());
+        }
+      }
     }
 
     match /usernames/{username} {
@@ -582,8 +731,8 @@ service cloud.firestore {
     }
 
     match /trendz/{trendId} {
-      // Signed-in users can read published trends; moderators/admins may also inspect drafts/archived/flagged items.
-      allow get: if signedIn() && isValidTrendId(trendId) && (resource.data.status == 'published' || isModerator());
+      // Signed-in users can read published trends (or check non-existent deleted IDs cleanly); moderators/admins may also inspect drafts/archived/flagged items.
+      allow get: if signedIn() && isValidTrendId(trendId) && (resource == null || resource.data.status == 'published' || isModerator());
       allow list: if signedIn() && (resource.data.status == 'published' || isModerator());
 
       // Publishing and editorial updates are strictly restricted to moderators/admins (and trusted backend Admin SDK).

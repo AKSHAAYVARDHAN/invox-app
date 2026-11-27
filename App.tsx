@@ -509,6 +509,7 @@ const MainAppRoutes = () => (
             <ReactRouterDOM.Route path="/" element={<DefaultPlatformRedirect />} />
             <ReactRouterDOM.Route path="/explore" element={<SectionRouteGuard sectionId="explore"><ExplorePage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/trendz" element={<SectionRouteGuard sectionId="trendz"><TrendzPage /></SectionRouteGuard>} />
+            <ReactRouterDOM.Route path="/trendz/following" element={<SectionRouteGuard sectionId="trendz"><TrendzPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/trendz/saved" element={<SectionRouteGuard sectionId="trendz"><TrendzPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/trendz/:trendId" element={<SectionRouteGuard sectionId="trendz"><TrendzPage /></SectionRouteGuard>} />
             <ReactRouterDOM.Route path="/spotlight" element={<SectionRouteGuard sectionId="spotlight"><SpotlightPage /></SectionRouteGuard>} />

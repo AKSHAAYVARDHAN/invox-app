@@ -617,6 +617,56 @@
         "updatedAtIso": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "runId", "stage", "stageHistory", "domainSlug", "providerId", "providerName", "source", "corroboratingSources", "media", "retryCount", "createdAtIso", "updatedAtIso"]
+    },
+    "TrendzAiConversation": {
+      "title": "TrendzAiConversation",
+      "description": "Private per-user persistent contextual AI conversation bound to a single published Trendz record, including bounded rolling memory summary for multi-turn continuity.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "userId": { "type": "string", "maxLength": 128 },
+        "trendId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "trendTitle": { "type": "string", "maxLength": 240 },
+        "trendDomainSlug": {
+          "type": "string",
+          "enum": ["technology", "health-care", "trading", "stock-market", "design", "finance", "science", "gaming", "art", "automotive", "space"]
+        },
+        "trendDomainName": { "type": "string", "maxLength": 80 },
+        "trendPublisher": { "type": "string", "maxLength": 160 },
+        "title": { "type": "string", "maxLength": 140 },
+        "lastMessagePreview": { "type": "string", "maxLength": 240 },
+        "messageCount": { "type": "number" },
+        "memorySummary": { "type": "string", "maxLength": 3000 },
+        "summarizedMessageCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "trendId", "trendTitle", "trendDomainSlug", "trendDomainName", "trendPublisher", "title", "lastMessagePreview", "messageCount", "memorySummary", "summarizedMessageCount", "createdAt", "updatedAt"]
+    },
+    "TrendzAiMessage": {
+      "title": "TrendzAiMessage",
+      "description": "Append-only message within a user's private Trendz Contextual AI conversation, storing user prompts and source-grounded AI responses.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "conversationId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "userId": { "type": "string", "maxLength": 128 },
+        "trendId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "text": { "type": "string", "maxLength": 16000 },
+        "status": { "type": "string", "enum": ["complete", "partial", "error"] },
+        "sequence": { "type": "number" },
+        "clientMessageId": { "type": "string", "maxLength": 128 },
+        "model": { "type": "string", "maxLength": 100 },
+        "grounding": { "type": "object" },
+        "citations": {
+          "type": "array",
+          "description": "Up to 8 server-validated citations spanning primary_source ([S#]), additional_source ([S#]), related_trend_source ([R#]), and editorial_briefing ([E#])"
+        },
+        "evidenceAssessment": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "conversationId", "userId", "trendId", "role", "text", "status", "sequence", "createdAt"]
     }
   },
   "firestore": {
@@ -711,6 +761,14 @@
     "/users/{userId}/trendzPreferences/{prefId}": {
       "schema": "TrendzDomainPreferences",
       "description": "Private per-user Trendz domain-following preferences strictly scoped to the authenticated owner for both reads and writes."
+    },
+    "/users/{userId}/trendzAiConversations/{conversationId}": {
+      "schema": "TrendzAiConversation",
+      "description": "Private per-user persistent Trendz Contextual AI conversations strictly isolated to the authenticated owner and bound to a published trend."
+    },
+    "/users/{userId}/trendzAiConversations/{conversationId}/messages/{messageId}": {
+      "schema": "TrendzAiMessage",
+      "description": "Private per-user append-only messages belonging to a Trendz Contextual AI conversation."
     },
     "/likes/{likeId}": {
       "schema": "Like",

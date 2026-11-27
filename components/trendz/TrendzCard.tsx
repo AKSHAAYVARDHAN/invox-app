@@ -18,6 +18,7 @@ import {
     ArrowsPointingInIcon,
     ArrowsPointingOutIcon,
     InformationCircleIcon,
+    CheckIcon,
 } from '../ui/Icons';
 import { handleImageError } from '../utils/imageUtils';
 import { useFullscreen } from '../hooks/useFullscreen';
@@ -28,7 +29,11 @@ import { useAIAssistant } from '../../contexts/AIAssistantContext';
 import { useTrendzEngagement } from '../../contexts/TrendzEngagementContext';
 import { sanitizeExternalUrl } from '../../utils/urlSanitizer';
 import { normalizeTrendzDomainSlug } from '../../utils/trendzDomains';
-import type { PersonalizedTrendReason, TrendViewModel } from '../../services/trendzService';
+import {
+    shareTrendItem,
+    type PersonalizedTrendReason,
+    type TrendViewModel,
+} from '../../services/trendzService';
 
 interface TrendzCardProps {
     trend: Trend | TrendViewModel;
@@ -97,6 +102,16 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick, personalization
     const { isFullscreen, toggleFullscreen } = useFullscreen(videoContainerRef);
     const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
     const [mediaContainerRef, isVisible] = useLazyLoad<HTMLDivElement>();
+    const [shareFeedback, setShareFeedback] = useState<'idle' | 'copied' | 'shared' | 'error'>('idle');
+    const shareTimerRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (shareTimerRef.current !== null && typeof window !== 'undefined') {
+                window.clearTimeout(shareTimerRef.current);
+            }
+        };
+    }, []);
 
     const setMediaBoxRef = useCallback(
         (node: HTMLDivElement | null) => {
@@ -135,14 +150,16 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick, personalization
     const safeLikes = displayStats.likes;
     const safeViews = displayStats.views;
     const safeComments = displayStats.comments;
+    const safeSaves = displayStats.saves;
     const hasExpandableContent = Boolean(safeFullContent && safeFullContent !== safeSummary);
 
+    const isFallbackTrend = Boolean(viewModelTrend.isFallback);
     const domainFollowed = isDomainFollowed(resolvedDomainSlug);
     const domainPending = isDomainPending(resolvedDomainSlug);
-    const bookmarked = isTrendBookmarked(trend.id);
-    const bookmarkPending = isBookmarkPending(trend.id);
-    const upvoted = isTrendUpvoted(trend.id);
-    const upvotePending = isUpvotePending(trend.id);
+    const bookmarked = isTrendBookmarked(trend.id, isFallbackTrend);
+    const bookmarkPending = isBookmarkPending(trend.id, isFallbackTrend);
+    const upvoted = isTrendUpvoted(trend.id, isFallbackTrend);
+    const upvotePending = isUpvotePending(trend.id, isFallbackTrend);
 
     const handleFollowDomainClick = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -157,6 +174,24 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick, personalization
     const handleBookmarkClick = (e: React.MouseEvent) => {
         e.stopPropagation();
         void toggleBookmark(viewModelTrend);
+    };
+
+    const handleShareClick = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const result = await shareTrendItem(viewModelTrend);
+        if (result.status === 'cancelled') {
+            return;
+        }
+        if (shareTimerRef.current !== null && typeof window !== 'undefined') {
+            window.clearTimeout(shareTimerRef.current);
+        }
+        setShareFeedback(result.status);
+        if (typeof window !== 'undefined') {
+            shareTimerRef.current = window.setTimeout(() => {
+                setShareFeedback('idle');
+                shareTimerRef.current = null;
+            }, 2000);
+        }
     };
 
     const handleAIAssistantClick = (e: React.MouseEvent) => {
@@ -269,7 +304,10 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick, personalization
 
     return (
         <>
-            <div className="bg-[#0c0c0e] border border-zinc-800/90 hover:border-zinc-700/80 p-4 mb-4 transition-all duration-150">
+            <div
+                onClick={onClick}
+                className="bg-[#0c0c0e] border border-zinc-800/90 hover:border-zinc-700/80 p-4 mb-4 transition-all duration-150 cursor-pointer"
+            >
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">
                     <div className="flex items-center gap-3">
@@ -305,7 +343,10 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick, personalization
                         </button>
                         <button 
                             type="button"
-                            onClick={onClick} 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onClick();
+                            }} 
                             className="p-1.5 border border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-800 hover:text-white transition-colors" 
                             aria-label="View trend details"
                         >
@@ -321,6 +362,7 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick, personalization
                         </button>
                         <button 
                             type="button"
+                            onClick={(e) => e.stopPropagation()}
                             className="p-1.5 border border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-800 hover:text-white transition-colors" 
                             aria-label="More options"
                         >
@@ -334,7 +376,10 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick, personalization
                     <h2 className="text-base font-semibold font-mono text-white tracking-tight">
                         <button
                             type="button"
-                            onClick={onClick}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onClick();
+                            }}
                             className="text-left hover:text-zinc-300 transition-colors cursor-pointer focus:outline-none focus-visible:underline"
                         >
                             "{safeTitle}"
@@ -345,7 +390,14 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick, personalization
                         {hasExpandableContent && (
                             <>
                                 {' '}
-                                <button onClick={() => setShowFullContent(prev => !prev)} className="text-white font-mono text-xs uppercase underline ml-1 hover:text-zinc-300">
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowFullContent((prev) => !prev);
+                                    }}
+                                    className="text-white font-mono text-xs uppercase underline ml-1 hover:text-zinc-300"
+                                >
                                     {showFullContent ? '[LESS]' : '[MORE]'}
                                 </button>
                             </>
@@ -360,7 +412,15 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick, personalization
                     className={`mt-3.5 border border-zinc-800 group bg-black ${!isVisible || (isVideo ? 'cursor-pointer' : 'cursor-zoom-in')}`}
                     onMouseEnter={() => setIsControlsVisible(true)}
                     onMouseLeave={() => setIsControlsVisible(false)}
-                    onClick={isVisible ? (isVideo ? togglePlayPause : () => trend.mediaUrl && setZoomedImageUrl(trend.mediaUrl)) : undefined}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (!isVisible) return;
+                        if (isVideo) {
+                            togglePlayPause(e);
+                        } else if (trend.mediaUrl) {
+                            setZoomedImageUrl(trend.mediaUrl);
+                        }
+                    }}
                 >
                     {isVisible ? (
                         isVideo ? (
@@ -439,12 +499,16 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick, personalization
                 </AspectRatioBox>
 
                 {/* Action Bar */}
-                <div className="mt-4 border-t border-zinc-800/80 pt-3 flex justify-between items-center font-mono text-xs text-zinc-400">
+                <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="mt-4 border-t border-zinc-800/80 pt-3 flex justify-between items-center font-mono text-xs text-zinc-400 cursor-default"
+                >
                     <button
                         type="button"
                         onClick={handleUpvoteClick}
                         disabled={upvotePending}
                         aria-pressed={upvoted}
+                        aria-busy={upvotePending}
                         aria-label={upvoted ? 'Remove upvote' : 'Upvote trend'}
                         className={`flex items-center gap-1.5 px-2 py-1 border transition-colors disabled:opacity-50 ${
                             upvoted
@@ -461,28 +525,61 @@ const TrendzCard: React.FC<TrendzCardProps> = ({ trend, onClick, personalization
                     </div>
                     <button
                         type="button"
-                        onClick={onClick}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onClick();
+                        }}
                         className="flex items-center gap-1.5 px-2 py-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors"
                         aria-label="View trend details"
                     >
                         <ChatBubbleBottomCenterTextIcon className="w-4 h-4" />
                         <span>{formatNumber(safeComments)}</span>
                     </button>
-                    <button type="button" className="p-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors" aria-label="Listen"><SoundWaveIcon className="w-4 h-4" /></button>
-                    <button type="button" className="p-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors" aria-label="Share trend"><ForwardIcon className="w-4 h-4" /></button>
+                    <button type="button" onClick={(e) => e.stopPropagation()} className="p-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors" aria-label="Listen"><SoundWaveIcon className="w-4 h-4" /></button>
+                    <button
+                        type="button"
+                        onClick={(e) => void handleShareClick(e)}
+                        className="flex items-center gap-1 px-1.5 py-1 border border-transparent hover:border-zinc-800 hover:text-white transition-colors"
+                        aria-label={
+                            shareFeedback === 'copied'
+                                ? 'Trend link copied'
+                                : shareFeedback === 'shared'
+                                  ? 'Trend shared'
+                                  : shareFeedback === 'error'
+                                    ? 'Unable to share trend link'
+                                    : 'Share trend'
+                        }
+                        title="Share trend"
+                    >
+                        {shareFeedback === 'copied' || shareFeedback === 'shared' ? (
+                            <>
+                                <CheckIcon className="w-4 h-4 text-white" />
+                                <span className="text-[10px] text-white uppercase">
+                                    {shareFeedback === 'shared' ? 'SHARED' : 'COPIED'}
+                                </span>
+                            </>
+                        ) : shareFeedback === 'error' ? (
+                            <span className="text-[10px] text-zinc-300 uppercase">RETRY</span>
+                        ) : (
+                            <ForwardIcon className="w-4 h-4" />
+                        )}
+                    </button>
                     <button
                         type="button"
                         onClick={handleBookmarkClick}
                         disabled={bookmarkPending}
                         aria-pressed={bookmarked}
+                        aria-busy={bookmarkPending}
                         aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark trend'}
-                        className={`p-1 border transition-colors disabled:opacity-50 ${
+                        title={bookmarked ? 'Saved — click to remove bookmark' : 'Bookmark trend'}
+                        className={`flex items-center gap-1.5 px-2 py-1 border transition-colors disabled:opacity-50 ${
                             bookmarked
-                                ? 'border-zinc-600 bg-zinc-900 text-white'
+                                ? 'border-zinc-500 bg-zinc-900 text-white font-bold'
                                 : 'border-transparent hover:border-zinc-800 hover:text-white'
                         }`}
                     >
                         <BookmarkIcon className={`w-4 h-4 ${bookmarked ? 'fill-current' : ''}`} />
+                        <span>{formatNumber(safeSaves)}</span>
                     </button>
                 </div>
             </div>

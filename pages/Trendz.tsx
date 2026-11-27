@@ -5,6 +5,7 @@ import DomainFilter from '../components/ui/DomainFilter';
 import TrendzCard from '../components/trendz/TrendzCard';
 import TrendzDetail from '../components/trendz/TrendzDetail';
 import TrendzCardSkeleton from '../components/trendz/TrendzCardSkeleton';
+import RelatedTrendsSection from '../components/trendz/RelatedTrendsSection';
 import {
     TRENDZ_CATEGORY_FILTERS,
     TRENDZ_DOMAIN_FILTER_OPTIONS,
@@ -18,17 +19,24 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTrendzEngagement } from '../contexts/TrendzEngagementContext';
 import {
     DEVELOPMENT_MOCK_TRENDS,
+    clearRelatedTrendsCache,
     dedupeTrendsById,
+    fetchFollowingTrendsPage,
     fetchPersonalizedTrendsFeed,
     fetchPublishedTrendsPage,
-    fetchRelatedTrends,
+    fetchRelatedTrendsForTrend,
     fetchSavedTrendsForUser,
     fetchTrendById,
     getFallbackMockTrendById,
-    getFallbackRelatedMockTrends,
+    getFallbackRelatedTrendsForTrend,
+    hydrateSampleSavedTrendsFromBookmarks,
+    hydrateSavedTrendsFromBookmarks,
     queryFallbackMockTrends,
     rankPersonalizedTrends,
+    resolveDetailBackTarget,
+    resolveFollowingTargetDomains,
     type PersonalizedTrendReason,
+    type RelatedTrendMatch,
     type SavedTrendEntry,
     type TrendSortMode,
     type TrendViewModel,
@@ -42,7 +50,7 @@ const trendzDomains = TRENDZ_DOMAIN_FILTER_OPTIONS;
 const PAGE_SIZE = 10;
 
 type FeedDataSource = 'live' | 'dev_fallback';
-type TrendzFeedView = 'all' | 'for-you' | 'saved';
+type TrendzFeedView = 'all' | 'for-you' | 'following' | 'saved';
 
 interface TrendzOutletContext {
     setRightSidebarVariant?: (variant: string) => void;
@@ -73,6 +81,7 @@ const TrendzPage = () => {
     const { domainSelections, setDomainSelection } = useFilters();
     const {
         isAuthenticated,
+        authLoading,
         preferencesLoading,
         preferencesError,
         actionError,
@@ -81,24 +90,37 @@ const TrendzPage = () => {
         followedDomainSlugs,
         isDomainFollowed,
         isDomainPending,
+        followDomain,
+        unfollowDomain,
         toggleFollowDomain,
         bookmarkRecords,
         bookmarkedTrendIds,
+        sampleBookmarkRecords,
+        sampleBookmarkedTrendIds,
         isBookmarkPending,
         removeBookmarkById,
         upvoteRecords,
+        sampleUpvoteRecords,
+        sampleViewRecords,
         personalizationSignals,
+        samplePersonalizationSignals,
     } = useTrendzEngagement();
 
     const isSavedPath = location.pathname === '/trendz/saved';
-    const trendId = rawTrendId && rawTrendId !== 'saved' ? rawTrendId : undefined;
+    const isFollowingPath = location.pathname === '/trendz/following';
+    const trendId =
+        rawTrendId && rawTrendId !== 'saved' && rawTrendId !== 'following'
+            ? rawTrendId
+            : undefined;
     const viewParam = searchParams.get('view');
     const feedView: TrendzFeedView =
         isSavedPath || viewParam === 'saved'
             ? 'saved'
-            : viewParam === 'for-you'
-                ? 'for-you'
-                : 'all';
+            : isFollowingPath || viewParam === 'following'
+                ? 'following'
+                : viewParam === 'for-you'
+                    ? 'for-you'
+                    : 'all';
 
     const sortBy: TrendSortMode = searchParams.get('sort') === 'momentum' ? 'momentum' : 'latest';
     const isDevSourceParam = searchParams.get('source') === 'dev';
@@ -125,17 +147,26 @@ const TrendzPage = () => {
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailError, setDetailError] = useState<string | null>(null);
     const [detailNotFound, setDetailNotFound] = useState(false);
+    const [detailAccessState, setDetailAccessState] = useState<
+        'ok' | 'not_found' | 'unavailable' | 'sign_in_required' | 'error'
+    >('ok');
     const [detailRetryTick, setDetailRetryTick] = useState(0);
 
-    // Similar Signals state (backed strictly by relatedTrendIds)
-    const [relatedTrends, setRelatedTrends] = useState<TrendViewModel[]>([]);
+    // Related Trends state (multi-signal topical discovery + session cache)
+    const [relatedMatches, setRelatedMatches] = useState<RelatedTrendMatch[]>([]);
     const [relatedLoading, setRelatedLoading] = useState(false);
+    const [relatedError, setRelatedError] = useState<string | null>(null);
+    const [relatedRetryTick, setRelatedRetryTick] = useState(0);
 
-    // Personalized ("For You") feed state
+    // Personalized ("For You") feed state & bounded client-side pagination
     const [personalizedReasons, setPersonalizedReasons] = useState<
         Record<string, PersonalizedTrendReason>
     >({});
     const [hasPersonalizationSignals, setHasPersonalizationSignals] = useState(false);
+    const [visibleForYouCount, setVisibleForYouCount] = useState(PAGE_SIZE);
+
+    // Responsive mobile/tablet domain management drawer inside Following mode
+    const [showMobileManageDomains, setShowMobileManageDomains] = useState(false);
 
     // Saved Trends view state (/trendz/saved or /trendz?view=saved)
     const [savedEntries, setSavedEntries] = useState<SavedTrendEntry[]>([]);
@@ -153,10 +184,8 @@ const TrendzPage = () => {
 
     // Keep URL ?source=dev synchronized with explicit dev fallback state
     useEffect(() => {
-        if (isDevSourceParam && dataSource !== 'dev_fallback') {
-            setDataSource('dev_fallback');
-        }
-    }, [isDevSourceParam, dataSource]);
+        setDataSource(isDevSourceParam ? 'dev_fallback' : 'live');
+    }, [isDevSourceParam]);
 
     // Sync local search input when sidebar search updates
     useEffect(() => {
@@ -197,6 +226,48 @@ const TrendzPage = () => {
     );
 
     const domainKey = selectedDomainSlugs.join(',');
+    const followedDomainsKey = followedDomainSlugs.join(',');
+
+    // Active single domain filter inside Following mode (must be one of the user's followed domains)
+    const activeFollowingDomainSlug = useMemo<TrendzDomainSlug | null>(() => {
+        if (feedView !== 'following' || followedDomainSlugs.length === 0) {
+            return null;
+        }
+        if (selectedDomainSlugs.length === 1 && followedDomainSlugs.includes(selectedDomainSlugs[0])) {
+            return selectedDomainSlugs[0];
+        }
+        return null;
+    }, [feedView, followedDomainSlugs, selectedDomainSlugs]);
+
+    const effectiveFollowingTargetDomains = useMemo<TrendzDomainSlug[]>(
+        () => resolveFollowingTargetDomains(followedDomainSlugs, activeFollowingDomainSlug),
+        [followedDomainSlugs, activeFollowingDomainSlug]
+    );
+    const effectiveFollowingKey = effectiveFollowingTargetDomains.join(',');
+
+    // Clear stale individual filter if user unfollows the currently filtered domain in Following mode
+    useEffect(() => {
+        if (feedView !== 'following') return;
+        if (selectedDomainSlugs.length === 1 && !followedDomainSlugs.includes(selectedDomainSlugs[0])) {
+            setDomainSelection('trendz', []);
+            setFollowedDomainsFilter?.(null);
+        }
+    }, [feedView, selectedDomainSlugs, followedDomainSlugs, setDomainSelection, setFollowedDomainsFilter]);
+
+    // Clean up user-scoped view state on account switch or sign-out
+    const prevPageUidRef = useRef<string | null>(currentUser?.uid ?? null);
+    useEffect(() => {
+        const nextUid = currentUser?.uid ?? null;
+        if (prevPageUidRef.current !== nextUid) {
+            prevPageUidRef.current = nextUid;
+            setSavedEntries([]);
+            setPersonalizedReasons({});
+            setHasPersonalizationSignals(false);
+            setShowMobileManageDomains(false);
+            setDomainSelection('trendz', []);
+            setFollowedDomainsFilter?.(null);
+        }
+    }, [currentUser?.uid, setDomainSelection, setFollowedDomainsFilter]);
 
     const updateCanonicalDomainSelection = useCallback(
         (rawNames: string[], syncFollowedLabel?: string | null) => {
@@ -260,11 +331,34 @@ const TrendzPage = () => {
         [selectedDomainSlugs, updateCanonicalDomainSelection]
     );
 
-    const handleToggleSortToLatest = useCallback(() => {
-        const next = new URLSearchParams(searchParams);
-        next.delete('sort');
-        setSearchParams(next, { replace: true });
-    }, [searchParams, setSearchParams]);
+    const handleFollowingChipClick = useCallback(
+        (slug: TrendzDomainSlug | null) => {
+            if (!slug) {
+                updateCanonicalDomainSelection([], null);
+                return;
+            }
+            const canonicalName = formatTrendzDomainName(slug);
+            if (activeFollowingDomainSlug === slug) {
+                updateCanonicalDomainSelection([], null);
+            } else {
+                updateCanonicalDomainSelection([canonicalName], canonicalName);
+            }
+        },
+        [activeFollowingDomainSlug, updateCanonicalDomainSelection]
+    );
+
+    const handleSetSortBy = useCallback(
+        (nextSort: TrendSortMode) => {
+            const next = new URLSearchParams(searchParams);
+            if (nextSort === 'momentum') {
+                next.set('sort', 'momentum');
+            } else {
+                next.delete('sort');
+            }
+            setSearchParams(next, { replace: true });
+        },
+        [searchParams, setSearchParams]
+    );
 
     const handleSwitchToDevFallback = useCallback(() => {
         setDataSource('dev_fallback');
@@ -283,13 +377,31 @@ const TrendzPage = () => {
 
     const handleSwitchFeedView = useCallback(
         (targetView: TrendzFeedView) => {
+            if (targetView !== 'following') {
+                setFollowedDomainsFilter?.(null);
+            } else {
+                // Entering Following mode: preserve selection only if it's a single followed domain
+                const keepSoleFollowed =
+                    selectedDomainSlugs.length === 1 &&
+                    followedDomainSlugs.includes(selectedDomainSlugs[0]);
+                if (!keepSoleFollowed) {
+                    setDomainSelection('trendz', []);
+                    setFollowedDomainsFilter?.(null);
+                }
+            }
+
             if (targetView === 'saved') {
-                navigate('/trendz/saved');
+                navigate(dataSource === 'dev_fallback' ? '/trendz/saved?source=dev' : '/trendz/saved');
                 return;
             }
             const next = new URLSearchParams();
             if (targetView === 'for-you') {
                 next.set('view', 'for-you');
+            } else if (targetView === 'following') {
+                next.set('view', 'following');
+            }
+            if (sortBy === 'momentum' && (targetView === 'all' || targetView === 'following')) {
+                next.set('sort', 'momentum');
             }
             if (dataSource === 'dev_fallback') {
                 next.set('source', 'dev');
@@ -297,18 +409,50 @@ const TrendzPage = () => {
             const qs = next.toString();
             navigate(qs ? `/trendz?${qs}` : '/trendz');
         },
-        [navigate, dataSource]
+        [
+            navigate,
+            dataSource,
+            sortBy,
+            selectedDomainSlugs,
+            followedDomainSlugs,
+            setDomainSelection,
+            setFollowedDomainsFilter,
+        ]
     );
 
-    const personalizationFingerprint = useMemo(
-        () =>
-            [
-                followedDomainSlugs.join(','),
-                bookmarkRecords.map((b) => b.targetId).slice(0, 20).join(','),
-                upvoteRecords.map((u) => u.targetId).slice(0, 20).join(','),
-                personalizationSignals.viewRecords.map((v) => v.trendId).slice(0, 20).join(','),
-            ].join('|'),
-        [followedDomainSlugs, bookmarkRecords, upvoteRecords, personalizationSignals.viewRecords]
+    const activeBookmarkRecords =
+        dataSource === 'dev_fallback' ? sampleBookmarkRecords : bookmarkRecords;
+    const activeBookmarkedTrendIds =
+        dataSource === 'dev_fallback' ? sampleBookmarkedTrendIds : bookmarkedTrendIds;
+    const activePersonalizationSignals =
+        dataSource === 'dev_fallback' ? samplePersonalizationSignals : personalizationSignals;
+
+    const personalizationFingerprint = useMemo(() => {
+        const activeUpvotes = dataSource === 'dev_fallback' ? sampleUpvoteRecords : upvoteRecords;
+        const activeViews =
+            dataSource === 'dev_fallback'
+                ? sampleViewRecords
+                : personalizationSignals.viewRecords;
+        return [
+            dataSource,
+            followedDomainSlugs.join(','),
+            `${activeBookmarkRecords.length}:${activeBookmarkRecords.map((b) => b.targetId).slice(0, 30).join(',')}`,
+            `${activeUpvotes.length}:${activeUpvotes.map((u) => u.targetId).slice(0, 30).join(',')}`,
+            `${activeViews.length}:${activeViews.map((v) => v.trendId).slice(0, 30).join(',')}`,
+        ].join('|');
+    }, [
+        dataSource,
+        followedDomainSlugs,
+        activeBookmarkRecords,
+        upvoteRecords,
+        sampleUpvoteRecords,
+        sampleViewRecords,
+        personalizationSignals.viewRecords,
+    ]);
+
+    const bookmarkIdsFingerprint = useMemo(
+        () => activeBookmarkRecords.map((b) => b.targetId).join(','),
+        [activeBookmarkRecords]
     );
 
     // Mount Trendz right sidebar variant
@@ -325,7 +469,7 @@ const TrendzPage = () => {
         document.querySelector('main')?.scrollTo(0, 0);
     }, [trendId, feedView, domainKey, sortBy]);
 
-    // Primary feed fetch (ALL & FOR YOU views)
+    // Primary feed fetch (ALL, FOR YOU, and FOLLOWING views)
     useEffect(() => {
         if (trendId || feedView === 'saved') {
             return;
@@ -335,17 +479,18 @@ const TrendzPage = () => {
         cursorRef.current = null;
         setFeedError(null);
 
-        if (feedView === 'for-you') {
-            if (dataSource === 'dev_fallback') {
-                const fallbackPool = queryFallbackMockTrends({
-                    domainSlugs: selectedDomainSlugs,
-                    searchQuery: debouncedSearch,
-                    sortBy: 'latest',
-                });
-                const ranked = rankPersonalizedTrends(fallbackPool, personalizationSignals);
-                setTrends(ranked.items);
-                setPersonalizedReasons(ranked.reasonsByTrendId);
-                setHasPersonalizationSignals(ranked.hasPersonalizationSignals);
+        // 1. FOLLOWING FEED — strictly published trends from the user's followed domains
+        if (feedView === 'following') {
+            setPersonalizedReasons({});
+
+            if (authLoading) {
+                setLoading(true);
+                setIsFetchingMore(false);
+                return;
+            }
+
+            if (!isAuthenticated) {
+                setTrends([]);
                 setHasMore(false);
                 setLoading(false);
                 setIsFetchingMore(false);
@@ -353,6 +498,87 @@ const TrendzPage = () => {
             }
 
             if (preferencesLoading) {
+                setLoading(true);
+                setIsFetchingMore(false);
+                return;
+            }
+
+            if (effectiveFollowingTargetDomains.length === 0) {
+                setTrends([]);
+                setHasMore(false);
+                setLoading(false);
+                setIsFetchingMore(false);
+                return;
+            }
+
+            if (dataSource === 'dev_fallback') {
+                const fallbackItems = queryFallbackMockTrends({
+                    domainSlugs: effectiveFollowingTargetDomains,
+                    searchQuery: debouncedSearch,
+                    sortBy,
+                });
+                setTrends(fallbackItems);
+                setHasMore(false);
+                setLoading(false);
+                setIsFetchingMore(false);
+                return;
+            }
+
+            setLoading(true);
+            setIsFetchingMore(false);
+            setHasMore(false);
+
+            fetchFollowingTrendsPage({
+                followedDomainSlugs,
+                activeDomainSlug: activeFollowingDomainSlug,
+                pageSize: PAGE_SIZE,
+                cursor: null,
+                sortBy,
+                searchQuery: debouncedSearch,
+            })
+                .then((pageResult) => {
+                    if (feedRequestIdRef.current !== requestId) return;
+                    cursorRef.current = pageResult.lastDoc;
+                    setTrends(dedupeTrendsById(pageResult.items));
+                    setHasMore(pageResult.hasMore && Boolean(pageResult.lastDoc));
+                    setLoading(false);
+                })
+                .catch((err) => {
+                    if (feedRequestIdRef.current !== requestId) return;
+                    console.error('[TRENDZ_FOLLOWING_FEED_ERROR]', err);
+                    setTrends([]);
+                    setHasMore(false);
+                    setFeedError(
+                        err?.code === 'permission-denied'
+                            ? 'Permission denied while loading your Following feed. Please verify you are signed in.'
+                            : 'Unable to load published trends for your followed domains right now. Please retry.'
+                    );
+                    setLoading(false);
+                });
+            return;
+        }
+
+        // 2. FOR YOU FEED — deterministic multi-signal personalized ranking
+        if (feedView === 'for-you') {
+            setVisibleForYouCount(PAGE_SIZE);
+
+            if (dataSource === 'dev_fallback') {
+                const fallbackPool = queryFallbackMockTrends({
+                    domainSlugs: selectedDomainSlugs,
+                    searchQuery: debouncedSearch,
+                    sortBy: 'latest',
+                });
+                const ranked = rankPersonalizedTrends(fallbackPool, activePersonalizationSignals);
+                setTrends(ranked.items);
+                setPersonalizedReasons(ranked.reasonsByTrendId);
+                setHasPersonalizationSignals(ranked.hasPersonalizationSignals);
+                setHasMore(ranked.items.length > PAGE_SIZE);
+                setLoading(false);
+                setIsFetchingMore(false);
+                return;
+            }
+
+            if (authLoading || preferencesLoading) {
                 setLoading(true);
                 return;
             }
@@ -364,14 +590,15 @@ const TrendzPage = () => {
             fetchPersonalizedTrendsFeed(personalizationSignals, {
                 domainSlugs: selectedDomainSlugs,
                 searchQuery: debouncedSearch,
-                poolSize: 30,
+                poolSize: 45,
             })
                 .then((result) => {
                     if (feedRequestIdRef.current !== requestId) return;
-                    setTrends(dedupeTrendsById(result.items));
+                    const deduped = dedupeTrendsById(result.items);
+                    setTrends(deduped);
                     setPersonalizedReasons(result.reasonsByTrendId);
                     setHasPersonalizationSignals(result.hasPersonalizationSignals);
-                    setHasMore(false);
+                    setHasMore(deduped.length > PAGE_SIZE);
                     setLoading(false);
                 })
                 .catch((err) => {
@@ -390,7 +617,7 @@ const TrendzPage = () => {
             return;
         }
 
-        // Standard ALL feed (never hides any published content)
+        // 3. STANDARD ALL FEED — general published Trendz feed
         setPersonalizedReasons({});
 
         if (dataSource === 'dev_fallback') {
@@ -402,6 +629,12 @@ const TrendzPage = () => {
             setTrends(fallbackItems);
             setHasMore(false);
             setLoading(false);
+            setIsFetchingMore(false);
+            return;
+        }
+
+        if (authLoading) {
+            setLoading(true);
             setIsFetchingMore(false);
             return;
         }
@@ -441,22 +674,56 @@ const TrendzPage = () => {
         feedView,
         dataSource,
         domainKey,
+        followedDomainsKey,
+        effectiveFollowingKey,
+        activeFollowingDomainSlug,
         debouncedSearch,
         sortBy,
         refreshKey,
         retryTick,
         selectedDomainSlugs,
+        effectiveFollowingTargetDomains,
+        followedDomainSlugs,
+        isAuthenticated,
+        authLoading,
         preferencesLoading,
         personalizationFingerprint,
+        activePersonalizationSignals,
     ]);
 
+    const savedEntriesRef = useRef<SavedTrendEntry[]>(savedEntries);
+    savedEntriesRef.current = savedEntries;
+    const savedHydrationForceKeyRef = useRef<string>('');
+
     // Saved Trends view hydration (/trendz/saved or /trendz?view=saved)
+    // LIVE mode hydrates strictly from Firestore; DEV_FALLBACK mode hydrates strictly from local sample bookmarks.
     useEffect(() => {
         if (trendId || feedView !== 'saved') {
             return;
         }
 
         const uid = currentUser?.uid;
+
+        if (dataSource === 'dev_fallback') {
+            if (authLoading) {
+                return;
+            }
+            if (!uid) {
+                setSavedEntries([]);
+                setSavedLoading(false);
+                setSavedError(null);
+                return;
+            }
+            setSavedEntries(hydrateSampleSavedTrendsFromBookmarks(sampleBookmarkRecords));
+            setSavedLoading(false);
+            setSavedError(null);
+            return;
+        }
+
+        if (authLoading || preferencesLoading) {
+            return;
+        }
+
         if (!uid) {
             setSavedEntries([]);
             setSavedLoading(false);
@@ -464,11 +731,65 @@ const TrendzPage = () => {
             return;
         }
 
+        if (bookmarkRecords.length === 0) {
+            if (savedRetryTick > 0 && preferencesError) {
+                const requestId = ++savedRequestIdRef.current;
+                setSavedLoading(true);
+                setSavedError(null);
+                fetchSavedTrendsForUser(uid)
+                    .then((entries) => {
+                        if (savedRequestIdRef.current !== requestId) return;
+                        setSavedEntries(entries);
+                        setSavedLoading(false);
+                    })
+                    .catch((err) => {
+                        if (savedRequestIdRef.current !== requestId) return;
+                        console.error('[TRENDZ_SAVED_LOAD_ERROR]', err);
+                        setSavedEntries([]);
+                        setSavedError(
+                            err?.code === 'permission-denied'
+                                ? 'Permission denied while loading your saved trends.'
+                                : 'Unable to load your saved trends from Firestore. Please retry.'
+                        );
+                        setSavedLoading(false);
+                    });
+                return;
+            }
+            setSavedEntries([]);
+            setSavedLoading(false);
+            setSavedError(null);
+            return;
+        }
+
+        const forceKey = `live:${uid}:${refreshKey}:${savedRetryTick}`;
+        const isForceRefresh = savedHydrationForceKeyRef.current !== forceKey;
+        const hydratedById = new Map(
+            savedEntriesRef.current
+                .filter((e) => !e.trend?.isFallback)
+                .map((e) => [e.trendId, e])
+        );
+        const hasMissingBookmarks = bookmarkRecords.some((b) => !hydratedById.has(b.targetId));
+
+        if (!isForceRefresh && !hasMissingBookmarks) {
+            // Only removal/reordering occurred — reconcile immediately without flashing skeletons
+            setSavedEntries(
+                bookmarkRecords
+                    .map((b) => hydratedById.get(b.targetId))
+                    .filter((entry): entry is SavedTrendEntry => Boolean(entry))
+            );
+            setSavedLoading(false);
+            setSavedError(null);
+            return;
+        }
+
+        savedHydrationForceKeyRef.current = forceKey;
         const requestId = ++savedRequestIdRef.current;
-        setSavedLoading(true);
+        if (isForceRefresh || savedEntriesRef.current.length === 0) {
+            setSavedLoading(true);
+        }
         setSavedError(null);
 
-        fetchSavedTrendsForUser(uid)
+        hydrateSavedTrendsFromBookmarks(bookmarkRecords)
             .then((entries) => {
                 if (savedRequestIdRef.current !== requestId) return;
                 setSavedEntries(entries);
@@ -485,38 +806,90 @@ const TrendzPage = () => {
                 );
                 setSavedLoading(false);
             });
-    }, [trendId, feedView, currentUser?.uid, refreshKey, savedRetryTick]);
+    }, [
+        trendId,
+        feedView,
+        dataSource,
+        authLoading,
+        preferencesLoading,
+        preferencesError,
+        currentUser?.uid,
+        bookmarkIdsFingerprint,
+        sampleBookmarkRecords,
+        refreshKey,
+        savedRetryTick,
+    ]);
 
-    // Keep Saved Trends list immediately synchronized when user removes a bookmark
-    const visibleSavedEntries = useMemo(
-        () => savedEntries.filter((entry) => bookmarkedTrendIds.has(entry.trendId)),
-        [savedEntries, bookmarkedTrendIds]
-    );
+    // Keep Saved Trends list immediately synchronized when user removes a bookmark or searches
+    const visibleSavedEntries = useMemo(() => {
+        const activeEntries = savedEntries.filter((entry) =>
+            activeBookmarkedTrendIds.has(entry.trendId)
+        );
+        const q = debouncedSearch.toLowerCase();
+        if (!q) {
+            return activeEntries;
+        }
+        return activeEntries.filter((entry) => {
+            const title = (entry.trend?.title || entry.bookmark.trendTitle || '').toLowerCase();
+            const summary = (entry.trend?.summary || entry.bookmark.trendSummary || '').toLowerCase();
+            const publisher = (
+                entry.trend?.details?.publishedBy ||
+                entry.bookmark.trendPublisher ||
+                ''
+            ).toLowerCase();
+            const domainName = formatTrendzDomainName(entry.bookmark.domainSlug).toLowerCase();
+            return (
+                title.includes(q) ||
+                summary.includes(q) ||
+                publisher.includes(q) ||
+                domainName.includes(q)
+            );
+        });
+    }, [savedEntries, activeBookmarkedTrendIds, debouncedSearch]);
 
-    // Cursor-based pagination loader (active on ALL live feed)
+    // Pagination loader: Firestore cursor pagination for ALL & FOLLOWING, bounded slice pagination for FOR YOU
     const loadMoreTrends = useCallback(() => {
-        if (
-            trendId ||
-            feedView !== 'all' ||
-            dataSource !== 'live' ||
-            loading ||
-            isFetchingMore ||
-            !hasMore ||
-            !cursorRef.current
-        ) {
+        if (trendId || feedView === 'saved' || loading || isFetchingMore) {
+            return;
+        }
+
+        if (feedView === 'for-you') {
+            if (visibleForYouCount >= trends.length) {
+                setHasMore(false);
+                return;
+            }
+            const nextCount = visibleForYouCount + PAGE_SIZE;
+            setVisibleForYouCount(nextCount);
+            setHasMore(nextCount < trends.length);
+            return;
+        }
+
+        if (dataSource !== 'live' || !hasMore || !cursorRef.current) {
             return;
         }
 
         const requestId = feedRequestIdRef.current;
         setIsFetchingMore(true);
 
-        fetchPublishedTrendsPage({
-            pageSize: PAGE_SIZE,
-            cursor: cursorRef.current,
-            domainSlugs: selectedDomainSlugs,
-            sortBy,
-            searchQuery: debouncedSearch,
-        })
+        const nextPagePromise =
+            feedView === 'following'
+                ? fetchFollowingTrendsPage({
+                      followedDomainSlugs,
+                      activeDomainSlug: activeFollowingDomainSlug,
+                      pageSize: PAGE_SIZE,
+                      cursor: cursorRef.current,
+                      sortBy,
+                      searchQuery: debouncedSearch,
+                  })
+                : fetchPublishedTrendsPage({
+                      pageSize: PAGE_SIZE,
+                      cursor: cursorRef.current,
+                      domainSlugs: selectedDomainSlugs,
+                      sortBy,
+                      searchQuery: debouncedSearch,
+                  });
+
+        nextPagePromise
             .then((pageResult) => {
                 if (feedRequestIdRef.current !== requestId) return;
                 cursorRef.current = pageResult.lastDoc;
@@ -530,14 +903,29 @@ const TrendzPage = () => {
                 setIsFetchingMore(false);
                 setHasMore(false);
             });
-    }, [trendId, feedView, dataSource, loading, isFetchingMore, hasMore, selectedDomainSlugs, sortBy, debouncedSearch]);
+    }, [
+        trendId,
+        feedView,
+        dataSource,
+        loading,
+        isFetchingMore,
+        hasMore,
+        visibleForYouCount,
+        trends.length,
+        followedDomainSlugs,
+        activeFollowingDomainSlug,
+        selectedDomainSlugs,
+        sortBy,
+        debouncedSearch,
+    ]);
 
-    // IntersectionObserver for automatic cursor pagination
+    // IntersectionObserver for automatic pagination (ALL, FOLLOWING, and FOR YOU)
     const lastTrendElementRef = useCallback(
         (node: HTMLDivElement | null) => {
             if (loading || isFetchingMore) return;
             if (observerRef.current) observerRef.current.disconnect();
-            if (!node || !hasMore || dataSource !== 'live' || feedView !== 'all') return;
+            if (!node || !hasMore || feedView === 'saved') return;
+            if ((feedView === 'all' || feedView === 'following') && dataSource !== 'live') return;
 
             observerRef.current = new IntersectionObserver(
                 (entries) => {
@@ -558,6 +946,13 @@ const TrendzPage = () => {
         };
     }, []);
 
+    // Scroll to top cleanly when opening or switching a dedicated Trend detail page
+    useEffect(() => {
+        if (trendId && typeof window !== 'undefined') {
+            window.scrollTo({ top: 0, behavior: 'auto' });
+        }
+    }, [trendId]);
+
     // URL-driven individual trend detail loader (/trendz/:trendId)
     useEffect(() => {
         if (!trendId) {
@@ -565,29 +960,46 @@ const TrendzPage = () => {
             setDetailLoading(false);
             setDetailError(null);
             setDetailNotFound(false);
-            setRelatedTrends([]);
+            setDetailAccessState('ok');
+            setRelatedMatches([]);
+            setRelatedError(null);
             return;
         }
 
         const requestId = ++detailRequestIdRef.current;
         setDetailError(null);
         setDetailNotFound(false);
+        setDetailAccessState('ok');
 
         if (dataSource === 'dev_fallback') {
             const mockMatch = getFallbackMockTrendById(trendId);
             if (mockMatch) {
                 setSelectedTrend(mockMatch);
-                setDetailLoading(false);
+                setDetailNotFound(false);
+                setDetailAccessState('ok');
             } else {
                 setSelectedTrend(null);
                 setDetailNotFound(true);
-                setDetailLoading(false);
+                setDetailAccessState('not_found');
             }
+            setDetailLoading(false);
+            return;
+        }
+
+        // Wait for Firebase Auth resolution on direct URL navigation / browser refresh
+        if (authLoading) {
+            setDetailLoading(true);
             return;
         }
 
         // Show cached live record immediately while refreshing from Firestore if available
-        const cachedLive = trends.find((t) => !t.isFallback && t.id === trendId) || null;
+        const cachedLive =
+            trends.find((t) => !t.isFallback && t.id === trendId) ||
+            savedEntries.find(
+                (entry) => entry.trend && !entry.trend.isFallback && entry.trendId === trendId
+            )?.trend ||
+            null;
+
         if (cachedLive) {
             setSelectedTrend(cachedLive);
             setDetailLoading(false);
@@ -602,99 +1014,192 @@ const TrendzPage = () => {
                 if (!record) {
                     setSelectedTrend(null);
                     setDetailNotFound(true);
+                    setDetailAccessState('not_found');
                 } else {
                     setSelectedTrend(record);
                     setDetailNotFound(false);
+                    setDetailAccessState('ok');
                 }
                 setDetailLoading(false);
             })
             .catch((err) => {
                 if (detailRequestIdRef.current !== requestId) return;
                 console.error('[TRENDZ_DETAIL_LOAD_ERROR]', err);
-                if (!cachedLive) {
-                    setDetailError(
-                        err?.code === 'permission-denied'
-                            ? 'This trend is unavailable or requires sign-in.'
-                            : 'Unable to retrieve this trend from Firestore.'
-                    );
+                const errCode = String(err?.code || '').toLowerCase();
+                if (errCode === 'permission-denied') {
+                    setSelectedTrend(null);
+                    if (!isAuthenticated) {
+                        setDetailAccessState('sign_in_required');
+                        setDetailError('Sign in to access published Trendz briefings.');
+                    } else {
+                        setDetailNotFound(true);
+                        setDetailAccessState('unavailable');
+                        setDetailError(null);
+                    }
+                } else if (!cachedLive) {
+                    setDetailAccessState('error');
+                    setDetailError('Unable to retrieve this trend from Firestore.');
                 }
                 setDetailLoading(false);
             });
-    }, [trendId, dataSource, detailRetryTick]);
+    }, [trendId, dataSource, authLoading, isAuthenticated, detailRetryTick]);
 
-    // Similar Signals loader driven strictly by selectedTrend.relatedTrendIds
+    // Keep a ref to already-loaded live published trends so Related Trends can reuse them without extra reads
+    const knownLiveCandidatesRef = useRef<TrendViewModel[]>([]);
+    knownLiveCandidatesRef.current = useMemo(() => {
+        const pool: TrendViewModel[] = [];
+        for (const item of trends) {
+            if (!item.isFallback && item.status === 'published') {
+                pool.push(item);
+            }
+        }
+        for (const entry of savedEntries) {
+            if (entry.trend && !entry.trend.isFallback && entry.trend.status === 'published') {
+                pool.push(entry.trend);
+            }
+        }
+        return dedupeTrendsById(pool);
+    }, [trends, savedEntries]);
+
+    const selectedTrendRelatedSignature = useMemo(() => {
+        if (!selectedTrend) return '';
+        return [
+            selectedTrend.id,
+            selectedTrend.isFallback ? 'dev' : 'live',
+            selectedTrend.domainSlug,
+            selectedTrend.category || '',
+            selectedTrend.publishedAtMs || 0,
+            (selectedTrend.tags || []).join(','),
+            (selectedTrend.relatedTrendIds || []).join(','),
+            selectedTrend.title || '',
+        ].join('|');
+    }, [selectedTrend]);
+
+    const lastRelatedRetryTickRef = useRef(0);
+
+    // Intelligent Related Trends loader (multi-signal topical ranking, cached per trend signature)
     useEffect(() => {
         if (!selectedTrend) {
-            setRelatedTrends([]);
+            setRelatedMatches([]);
             setRelatedLoading(false);
+            setRelatedError(null);
             return;
         }
 
         const requestId = ++relatedRequestIdRef.current;
-        const relatedIds = selectedTrend.relatedTrendIds || [];
-
-        if (relatedIds.length === 0) {
-            setRelatedTrends([]);
-            setRelatedLoading(false);
-            return;
-        }
+        const isExplicitRetry = relatedRetryTick !== lastRelatedRetryTickRef.current;
+        lastRelatedRetryTickRef.current = relatedRetryTick;
+        setRelatedError(null);
 
         if (selectedTrend.isFallback || dataSource === 'dev_fallback') {
-            setRelatedTrends(getFallbackRelatedMockTrends(relatedIds, selectedTrend.id, 4));
+            const fallbackResult = getFallbackRelatedTrendsForTrend(selectedTrend, { maxCount: 4 });
+            setRelatedMatches(fallbackResult.items);
             setRelatedLoading(false);
             return;
         }
 
         setRelatedLoading(true);
-        fetchRelatedTrends(relatedIds, selectedTrend.id, 4)
-            .then((items) => {
+        fetchRelatedTrendsForTrend(selectedTrend, {
+            maxCount: 4,
+            knownCandidates: knownLiveCandidatesRef.current,
+            forceRefresh: isExplicitRetry,
+        })
+            .then((result) => {
                 if (relatedRequestIdRef.current !== requestId) return;
-                setRelatedTrends(items);
+                setRelatedMatches(result.items);
+                setRelatedError(null);
                 setRelatedLoading(false);
             })
             .catch((err) => {
                 if (relatedRequestIdRef.current !== requestId) return;
                 console.error('[TRENDZ_RELATED_LOAD_ERROR]', err);
-                setRelatedTrends([]);
+                setRelatedMatches([]);
+                setRelatedError(
+                    err?.code === 'permission-denied'
+                        ? 'Permission denied while loading related trends.'
+                        : 'Unable to load related trends right now.'
+                );
                 setRelatedLoading(false);
             });
-    }, [selectedTrend?.id, selectedTrend?.isFallback, dataSource]);
+    }, [selectedTrendRelatedSignature, dataSource, refreshKey, relatedRetryTick]);
+
+    const handleRetryRelatedTrends = useCallback(() => {
+        if (selectedTrend?.id) {
+            clearRelatedTrendsCache(selectedTrend.id);
+        }
+        setRelatedRetryTick((prev) => prev + 1);
+    }, [selectedTrend?.id]);
+
+    const detailBackTarget = useMemo(
+        () =>
+            resolveDetailBackTarget({
+                fromParam: searchParams.get('from'),
+                sortParam: searchParams.get('sort'),
+                isDevSource: dataSource === 'dev_fallback',
+            }),
+        [searchParams, dataSource]
+    );
 
     const handleSelectTrend = useCallback(
         (trend: TrendViewModel) => {
             const targetPath = `/trendz/${encodeURIComponent(trend.id)}`;
             const params = new URLSearchParams();
-            if (dataSource === 'dev_fallback') params.set('source', 'dev');
-            if (feedView === 'saved') params.set('from', 'saved');
-            else if (feedView === 'for-you') params.set('from', 'for-you');
+            if (dataSource === 'dev_fallback' || trend.isFallback) params.set('source', 'dev');
+
+            const activeFrom = trendId
+                ? searchParams.get('from')
+                : feedView === 'saved'
+                  ? 'saved'
+                  : feedView === 'following'
+                    ? 'following'
+                    : feedView === 'for-you'
+                      ? 'for-you'
+                      : null;
+
+            if (activeFrom) params.set('from', activeFrom);
+
+            const activeSort = trendId ? searchParams.get('sort') : sortBy;
+            if (activeSort === 'momentum' && activeFrom !== 'for-you' && activeFrom !== 'saved') {
+                params.set('sort', 'momentum');
+            }
+
             const qs = params.toString();
             navigate(qs ? `${targetPath}?${qs}` : targetPath);
         },
-        [navigate, dataSource, feedView]
+        [navigate, dataSource, trendId, searchParams, feedView, sortBy]
     );
 
     const handleBackToFeed = useCallback(() => {
-        const fromView = searchParams.get('from');
-        if (fromView === 'saved') {
-            navigate('/trendz/saved');
-            return;
-        }
-        const params = new URLSearchParams();
-        if (fromView === 'for-you') params.set('view', 'for-you');
-        if (sortBy === 'momentum') params.set('sort', 'momentum');
-        if (dataSource === 'dev_fallback') params.set('source', 'dev');
-        const qs = params.toString();
-        navigate(qs ? `/trendz?${qs}` : '/trendz');
-    }, [navigate, searchParams, sortBy, dataSource]);
+        navigate(detailBackTarget.path);
+    }, [navigate, detailBackTarget.path]);
+
+    const handleSelectDomainFromDetail = useCallback(
+        (domainSlug: TrendzDomainSlug) => {
+            const formatted = formatTrendzDomainName(domainSlug);
+            updateCanonicalDomainSelection([formatted], null);
+            navigate(dataSource === 'dev_fallback' ? '/trendz?source=dev' : '/trendz');
+        },
+        [updateCanonicalDomainSelection, navigate, dataSource]
+    );
 
     const hasActiveFilters =
-        selectedDomainSlugs.length > 0 || Boolean(debouncedSearch) || sortBy === 'momentum';
+        feedView === 'following'
+            ? Boolean(activeFollowingDomainSlug) || Boolean(debouncedSearch) || sortBy === 'momentum'
+            : selectedDomainSlugs.length > 0 || Boolean(debouncedSearch) || sortBy === 'momentum';
+
+    const displayedTrends = useMemo(
+        () => (feedView === 'for-you' ? trends.slice(0, visibleForYouCount) : trends),
+        [feedView, trends, visibleForYouCount]
+    );
 
     // ==========================================
     // Detail View (/trendz/:trendId)
     // ==========================================
     if (trendId) {
-        if (detailLoading) {
+        const isCurrentDetailBookmarked = activeBookmarkedTrendIds.has(trendId);
+        const isDevDetail = dataSource === 'dev_fallback';
+
+        if (detailLoading || authLoading) {
             return (
                 <div className="space-y-4">
                     <div className="bg-[#0c0c0e] border border-zinc-800 p-4 sm:p-6">
@@ -703,9 +1208,29 @@ const TrendzPage = () => {
                             onClick={handleBackToFeed}
                             className="flex items-center gap-2 mb-4 text-zinc-400 hover:text-white font-mono text-xs uppercase tracking-wider transition-colors"
                         >
-                            <span>// BACK_TO_TRENDZ</span>
+                            <span>{detailBackTarget.label}</span>
                         </button>
                         <TrendzCardSkeleton />
+                    </div>
+                </div>
+            );
+        }
+
+        if (detailAccessState === 'sign_in_required') {
+            return (
+                <div className="bg-[#0c0c0e] border border-zinc-800 p-6 font-mono space-y-4">
+                    <p className="text-xs font-bold text-white uppercase tracking-wider">// SIGN_IN_REQUIRED</p>
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                        {detailError || 'Sign in to view published Trendz briefings.'}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
+                        <button
+                            type="button"
+                            onClick={handleBackToFeed}
+                            className="px-3.5 py-2 bg-white text-black font-bold text-xs uppercase tracking-wider hover:bg-zinc-200 transition-colors"
+                        >
+                            {detailBackTarget.label}
+                        </button>
                     </div>
                 </div>
             );
@@ -715,8 +1240,8 @@ const TrendzPage = () => {
             return (
                 <div className="bg-[#0c0c0e] border border-zinc-800 p-6 font-mono space-y-4">
                     <p className="text-xs font-bold text-white uppercase tracking-wider">// SIGNAL_FETCH_ERROR</p>
-                    <p className="text-xs text-zinc-400">{detailError}</p>
-                    <div className="flex items-center gap-3 pt-1">
+                    <p className="text-xs text-zinc-400 leading-relaxed">{detailError}</p>
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
                         <button
                             type="button"
                             onClick={() => setDetailRetryTick((prev) => prev + 1)}
@@ -729,7 +1254,7 @@ const TrendzPage = () => {
                             onClick={handleBackToFeed}
                             className="px-3.5 py-2 border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 text-xs uppercase tracking-wider transition-colors"
                         >
-                            // BACK_TO_TRENDZ
+                            {detailBackTarget.label}
                         </button>
                     </div>
                 </div>
@@ -737,20 +1262,35 @@ const TrendzPage = () => {
         }
 
         if (detailNotFound || !selectedTrend) {
+            const isUnavailable = detailAccessState === 'unavailable';
             return (
                 <div className="bg-[#0c0c0e] border border-zinc-800 p-6 font-mono space-y-4">
-                    <p className="text-xs font-bold text-white uppercase tracking-wider">// SIGNAL_NOT_FOUND</p>
-                    <p className="text-xs text-zinc-400">
-                        This trend record could not be found, has been removed, or is not published.
+                    <p className="text-xs font-bold text-white uppercase tracking-wider">
+                        {isUnavailable ? '// SIGNAL_UNAVAILABLE' : '// SIGNAL_NOT_FOUND'}
                     </p>
-                    <div className="pt-1">
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                        {isUnavailable
+                            ? 'This trend record is currently unpublished, archived, or no longer publicly available.'
+                            : 'This trend record could not be found, has been removed, or is not published.'}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
                         <button
                             type="button"
                             onClick={handleBackToFeed}
                             className="px-3.5 py-2 bg-white text-black font-bold text-xs uppercase tracking-wider hover:bg-zinc-200 transition-colors"
                         >
-                            // BACK_TO_TRENDZ
+                            {detailBackTarget.label}
                         </button>
+                        {isCurrentDetailBookmarked && (
+                            <button
+                                type="button"
+                                disabled={isBookmarkPending(trendId, isDevDetail)}
+                                onClick={() => void removeBookmarkById(trendId, isDevDetail)}
+                                className="px-3.5 py-2 border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 text-xs uppercase tracking-wider transition-colors disabled:opacity-50"
+                            >
+                                {isBookmarkPending(trendId, isDevDetail) ? 'REMOVING...' : 'REMOVE FROM SAVED'}
+                            </button>
+                        )}
                     </div>
                 </div>
             );
@@ -776,32 +1316,21 @@ const TrendzPage = () => {
                     </div>
                 )}
 
-                <TrendzDetail trend={selectedTrend} onBack={handleBackToFeed} />
+                <TrendzDetail
+                    trend={selectedTrend}
+                    onBack={handleBackToFeed}
+                    backLabel={detailBackTarget.label}
+                    onSelectDomain={handleSelectDomainFromDetail}
+                />
 
-                <div className="mt-8 border-t border-zinc-800/80 pt-6">
-                    <div className="flex items-center gap-2 mb-4">
-                        <span className="w-1.5 h-1.5 bg-white"></span>
-                        <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">
-                            // SIMILAR_SIGNALS
-                        </h3>
-                    </div>
-
-                    {relatedLoading ? (
-                        <TrendzCardSkeleton />
-                    ) : relatedTrends.length > 0 ? (
-                        relatedTrends.map((trend) => (
-                            <TrendzCard
-                                key={trend.id}
-                                trend={trend}
-                                onClick={() => handleSelectTrend(trend)}
-                            />
-                        ))
-                    ) : (
-                        <p className="text-zinc-500 font-mono text-xs">
-                            // No published related signals linked to this trend.
-                        </p>
-                    )}
-                </div>
+                <RelatedTrendsSection
+                    matches={relatedMatches}
+                    loading={relatedLoading}
+                    error={relatedError}
+                    isFallbackMode={Boolean(selectedTrend.isFallback || dataSource === 'dev_fallback')}
+                    onSelectTrend={handleSelectTrend}
+                    onRetry={handleRetryRelatedTrends}
+                />
             </div>
         );
     }
@@ -817,7 +1346,7 @@ const TrendzPage = () => {
     // ==========================================
     return (
         <div className="space-y-4">
-            {/* Feed View Switcher (ALL / FOR YOU / SAVED) */}
+            {/* Feed View Switcher (ALL / FOR YOU / FOLLOWING / SAVED) */}
             <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                     <button
@@ -844,6 +1373,20 @@ const TrendzPage = () => {
                     </button>
                     <button
                         type="button"
+                        onClick={() => handleSwitchFeedView('following')}
+                        className={`px-3 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider whitespace-nowrap transition-all duration-150 border ${
+                            feedView === 'following'
+                                ? 'bg-white text-black border-white font-bold'
+                                : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
+                        }`}
+                    >
+                        FOLLOWING
+                        {!preferencesLoading && isAuthenticated
+                            ? ` [${followedDomainSlugs.length}]`
+                            : ''}
+                    </button>
+                    <button
+                        type="button"
                         onClick={() => handleSwitchFeedView('saved')}
                         className={`px-3 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider whitespace-nowrap transition-all duration-150 border ${
                             feedView === 'saved'
@@ -851,7 +1394,12 @@ const TrendzPage = () => {
                                 : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
                         }`}
                     >
-                        SAVED{!preferencesLoading && bookmarkRecords.length > 0 ? ` [${bookmarkRecords.length}]` : ''}
+                        SAVED
+                        {!authLoading &&
+                        (dataSource === 'dev_fallback' || !preferencesLoading) &&
+                        isAuthenticated
+                            ? ` [${activeBookmarkRecords.length}]`
+                            : ''}
                     </button>
                 </div>
                 {preferencesLoading && isAuthenticated && (
@@ -895,21 +1443,59 @@ const TrendzPage = () => {
                ========================================== */}
             {feedView === 'saved' ? (
                 <div className="space-y-4">
+                    {dataSource === 'dev_fallback' && (
+                        <div className="bg-[#0c0c0e] px-3.5 py-2.5 border border-zinc-700 flex items-center justify-between gap-3 font-mono text-[11px]">
+                            <span className="text-zinc-300">
+                                // DATA_SOURCE: DEV_FALLBACK (LOCAL SAMPLE BOOKMARKS)
+                            </span>
+                            <button
+                                type="button"
+                                onClick={handleSwitchToLive}
+                                className="text-white underline hover:text-zinc-300 uppercase tracking-wider shrink-0"
+                            >
+                                SWITCH TO LIVE
+                            </button>
+                        </div>
+                    )}
+
                     <div className="bg-[#0c0c0e] p-3.5 border border-zinc-800 flex items-center justify-between gap-3 font-mono">
                         <div>
                             <h2 className="text-xs font-bold text-white uppercase tracking-wider">
                                 // SAVED_TRENDS
                             </h2>
                             <p className="text-[11px] text-zinc-500 mt-0.5">
-                                Bookmarked industry developments synced to your account.
+                                {dataSource === 'dev_fallback'
+                                    ? 'Bookmarked sample trends stored locally for this account.'
+                                    : 'Bookmarked industry developments synced to your account.'}
                             </p>
                         </div>
                         <span className="text-xs text-zinc-400 shrink-0">
-                            [{visibleSavedEntries.length}]
+                            {debouncedSearch
+                                ? `[${visibleSavedEntries.length}/${activeBookmarkRecords.length}]`
+                                : `[${activeBookmarkRecords.length}]`}
                         </span>
                     </div>
 
-                    {!isAuthenticated ? (
+                    {isAuthenticated && activeBookmarkRecords.length > 0 && (
+                        <div>
+                            <input
+                                type="search"
+                                placeholder="SEARCH_SAVED_TRENDS..."
+                                value={localSearchInput}
+                                onChange={(e) => handleSearchInputChange(e.target.value)}
+                                className="w-full bg-[#0c0c0e] border border-zinc-800/90 px-3.5 py-2.5 text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
+                            />
+                        </div>
+                    )}
+
+                    {authLoading ||
+                    savedLoading ||
+                    (dataSource === 'live' && preferencesLoading) ? (
+                        <>
+                            <TrendzCardSkeleton />
+                            <TrendzCardSkeleton />
+                        </>
+                    ) : !isAuthenticated ? (
                         <div className="bg-[#0c0c0e] border border-zinc-800 p-6 font-mono space-y-3">
                             <p className="text-xs font-bold text-white uppercase tracking-wider">
                                 // SIGN_IN_REQUIRED
@@ -918,21 +1504,22 @@ const TrendzPage = () => {
                                 Sign in to view and manage your saved trends across sessions.
                             </p>
                         </div>
-                    ) : savedLoading || preferencesLoading ? (
-                        <>
-                            <TrendzCardSkeleton />
-                            <TrendzCardSkeleton />
-                        </>
-                    ) : savedError ? (
+                    ) : dataSource === 'live' &&
+                      (savedError || (preferencesError && bookmarkRecords.length === 0)) ? (
                         <div className="bg-[#0c0c0e] border border-zinc-800 p-6 font-mono space-y-3">
                             <p className="text-xs font-bold text-white uppercase tracking-wider">
                                 // SAVED_TRENDS_ERROR
                             </p>
-                            <p className="text-xs text-zinc-400 leading-relaxed">{savedError}</p>
+                            <p className="text-xs text-zinc-400 leading-relaxed">
+                                {savedError || preferencesError}
+                            </p>
                             <div className="pt-1">
                                 <button
                                     type="button"
-                                    onClick={() => setSavedRetryTick((prev) => prev + 1)}
+                                    onClick={() => {
+                                        void refreshEngagement();
+                                        setSavedRetryTick((prev) => prev + 1);
+                                    }}
                                     className="px-3.5 py-2 bg-white text-black font-bold text-xs uppercase tracking-wider hover:bg-zinc-200 transition-colors"
                                 >
                                     RETRY
@@ -942,19 +1529,33 @@ const TrendzPage = () => {
                     ) : visibleSavedEntries.length === 0 ? (
                         <div className="bg-[#0c0c0e] border border-zinc-800 p-6 font-mono space-y-3">
                             <p className="text-xs font-bold text-white uppercase tracking-wider">
-                                // NO_SAVED_TRENDS
+                                {debouncedSearch && activeBookmarkRecords.length > 0
+                                    ? '// NO_MATCHING_SAVED_TRENDS'
+                                    : '// NO_SAVED_TRENDS'}
                             </p>
                             <p className="text-xs text-zinc-400 leading-relaxed">
-                                You haven&apos;t bookmarked any trends yet. Click the bookmark icon on any live trend to save it here.
+                                {debouncedSearch && activeBookmarkRecords.length > 0
+                                    ? 'No saved trends match your search query.'
+                                    : "You haven't bookmarked any trends yet. Click the bookmark icon on any trend to save it here."}
                             </p>
                             <div className="pt-1">
-                                <button
-                                    type="button"
-                                    onClick={() => handleSwitchFeedView('all')}
-                                    className="px-3.5 py-2 bg-white text-black font-bold text-xs uppercase tracking-wider hover:bg-zinc-200 transition-colors"
-                                >
-                                    BROWSE ALL TRENDZ
-                                </button>
+                                {debouncedSearch && activeBookmarkRecords.length > 0 ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSearchInputChange('')}
+                                        className="px-3.5 py-2 bg-white text-black font-bold text-xs uppercase tracking-wider hover:bg-zinc-200 transition-colors"
+                                    >
+                                        CLEAR SEARCH
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSwitchFeedView('all')}
+                                        className="px-3.5 py-2 bg-white text-black font-bold text-xs uppercase tracking-wider hover:bg-zinc-200 transition-colors"
+                                    >
+                                        BROWSE ALL TRENDZ
+                                    </button>
+                                )}
                             </div>
                         </div>
                     ) : (
@@ -969,7 +1570,10 @@ const TrendzPage = () => {
                                 );
                             }
 
-                            const pendingRemove = isBookmarkPending(entry.trendId);
+                            const pendingRemove = isBookmarkPending(
+                                entry.trendId,
+                                dataSource === 'dev_fallback'
+                            );
                             const domainLabel = formatTrendzDomainName(entry.bookmark.domainSlug);
                             return (
                                 <div
@@ -1001,7 +1605,12 @@ const TrendzPage = () => {
                                         <button
                                             type="button"
                                             disabled={pendingRemove}
-                                            onClick={() => void removeBookmarkById(entry.trendId)}
+                                            onClick={() =>
+                                                void removeBookmarkById(
+                                                    entry.trendId,
+                                                    dataSource === 'dev_fallback'
+                                                )
+                                            }
                                             className="px-3 py-1.5 border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 text-[11px] uppercase tracking-wider transition-colors disabled:opacity-50"
                                         >
                                             {pendingRemove ? 'REMOVING...' : 'REMOVE BOOKMARK'}
@@ -1030,6 +1639,102 @@ const TrendzPage = () => {
                         </div>
                     )}
 
+                    {/* Following Feed Context Banner & Controls */}
+                    {feedView === 'following' && (
+                        <div className="bg-[#0c0c0e] p-3.5 border border-zinc-800 font-mono space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="space-y-0.5 min-w-0">
+                                    <p className="text-xs font-bold text-white uppercase tracking-wider">
+                                        // FOLLOWING_FEED
+                                        {activeFollowingDomainSlug
+                                            ? ` :: ${formatTrendzDomainName(activeFollowingDomainSlug).toUpperCase()}`
+                                            : ''}
+                                    </p>
+                                    <p className="text-[11px] text-zinc-400">
+                                        {!isAuthenticated
+                                            ? 'Sign in to follow domains and receive a dedicated stream of published trends.'
+                                            : followedDomainSlugs.length === 0
+                                                ? 'You are not following any domains yet. Follow domains below or from the sidebar to populate this feed.'
+                                                : activeFollowingDomainSlug
+                                                    ? `Showing published trends from ${formatTrendzDomainName(activeFollowingDomainSlug)} (${followedDomainSlugs.length} followed domains total).`
+                                                    : `Showing published trends across all ${followedDomainSlugs.length} followed domain${followedDomainSlugs.length === 1 ? '' : 's'}.`}
+                                    </p>
+                                </div>
+                                {isAuthenticated && (
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        {followedDomainSlugs.length > 0 && (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleSetSortBy('latest')}
+                                                    className={`px-2 py-1 text-[10px] uppercase tracking-wider border transition-colors ${
+                                                        sortBy === 'latest'
+                                                            ? 'bg-white text-black border-white font-bold'
+                                                            : 'bg-black text-zinc-400 border-zinc-800 hover:border-zinc-600 hover:text-white'
+                                                    }`}
+                                                >
+                                                    LATEST
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleSetSortBy('momentum')}
+                                                    className={`px-2 py-1 text-[10px] uppercase tracking-wider border transition-colors ${
+                                                        sortBy === 'momentum'
+                                                            ? 'bg-white text-black border-white font-bold'
+                                                            : 'bg-black text-zinc-400 border-zinc-800 hover:border-zinc-600 hover:text-white'
+                                                    }`}
+                                                >
+                                                    MOMENTUM
+                                                </button>
+                                            </>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowMobileManageDomains((prev) => !prev)}
+                                            className="lg:hidden px-2 py-1 text-[10px] uppercase tracking-wider border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
+                                        >
+                                            {showMobileManageDomains ? 'CLOSE' : 'MANAGE'}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Responsive mobile/tablet domain management panel (desktop uses RightSidebar) */}
+                            {isAuthenticated && showMobileManageDomains && (
+                                <div className="lg:hidden pt-2 border-t border-zinc-800/80 space-y-2">
+                                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider">
+                                        // MANAGE_FOLLOWED_DOMAINS
+                                    </p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {TRENDZ_DOMAINS.map((domain) => {
+                                            const followed = isDomainFollowed(domain.slug);
+                                            const pending = isDomainPending(domain.slug);
+                                            return (
+                                                <button
+                                                    key={domain.slug}
+                                                    type="button"
+                                                    disabled={pending}
+                                                    onClick={() =>
+                                                        void (followed
+                                                            ? unfollowDomain(domain.slug)
+                                                            : followDomain(domain.slug))
+                                                    }
+                                                    className={`px-2.5 py-1 text-[10px] uppercase tracking-wider border transition-colors disabled:opacity-50 ${
+                                                        followed
+                                                            ? 'bg-white text-black border-white font-bold'
+                                                            : 'bg-black text-zinc-300 border-zinc-800 hover:border-zinc-500 hover:text-white'
+                                                    }`}
+                                                >
+                                                    {pending ? '...' : followed ? `✓ ${domain.name}` : `+ ${domain.name}`}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Personalized ("For You") Context Banner */}
                     {feedView === 'for-you' && (
                         <div className="bg-[#0c0c0e] p-3.5 border border-zinc-800 font-mono space-y-2.5">
@@ -1039,7 +1744,7 @@ const TrendzPage = () => {
                                         // SIGN_IN_TO_PERSONALIZE
                                     </p>
                                     <p className="text-[11px] text-zinc-400">
-                                        Showing high-momentum and recent trends. Sign in to personalize by followed domains, bookmarks, and upvotes.
+                                        Showing balanced high-momentum and fresh trends. Sign in to personalize by followed domains, bookmarks, upvotes, and recent views.
                                     </p>
                                 </div>
                             ) : hasPersonalizationSignals ? (
@@ -1049,7 +1754,7 @@ const TrendzPage = () => {
                                             // FOR_YOU_FEED
                                         </p>
                                         <p className="text-[11px] text-zinc-400">
-                                            Ranked by followed domains ({followedDomainSlugs.length}), saved trends ({bookmarkRecords.length}), upvotes ({upvoteRecords.length}), recent views &amp; momentum.
+                                            Ranked by followed domains ({followedDomainSlugs.length}), bookmarks ({bookmarkRecords.length}), upvotes ({upvoteRecords.length}), recent views ({personalizationSignals.viewRecords.length}), momentum, freshness &amp; domain diversity.
                                         </p>
                                     </div>
                                 </div>
@@ -1060,7 +1765,7 @@ const TrendzPage = () => {
                                             // PERSONALIZE_YOUR_STREAM
                                         </p>
                                         <p className="text-[11px] text-zinc-400">
-                                            No domain preferences yet — showing top momentum &amp; recent signals. Follow domains below to tailor this feed:
+                                            No personal signals yet — showing diverse high-momentum &amp; fresh signals. Follow domains below to tailor your recommendations:
                                         </p>
                                     </div>
                                     <div className="flex flex-wrap gap-1.5">
@@ -1089,91 +1794,139 @@ const TrendzPage = () => {
                         </div>
                     )}
 
-                    {/* Active Single Domain Banner with Follow/Unfollow Control */}
-                    {(followedDomainsFilter || soleSelectedDomainSlug) && soleSelectedDomainSlug && soleSelectedDomainName && (
-                        <div className="bg-[#0c0c0e] p-3 border border-zinc-800 mb-2 flex items-center justify-between gap-2">
-                            <h2 className="font-mono text-xs text-white uppercase tracking-wider truncate">
-                                {`// DOMAIN: ${soleSelectedDomainName}`}
-                            </h2>
-                            <div className="flex items-center gap-2 shrink-0">
-                                <button
-                                    type="button"
-                                    disabled={isDomainPending(soleSelectedDomainSlug)}
-                                    onClick={() => void toggleFollowDomain(soleSelectedDomainSlug)}
-                                    className={`font-mono text-[10px] px-2.5 py-0.5 uppercase tracking-wider border transition-colors disabled:opacity-50 ${
-                                        isDomainFollowed(soleSelectedDomainSlug)
-                                            ? 'bg-zinc-900 text-white border-zinc-600 font-bold hover:border-zinc-500'
-                                            : 'text-zinc-300 border-zinc-800 hover:border-zinc-600 hover:text-white'
-                                    }`}
-                                >
-                                    {isDomainPending(soleSelectedDomainSlug)
-                                        ? '...'
-                                        : isDomainFollowed(soleSelectedDomainSlug)
-                                            ? 'FOLLOWING'
-                                            : '+ FOLLOW'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => updateCanonicalDomainSelection([], null)}
-                                    className="font-mono text-[10px] text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 px-2 py-0.5 uppercase transition-colors"
-                                >
-                                    CLEAR
-                                </button>
+                    {/* Active Single Domain Banner with Follow/Unfollow Control (ALL & FOR YOU) */}
+                    {feedView !== 'following' &&
+                        (followedDomainsFilter || soleSelectedDomainSlug) &&
+                        soleSelectedDomainSlug &&
+                        soleSelectedDomainName && (
+                            <div className="bg-[#0c0c0e] p-3 border border-zinc-800 mb-2 flex items-center justify-between gap-2">
+                                <h2 className="font-mono text-xs text-white uppercase tracking-wider truncate">
+                                    {`// DOMAIN: ${soleSelectedDomainName}`}
+                                </h2>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                        type="button"
+                                        disabled={isDomainPending(soleSelectedDomainSlug)}
+                                        onClick={() => void toggleFollowDomain(soleSelectedDomainSlug)}
+                                        className={`font-mono text-[10px] px-2.5 py-0.5 uppercase tracking-wider border transition-colors disabled:opacity-50 ${
+                                            isDomainFollowed(soleSelectedDomainSlug)
+                                                ? 'bg-zinc-900 text-white border-zinc-600 font-bold hover:border-zinc-500'
+                                                : 'text-zinc-300 border-zinc-800 hover:border-zinc-600 hover:text-white'
+                                        }`}
+                                    >
+                                        {isDomainPending(soleSelectedDomainSlug)
+                                            ? '...'
+                                            : isDomainFollowed(soleSelectedDomainSlug)
+                                                ? 'FOLLOWING'
+                                                : '+ FOLLOW'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => updateCanonicalDomainSelection([], null)}
+                                        className="font-mono text-[10px] text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 px-2 py-0.5 uppercase transition-colors"
+                                    >
+                                        CLEAR
+                                    </button>
+                                </div>
                             </div>
+                        )}
+
+                    {/* Following Mode Filter Bar (All Following + each followed domain) */}
+                    {feedView === 'following' && isAuthenticated && followedDomainSlugs.length > 0 && (
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 no-scrollbar">
+                            <button
+                                type="button"
+                                onClick={() => handleFollowingChipClick(null)}
+                                className={`px-3 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider whitespace-nowrap transition-all duration-150 border ${
+                                    activeFollowingDomainSlug === null
+                                        ? 'bg-white text-black border-white font-bold'
+                                        : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
+                                }`}
+                            >
+                                ALL FOLLOWING [{followedDomainSlugs.length}]
+                            </button>
+                            {followedDomainSlugs.map((slug) => {
+                                const name = formatTrendzDomainName(slug);
+                                const isActive = activeFollowingDomainSlug === slug;
+                                return (
+                                    <button
+                                        type="button"
+                                        key={slug}
+                                        onClick={() => handleFollowingChipClick(slug)}
+                                        className={`px-3 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider whitespace-nowrap transition-all duration-150 border ${
+                                            isActive
+                                                ? 'bg-white text-black border-white font-bold'
+                                                : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
+                                        }`}
+                                    >
+                                        {name}
+                                    </button>
+                                );
+                            })}
                         </div>
                     )}
 
-                    {/* Category Filter Pills (synchronized with canonical domain registry) */}
-                    <div className="flex items-center gap-1.5 overflow-x-auto pb-3 mb-3 no-scrollbar">
-                        {categoryFilters.map((category) => {
-                            const slug = category === 'All' ? null : normalizeTrendzDomainSlug(category);
-                            const isActive =
-                                category === 'All'
-                                    ? selectedDomainSlugs.length === 0
-                                    : Boolean(slug && selectedDomainSlugs.includes(slug));
+                    {/* Category Filter Pills for ALL & FOR YOU (synchronized with canonical domain registry) */}
+                    {feedView !== 'following' && (
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-3 mb-3 no-scrollbar">
+                            {categoryFilters.map((category) => {
+                                const slug = category === 'All' ? null : normalizeTrendzDomainSlug(category);
+                                const isActive =
+                                    category === 'All'
+                                        ? selectedDomainSlugs.length === 0
+                                        : Boolean(slug && selectedDomainSlugs.includes(slug));
 
-                            return (
-                                <button
-                                    type="button"
-                                    key={category}
-                                    onClick={() => handleCategoryClick(category)}
-                                    className={`px-3 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider whitespace-nowrap transition-all duration-150 border ${
-                                        isActive
-                                            ? 'bg-white text-black border-white font-bold'
-                                            : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
-                                    }`}
-                                >
-                                    {category}
-                                </button>
-                            );
-                        })}
-                    </div>
+                                return (
+                                    <button
+                                        type="button"
+                                        key={category}
+                                        onClick={() => handleCategoryClick(category)}
+                                        className={`px-3 py-1.5 rounded-none font-mono text-xs uppercase tracking-wider whitespace-nowrap transition-all duration-150 border ${
+                                            isActive
+                                                ? 'bg-white text-black border-white font-bold'
+                                                : 'bg-[#0c0c0e] text-zinc-400 border-zinc-800/90 hover:border-zinc-700 hover:text-white'
+                                        }`}
+                                    >
+                                        {category}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
 
-                    {/* Search Bar */}
-                    <div className="mb-4">
-                        <input
-                            type="search"
-                            placeholder="SEARCH_TRENDS_OR_DOMAINS..."
-                            value={localSearchInput}
-                            onChange={(e) => handleSearchInputChange(e.target.value)}
-                            className="w-full bg-[#0c0c0e] border border-zinc-800/90 px-3.5 py-2.5 text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
+                    {/* Search Bar (shown in ALL, FOR YOU, and active FOLLOWING) */}
+                    {(feedView !== 'following' || (isAuthenticated && followedDomainSlugs.length > 0)) && (
+                        <div className="mb-4">
+                            <input
+                                type="search"
+                                placeholder={
+                                    feedView === 'following'
+                                        ? 'SEARCH_FOLLOWING_TRENDS...'
+                                        : 'SEARCH_TRENDS_OR_DOMAINS...'
+                                }
+                                value={localSearchInput}
+                                onChange={(e) => handleSearchInputChange(e.target.value)}
+                                className="w-full bg-[#0c0c0e] border border-zinc-800/90 px-3.5 py-2.5 text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
+                            />
+                        </div>
+                    )}
+
+                    {/* DomainFilter Dropdown (ALL & FOR YOU) */}
+                    {feedView !== 'following' && (
+                        <DomainFilter
+                            domains={trendzDomains}
+                            selectedDomains={selectedDomainNames}
+                            onSelectionChange={(domains) => updateCanonicalDomainSelection(domains)}
                         />
-                    </div>
+                    )}
 
-                    {/* DomainFilter Dropdown (synchronized with Category Pills & Followed Domains) */}
-                    <DomainFilter
-                        domains={trendzDomains}
-                        selectedDomains={selectedDomainNames}
-                        onSelectionChange={(domains) => updateCanonicalDomainSelection(domains)}
-                    />
-
-                    {/* Active Momentum Sort Banner (triggered by Momentum Now VIEW_ALL) */}
+                    {/* Active Momentum Sort Banner (ALL mode — Following has inline sort toggle) */}
                     {feedView === 'all' && sortBy === 'momentum' && (
                         <div className="bg-[#0c0c0e] px-3.5 py-2.5 border border-zinc-800 flex items-center justify-between gap-2 font-mono text-xs">
                             <span className="text-white uppercase tracking-wider">// SORT: MOMENTUM_NOW</span>
                             <button
                                 type="button"
-                                onClick={handleToggleSortToLatest}
+                                onClick={() => handleSetSortBy('latest')}
                                 className="text-[10px] text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-600 px-2 py-0.5 uppercase tracking-wider transition-colors"
                             >
                                 SHOW LATEST
@@ -1183,7 +1936,61 @@ const TrendzPage = () => {
 
                     {/* Main Feed Stream */}
                     <div className="mt-4">
-                        {loading ? (
+                        {feedView === 'following' && !isAuthenticated ? (
+                            <div className="bg-[#0c0c0e] border border-zinc-800 p-6 font-mono space-y-3">
+                                <p className="text-xs font-bold text-white uppercase tracking-wider">
+                                    // SIGN_IN_REQUIRED
+                                </p>
+                                <p className="text-xs text-zinc-400 leading-relaxed">
+                                    Sign in to follow Trendz domains and view your dedicated Following stream.
+                                </p>
+                                <div className="pt-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSwitchFeedView('all')}
+                                        className="px-3.5 py-2 bg-white text-black font-bold text-xs uppercase tracking-wider hover:bg-zinc-200 transition-colors"
+                                    >
+                                        BROWSE ALL TRENDZ
+                                    </button>
+                                </div>
+                            </div>
+                        ) : feedView === 'following' && !preferencesLoading && followedDomainSlugs.length === 0 ? (
+                            <div className="bg-[#0c0c0e] border border-zinc-800 p-6 font-mono space-y-4">
+                                <div className="space-y-1.5">
+                                    <p className="text-xs font-bold text-white uppercase tracking-wider">
+                                        // NO_FOLLOWED_DOMAINS
+                                    </p>
+                                    <p className="text-xs text-zinc-400 leading-relaxed">
+                                        Follow one or more domains below to build your Following stream. Published trends from your followed domains will appear here immediately.
+                                    </p>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {TRENDZ_DOMAINS.map((domain) => {
+                                        const pending = isDomainPending(domain.slug);
+                                        return (
+                                            <button
+                                                key={domain.slug}
+                                                type="button"
+                                                disabled={pending}
+                                                onClick={() => void followDomain(domain.slug)}
+                                                className="px-2.5 py-1.5 text-[11px] uppercase tracking-wider border bg-black text-zinc-300 border-zinc-800 hover:border-zinc-500 hover:text-white transition-colors disabled:opacity-50"
+                                            >
+                                                {pending ? '...' : `+ ${domain.name}`}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <div className="pt-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSwitchFeedView('all')}
+                                        className="px-3.5 py-2 bg-white text-black font-bold text-xs uppercase tracking-wider hover:bg-zinc-200 transition-colors"
+                                    >
+                                        BROWSE ALL TRENDZ
+                                    </button>
+                                </div>
+                            </div>
+                        ) : loading ? (
                             <>
                                 <TrendzCardSkeleton />
                                 <TrendzCardSkeleton />
@@ -1212,21 +2019,25 @@ const TrendzPage = () => {
                                     </button>
                                 </div>
                             </div>
-                        ) : trends.length === 0 ? (
+                        ) : displayedTrends.length === 0 ? (
                             <div className="bg-[#0c0c0e] border border-zinc-800 p-6 font-mono space-y-3">
                                 <p className="text-xs font-bold text-white uppercase tracking-wider">
                                     {hasActiveFilters
                                         ? '// NO_MATCHING_SIGNALS'
-                                        : feedView === 'for-you'
-                                            ? '// NO_PERSONALIZED_RECOMMENDATIONS'
-                                            : '// NO_PUBLISHED_SIGNALS'}
+                                        : feedView === 'following'
+                                            ? '// NO_FOLLOWING_SIGNALS'
+                                            : feedView === 'for-you'
+                                                ? '// NO_PERSONALIZED_RECOMMENDATIONS'
+                                                : '// NO_PUBLISHED_SIGNALS'}
                                 </p>
                                 <p className="text-xs text-zinc-400 leading-relaxed">
                                     {hasActiveFilters
                                         ? 'No published Trendz match your active domain filter or search query.'
-                                        : feedView === 'for-you'
-                                            ? 'No personalized recommendations are currently available. Switch to All Trendz or follow additional domains.'
-                                            : 'No published Trendz records are currently available in Firestore.'}
+                                        : feedView === 'following'
+                                            ? 'No published Trendz are currently available in your followed domains. Follow additional domains or browse All Trendz.'
+                                            : feedView === 'for-you'
+                                                ? 'No personalized recommendations are currently available. Switch to All Trendz or follow additional domains.'
+                                                : 'No published Trendz records are currently available in Firestore.'}
                                 </p>
                                 <div className="flex flex-wrap items-center gap-2.5 pt-2">
                                     {hasActiveFilters ? (
@@ -1239,7 +2050,7 @@ const TrendzPage = () => {
                                         </button>
                                     ) : (
                                         <>
-                                            {feedView === 'for-you' && (
+                                            {(feedView === 'for-you' || feedView === 'following') && (
                                                 <button
                                                     type="button"
                                                     onClick={() => handleSwitchFeedView('all')}
@@ -1269,12 +2080,18 @@ const TrendzPage = () => {
                                 </div>
                             </div>
                         ) : (
-                            trends.map((trend, index) => {
+                            displayedTrends.map((trend, index) => {
                                 const reason =
                                     feedView === 'for-you'
                                         ? personalizedReasons[trend.id]
                                         : undefined;
-                                if (feedView === 'all' && trends.length === index + 1) {
+                                const isLastItem = displayedTrends.length === index + 1;
+                                const attachPaginationRef =
+                                    isLastItem &&
+                                    (feedView === 'all' ||
+                                        feedView === 'following' ||
+                                        feedView === 'for-you');
+                                if (attachPaginationRef) {
                                     return (
                                         <div ref={lastTrendElementRef} key={trend.id}>
                                             <TrendzCard
@@ -1303,9 +2120,10 @@ const TrendzPage = () => {
                         {!loading &&
                             !isFetchingMore &&
                             hasMore &&
-                            feedView === 'all' &&
-                            dataSource === 'live' &&
-                            trends.length > 0 && (
+                            displayedTrends.length > 0 &&
+                            (feedView === 'for-you' ||
+                                ((feedView === 'all' || feedView === 'following') &&
+                                    dataSource === 'live')) && (
                                 <button
                                     type="button"
                                     onClick={loadMoreTrends}
@@ -1314,7 +2132,7 @@ const TrendzPage = () => {
                                     LOAD MORE SIGNALS
                                 </button>
                             )}
-                        {!hasMore && trends.length > 0 && !loading && !isFetchingMore && (
+                        {!hasMore && displayedTrends.length > 0 && !loading && !isFetchingMore && (
                             <p className="text-zinc-600 font-mono text-xs tracking-wider">
                                 // END OF STREAM REACHED
                             </p>

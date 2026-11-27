@@ -1,14 +1,28 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from './AuthContext';
 import {
+    bookmarkTrend as persistTrendBookmark,
+    buildSampleBookmarkRecord,
+    buildSampleUpvoteRecord,
+    dedupeTrendBookmarkRecords,
+    dedupeTrendUpvoteRecords,
+    dedupeTrendViewRecords,
     fetchUserFollowedTrendDomains,
     fetchUserTrendBookmarks,
     fetchUserTrendUpvotes,
     fetchUserTrendViews,
     followTrendDomain,
+    loadAnonymousTrendViews,
+    loadSampleBookmarkRecords,
+    loadSampleUpvoteRecords,
+    loadSampleViewRecords,
     normalizeFollowedTrendDomains,
+    recordAnonymousTrendView,
+    recordSampleTrendView,
     recordTrendView,
     removeTrendBookmarkById,
+    saveSampleBookmarkIds,
+    saveSampleUpvoteIds,
     toggleTrendBookmark,
     toggleTrendUpvote,
     unfollowTrendDomain,
@@ -47,31 +61,39 @@ interface TrendzEngagementContextValue {
     unfollowDomain: (rawDomain: string) => Promise<boolean>;
     toggleFollowDomain: (rawDomain: string) => Promise<boolean>;
 
-    // Bookmarks
+    // Bookmarks (LIVE Firestore + isolated DEV_FALLBACK localStorage)
     bookmarkRecords: TrendBookmarkRecord[];
     bookmarkedTrendIds: Set<string>;
-    isTrendBookmarked: (trendId: string) => boolean;
-    isBookmarkPending: (trendId: string) => boolean;
+    sampleBookmarkRecords: TrendBookmarkRecord[];
+    sampleBookmarkedTrendIds: Set<string>;
+    isTrendBookmarked: (trendId: string, isFallback?: boolean) => boolean;
+    isBookmarkPending: (trendId: string, isFallback?: boolean) => boolean;
+    bookmarkTrend: (trend: TrendViewModel) => Promise<boolean>;
+    unbookmarkTrend: (trendId: string, isFallback?: boolean) => Promise<boolean>;
     toggleBookmark: (trend: TrendViewModel) => Promise<boolean>;
-    removeBookmarkById: (trendId: string) => Promise<boolean>;
+    removeBookmarkById: (trendId: string, isFallback?: boolean) => Promise<boolean>;
 
-    // Upvotes
+    // Upvotes (LIVE Firestore + isolated DEV_FALLBACK localStorage)
     upvoteRecords: TrendUpvoteRecord[];
     upvotedTrendIds: Set<string>;
-    isTrendUpvoted: (trendId: string) => boolean;
-    isUpvotePending: (trendId: string) => boolean;
+    sampleUpvoteRecords: TrendUpvoteRecord[];
+    sampleUpvotedTrendIds: Set<string>;
+    isTrendUpvoted: (trendId: string, isFallback?: boolean) => boolean;
+    isUpvotePending: (trendId: string, isFallback?: boolean) => boolean;
     toggleUpvote: (trend: TrendViewModel) => Promise<boolean>;
 
-    // Views
+    // Views (LIVE auth Firestore / anon local + isolated DEV_FALLBACK local)
     viewRecords: TrendViewRecord[];
+    sampleViewRecords: TrendViewRecord[];
     trackTrendView: (trend: TrendViewModel) => Promise<void>;
 
     // Live count sync across cards & detail views
     statsOverrides: Record<string, TrendStatsOverride>;
-    getDisplayStats: (trend: TrendViewModel) => { likes: number; views: number; comments: number };
+    getDisplayStats: (trend: TrendViewModel) => { likes: number; views: number; comments: number; saves: number };
 
-    // Personalization signals bundle
+    // Personalization signals bundles (strictly separated LIVE vs DEV_FALLBACK)
     personalizationSignals: PersonalizationSignals;
+    samplePersonalizationSignals: PersonalizationSignals;
 }
 
 const TrendzEngagementContext = createContext<TrendzEngagementContextValue | undefined>(undefined);
@@ -96,8 +118,11 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
 
     const [followedDomainSlugs, setFollowedDomainSlugs] = useState<TrendzDomainSlug[]>([]);
     const [bookmarkRecords, setBookmarkRecords] = useState<TrendBookmarkRecord[]>([]);
+    const [sampleBookmarkRecords, setSampleBookmarkRecords] = useState<TrendBookmarkRecord[]>([]);
     const [upvoteRecords, setUpvoteRecords] = useState<TrendUpvoteRecord[]>([]);
+    const [sampleUpvoteRecords, setSampleUpvoteRecords] = useState<TrendUpvoteRecord[]>([]);
     const [viewRecords, setViewRecords] = useState<TrendViewRecord[]>([]);
+    const [sampleViewRecords, setSampleViewRecords] = useState<TrendViewRecord[]>([]);
     const [statsOverrides, setStatsOverrides] = useState<Record<string, TrendStatsOverride>>({});
 
     const [preferencesLoading, setPreferencesLoading] = useState(false);
@@ -114,15 +139,46 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
     const pendingDomainsRef = useRef<Set<string>>(new Set());
     const followedDomainSlugsRef = useRef<TrendzDomainSlug[]>(followedDomainSlugs);
     followedDomainSlugsRef.current = followedDomainSlugs;
+    const pendingBookmarksRef = useRef<Set<string>>(new Set());
+    const bookmarkRecordsRef = useRef<TrendBookmarkRecord[]>(bookmarkRecords);
+    bookmarkRecordsRef.current = bookmarkRecords;
+    const sampleBookmarkRecordsRef = useRef<TrendBookmarkRecord[]>(sampleBookmarkRecords);
+    sampleBookmarkRecordsRef.current = sampleBookmarkRecords;
+    const pendingUpvotesRef = useRef<Set<string>>(new Set());
+    const upvoteRecordsRef = useRef<TrendUpvoteRecord[]>(upvoteRecords);
+    upvoteRecordsRef.current = upvoteRecords;
+    const sampleUpvoteRecordsRef = useRef<TrendUpvoteRecord[]>(sampleUpvoteRecords);
+    sampleUpvoteRecordsRef.current = sampleUpvoteRecords;
+    const sampleViewRecordsRef = useRef<TrendViewRecord[]>(sampleViewRecords);
+    sampleViewRecordsRef.current = sampleViewRecords;
+    const inFlightViewTracksRef = useRef<Set<string>>(new Set());
+    const statsOverridesRef = useRef<Record<string, TrendStatsOverride>>(statsOverrides);
+    statsOverridesRef.current = statsOverrides;
 
     const loadUserEngagement = useCallback(async (targetUid: string | null) => {
         const seq = ++loadSeqRef.current;
 
         if (!targetUid) {
+            const anonViews = loadAnonymousTrendViews();
+            const anonSampleViews = loadSampleViewRecords(null);
+            followedDomainSlugsRef.current = [];
+            bookmarkRecordsRef.current = [];
+            sampleBookmarkRecordsRef.current = [];
+            upvoteRecordsRef.current = [];
+            sampleUpvoteRecordsRef.current = [];
+            sampleViewRecordsRef.current = anonSampleViews;
+            pendingDomainsRef.current = new Set();
+            pendingBookmarksRef.current = new Set();
+            pendingUpvotesRef.current = new Set();
+            inFlightViewTracksRef.current = new Set();
+            statsOverridesRef.current = {};
             setFollowedDomainSlugs([]);
             setBookmarkRecords([]);
+            setSampleBookmarkRecords([]);
             setUpvoteRecords([]);
-            setViewRecords([]);
+            setSampleUpvoteRecords([]);
+            setViewRecords(anonViews);
+            setSampleViewRecords(anonSampleViews);
             setStatsOverrides({});
             setPendingDomains(new Set());
             setPendingBookmarks(new Set());
@@ -132,6 +188,17 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
             setActionError(null);
             return;
         }
+
+        // Immediately restore user-scoped DEV_FALLBACK sample engagement from localStorage
+        const restoredSampleBookmarks = loadSampleBookmarkRecords(targetUid);
+        const restoredSampleUpvotes = loadSampleUpvoteRecords(targetUid);
+        const restoredSampleViews = loadSampleViewRecords(targetUid);
+        sampleBookmarkRecordsRef.current = restoredSampleBookmarks;
+        sampleUpvoteRecordsRef.current = restoredSampleUpvotes;
+        sampleViewRecordsRef.current = restoredSampleViews;
+        setSampleBookmarkRecords(restoredSampleBookmarks);
+        setSampleUpvoteRecords(restoredSampleUpvotes);
+        setSampleViewRecords(restoredSampleViews);
 
         setPreferencesLoading(true);
         setPreferencesError(null);
@@ -160,23 +227,29 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
         }
 
         if (bookmarksRes.status === 'fulfilled') {
-            setBookmarkRecords(bookmarksRes.value);
+            const deduped = dedupeTrendBookmarkRecords(bookmarksRes.value);
+            bookmarkRecordsRef.current = deduped;
+            setBookmarkRecords(deduped);
         } else {
+            bookmarkRecordsRef.current = [];
             setBookmarkRecords([]);
             errors.push('saved trends');
             console.error('[TRENDZ_LOAD_BOOKMARKS_ERROR]', bookmarksRes.reason);
         }
 
         if (upvotesRes.status === 'fulfilled') {
-            setUpvoteRecords(upvotesRes.value);
+            const dedupedUpvotes = dedupeTrendUpvoteRecords(upvotesRes.value);
+            upvoteRecordsRef.current = dedupedUpvotes;
+            setUpvoteRecords(dedupedUpvotes);
         } else {
+            upvoteRecordsRef.current = [];
             setUpvoteRecords([]);
             errors.push('upvotes');
             console.error('[TRENDZ_LOAD_UPVOTES_ERROR]', upvotesRes.reason);
         }
 
         if (viewsRes.status === 'fulfilled') {
-            setViewRecords(viewsRes.value);
+            setViewRecords(dedupeTrendViewRecords(viewsRes.value));
         } else {
             setViewRecords([]);
             console.warn('[TRENDZ_LOAD_VIEWS_WARN]', viewsRes.reason);
@@ -200,11 +273,23 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
             return;
         }
         followedDomainSlugsRef.current = [];
+        bookmarkRecordsRef.current = [];
+        sampleBookmarkRecordsRef.current = [];
+        upvoteRecordsRef.current = [];
+        sampleUpvoteRecordsRef.current = [];
+        sampleViewRecordsRef.current = [];
         pendingDomainsRef.current = new Set();
+        pendingBookmarksRef.current = new Set();
+        pendingUpvotesRef.current = new Set();
+        inFlightViewTracksRef.current = new Set();
+        statsOverridesRef.current = {};
         setFollowedDomainSlugs([]);
         setBookmarkRecords([]);
+        setSampleBookmarkRecords([]);
         setUpvoteRecords([]);
+        setSampleUpvoteRecords([]);
         setViewRecords([]);
+        setSampleViewRecords([]);
         setStatsOverrides({});
         setPendingDomains(new Set());
         setPendingBookmarks(new Set());
@@ -232,9 +317,24 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
         [bookmarkRecords]
     );
 
+    const sampleBookmarkedTrendIds = useMemo(
+        () => new Set<string>(sampleBookmarkRecords.map((b) => b.targetId)),
+        [sampleBookmarkRecords]
+    );
+
     const upvotedTrendIds = useMemo(
         () => new Set<string>(upvoteRecords.map((u) => u.targetId)),
         [upvoteRecords]
+    );
+
+    const sampleUpvotedTrendIds = useMemo(
+        () => new Set<string>(sampleUpvoteRecords.map((u) => u.targetId)),
+        [sampleUpvoteRecords]
+    );
+
+    const sampleViewedTrendIds = useMemo(
+        () => new Set<string>(sampleViewRecords.map((v) => v.trendId)),
+        [sampleViewRecords]
     );
 
     const isDomainFollowed = useCallback(
@@ -254,22 +354,26 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
     );
 
     const isTrendBookmarked = useCallback(
-        (trendId: string): boolean => bookmarkedTrendIds.has(trendId),
-        [bookmarkedTrendIds]
+        (trendId: string, isFallback = false): boolean =>
+            isFallback ? sampleBookmarkedTrendIds.has(trendId) : bookmarkedTrendIds.has(trendId),
+        [bookmarkedTrendIds, sampleBookmarkedTrendIds]
     );
 
     const isBookmarkPending = useCallback(
-        (trendId: string): boolean => pendingBookmarks.has(trendId),
+        (trendId: string, isFallback = false): boolean =>
+            isFallback ? false : pendingBookmarks.has(trendId),
         [pendingBookmarks]
     );
 
     const isTrendUpvoted = useCallback(
-        (trendId: string): boolean => upvotedTrendIds.has(trendId),
-        [upvotedTrendIds]
+        (trendId: string, isFallback = false): boolean =>
+            isFallback ? sampleUpvotedTrendIds.has(trendId) : upvotedTrendIds.has(trendId),
+        [upvotedTrendIds, sampleUpvotedTrendIds]
     );
 
     const isUpvotePending = useCallback(
-        (trendId: string): boolean => pendingUpvotes.has(trendId),
+        (trendId: string, isFallback = false): boolean =>
+            isFallback ? false : pendingUpvotes.has(trendId),
         [pendingUpvotes]
     );
 
@@ -371,29 +475,71 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
                 setActionError('Sign in to bookmark trends.');
                 return false;
             }
+
+            // DEV_FALLBACK sample trends: store locally per user in localStorage (never write to Firestore)
             if (trend.isFallback) {
-                setActionError(
-                    'Sample fallback trends cannot be bookmarked. Switch to live Trendz to save items.'
+                setActionError(null);
+                const previousSample = sampleBookmarkRecordsRef.current;
+                const wasBookmarked = previousSample.some((item) => item.targetId === trend.id);
+                let nextSample: TrendBookmarkRecord[];
+
+                if (wasBookmarked) {
+                    nextSample = previousSample.filter((item) => item.targetId !== trend.id);
+                } else {
+                    const newRecord = buildSampleBookmarkRecord(uid, trend, Date.now());
+                    nextSample = dedupeTrendBookmarkRecords([
+                        newRecord,
+                        ...previousSample.filter((item) => item.targetId !== trend.id),
+                    ]);
+                }
+
+                const persistedIds = saveSampleBookmarkIds(
+                    uid,
+                    nextSample.map((item) => item.targetId)
                 );
-                return false;
+                const persistedIdSet = new Set(persistedIds);
+                const normalizedNext = nextSample.filter((item) => persistedIdSet.has(item.targetId));
+
+                sampleBookmarkRecordsRef.current = normalizedNext;
+                setSampleBookmarkRecords(normalizedNext);
+                return true;
             }
-            if (pendingBookmarks.has(trend.id)) {
+
+            if (pendingBookmarksRef.current.has(trend.id)) {
                 return false;
             }
 
-            const wasBookmarked = bookmarkedTrendIds.has(trend.id);
-            const previousRecords = bookmarkRecords;
+            const previousRecords = bookmarkRecordsRef.current;
+            const wasBookmarked = previousRecords.some((item) => item.targetId === trend.id);
+            const previousOverride = statsOverridesRef.current[trend.id];
+            const currentDisplayedSaves = previousOverride?.saves ?? trend.savesCount ?? 0;
+            const optimisticSaves = Math.max(0, currentDisplayedSaves + (wasBookmarked ? -1 : 1));
 
             setActionError(null);
+            pendingBookmarksRef.current.add(trend.id);
             setPendingBookmarks((prev) => {
                 const next = new Set(prev);
                 next.add(trend.id);
                 return next;
             });
 
-            // Immediate optimistic UI update
+            // Immediate optimistic UI update (both bookmark list and save count)
+            setStatsOverrides((prev) => {
+                const next = {
+                    ...prev,
+                    [trend.id]: {
+                        ...prev[trend.id],
+                        saves: optimisticSaves,
+                    },
+                };
+                statsOverridesRef.current = next;
+                return next;
+            });
+
             if (wasBookmarked) {
-                setBookmarkRecords((prev) => prev.filter((item) => item.targetId !== trend.id));
+                const nextRecords = previousRecords.filter((item) => item.targetId !== trend.id);
+                bookmarkRecordsRef.current = nextRecords;
+                setBookmarkRecords(nextRecords);
             } else {
                 const optimisticRecord: TrendBookmarkRecord = {
                     id: `${uid}_trendz_${trend.id}`,
@@ -401,46 +547,64 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
                     targetType: 'trendz',
                     targetId: trend.id,
                     domainSlug: trend.domainSlug,
-                    trendTitle: trend.title,
-                    trendSummary: trend.summary,
-                    trendPublisher: trend.details.publishedBy,
-                    trendPublishedOn: trend.details.publishedOn,
-                    trendMediaUrl: trend.mediaUrl,
-                    trendMediaType: trend.mediaType,
+                    trendTitle: (trend.title || '').trim() || 'Untitled Trend',
+                    trendSummary: (trend.summary || '').trim(),
+                    trendPublisher: (trend.details?.publishedBy || '').trim() || 'INVOX Desk',
+                    trendPublishedOn: (trend.details?.publishedOn || '').trim() || 'RECENT',
+                    trendMediaUrl: trend.mediaUrl || '',
+                    trendMediaType: trend.mediaType === 'video' ? 'video' : 'image',
                     createdAtMs: Date.now(),
                 };
-                setBookmarkRecords((prev) => [
+                const nextRecords = dedupeTrendBookmarkRecords([
                     optimisticRecord,
-                    ...prev.filter((item) => item.targetId !== trend.id),
+                    ...previousRecords.filter((item) => item.targetId !== trend.id),
                 ]);
+                bookmarkRecordsRef.current = nextRecords;
+                setBookmarkRecords(nextRecords);
             }
 
             try {
                 const result = await toggleTrendBookmark(uid, trend);
                 if (activeUidRef.current === uid) {
-                    setStatsOverrides((prev) => ({
-                        ...prev,
-                        [trend.id]: {
-                            ...prev[trend.id],
-                            saves: result.savesCount,
-                        },
-                    }));
-                    if (result.bookmarked && result.bookmark) {
-                        setBookmarkRecords((prev) => [
-                            result.bookmark!,
-                            ...prev.filter((item) => item.targetId !== trend.id),
-                        ]);
-                    } else {
-                        setBookmarkRecords((prev) =>
-                            prev.filter((item) => item.targetId !== trend.id)
-                        );
-                    }
+                    setStatsOverrides((prev) => {
+                        const next = {
+                            ...prev,
+                            [trend.id]: {
+                                ...prev[trend.id],
+                                saves: result.savesCount,
+                            },
+                        };
+                        statsOverridesRef.current = next;
+                        return next;
+                    });
+                    setBookmarkRecords((prev) => {
+                        const updated =
+                            result.bookmarked && result.bookmark
+                                ? dedupeTrendBookmarkRecords([
+                                      result.bookmark,
+                                      ...prev.filter((item) => item.targetId !== trend.id),
+                                  ])
+                                : prev.filter((item) => item.targetId !== trend.id);
+                        bookmarkRecordsRef.current = updated;
+                        return updated;
+                    });
                 }
                 return true;
             } catch (err) {
                 console.error('[TRENDZ_BOOKMARK_ERROR]', err);
                 if (activeUidRef.current === uid) {
+                    bookmarkRecordsRef.current = previousRecords;
                     setBookmarkRecords(previousRecords);
+                    setStatsOverrides((prev) => {
+                        const next = { ...prev };
+                        if (previousOverride) {
+                            next[trend.id] = previousOverride;
+                        } else {
+                            delete next[trend.id];
+                        }
+                        statsOverridesRef.current = next;
+                        return next;
+                    });
                     setActionError(
                         formatFirebaseActionError(
                             err,
@@ -450,6 +614,7 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
                 }
                 return false;
             } finally {
+                pendingBookmarksRef.current.delete(trend.id);
                 setPendingBookmarks((prev) => {
                     const next = new Set(prev);
                     next.delete(trend.id);
@@ -457,41 +622,225 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
                 });
             }
         },
-        [uid, pendingBookmarks, bookmarkedTrendIds, bookmarkRecords]
+        [uid]
+    );
+
+    const bookmarkTrend = useCallback(
+        async (trend: TrendViewModel): Promise<boolean> => {
+            if (!uid) {
+                setActionError('Sign in to bookmark trends.');
+                return false;
+            }
+
+            // DEV_FALLBACK sample trends: store locally per user in localStorage (never write to Firestore)
+            if (trend.isFallback) {
+                setActionError(null);
+                const previousSample = sampleBookmarkRecordsRef.current;
+                if (previousSample.some((item) => item.targetId === trend.id)) {
+                    return true;
+                }
+                const newRecord = buildSampleBookmarkRecord(uid, trend, Date.now());
+                const nextSample = dedupeTrendBookmarkRecords([
+                    newRecord,
+                    ...previousSample.filter((item) => item.targetId !== trend.id),
+                ]);
+                const persistedIds = saveSampleBookmarkIds(
+                    uid,
+                    nextSample.map((item) => item.targetId)
+                );
+                const persistedIdSet = new Set(persistedIds);
+                const normalizedNext = nextSample.filter((item) => persistedIdSet.has(item.targetId));
+                sampleBookmarkRecordsRef.current = normalizedNext;
+                setSampleBookmarkRecords(normalizedNext);
+                return true;
+            }
+
+            if (bookmarkRecordsRef.current.some((item) => item.targetId === trend.id)) {
+                return true;
+            }
+            if (pendingBookmarksRef.current.has(trend.id)) {
+                return false;
+            }
+
+            const previousRecords = bookmarkRecordsRef.current;
+            const previousOverride = statsOverridesRef.current[trend.id];
+            const optimisticSaves = Math.max(0, (previousOverride?.saves ?? trend.savesCount ?? 0) + 1);
+
+            setActionError(null);
+            pendingBookmarksRef.current.add(trend.id);
+            setPendingBookmarks((prev) => {
+                const next = new Set(prev);
+                next.add(trend.id);
+                return next;
+            });
+
+            const optimisticRecord: TrendBookmarkRecord = {
+                id: `${uid}_trendz_${trend.id}`,
+                userId: uid,
+                targetType: 'trendz',
+                targetId: trend.id,
+                domainSlug: trend.domainSlug,
+                trendTitle: (trend.title || '').trim() || 'Untitled Trend',
+                trendSummary: (trend.summary || '').trim(),
+                trendPublisher: (trend.details?.publishedBy || '').trim() || 'INVOX Desk',
+                trendPublishedOn: (trend.details?.publishedOn || '').trim() || 'RECENT',
+                trendMediaUrl: trend.mediaUrl || '',
+                trendMediaType: trend.mediaType === 'video' ? 'video' : 'image',
+                createdAtMs: Date.now(),
+            };
+            const optimisticList = dedupeTrendBookmarkRecords([
+                optimisticRecord,
+                ...previousRecords.filter((item) => item.targetId !== trend.id),
+            ]);
+            bookmarkRecordsRef.current = optimisticList;
+            setBookmarkRecords(optimisticList);
+            setStatsOverrides((prev) => {
+                const next = {
+                    ...prev,
+                    [trend.id]: { ...prev[trend.id], saves: optimisticSaves },
+                };
+                statsOverridesRef.current = next;
+                return next;
+            });
+
+            try {
+                const result = await persistTrendBookmark(uid, trend);
+                if (activeUidRef.current === uid) {
+                    setStatsOverrides((prev) => {
+                        const next = {
+                            ...prev,
+                            [trend.id]: { ...prev[trend.id], saves: result.savesCount },
+                        };
+                        statsOverridesRef.current = next;
+                        return next;
+                    });
+                    setBookmarkRecords((prev) => {
+                        const updated = dedupeTrendBookmarkRecords([
+                            result.bookmark,
+                            ...prev.filter((item) => item.targetId !== trend.id),
+                        ]);
+                        bookmarkRecordsRef.current = updated;
+                        return updated;
+                    });
+                }
+                return true;
+            } catch (err) {
+                console.error('[TRENDZ_BOOKMARK_ERROR]', err);
+                if (activeUidRef.current === uid) {
+                    bookmarkRecordsRef.current = previousRecords;
+                    setBookmarkRecords(previousRecords);
+                    setStatsOverrides((prev) => {
+                        const next = { ...prev };
+                        if (previousOverride) next[trend.id] = previousOverride;
+                        else delete next[trend.id];
+                        statsOverridesRef.current = next;
+                        return next;
+                    });
+                    setActionError(
+                        formatFirebaseActionError(err, 'Failed to bookmark this trend.')
+                    );
+                }
+                return false;
+            } finally {
+                pendingBookmarksRef.current.delete(trend.id);
+                setPendingBookmarks((prev) => {
+                    const next = new Set(prev);
+                    next.delete(trend.id);
+                    return next;
+                });
+            }
+        },
+        [uid]
     );
 
     const removeBookmarkById = useCallback(
-        async (trendId: string): Promise<boolean> => {
+        async (trendId: string, isFallback = false): Promise<boolean> => {
             if (!uid) {
                 setActionError('Sign in to manage your saved trends.');
                 return false;
             }
-            if (pendingBookmarks.has(trendId)) {
+
+            // DEV_FALLBACK sample trends: remove strictly from localStorage (never touch Firestore)
+            if (isFallback) {
+                setActionError(null);
+                const nextSample = sampleBookmarkRecordsRef.current.filter(
+                    (item) => item.targetId !== trendId
+                );
+                saveSampleBookmarkIds(
+                    uid,
+                    nextSample.map((item) => item.targetId)
+                );
+                sampleBookmarkRecordsRef.current = nextSample;
+                setSampleBookmarkRecords(nextSample);
+                return true;
+            }
+
+            if (pendingBookmarksRef.current.has(trendId)) {
                 return false;
             }
 
-            const previousRecords = bookmarkRecords;
+            const previousRecords = bookmarkRecordsRef.current;
+            const previousOverride = statsOverridesRef.current[trendId];
             setActionError(null);
+            pendingBookmarksRef.current.add(trendId);
             setPendingBookmarks((prev) => {
                 const next = new Set(prev);
                 next.add(trendId);
                 return next;
             });
-            setBookmarkRecords((prev) => prev.filter((item) => item.targetId !== trendId));
+            const nextRecords = previousRecords.filter((item) => item.targetId !== trendId);
+            bookmarkRecordsRef.current = nextRecords;
+            setBookmarkRecords(nextRecords);
+
+            if (previousOverride?.saves !== undefined) {
+                setStatsOverrides((prev) => {
+                    const next = {
+                        ...prev,
+                        [trendId]: {
+                            ...prev[trendId],
+                            saves: Math.max(0, (previousOverride.saves ?? 1) - 1),
+                        },
+                    };
+                    statsOverridesRef.current = next;
+                    return next;
+                });
+            }
 
             try {
-                await removeTrendBookmarkById(uid, trendId);
+                const res = await removeTrendBookmarkById(uid, trendId);
+                if (activeUidRef.current === uid && typeof res.savesCount === 'number') {
+                    setStatsOverrides((prev) => {
+                        const next = {
+                            ...prev,
+                            [trendId]: {
+                                ...prev[trendId],
+                                saves: res.savesCount,
+                            },
+                        };
+                        statsOverridesRef.current = next;
+                        return next;
+                    });
+                }
                 return true;
             } catch (err) {
                 console.error('[TRENDZ_REMOVE_BOOKMARK_ERROR]', err);
                 if (activeUidRef.current === uid) {
+                    bookmarkRecordsRef.current = previousRecords;
                     setBookmarkRecords(previousRecords);
+                    setStatsOverrides((prev) => {
+                        const next = { ...prev };
+                        if (previousOverride) next[trendId] = previousOverride;
+                        else delete next[trendId];
+                        statsOverridesRef.current = next;
+                        return next;
+                    });
                     setActionError(
                         formatFirebaseActionError(err, 'Failed to remove saved trend bookmark.')
                     );
                 }
                 return false;
             } finally {
+                pendingBookmarksRef.current.delete(trendId);
                 setPendingBookmarks((prev) => {
                     const next = new Set(prev);
                     next.delete(trendId);
@@ -499,7 +848,7 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
                 });
             }
         },
-        [uid, pendingBookmarks, bookmarkRecords]
+        [uid]
     );
 
     const toggleUpvote = useCallback(
@@ -508,39 +857,70 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
                 setActionError('Sign in to upvote trends.');
                 return false;
             }
+
+            // DEV_FALLBACK sample trends: persist strictly in user-scoped localStorage (never Firestore)
             if (trend.isFallback) {
-                setActionError(
-                    'Sample fallback trends cannot be upvoted. Switch to live Trendz to upvote items.'
+                setActionError(null);
+                const previousSample = sampleUpvoteRecordsRef.current;
+                const wasUpvoted = previousSample.some((item) => item.targetId === trend.id);
+                let nextSample: TrendUpvoteRecord[];
+
+                if (wasUpvoted) {
+                    nextSample = previousSample.filter((item) => item.targetId !== trend.id);
+                } else {
+                    const newRecord = buildSampleUpvoteRecord(uid, trend, Date.now());
+                    nextSample = dedupeTrendUpvoteRecords([
+                        newRecord,
+                        ...previousSample.filter((item) => item.targetId !== trend.id),
+                    ]);
+                }
+
+                const persistedIds = saveSampleUpvoteIds(
+                    uid,
+                    nextSample.map((item) => item.targetId)
                 );
-                return false;
+                const persistedIdSet = new Set(persistedIds);
+                const normalizedNext = nextSample.filter((item) => persistedIdSet.has(item.targetId));
+
+                sampleUpvoteRecordsRef.current = normalizedNext;
+                setSampleUpvoteRecords(normalizedNext);
+                return true;
             }
-            if (pendingUpvotes.has(trend.id)) {
+
+            if (pendingUpvotesRef.current.has(trend.id)) {
                 return false;
             }
 
-            const wasUpvoted = upvotedTrendIds.has(trend.id);
-            const previousRecords = upvoteRecords;
-            const previousOverride = statsOverrides[trend.id];
+            const previousRecords = upvoteRecordsRef.current;
+            const wasUpvoted = previousRecords.some((item) => item.targetId === trend.id);
+            const previousOverride = statsOverridesRef.current[trend.id];
             const currentDisplayedLikes = previousOverride?.likes ?? trend.stats?.likes ?? 0;
             const optimisticLikes = Math.max(0, currentDisplayedLikes + (wasUpvoted ? -1 : 1));
 
             setActionError(null);
+            pendingUpvotesRef.current.add(trend.id);
             setPendingUpvotes((prev) => {
                 const next = new Set(prev);
                 next.add(trend.id);
                 return next;
             });
 
-            setStatsOverrides((prev) => ({
-                ...prev,
-                [trend.id]: {
-                    ...prev[trend.id],
-                    likes: optimisticLikes,
-                },
-            }));
+            setStatsOverrides((prev) => {
+                const next = {
+                    ...prev,
+                    [trend.id]: {
+                        ...prev[trend.id],
+                        likes: optimisticLikes,
+                    },
+                };
+                statsOverridesRef.current = next;
+                return next;
+            });
 
             if (wasUpvoted) {
-                setUpvoteRecords((prev) => prev.filter((item) => item.targetId !== trend.id));
+                const nextRecords = previousRecords.filter((item) => item.targetId !== trend.id);
+                upvoteRecordsRef.current = nextRecords;
+                setUpvoteRecords(nextRecords);
             } else {
                 const optimisticUpvote: TrendUpvoteRecord = {
                     id: `${uid}_trendz_${trend.id}`,
@@ -550,37 +930,45 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
                     domainSlug: trend.domainSlug,
                     createdAtMs: Date.now(),
                 };
-                setUpvoteRecords((prev) => [
+                const nextRecords = dedupeTrendUpvoteRecords([
                     optimisticUpvote,
-                    ...prev.filter((item) => item.targetId !== trend.id),
+                    ...previousRecords.filter((item) => item.targetId !== trend.id),
                 ]);
+                upvoteRecordsRef.current = nextRecords;
+                setUpvoteRecords(nextRecords);
             }
 
             try {
                 const result = await toggleTrendUpvote(uid, trend);
                 if (activeUidRef.current === uid) {
-                    setStatsOverrides((prev) => ({
-                        ...prev,
-                        [trend.id]: {
-                            ...prev[trend.id],
-                            likes: result.likesCount,
-                        },
-                    }));
-                    if (result.upvoted && result.record) {
-                        setUpvoteRecords((prev) => [
-                            result.record!,
-                            ...prev.filter((item) => item.targetId !== trend.id),
-                        ]);
-                    } else {
-                        setUpvoteRecords((prev) =>
-                            prev.filter((item) => item.targetId !== trend.id)
-                        );
-                    }
+                    setStatsOverrides((prev) => {
+                        const next = {
+                            ...prev,
+                            [trend.id]: {
+                                ...prev[trend.id],
+                                likes: result.likesCount,
+                            },
+                        };
+                        statsOverridesRef.current = next;
+                        return next;
+                    });
+                    setUpvoteRecords((prev) => {
+                        const updated =
+                            result.upvoted && result.record
+                                ? dedupeTrendUpvoteRecords([
+                                      result.record,
+                                      ...prev.filter((item) => item.targetId !== trend.id),
+                                  ])
+                                : prev.filter((item) => item.targetId !== trend.id);
+                        upvoteRecordsRef.current = updated;
+                        return updated;
+                    });
                 }
                 return true;
             } catch (err) {
                 console.error('[TRENDZ_UPVOTE_ERROR]', err);
                 if (activeUidRef.current === uid) {
+                    upvoteRecordsRef.current = previousRecords;
                     setUpvoteRecords(previousRecords);
                     setStatsOverrides((prev) => {
                         const next = { ...prev };
@@ -589,6 +977,7 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
                         } else {
                             delete next[trend.id];
                         }
+                        statsOverridesRef.current = next;
                         return next;
                     });
                     setActionError(
@@ -600,6 +989,7 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
                 }
                 return false;
             } finally {
+                pendingUpvotesRef.current.delete(trend.id);
                 setPendingUpvotes((prev) => {
                     const next = new Set(prev);
                     next.delete(trend.id);
@@ -607,35 +997,91 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
                 });
             }
         },
-        [uid, pendingUpvotes, upvotedTrendIds, upvoteRecords, statsOverrides]
+        [uid]
     );
 
     const trackTrendView = useCallback(
         async (trend: TrendViewModel): Promise<void> => {
-            if (!uid || trend.isFallback) {
+            if (!trend?.id) {
                 return;
             }
+
+            // DEV_FALLBACK sample trends: deduplicated local view tracking (never touches Firestore)
+            if (trend.isFallback) {
+                const res = recordSampleTrendView(trend, uid);
+                if (res.recorded && res.record) {
+                    const updated = dedupeTrendViewRecords([
+                        res.record,
+                        ...sampleViewRecordsRef.current.filter((item) => item.trendId !== trend.id),
+                    ]);
+                    sampleViewRecordsRef.current = updated;
+                    setSampleViewRecords(updated);
+                }
+                return;
+            }
+
+            // Anonymous LIVE visits: deduplicated local view tracking without attempting unauthorized Firestore writes
+            if (!uid) {
+                const res = recordAnonymousTrendView(trend);
+                if (res.recorded) {
+                    setStatsOverrides((prev) => {
+                        const next = {
+                            ...prev,
+                            [trend.id]: {
+                                ...prev[trend.id],
+                                views: res.viewsCount,
+                            },
+                        };
+                        statsOverridesRef.current = next;
+                        return next;
+                    });
+                    if (res.record) {
+                        setViewRecords((prev) =>
+                            dedupeTrendViewRecords([
+                                res.record!,
+                                ...prev.filter((item) => item.trendId !== trend.id),
+                            ])
+                        );
+                    }
+                }
+                return;
+            }
+
+            const trackKey = `${uid}:${trend.id}`;
+            if (inFlightViewTracksRef.current.has(trackKey)) {
+                return;
+            }
+            inFlightViewTracksRef.current.add(trackKey);
+
             try {
                 const result = await recordTrendView(uid, trend);
                 if (activeUidRef.current !== uid) return;
 
                 if (result.recorded) {
-                    setStatsOverrides((prev) => ({
-                        ...prev,
-                        [trend.id]: {
-                            ...prev[trend.id],
-                            views: result.viewsCount,
-                        },
-                    }));
+                    setStatsOverrides((prev) => {
+                        const next = {
+                            ...prev,
+                            [trend.id]: {
+                                ...prev[trend.id],
+                                views: result.viewsCount,
+                            },
+                        };
+                        statsOverridesRef.current = next;
+                        return next;
+                    });
                     if (result.record) {
-                        setViewRecords((prev) => [
-                            result.record!,
-                            ...prev.filter((item) => item.trendId !== trend.id),
-                        ]);
+                        setViewRecords((prev) =>
+                            dedupeTrendViewRecords([
+                                result.record!,
+                                ...prev.filter((item) => item.trendId !== trend.id),
+                            ])
+                        );
                     }
                 }
             } catch (err) {
                 console.warn('[TRENDZ_VIEW_TRACK_WARN]', err);
+            } finally {
+                inFlightViewTracksRef.current.delete(trackKey);
             }
         },
         [uid]
@@ -643,14 +1089,23 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
 
     const getDisplayStats = useCallback(
         (trend: TrendViewModel) => {
+            if (trend.isFallback) {
+                return {
+                    likes: (trend.stats?.likes ?? 0) + (sampleUpvotedTrendIds.has(trend.id) ? 1 : 0),
+                    views: (trend.stats?.views ?? 0) + (sampleViewedTrendIds.has(trend.id) ? 1 : 0),
+                    comments: trend.stats?.comments ?? 0,
+                    saves: (trend.savesCount ?? 0) + (sampleBookmarkedTrendIds.has(trend.id) ? 1 : 0),
+                };
+            }
             const override = statsOverrides[trend.id];
             return {
                 likes: override?.likes ?? trend.stats?.likes ?? 0,
                 views: override?.views ?? trend.stats?.views ?? 0,
                 comments: trend.stats?.comments ?? 0,
+                saves: override?.saves ?? trend.savesCount ?? 0,
             };
         },
-        [statsOverrides]
+        [statsOverrides, sampleBookmarkedTrendIds, sampleUpvotedTrendIds, sampleViewedTrendIds]
     );
 
     const personalizationSignals = useMemo<PersonalizationSignals>(
@@ -661,6 +1116,16 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
             viewRecords,
         }),
         [followedDomainSlugs, bookmarkRecords, upvoteRecords, viewRecords]
+    );
+
+    const samplePersonalizationSignals = useMemo<PersonalizationSignals>(
+        () => ({
+            followedDomainSlugs,
+            bookmarkedRecords: sampleBookmarkRecords,
+            upvoteRecords: sampleUpvoteRecords,
+            viewRecords: sampleViewRecords,
+        }),
+        [followedDomainSlugs, sampleBookmarkRecords, sampleUpvoteRecords, sampleViewRecords]
     );
 
     const value = useMemo<TrendzEngagementContextValue>(
@@ -680,20 +1145,28 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
             toggleFollowDomain,
             bookmarkRecords,
             bookmarkedTrendIds,
+            sampleBookmarkRecords,
+            sampleBookmarkedTrendIds,
             isTrendBookmarked,
             isBookmarkPending,
+            bookmarkTrend,
+            unbookmarkTrend: removeBookmarkById,
             toggleBookmark,
             removeBookmarkById,
             upvoteRecords,
             upvotedTrendIds,
+            sampleUpvoteRecords,
+            sampleUpvotedTrendIds,
             isTrendUpvoted,
             isUpvotePending,
             toggleUpvote,
             viewRecords,
+            sampleViewRecords,
             trackTrendView,
             statsOverrides,
             getDisplayStats,
             personalizationSignals,
+            samplePersonalizationSignals,
         }),
         [
             uid,
@@ -711,20 +1184,27 @@ export const TrendzEngagementProvider: React.FC<{ children: React.ReactNode }> =
             toggleFollowDomain,
             bookmarkRecords,
             bookmarkedTrendIds,
+            sampleBookmarkRecords,
+            sampleBookmarkedTrendIds,
             isTrendBookmarked,
             isBookmarkPending,
+            bookmarkTrend,
             toggleBookmark,
             removeBookmarkById,
             upvoteRecords,
             upvotedTrendIds,
+            sampleUpvoteRecords,
+            sampleUpvotedTrendIds,
             isTrendUpvoted,
             isUpvotePending,
             toggleUpvote,
             viewRecords,
+            sampleViewRecords,
             trackTrendView,
             statsOverrides,
             getDisplayStats,
             personalizationSignals,
+            samplePersonalizationSignals,
         ]
     );
 

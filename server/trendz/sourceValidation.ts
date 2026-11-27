@@ -374,6 +374,31 @@ export function resolveCredibilityTier(hostname: string): TrendSourceCredibility
   return 'trade';
 }
 
+export type SourceVerificationStatus = 'verified' | 'unavailable' | 'unverified';
+export type SourceExcerptCompleteness = 'full_excerpt' | 'truncated' | 'unavailable';
+
+export interface SourceVerificationResult {
+  status: SourceVerificationStatus;
+  scope: 'url_reachability_only';
+  checkedAtIso: string;
+  originalUrl: string;
+  finalUrl?: string;
+  canonicalUrl?: string;
+  redirected: boolean;
+  redirectCount: number;
+  httpStatus?: number;
+  publisherName?: string;
+  sourceDomain?: string;
+  author?: string;
+  sourceThumbnailUrl?: string;
+  publishedAtIso?: string;
+  excerpt?: string;
+  excerptTruncated?: boolean;
+  excerptCompleteness: SourceExcerptCompleteness;
+  failureReason?: string;
+  cached?: boolean;
+}
+
 export function extractArticleMetadataFromHtml(
   html: string,
   baseUrl: string
@@ -384,7 +409,10 @@ export function extractArticleMetadataFromHtml(
   author?: string;
   publishedAtIso?: string;
   ogImageUrl?: string;
+  canonicalUrl?: string;
   bodyExcerpt: string;
+  excerptSource: 'article_paragraphs' | 'meta_description' | 'none';
+  bodyExcerptTruncated: boolean;
 } {
   const getMetaContent = (attr: 'property' | 'name', value: string): string | undefined => {
     const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -450,6 +478,23 @@ export function extractArticleMetadataFromHtml(
     }
   }
 
+  // Extract declared <link rel="canonical" href="..."> when present and valid HTTP(S)
+  let canonicalUrl: string | undefined;
+  const canonicalMatch =
+    html.match(/<link[^>]+rel=["'][^"']*\bcanonical\b[^"']*["'][^>]+href=["']([^"']+)["'][^>]*>/i) ||
+    html.match(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["'][^"']*\bcanonical\b[^"']*["'][^>]*>/i);
+  if (canonicalMatch?.[1]) {
+    try {
+      const resolvedCanonical = new URL(decodeHtmlEntities(canonicalMatch[1].trim()), baseUrl).toString();
+      const normalizedCanonical = canonicalizeSourceUrl(resolvedCanonical);
+      if (normalizedCanonical) {
+        canonicalUrl = normalizedCanonical;
+      }
+    } catch {
+      // ignore malformed canonical link tag
+    }
+  }
+
   // Extract paragraph text preferentially from <article> or <main>, falling back to whole document
   const articleMatch =
     html.match(/<article[\s\S]*?<\/article>/i)?.[0] ||
@@ -459,15 +504,27 @@ export function extractArticleMetadataFromHtml(
   const paragraphs: string[] = [];
   const pRegex = /<p\b[^>]*>([\s\S]*?)<\/p>/gi;
   let m: RegExpExecArray | null;
+  let hitParagraphCap = false;
   while ((m = pRegex.exec(articleMatch)) !== null) {
     const text = sanitizePlainText(m[1], 1000);
     if (text.length >= 40) {
       paragraphs.push(text);
     }
-    if (paragraphs.join(' ').length >= 4500) break;
+    if (paragraphs.join(' ').length >= 4500) {
+      hitParagraphCap = true;
+      break;
+    }
   }
 
-  const bodyExcerpt = (paragraphs.length > 0 ? paragraphs.join('\n\n') : description).slice(0, 4500);
+  const rawBody = paragraphs.length > 0 ? paragraphs.join('\n\n') : description;
+  const bodyExcerpt = rawBody.slice(0, 4500);
+  const excerptSource: 'article_paragraphs' | 'meta_description' | 'none' =
+    paragraphs.length > 0
+      ? 'article_paragraphs'
+      : description.trim().length > 0
+        ? 'meta_description'
+        : 'none';
+  const bodyExcerptTruncated = hitParagraphCap || rawBody.length > 4500;
 
   return {
     title,
@@ -476,7 +533,10 @@ export function extractArticleMetadataFromHtml(
     author,
     publishedAtIso,
     ogImageUrl,
+    canonicalUrl,
     bodyExcerpt,
+    excerptSource,
+    bodyExcerptTruncated,
   };
 }
 
@@ -487,7 +547,18 @@ export function extractArticleMetadataFromHtml(
 export async function safeFetchTextWithSsrfProtection(
   rawUrl: string,
   options?: { timeoutMs?: number; maxBytes?: number; accept?: string }
-): Promise<{ ok: true; finalUrl: string; status: number; contentType: string; text: string } | { ok: false; status?: number; error: string }> {
+): Promise<
+  | {
+      ok: true;
+      finalUrl: string;
+      status: number;
+      contentType: string;
+      text: string;
+      redirectCount: number;
+      truncated: boolean;
+    }
+  | { ok: false; status?: number; error: string; blockedByPolicy?: boolean; redirectCount?: number }
+> {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_SOURCE_FETCH_TIMEOUT_MS;
   const maxBytes = options?.maxBytes ?? MAX_SOURCE_BODY_BYTES;
   let currentUrl = rawUrl;
@@ -495,7 +566,9 @@ export async function safeFetchTextWithSsrfProtection(
   for (let redirectCount = 0; redirectCount <= MAX_SOURCE_REDIRECTS; redirectCount++) {
     const validation = await validateOutboundSourceUrl(currentUrl);
     if (!validation.valid) {
-      return { ok: false, error: validation.reason || 'Source URL blocked by validation.' };
+      const reason = validation.reason || 'Source URL blocked by validation.';
+      const blockedByPolicy = /blocked|protocol|credentials|single-label|malformed/i.test(reason);
+      return { ok: false, error: reason, blockedByPolicy, redirectCount };
     }
 
     const controller = new AbortController();
@@ -516,10 +589,20 @@ export async function safeFetchTextWithSsrfProtection(
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get('location');
         if (!location) {
-          return { ok: false, status: response.status, error: 'Redirect missing Location header.' };
+          return {
+            ok: false,
+            status: response.status,
+            error: 'Redirect missing Location header.',
+            redirectCount,
+          };
         }
         if (redirectCount >= MAX_SOURCE_REDIRECTS) {
-          return { ok: false, status: response.status, error: 'Too many redirects.' };
+          return {
+            ok: false,
+            status: response.status,
+            error: 'Too many redirects.',
+            redirectCount,
+          };
         }
         currentUrl = new URL(location, currentUrl).toString();
         continue;
@@ -530,23 +613,40 @@ export async function safeFetchTextWithSsrfProtection(
           ok: false,
           status: response.status,
           error: `Source returned HTTP ${response.status}.`,
+          redirectCount,
         };
       }
 
       const contentType = response.headers.get('content-type') || '';
       const contentLengthHeader = Number(response.headers.get('content-length') || '0');
       if (contentLengthHeader > maxBytes * 2) {
-        return { ok: false, status: response.status, error: 'Source document exceeds size cap.' };
+        return {
+          ok: false,
+          status: response.status,
+          error: 'Source document exceeds size cap.',
+          redirectCount,
+        };
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
-        const text = (await response.text()).slice(0, maxBytes);
-        return { ok: true, finalUrl: currentUrl, status: response.status, contentType, text };
+        const rawText = await response.text();
+        const truncated = rawText.length > maxBytes;
+        const text = rawText.slice(0, maxBytes);
+        return {
+          ok: true,
+          finalUrl: currentUrl,
+          status: response.status,
+          contentType,
+          text,
+          redirectCount,
+          truncated,
+        };
       }
 
       const chunks: Uint8Array[] = [];
       let totalBytes = 0;
+      let truncated = false;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -554,6 +654,7 @@ export async function safeFetchTextWithSsrfProtection(
           totalBytes += value.byteLength;
           if (totalBytes > maxBytes) {
             chunks.push(value.slice(0, Math.max(0, value.byteLength - (totalBytes - maxBytes))));
+            truncated = true;
             await reader.cancel().catch(() => {});
             break;
           }
@@ -563,18 +664,206 @@ export async function safeFetchTextWithSsrfProtection(
 
       const combined = Buffer.concat(chunks);
       const text = combined.toString('utf8');
-      return { ok: true, finalUrl: currentUrl, status: response.status, contentType, text };
+      return {
+        ok: true,
+        finalUrl: currentUrl,
+        status: response.status,
+        contentType,
+        text,
+        redirectCount,
+        truncated,
+      };
     } catch (err: any) {
       if (err?.name === 'AbortError') {
-        return { ok: false, error: `Source request timed out after ${timeoutMs}ms.` };
+        return {
+          ok: false,
+          error: `Source request timed out after ${timeoutMs}ms.`,
+          redirectCount,
+        };
       }
-      return { ok: false, error: err?.message || 'Network failure retrieving source.' };
+      return {
+        ok: false,
+        error: err?.message || 'Network failure retrieving source.',
+        redirectCount,
+      };
     } finally {
       clearTimeout(timer);
     }
   }
 
-  return { ok: false, error: 'Exceeded maximum redirect count.' };
+  return { ok: false, error: 'Exceeded maximum redirect count.', redirectCount: MAX_SOURCE_REDIRECTS };
+}
+
+function buildDisplayExcerpt(
+  bodyExcerpt: string,
+  description: string,
+  excerptSource: 'article_paragraphs' | 'meta_description' | 'none',
+  bodyTruncated: boolean,
+  responseTruncated: boolean,
+  maxChars = 540
+): {
+  excerpt?: string;
+  excerptTruncated: boolean;
+  excerptCompleteness: SourceExcerptCompleteness;
+} {
+  const candidate = (bodyExcerpt || description || '').trim();
+  if (candidate.length < 24) {
+    return {
+      excerpt: undefined,
+      excerptTruncated: false,
+      excerptCompleteness: 'unavailable',
+    };
+  }
+
+  let text = candidate;
+  let clipped = false;
+  if (text.length > maxChars) {
+    const cut = text.slice(0, maxChars);
+    const lastSpace = cut.lastIndexOf(' ');
+    text = `${(lastSpace > maxChars * 0.6 ? cut.slice(0, lastSpace) : cut).trim()}…`;
+    clipped = true;
+  }
+
+  const isPartial =
+    clipped ||
+    bodyTruncated ||
+    responseTruncated ||
+    excerptSource === 'meta_description';
+
+  return {
+    excerpt: text,
+    excerptTruncated: isPartial,
+    excerptCompleteness: isPartial ? 'truncated' : 'full_excerpt',
+  };
+}
+
+/**
+ * Verifies live reachability and extracts provenance metadata for a single Trendz source URL.
+ * Strictly checks URL reachability and publisher metadata only (never claims factual verification).
+ */
+export async function verifySourceUrlMetadata(params: {
+  url: string;
+  timeoutMs?: number;
+  maxBytes?: number;
+}): Promise<SourceVerificationResult> {
+  const checkedAtIso = new Date().toISOString();
+  const trimmedUrl = typeof params.url === 'string' ? params.url.trim() : '';
+
+  const syntax = validateSourceUrlSyntax(trimmedUrl);
+  if (!syntax.valid) {
+    return {
+      status: 'unverified',
+      scope: 'url_reachability_only',
+      checkedAtIso,
+      originalUrl: trimmedUrl,
+      redirected: false,
+      redirectCount: 0,
+      excerptCompleteness: 'unavailable',
+      failureReason: 'Source URL is missing, malformed, or uses a disallowed address.',
+    };
+  }
+
+  const fetchResult = await safeFetchTextWithSsrfProtection(trimmedUrl, {
+    timeoutMs: params.timeoutMs ?? 8_000,
+    maxBytes: params.maxBytes ?? 512_000,
+  });
+
+  if (fetchResult.ok === false || 'error' in fetchResult) {
+    const fail = fetchResult as {
+      ok: false;
+      status?: number;
+      error: string;
+      blockedByPolicy?: boolean;
+      redirectCount?: number;
+    };
+    const isBlocked = Boolean(fail.blockedByPolicy);
+    const safeReason = isBlocked
+      ? 'Source address cannot be checked by the verification service.'
+      : fail.status
+        ? `Source returned HTTP ${fail.status}.`
+        : /timed out/i.test(fail.error)
+          ? 'Source verification request timed out.'
+          : /too many redirects|redirect/i.test(fail.error)
+            ? 'Source redirect chain could not be resolved.'
+            : /size cap/i.test(fail.error)
+              ? 'Source response exceeded verification size limit.'
+              : 'Source could not be reached from the verification service.';
+
+    return {
+      status: isBlocked ? 'unverified' : 'unavailable',
+      scope: 'url_reachability_only',
+      checkedAtIso,
+      originalUrl: trimmedUrl,
+      canonicalUrl: syntax.canonicalUrl,
+      redirected: (fail.redirectCount ?? 0) > 0,
+      redirectCount: fail.redirectCount ?? 0,
+      httpStatus: fail.status,
+      sourceDomain: syntax.hostname?.replace(/^www\./, ''),
+      excerptCompleteness: 'unavailable',
+      failureReason: safeReason,
+    };
+  }
+
+  const normalizedFinalUrl =
+    canonicalizeSourceUrl(fetchResult.finalUrl) || syntax.canonicalUrl || fetchResult.finalUrl;
+
+  const isHtmlLike =
+    !fetchResult.contentType ||
+    /text\/html|application\/xhtml\+xml|application\/xml|text\/plain/i.test(fetchResult.contentType);
+
+  const extracted = isHtmlLike
+    ? extractArticleMetadataFromHtml(fetchResult.text, fetchResult.finalUrl)
+    : null;
+
+  const resolvedCanonicalUrl = extracted?.canonicalUrl || normalizedFinalUrl;
+  const redirected =
+    fetchResult.redirectCount > 0 ||
+    Boolean(syntax.canonicalUrl && normalizedFinalUrl && syntax.canonicalUrl !== normalizedFinalUrl);
+
+  let sourceDomain = syntax.hostname?.replace(/^www\./, '');
+  try {
+    sourceDomain = new URL(resolvedCanonicalUrl).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    // retain syntax hostname
+  }
+
+  const publisherName = extracted?.siteName
+    ? sanitizePlainText(extracted.siteName, 140)
+    : undefined;
+
+  const excerptInfo = extracted
+    ? buildDisplayExcerpt(
+        extracted.bodyExcerpt,
+        extracted.description,
+        extracted.excerptSource,
+        extracted.bodyExcerptTruncated,
+        fetchResult.truncated
+      )
+    : {
+        excerpt: undefined,
+        excerptTruncated: false,
+        excerptCompleteness: 'unavailable' as SourceExcerptCompleteness,
+      };
+
+  return {
+    status: 'verified',
+    scope: 'url_reachability_only',
+    checkedAtIso,
+    originalUrl: trimmedUrl,
+    finalUrl: fetchResult.finalUrl,
+    canonicalUrl: resolvedCanonicalUrl,
+    redirected,
+    redirectCount: fetchResult.redirectCount,
+    httpStatus: fetchResult.status,
+    publisherName,
+    sourceDomain,
+    author: extracted?.author || undefined,
+    sourceThumbnailUrl: extracted?.ogImageUrl,
+    publishedAtIso: extracted?.publishedAtIso,
+    excerpt: excerptInfo.excerpt,
+    excerptTruncated: excerptInfo.excerptTruncated,
+    excerptCompleteness: excerptInfo.excerptCompleteness,
+  };
 }
 
 /**
