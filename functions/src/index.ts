@@ -1,10 +1,17 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { defineSecret, defineString } from 'firebase-functions/params';
 
 initializeApp();
 
 const db = getFirestore();
+const trendzSchedulerSecret = defineSecret('TRENDZ_SCHEDULER_SECRET');
+const trendzSchedulerTargetUrl = defineString('TRENDZ_SCHEDULER_TARGET_URL', {
+  default: '',
+  description: 'Base URL of the INVOX server hosting /api/internal/trendz/scheduled-ingest',
+});
 
 type ReputationAction = 'post' | 'project' | 'comment' | 'like' | 'follow' | 'application';
 
@@ -128,3 +135,95 @@ export const generateTrendSummary = onCall(async request => {
 
   return { summary };
 });
+
+/**
+ * Phase 08.1: Automated Trendz Ingestion Cloud Scheduler Function.
+ * Runs every 15 minutes (UTC), checks Firestore `/trendAutomation/config` and `/trendAutomation/state`,
+ * respects enabled/paused state, configured interval, and active distributed lock leases,
+ * and triggers the single unified backend pipeline (`/api/internal/trendz/scheduled-ingest`).
+ * Automation remains disabled by default until explicitly enabled by an administrator.
+ */
+export const scheduledTrendzIngestion = onSchedule(
+  {
+    schedule: 'every 15 minutes',
+    timeZone: 'UTC',
+    timeoutSeconds: 300,
+    memory: '512MiB',
+    retryCount: 0,
+    secrets: [trendzSchedulerSecret],
+  },
+  async () => {
+    const nowMs = Date.now();
+    const [configSnap, stateSnap] = await Promise.all([
+      db.collection('trendAutomation').doc('config').get(),
+      db.collection('trendAutomation').doc('state').get(),
+    ]);
+
+    const config = configSnap.exists ? (configSnap.data() as Record<string, any>) : null;
+    if (!config || config.enabled !== true) {
+      console.log('[TRENDZ_CLOUD_SCHEDULER] Automation is disabled or unconfigured; skipping tick.');
+      return;
+    }
+
+    const state = stateSnap.exists ? (stateSnap.data() as Record<string, any>) : null;
+    const intervalMinutes = Math.min(1440, Math.max(5, Number(config.intervalMinutes || 15)));
+
+    // Fast-path interval check before making any outbound HTTP call
+    if (state?.lastExecutionAtIso) {
+      const lastMs = Date.parse(String(state.lastExecutionAtIso));
+      if (!Number.isNaN(lastMs) && nowMs - lastMs + 10_000 < intervalMinutes * 60_000) {
+        console.log('[TRENDZ_CLOUD_SCHEDULER] Configured interval has not elapsed; skipping tick.');
+        return;
+      }
+    }
+
+    // Fast-path distributed lock check
+    if (state?.locked === true && state?.lockExpiresAtIso) {
+      const expiresMs = Date.parse(String(state.lockExpiresAtIso));
+      if (!Number.isNaN(expiresMs) && expiresMs > nowMs) {
+        console.log(`[TRENDZ_CLOUD_SCHEDULER] Active lock held by ${state.lockRunId || 'unknown'}; skipping.`);
+        return;
+      }
+    }
+
+    const baseUrl = (trendzSchedulerTargetUrl.value() || process.env.TRENDZ_SCHEDULER_TARGET_URL || '').trim().replace(/\/+$/, '');
+    const secret = (trendzSchedulerSecret.value() || '').trim();
+    if (!baseUrl || !secret) {
+      console.warn('[TRENDZ_CLOUD_SCHEDULER] Missing TRENDZ_SCHEDULER_TARGET_URL or TRENDZ_SCHEDULER_SECRET; cannot invoke backend.');
+      return;
+    }
+
+    const endpoint = `${baseUrl}/api/internal/trendz/scheduled-ingest`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 240_000);
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Trendz-Scheduler-Secret': secret,
+        },
+        body: JSON.stringify({
+          source: 'firebase_cloud_scheduler',
+          scheduledAtIso: new Date(nowMs).toISOString(),
+        }),
+      });
+
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        console.error(`[TRENDZ_CLOUD_SCHEDULER] Backend returned HTTP ${response.status}:`, body?.error || 'Unknown error');
+        return;
+      }
+      console.log(
+        `[TRENDZ_CLOUD_SCHEDULER] Tick completed: executed=${Boolean(body?.executed)}, skippedReason=${body?.skippedReason || 'none'}, runId=${body?.run?.id || 'none'}`
+      );
+    } catch (err: any) {
+      console.error('[TRENDZ_CLOUD_SCHEDULER] Failed to invoke scheduled backend endpoint:', err?.message || err);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+);
+

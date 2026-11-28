@@ -30,8 +30,18 @@ import {
   getActiveIngestionLockInfo,
   processSingleSourceUrlPipeline,
   retryFailedIngestionItem,
-  runTrendzIngestionPipeline,
 } from "./server/trendz/pipelineOrchestrator";
+import {
+  FirestoreAdminTrendAutomationStore,
+  FirestoreRestTrendAutomationStore,
+  InMemoryTrendAutomationStore,
+  hasServerSideFirestoreAdminCredentials,
+  type TrendAutomationStore,
+} from "./server/trendz/automationStore";
+import {
+  TrendAutomationController,
+  verifySchedulerSecret,
+} from "./server/trendz/automationScheduler";
 import { listSourceProviderSummaries } from "./server/trendz/sourceProviders";
 import {
   SERVER_TRENDZ_DOMAINS,
@@ -546,6 +556,53 @@ Rules:
     bucketName: "trendz-admin-pipeline",
   });
 
+  // Phase 08.1: Unified Autonomous Ingestion Scheduler & Distributed Lock Controller
+  const defaultAutomationStore: TrendAutomationStore = hasServerSideFirestoreAdminCredentials()
+    ? new FirestoreAdminTrendAutomationStore(FIREBASE_PROJECT_ID)
+    : new InMemoryTrendAutomationStore();
+  const trendAutomationController = new TrendAutomationController(defaultAutomationStore);
+
+  function resolveAdminAutomationStore(req: AuthenticatedRequest): TrendAutomationStore | undefined {
+    if (defaultAutomationStore.mode === "firestore_admin") {
+      return undefined; // Use Admin SDK directly
+    }
+    const authHeader = req.headers.authorization || "";
+    const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : "";
+    if (!bearerToken) return undefined;
+    return new FirestoreRestTrendAutomationStore(FIREBASE_PROJECT_ID, bearerToken);
+  }
+
+  // Server-to-server scheduled execution webhook (Cloud Scheduler / Firebase Functions v2).
+  // Strictly gated by constant-time TRENDZ_SCHEDULER_SECRET; never accessible to browser users.
+  app.use("/api/internal/trendz", express.json({ limit: "32kb" }));
+  app.post("/api/internal/trendz/scheduled-ingest", async (req, res) => {
+    const authCheck = verifySchedulerSecret(req.headers["x-trendz-scheduler-secret"]);
+    if (!authCheck.ok) {
+      return res.status(authCheck.statusCode || 401).json({ error: authCheck.error });
+    }
+    try {
+      const result = await trendAutomationController.executeCycle({
+        triggerMode: "scheduled",
+        triggeredBy: "cloud_scheduler",
+        ownerId: typeof req.body?.source === "string" ? req.body.source.slice(0, 80) : "cloud_scheduler",
+        force: false,
+      });
+      return res.status(result.conflict ? 409 : 200).json({
+        executed: result.executed,
+        skippedReason: result.skippedReason || null,
+        persistedServerSide: result.persistedServerSide,
+        run: result.output?.run || null,
+        state: result.state,
+      });
+    } catch (error: any) {
+      if (error?.statusCode === 409) {
+        return res.status(409).json({ executed: false, skippedReason: "locked", error: error.message });
+      }
+      console.error("[TRENDZ_SCHEDULED_INGEST_ERROR]", error?.message || error);
+      return res.status(500).json({ error: "Scheduled ingestion execution failed." });
+    }
+  });
+
   app.use("/api/admin/trendz", express.json({ limit: "512kb" }));
   app.use("/api/admin/trendz", requireFirebaseAuth, requireAdminOrModerator);
 
@@ -557,6 +614,76 @@ Rules:
       lock: getActiveIngestionLockInfo(),
       aiThumbnailsEnabled: process.env.TRENDZ_ENABLE_AI_THUMBNAILS === "true",
     });
+  });
+
+  app.get("/api/admin/trendz/automation", async (req: AuthenticatedRequest, res) => {
+    try {
+      const storeOverride = resolveAdminAutomationStore(req);
+      const snapshot = await trendAutomationController.getSnapshot(storeOverride);
+      return res.json(snapshot);
+    } catch (error: any) {
+      console.error("[TRENDZ_AUTOMATION_GET_ERROR]", error?.message || error);
+      // Graceful fallback to default controller state if REST Firestore is temporarily unreachable
+      try {
+        const fallbackSnapshot = await trendAutomationController.getSnapshot();
+        return res.json(fallbackSnapshot);
+      } catch {
+        return res.status(500).json({ error: "Failed to load Trendz automation status." });
+      }
+    }
+  });
+
+  app.patch("/api/admin/trendz/automation", trendzAdminLimiter, async (req: AuthenticatedRequest, res) => {
+    try {
+      const storeOverride = resolveAdminAutomationStore(req);
+      const updated = await trendAutomationController.updateConfig(
+        req.body || {},
+        { uid: req.authUser!.uid, email: req.authUser?.email },
+        storeOverride
+      );
+      if (updated.ok === false) {
+        return res.status(400).json({ error: updated.error });
+      }
+      const snapshot = await trendAutomationController.getSnapshot(storeOverride);
+      return res.json(snapshot);
+    } catch (error: any) {
+      console.error("[TRENDZ_AUTOMATION_PATCH_ERROR]", error?.message || error);
+      return res.status(500).json({ error: "Failed to update Trendz automation configuration." });
+    }
+  });
+
+  app.post("/api/admin/trendz/automation/run-now", trendzAdminLimiter, async (req: AuthenticatedRequest, res) => {
+    try {
+      const storeOverride = resolveAdminAutomationStore(req);
+      const cycle = await trendAutomationController.executeCycle({
+        triggerMode: "scheduled",
+        triggeredBy: req.authUser!.uid,
+        triggeredByEmail: req.authUser?.email,
+        ownerId: `admin_run_now:${req.authUser!.uid}`,
+        force: true,
+        storeOverride,
+      });
+      if (!cycle.executed && cycle.conflict) {
+        return res.status(409).json({
+          error: "Another Trendz ingestion run is currently active. Wait for completion before triggering a new cycle.",
+          state: cycle.state,
+        });
+      }
+      return res.json({
+        run: cycle.output?.run,
+        items: cycle.output?.items || [],
+        corroborationUpdates: cycle.output?.corroborationUpdates || [],
+        persistedServerSide: cycle.persistedServerSide,
+        state: cycle.state,
+      });
+    } catch (error: any) {
+      if (error?.statusCode === 409) {
+        return res.status(409).json({ error: error.message });
+      }
+      console.error("[TRENDZ_AUTOMATION_RUN_NOW_ERROR]", error?.message || error);
+      const safe = getSafeGeminiError(error, "Automated ingestion cycle failed.");
+      return res.status(safe.status).json({ error: safe.message });
+    }
   });
 
   app.post("/api/admin/trendz/ingest", trendzAdminLimiter, async (req: AuthenticatedRequest, res) => {
@@ -583,6 +710,17 @@ Rules:
       const maxItemsPerDomain = Number(req.body?.maxItemsPerDomain ?? 2);
       if (!Number.isFinite(maxItemsPerDomain) || maxItemsPerDomain < 1 || maxItemsPerDomain > 10) {
         return res.status(400).json({ error: "maxItemsPerDomain must be between 1 and 10." });
+      }
+
+      const maxArticlesPerExecution =
+        req.body?.maxArticlesPerExecution !== undefined
+          ? Number(req.body.maxArticlesPerExecution)
+          : undefined;
+      if (
+        maxArticlesPerExecution !== undefined &&
+        (!Number.isFinite(maxArticlesPerExecution) || maxArticlesPerExecution < 1 || maxArticlesPerExecution > 25)
+      ) {
+        return res.status(400).json({ error: "maxArticlesPerExecution must be between 1 and 25." });
       }
 
       const providerIds = Array.isArray(req.body?.providerIds)
@@ -616,19 +754,38 @@ Rules:
             }))
         : [];
 
-      const result = await runTrendzIngestionPipeline({
+      const storeOverride = resolveAdminAutomationStore(req);
+      const cycle = await trendAutomationController.executeCycle({
+        triggerMode: "manual",
         triggeredBy: req.authUser!.uid,
         triggeredByEmail: req.authUser?.email,
-        triggerMode: "manual",
-        domains,
-        windowHours,
-        maxItemsPerDomain,
-        providerIds,
+        ownerId: `admin_manual:${req.authUser!.uid}`,
+        force: true,
+        overrideParams: {
+          domains,
+          windowHours,
+          maxItemsPerDomain,
+          maxArticlesPerExecution,
+          providerIds,
+        },
         existingCandidates,
         existingPublishedTrends,
+        storeOverride,
       });
 
-      return res.json(result);
+      if (!cycle.executed && cycle.conflict) {
+        return res.status(409).json({
+          error: "Another Trendz ingestion run is currently active. Wait for completion before starting a new run.",
+        });
+      }
+
+      return res.json({
+        run: cycle.output!.run,
+        items: cycle.output!.items,
+        corroborationUpdates: cycle.output!.corroborationUpdates,
+        persistedServerSide: cycle.persistedServerSide,
+        state: cycle.state,
+      });
     } catch (error: any) {
       if (error?.statusCode === 409) {
         return res.status(409).json({ error: error.message });
@@ -1314,6 +1471,11 @@ Rules:
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`[INVOX_SERVER] Server running on port ${PORT}`);
+    // Optional standalone Node in-process scheduler (disabled by default for safe rollout;
+    // production Firebase deployments use Cloud Functions v2 onSchedule -> /api/internal/trendz/scheduled-ingest).
+    if (process.env.TRENDZ_IN_PROCESS_SCHEDULER_ENABLED === "true") {
+      trendAutomationController.startInProcessTicker(60_000);
+    }
   });
 }
 

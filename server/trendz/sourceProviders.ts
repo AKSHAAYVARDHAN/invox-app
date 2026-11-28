@@ -26,6 +26,9 @@ export interface SourceDiscoveryRequest {
   domains: TrendzDomainSlug[];
   windowHours: number;
   maxItemsPerDomain: number;
+  requestTimeoutMs?: number;
+  maxTransientRetries?: number;
+  retryBaseDelayMs?: number;
 }
 
 export interface SourceDiscoveryResult {
@@ -33,6 +36,10 @@ export interface SourceDiscoveryResult {
   providerName: string;
   candidates: DiscoveredSourceCandidate[];
   errors: string[];
+  durationMs: number;
+  attempts: number;
+  requestCount: number;
+  rateLimited: boolean;
 }
 
 export interface TrendSourceProvider {
@@ -88,10 +95,24 @@ export const CURATED_RSS_FEEDS: readonly CuratedRssFeed[] = [
   { url: 'https://spacenews.com/feed/', publisher: 'SpaceNews', domainSlug: 'space' },
 ];
 
-// Simple in-memory per-provider rate window tracker
+// Simple in-memory per-provider rate window + Retry-After cooldown tracker
 const providerRequestTimestamps = new Map<string, number[]>();
+const providerCooldownUntilMs = new Map<string, number>();
+
+export function isProviderInRateLimitCooldown(providerId: string): boolean {
+  const until = providerCooldownUntilMs.get(providerId) || 0;
+  return Date.now() < until;
+}
+
+export function setProviderRateLimitCooldown(providerId: string, cooldownMs: number): void {
+  const clampedMs = Math.min(5 * 60_000, Math.max(1_000, cooldownMs));
+  providerCooldownUntilMs.set(providerId, Date.now() + clampedMs);
+}
 
 function consumeProviderQuota(providerId: string, limitPerMinute: number): boolean {
+  if (isProviderInRateLimitCooldown(providerId)) {
+    return false;
+  }
   const now = Date.now();
   const cutoff = now - 60_000;
   const recent = (providerRequestTimestamps.get(providerId) || []).filter((ts) => ts > cutoff);
@@ -102,6 +123,100 @@ function consumeProviderQuota(providerId: string, limitPerMinute: number): boole
   recent.push(now);
   providerRequestTimestamps.set(providerId, recent);
   return true;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function isTransientFetchFailure(res: {
+  ok: false;
+  status?: number;
+  error: string;
+  blockedByPolicy?: boolean;
+}): boolean {
+  if (res.blockedByPolicy) return false;
+  if (res.status === 429 || res.status === 408) return true;
+  if (res.status !== undefined && res.status >= 500 && res.status < 600) return true;
+  if (res.status === undefined) {
+    return /timed out|network|fetch failed|econnreset|etimedout|socket/i.test(res.error);
+  }
+  return false;
+}
+
+/**
+ * Performs an SSRF-protected outbound fetch with bounded exponential backoff on transient failures
+ * (HTTP 429, 5xx, timeouts, transient network errors) while honoring Retry-After rate-limit hints.
+ */
+export async function fetchWithControlledBackoff(
+  providerId: string,
+  url: string,
+  options: {
+    timeoutMs?: number;
+    maxBytes?: number;
+    accept?: string;
+    maxRetries?: number;
+    baseDelayMs?: number;
+    fetcher?: typeof safeFetchTextWithSsrfProtection;
+  } = {}
+): Promise<{
+  result: Awaited<ReturnType<typeof safeFetchTextWithSsrfProtection>>;
+  attempts: number;
+  rateLimited: boolean;
+}> {
+  const maxRetries = Math.min(3, Math.max(0, Math.trunc(options.maxRetries ?? 2)));
+  const baseDelayMs = Math.min(5_000, Math.max(50, Math.trunc(options.baseDelayMs ?? 450)));
+  const fetcher = options.fetcher || safeFetchTextWithSsrfProtection;
+
+  let attempts = 0;
+  let rateLimited = false;
+  let lastResult: Awaited<ReturnType<typeof safeFetchTextWithSsrfProtection>> = {
+    ok: false,
+    error: 'Fetch not attempted.',
+  };
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    attempts++;
+    lastResult = await fetcher(url, {
+      timeoutMs: options.timeoutMs ?? 8_000,
+      maxBytes: options.maxBytes ?? 1_000_000,
+      accept: options.accept,
+    });
+
+    if (lastResult.ok) {
+      return { result: lastResult, attempts, rateLimited };
+    }
+
+    const fail = lastResult as {
+      ok: false;
+      status?: number;
+      error: string;
+      blockedByPolicy?: boolean;
+      retryAfterSeconds?: number;
+    };
+
+    if (fail.status === 429) {
+      rateLimited = true;
+      const cooldownMs = (fail.retryAfterSeconds ?? 30) * 1000;
+      setProviderRateLimitCooldown(providerId, cooldownMs);
+      // If upstream explicitly asked us to wait >5s, stop retrying immediately to respect rate limits
+      if ((fail.retryAfterSeconds ?? 0) > 5) {
+        return { result: lastResult, attempts, rateLimited };
+      }
+    }
+
+    if (attempt >= maxRetries || !isTransientFetchFailure(fail)) {
+      return { result: lastResult, attempts, rateLimited };
+    }
+
+    const retryAfterWaitMs =
+      fail.retryAfterSeconds !== undefined ? Math.min(5_000, fail.retryAfterSeconds * 1000) : 0;
+    const expDelayMs = Math.min(5_000, baseDelayMs * Math.pow(2, attempt));
+    const jitterMs = Math.floor(Math.random() * 120);
+    await sleep(Math.max(retryAfterWaitMs, expDelayMs + jitterMs));
+  }
+
+  return { result: lastResult, attempts, rateLimited };
 }
 
 function extractXmlTag(block: string, tagName: string): string {
@@ -204,9 +319,13 @@ export class RssFeedSourceProvider implements TrendSourceProvider {
   }
 
   async discover(req: SourceDiscoveryRequest): Promise<SourceDiscoveryResult> {
+    const startMs = Date.now();
     const candidates: DiscoveredSourceCandidate[] = [];
     const errors: string[] = [];
     const cutoffMs = Date.now() - req.windowHours * 3_600_000;
+    let totalAttempts = 0;
+    let requestCount = 0;
+    let rateLimited = false;
 
     for (const domainSlug of req.domains) {
       const feeds = CURATED_RSS_FEEDS.filter((f) => f.domainSlug === domainSlug);
@@ -216,15 +335,25 @@ export class RssFeedSourceProvider implements TrendSourceProvider {
       for (const feed of feeds) {
         if (domainCandidates.length >= req.maxItemsPerDomain * 2) break;
         if (!consumeProviderQuota(this.id, this.rateLimitPerMinute)) {
-          errors.push(`Provider '${this.id}' rate limit reached; skipped ${feed.publisher}.`);
+          rateLimited = true;
+          errors.push(`Provider '${this.id}' rate limit or cooldown active; skipped ${feed.publisher}.`);
           break;
         }
 
-        const fetched = await safeFetchTextWithSsrfProtection(feed.url, {
-          timeoutMs: 8_000,
-          maxBytes: 1_000_000,
-          accept: 'application/rss+xml,application/atom+xml,application/xml,text/xml;q=0.9,*/*;q=0.8',
-        });
+        requestCount++;
+        const { result: fetched, attempts, rateLimited: hitLimit } = await fetchWithControlledBackoff(
+          this.id,
+          feed.url,
+          {
+            timeoutMs: req.requestTimeoutMs ?? 8_000,
+            maxBytes: 1_000_000,
+            accept: 'application/rss+xml,application/atom+xml,application/xml,text/xml;q=0.9,*/*;q=0.8',
+            maxRetries: req.maxTransientRetries ?? 1,
+            baseDelayMs: req.retryBaseDelayMs ?? 450,
+          }
+        );
+        totalAttempts += attempts;
+        if (hitLimit) rateLimited = true;
 
         if (!fetched.ok) {
           const errMsg = 'error' in fetched ? fetched.error : 'Unknown fetch error';
@@ -262,6 +391,10 @@ export class RssFeedSourceProvider implements TrendSourceProvider {
       providerName: this.name,
       candidates,
       errors,
+      durationMs: Date.now() - startMs,
+      attempts: totalAttempts,
+      requestCount,
+      rateLimited,
     };
   }
 }
@@ -283,6 +416,7 @@ export class GNewsApiProvider implements TrendSourceProvider {
   }
 
   async discover(req: SourceDiscoveryRequest): Promise<SourceDiscoveryResult> {
+    const startMs = Date.now();
     const apiKey = process.env.GNEWS_API_KEY?.trim();
     if (!apiKey) {
       return {
@@ -290,6 +424,10 @@ export class GNewsApiProvider implements TrendSourceProvider {
         providerName: this.name,
         candidates: [],
         errors: ['GNEWS_API_KEY is not configured on the server.'],
+        durationMs: Date.now() - startMs,
+        attempts: 0,
+        requestCount: 0,
+        rateLimited: false,
       };
     }
 
@@ -297,10 +435,14 @@ export class GNewsApiProvider implements TrendSourceProvider {
     const errors: string[] = [];
     const fromIso = new Date(Date.now() - req.windowHours * 3_600_000).toISOString();
     const discoveredAtIso = new Date().toISOString();
+    let totalAttempts = 0;
+    let requestCount = 0;
+    let rateLimited = false;
 
     for (const domainSlug of req.domains) {
       if (!consumeProviderQuota(this.id, this.rateLimitPerMinute)) {
-        errors.push(`Provider '${this.id}' rate limit reached.`);
+        rateLimited = true;
+        errors.push(`Provider '${this.id}' rate limit or cooldown active.`);
         break;
       }
       const meta = getServerDomainMeta(domainSlug);
@@ -311,14 +453,26 @@ export class GNewsApiProvider implements TrendSourceProvider {
       endpoint.searchParams.set('from', fromIso);
       endpoint.searchParams.set('apikey', apiKey);
 
-      const fetched = await safeFetchTextWithSsrfProtection(endpoint.toString(), {
-        timeoutMs: 8_000,
-        maxBytes: 500_000,
-        accept: 'application/json',
-      });
+      requestCount++;
+      const { result: fetched, attempts, rateLimited: hitLimit } = await fetchWithControlledBackoff(
+        this.id,
+        endpoint.toString(),
+        {
+          timeoutMs: req.requestTimeoutMs ?? 8_000,
+          maxBytes: 500_000,
+          accept: 'application/json',
+          maxRetries: req.maxTransientRetries ?? 2,
+          baseDelayMs: req.retryBaseDelayMs ?? 500,
+        }
+      );
+      totalAttempts += attempts;
+      if (hitLimit) {
+        rateLimited = true;
+      }
       if (!fetched.ok) {
         const errMsg = 'error' in fetched ? fetched.error : 'Unknown fetch error';
         errors.push(`GNews API failed for '${domainSlug}': ${errMsg}`);
+        if (hitLimit) break;
         continue;
       }
 
@@ -350,7 +504,16 @@ export class GNewsApiProvider implements TrendSourceProvider {
       }
     }
 
-    return { providerId: this.id, providerName: this.name, candidates, errors };
+    return {
+      providerId: this.id,
+      providerName: this.name,
+      candidates,
+      errors,
+      durationMs: Date.now() - startMs,
+      attempts: totalAttempts,
+      requestCount,
+      rateLimited,
+    };
   }
 }
 
@@ -371,6 +534,7 @@ export class NewsDataApiProvider implements TrendSourceProvider {
   }
 
   async discover(req: SourceDiscoveryRequest): Promise<SourceDiscoveryResult> {
+    const startMs = Date.now();
     const apiKey = process.env.NEWSDATA_API_KEY?.trim();
     if (!apiKey) {
       return {
@@ -378,16 +542,24 @@ export class NewsDataApiProvider implements TrendSourceProvider {
         providerName: this.name,
         candidates: [],
         errors: ['NEWSDATA_API_KEY is not configured on the server.'],
+        durationMs: Date.now() - startMs,
+        attempts: 0,
+        requestCount: 0,
+        rateLimited: false,
       };
     }
 
     const candidates: DiscoveredSourceCandidate[] = [];
     const errors: string[] = [];
     const discoveredAtIso = new Date().toISOString();
+    let totalAttempts = 0;
+    let requestCount = 0;
+    let rateLimited = false;
 
     for (const domainSlug of req.domains) {
       if (!consumeProviderQuota(this.id, this.rateLimitPerMinute)) {
-        errors.push(`Provider '${this.id}' rate limit reached.`);
+        rateLimited = true;
+        errors.push(`Provider '${this.id}' rate limit or cooldown active.`);
         break;
       }
       const meta = getServerDomainMeta(domainSlug);
@@ -396,14 +568,26 @@ export class NewsDataApiProvider implements TrendSourceProvider {
       endpoint.searchParams.set('language', 'en');
       endpoint.searchParams.set('apikey', apiKey);
 
-      const fetched = await safeFetchTextWithSsrfProtection(endpoint.toString(), {
-        timeoutMs: 8_000,
-        maxBytes: 500_000,
-        accept: 'application/json',
-      });
+      requestCount++;
+      const { result: fetched, attempts, rateLimited: hitLimit } = await fetchWithControlledBackoff(
+        this.id,
+        endpoint.toString(),
+        {
+          timeoutMs: req.requestTimeoutMs ?? 8_000,
+          maxBytes: 500_000,
+          accept: 'application/json',
+          maxRetries: req.maxTransientRetries ?? 2,
+          baseDelayMs: req.retryBaseDelayMs ?? 500,
+        }
+      );
+      totalAttempts += attempts;
+      if (hitLimit) {
+        rateLimited = true;
+      }
       if (!fetched.ok) {
         const errMsg = 'error' in fetched ? fetched.error : 'Unknown fetch error';
         errors.push(`NewsData API failed for '${domainSlug}': ${errMsg}`);
+        if (hitLimit) break;
         continue;
       }
 
@@ -435,7 +619,16 @@ export class NewsDataApiProvider implements TrendSourceProvider {
       }
     }
 
-    return { providerId: this.id, providerName: this.name, candidates, errors };
+    return {
+      providerId: this.id,
+      providerName: this.name,
+      candidates,
+      errors,
+      durationMs: Date.now() - startMs,
+      attempts: totalAttempts,
+      requestCount,
+      rateLimited,
+    };
   }
 }
 

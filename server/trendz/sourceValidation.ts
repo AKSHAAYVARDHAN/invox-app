@@ -557,7 +557,14 @@ export async function safeFetchTextWithSsrfProtection(
       redirectCount: number;
       truncated: boolean;
     }
-  | { ok: false; status?: number; error: string; blockedByPolicy?: boolean; redirectCount?: number }
+  | {
+      ok: false;
+      status?: number;
+      error: string;
+      blockedByPolicy?: boolean;
+      redirectCount?: number;
+      retryAfterSeconds?: number;
+    }
 > {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_SOURCE_FETCH_TIMEOUT_MS;
   const maxBytes = options?.maxBytes ?? MAX_SOURCE_BODY_BYTES;
@@ -609,11 +616,25 @@ export async function safeFetchTextWithSsrfProtection(
       }
 
       if (!response.ok) {
+        let retryAfterSeconds: number | undefined;
+        const retryAfterRaw = response.headers.get('retry-after');
+        if (retryAfterRaw) {
+          const asNum = Number(retryAfterRaw.trim());
+          if (Number.isFinite(asNum) && asNum >= 0) {
+            retryAfterSeconds = Math.min(300, Math.ceil(asNum));
+          } else {
+            const asDateMs = Date.parse(retryAfterRaw);
+            if (!Number.isNaN(asDateMs)) {
+              retryAfterSeconds = Math.min(300, Math.max(0, Math.ceil((asDateMs - Date.now()) / 1000)));
+            }
+          }
+        }
         return {
           ok: false,
           status: response.status,
           error: `Source returned HTTP ${response.status}.`,
           redirectCount,
+          ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
         };
       }
 

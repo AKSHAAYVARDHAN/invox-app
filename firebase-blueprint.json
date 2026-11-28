@@ -567,7 +567,7 @@
     },
     "TrendIngestionRun": {
       "title": "TrendIngestionRun",
-      "description": "Traceable Trendz AI intelligence pipeline execution log (admin/moderator access only).",
+      "description": "Traceable Trendz AI intelligence pipeline execution log with per-provider breakdown and usage telemetry (admin/moderator access only).",
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 128 },
@@ -577,17 +577,21 @@
         "domains": { "type": "array" },
         "windowHours": { "type": "number" },
         "maxItemsPerDomain": { "type": "number" },
+        "maxArticlesPerExecution": { "type": "number" },
         "providerIds": { "type": "array" },
+        "providerResults": { "type": "array" },
+        "usageMetrics": { "type": "object" },
         "counts": { "type": "object" },
         "errors": { "type": "array" },
         "startedAt": { "type": "string", "format": "date-time" },
-        "completedAt": { "type": "string", "format": "date-time" }
+        "completedAt": { "type": "string", "format": "date-time" },
+        "durationMs": { "type": "number" }
       },
       "required": ["id", "status", "triggeredBy", "triggerMode", "domains", "windowHours", "maxItemsPerDomain", "providerIds", "counts", "errors", "startedAt"]
     },
     "TrendIngestionItem": {
       "title": "TrendIngestionItem",
-      "description": "Staged Trendz discovery & AI-processed editorial review item progressing through DISCOVERED -> PUBLISHED/REJECTED/FAILED (admin/moderator access only).",
+      "description": "Staged Trendz discovery & AI-processed editorial review item progressing through DISCOVERED -> PUBLISHED/REJECTED/FAILED with controlled retry metadata (admin/moderator access only).",
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 128 },
@@ -608,6 +612,10 @@
         "aiDraft": { "type": "object" },
         "media": { "type": "object" },
         "retryCount": { "type": "number" },
+        "maxRetries": { "type": "number" },
+        "lastRetryAtIso": { "type": "string", "format": "date-time" },
+        "nextRetryAtIso": { "type": "string", "format": "date-time" },
+        "permanentlyFailed": { "type": "boolean" },
         "failureStage": { "type": "string" },
         "failureReason": { "type": "string" },
         "publishedTrendId": { "type": "string" },
@@ -617,6 +625,60 @@
         "updatedAtIso": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "runId", "stage", "stageHistory", "domainSlug", "providerId", "providerName", "source", "corroboratingSources", "media", "retryCount", "createdAtIso", "updatedAtIso"]
+    },
+    "TrendAutomationConfig": {
+      "title": "TrendAutomationConfig",
+      "description": "Admin-only Trendz automated ingestion scheduler configuration stored at /trendAutomation/config (disabled by default for safe rollout).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "enum": ["config"] },
+        "enabled": { "type": "boolean" },
+        "intervalMinutes": { "type": "number" },
+        "timezone": { "type": "string", "maxLength": 64 },
+        "domains": { "type": "array" },
+        "providerIds": { "type": "array" },
+        "windowHours": { "type": "number" },
+        "maxItemsPerDomain": { "type": "number" },
+        "maxArticlesPerExecution": { "type": "number" },
+        "maxConcurrentArticles": { "type": "number" },
+        "requestTimeoutMs": { "type": "number" },
+        "maxRetryAttempts": { "type": "number" },
+        "retryBackoffBaseMinutes": { "type": "number" },
+        "maxRecoveriesPerRun": { "type": "number" },
+        "lockLeaseMinutes": { "type": "number" },
+        "updatedAtIso": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string", "maxLength": 128 },
+        "updatedByEmail": { "type": "string", "maxLength": 160 }
+      },
+      "required": ["id", "enabled", "intervalMinutes", "timezone", "domains", "providerIds", "windowHours", "maxItemsPerDomain", "maxArticlesPerExecution", "maxConcurrentArticles", "requestTimeoutMs", "maxRetryAttempts", "retryBackoffBaseMinutes", "maxRecoveriesPerRun", "lockLeaseMinutes", "updatedAtIso", "updatedBy"]
+    },
+    "TrendAutomationState": {
+      "title": "TrendAutomationState",
+      "description": "Admin-only Trendz distributed execution lock lease and scheduler monitoring state stored at /trendAutomation/state.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "enum": ["state"] },
+        "locked": { "type": "boolean" },
+        "lockRunId": { "type": "string", "maxLength": 128 },
+        "lockOwner": { "type": "string", "maxLength": 160 },
+        "lockTriggerMode": { "type": "string", "enum": ["manual", "single_url", "scheduled"] },
+        "lockAcquiredAtIso": { "type": "string", "format": "date-time" },
+        "lockExpiresAtIso": { "type": "string", "format": "date-time" },
+        "lastExecutionAtIso": { "type": "string", "format": "date-time" },
+        "lastCompletedAtIso": { "type": "string", "format": "date-time" },
+        "lastDurationMs": { "type": "number" },
+        "lastRunId": { "type": "string", "maxLength": 128 },
+        "lastTriggerMode": { "type": "string", "enum": ["manual", "single_url", "scheduled"] },
+        "lastStatus": { "type": "string", "enum": ["running", "completed", "partial_failure", "failed", "skipped"] },
+        "lastError": { "type": "string", "maxLength": 400 },
+        "lastCounts": { "type": "object" },
+        "lastProviderResults": { "type": "array" },
+        "nextScheduledRunAtIso": { "type": "string", "format": "date-time" },
+        "consecutiveFailures": { "type": "number" },
+        "totalScheduledRuns": { "type": "number" },
+        "updatedAtIso": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "locked", "consecutiveFailures", "totalScheduledRuns", "updatedAtIso"]
     },
     "TrendzAiConversation": {
       "title": "TrendzAiConversation",
@@ -793,6 +855,10 @@
     "/trendIngestionItems/{itemId}": {
       "schema": "TrendIngestionItem",
       "description": "Admin/moderator-only staged Trendz editorial review queue separate from published /trendz."
+    },
+    "/trendAutomation/{docId}": {
+      "schema": "TrendAutomationConfig",
+      "description": "Admin/moderator-only Trendz automated ingestion scheduler configuration ('config') and distributed execution lock/monitoring state ('state')."
     }
   }
 }

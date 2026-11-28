@@ -15,6 +15,8 @@ import {
 import { auth, db } from '../firebase';
 import type {
   TrendAdditionalSource,
+  TrendAutomationConfig,
+  TrendAutomationSnapshot,
   TrendCorroboratingSource,
   TrendIngestionItem,
   TrendIngestionRun,
@@ -64,6 +66,7 @@ interface PipelineApiRunResponse {
     targetId: string;
     corroboratingSource: TrendCorroboratingSource;
   }>;
+  persistedServerSide?: boolean;
 }
 
 async function getAdminAuthHeaders(): Promise<Record<string, string>> {
@@ -136,6 +139,80 @@ export async function fetchPipelineProvidersInfo(): Promise<PipelineProvidersInf
     throw new Error(data?.error || `Failed to load pipeline providers (HTTP ${response.status}).`);
   }
   return data as PipelineProvidersInfo;
+}
+
+/**
+ * Loads Phase 08.1 automated ingestion configuration, scheduler state, lock status,
+ * provider health, and recent run telemetry (admin/moderator only).
+ */
+export async function fetchTrendAutomationSnapshot(): Promise<TrendAutomationSnapshot> {
+  const headers = await getAdminAuthHeaders();
+  const response = await fetch('/api/admin/trendz/automation', {
+    method: 'GET',
+    headers,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || `Failed to load automation status (HTTP ${response.status}).`);
+  }
+  return data as TrendAutomationSnapshot;
+}
+
+/**
+ * Updates Trendz automation configuration (enable/pause, interval, timezone, domains, caps).
+ */
+export async function updateTrendAutomationConfig(
+  patch: Partial<
+    Pick<
+      TrendAutomationConfig,
+      | 'enabled'
+      | 'intervalMinutes'
+      | 'timezone'
+      | 'domains'
+      | 'providerIds'
+      | 'windowHours'
+      | 'maxItemsPerDomain'
+      | 'maxArticlesPerExecution'
+      | 'maxConcurrentArticles'
+      | 'requestTimeoutMs'
+      | 'maxRetryAttempts'
+      | 'retryBackoffBaseMinutes'
+      | 'maxRecoveriesPerRun'
+    >
+  >
+): Promise<TrendAutomationSnapshot> {
+  const headers = await getAdminAuthHeaders();
+  const response = await fetch('/api/admin/trendz/automation', {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify(patch),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || `Failed to update automation config (HTTP ${response.status}).`);
+  }
+  return data as TrendAutomationSnapshot;
+}
+
+/**
+ * Forces an immediate scheduled-configuration ingestion + recovery cycle through the shared lock.
+ */
+export async function triggerScheduledCycleNow(): Promise<PipelineApiRunResponse> {
+  const headers = await getAdminAuthHeaders();
+  const response = await fetch('/api/admin/trendz/automation/run-now', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({}),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || `Automated ingestion cycle failed (HTTP ${response.status}).`);
+  }
+  const output = data as PipelineApiRunResponse;
+  if (!output.persistedServerSide && output.run) {
+    await persistPipelineOutput(output);
+  }
+  return output;
 }
 
 /**
@@ -326,7 +403,9 @@ export async function triggerManualIngestionRun(params: {
   }
 
   const output = data as PipelineApiRunResponse;
-  await persistPipelineOutput(output);
+  if (!output.persistedServerSide) {
+    await persistPipelineOutput(output);
+  }
   return output;
 }
 

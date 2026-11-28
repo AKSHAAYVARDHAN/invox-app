@@ -621,6 +621,10 @@ export interface TrendIngestionItem {
   mediaFallbackUsed?: boolean;
   mediaNote?: string;
   retryCount: number;
+  maxRetries?: number;
+  lastRetryAtIso?: string;
+  nextRetryAtIso?: string;
+  permanentlyFailed?: boolean;
   failureStage?: TrendIngestionStage;
   failureReason?: string;
   publishedTrendId?: string;
@@ -643,6 +647,31 @@ export interface TrendIngestionRunCounts {
   published: number;
   rejected: number;
   failed: number;
+  recovered?: number;
+  skippedAlreadyProcessed?: number;
+}
+
+export interface TrendProviderExecutionResult {
+  providerId: string;
+  providerName: string;
+  status: 'succeeded' | 'partial' | 'failed' | 'rate_limited' | 'skipped';
+  discoveredCount: number;
+  validatedCount: number;
+  duplicatesMergedCount: number;
+  failedCount: number;
+  durationMs: number;
+  attempts: number;
+  rateLimited?: boolean;
+  errors: string[];
+}
+
+export interface TrendIngestionUsageMetrics {
+  providerRequests: number;
+  validationRequests: number;
+  geminiCalls: number;
+  recoveredItems: number;
+  skippedAlreadyProcessed: number;
+  cappedByExecutionLimit: number;
 }
 
 export interface TrendIngestionRun {
@@ -654,12 +683,74 @@ export interface TrendIngestionRun {
   domains: TrendzDomainSlug[];
   windowHours: number;
   maxItemsPerDomain: number;
+  maxArticlesPerExecution?: number;
   providerIds: string[];
+  providerResults?: TrendProviderExecutionResult[];
+  usageMetrics?: TrendIngestionUsageMetrics;
   counts: TrendIngestionRunCounts;
   errors: string[];
   startedAt: string;
   completedAt?: string;
+  durationMs?: number;
   updatedAt?: any;
+}
+
+export interface TrendAutomationConfig {
+  id: 'config';
+  enabled: boolean;
+  intervalMinutes: number;
+  timezone: string;
+  domains: TrendzDomainSlug[];
+  providerIds: string[];
+  windowHours: number;
+  maxItemsPerDomain: number;
+  maxArticlesPerExecution: number;
+  maxConcurrentArticles: number;
+  requestTimeoutMs: number;
+  maxRetryAttempts: number;
+  retryBackoffBaseMinutes: number;
+  maxRecoveriesPerRun: number;
+  lockLeaseMinutes: number;
+  updatedAtIso: string;
+  updatedBy: string;
+  updatedByEmail?: string;
+}
+
+export interface TrendAutomationState {
+  id: 'state';
+  locked: boolean;
+  lockRunId?: string | null;
+  lockOwner?: string | null;
+  lockTriggerMode?: 'manual' | 'single_url' | 'scheduled' | null;
+  lockAcquiredAtIso?: string | null;
+  lockExpiresAtIso?: string | null;
+  lastExecutionAtIso?: string | null;
+  lastCompletedAtIso?: string | null;
+  lastDurationMs?: number | null;
+  lastRunId?: string | null;
+  lastTriggerMode?: 'manual' | 'single_url' | 'scheduled' | null;
+  lastStatus?: 'running' | 'completed' | 'partial_failure' | 'failed' | 'skipped' | null;
+  lastError?: string | null;
+  lastCounts?: TrendIngestionRunCounts | null;
+  lastProviderResults?: TrendProviderExecutionResult[];
+  nextScheduledRunAtIso?: string | null;
+  consecutiveFailures: number;
+  totalScheduledRuns: number;
+  updatedAtIso: string;
+}
+
+export interface TrendAutomationSnapshot {
+  config: TrendAutomationConfig;
+  state: TrendAutomationState;
+  providers: TrendSourceProviderSummary[];
+  recentRuns: TrendIngestionRun[];
+  runtime: {
+    schedulerMode: 'cloud_functions_and_api' | 'in_process_and_api' | 'manual_only';
+    inProcessTickerActive: boolean;
+    schedulerSecretConfigured: boolean;
+    persistenceMode: 'firestore_admin' | 'firestore_rest' | 'memory';
+    headlessExecutionReady: boolean;
+  };
 }
 
 export type CommunityRole = 'owner' | 'admin' | 'member';

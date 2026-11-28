@@ -252,10 +252,14 @@ service cloud.firestore {
         && data.domains is list && data.domains.size() <= 20
         && data.windowHours is number && data.windowHours >= 1 && data.windowHours <= 720
         && data.maxItemsPerDomain is int && data.maxItemsPerDomain >= 1 && data.maxItemsPerDomain <= 25
+        && (!('maxArticlesPerExecution' in data) || (data.maxArticlesPerExecution is int && data.maxArticlesPerExecution >= 1 && data.maxArticlesPerExecution <= 25))
         && data.providerIds is list && data.providerIds.size() <= 20
+        && (!('providerResults' in data) || (data.providerResults is list && data.providerResults.size() <= 20))
+        && (!('usageMetrics' in data) || data.usageMetrics is map)
         && data.counts is map
         && data.errors is list && data.errors.size() <= 100
-        && data.startedAt is string && data.startedAt.size() <= 64;
+        && data.startedAt is string && data.startedAt.size() <= 64
+        && (!('durationMs' in data) || (data.durationMs is number && data.durationMs >= 0));
     }
 
     function isValidTrendIngestionItem(data, itemId) {
@@ -285,8 +289,129 @@ service cloud.firestore {
         && data.corroboratingSources is list && data.corroboratingSources.size() <= 15
         && isValidTrendMedia(data.media)
         && data.retryCount is int && data.retryCount >= 0 && data.retryCount <= 20
+        && (!('maxRetries' in data) || (data.maxRetries is int && data.maxRetries >= 1 && data.maxRetries <= 20))
+        && (!('lastRetryAtIso' in data) || (data.lastRetryAtIso is string && data.lastRetryAtIso.size() <= 64))
+        && (!('nextRetryAtIso' in data) || (data.nextRetryAtIso is string && data.nextRetryAtIso.size() <= 64))
+        && (!('permanentlyFailed' in data) || data.permanentlyFailed is bool)
         && data.createdAtIso is string && data.createdAtIso.size() <= 64
         && data.updatedAtIso is string && data.updatedAtIso.size() <= 64;
+    }
+
+    function isValidTrendAutomationConfig(data) {
+      return data.keys().hasAll([
+          'id',
+          'enabled',
+          'intervalMinutes',
+          'timezone',
+          'domains',
+          'providerIds',
+          'windowHours',
+          'maxItemsPerDomain',
+          'maxArticlesPerExecution',
+          'maxConcurrentArticles',
+          'requestTimeoutMs',
+          'maxRetryAttempts',
+          'retryBackoffBaseMinutes',
+          'maxRecoveriesPerRun',
+          'lockLeaseMinutes',
+          'updatedAtIso',
+          'updatedBy'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'enabled',
+          'intervalMinutes',
+          'timezone',
+          'domains',
+          'providerIds',
+          'windowHours',
+          'maxItemsPerDomain',
+          'maxArticlesPerExecution',
+          'maxConcurrentArticles',
+          'requestTimeoutMs',
+          'maxRetryAttempts',
+          'retryBackoffBaseMinutes',
+          'maxRecoveriesPerRun',
+          'lockLeaseMinutes',
+          'updatedAtIso',
+          'updatedBy',
+          'updatedByEmail'
+        ])
+        && data.id == 'config'
+        && data.enabled is bool
+        && data.intervalMinutes is int && data.intervalMinutes >= 5 && data.intervalMinutes <= 1440
+        && data.timezone is string && data.timezone.size() > 0 && data.timezone.size() <= 64
+        && data.domains is list && data.domains.size() >= 1 && data.domains.size() <= 11
+        && data.domains.hasOnly([
+          'technology', 'health-care', 'trading', 'stock-market',
+          'design', 'finance', 'science', 'gaming', 'art', 'automotive', 'space'
+        ])
+        && data.providerIds is list && data.providerIds.size() >= 1 && data.providerIds.size() <= 10
+        && data.providerIds.hasOnly(['curated_rss', 'gnews_api', 'newsdata_api'])
+        && data.windowHours is int && data.windowHours >= 1 && data.windowHours <= 720
+        && data.maxItemsPerDomain is int && data.maxItemsPerDomain >= 1 && data.maxItemsPerDomain <= 10
+        && data.maxArticlesPerExecution is int && data.maxArticlesPerExecution >= 1 && data.maxArticlesPerExecution <= 25
+        && data.maxConcurrentArticles is int && data.maxConcurrentArticles >= 1 && data.maxConcurrentArticles <= 5
+        && data.requestTimeoutMs is int && data.requestTimeoutMs >= 3000 && data.requestTimeoutMs <= 20000
+        && data.maxRetryAttempts is int && data.maxRetryAttempts >= 1 && data.maxRetryAttempts <= 5
+        && data.retryBackoffBaseMinutes is int && data.retryBackoffBaseMinutes >= 1 && data.retryBackoffBaseMinutes <= 120
+        && data.maxRecoveriesPerRun is int && data.maxRecoveriesPerRun >= 0 && data.maxRecoveriesPerRun <= 10
+        && data.lockLeaseMinutes is int && data.lockLeaseMinutes >= 2 && data.lockLeaseMinutes <= 30
+        && data.updatedAtIso is string && data.updatedAtIso.size() > 0 && data.updatedAtIso.size() <= 64
+        && data.updatedBy is string && data.updatedBy.size() > 0 && data.updatedBy.size() <= 128
+        && (!('updatedByEmail' in data) || (data.updatedByEmail is string && data.updatedByEmail.size() <= 160));
+    }
+
+    function isValidTrendAutomationState(data) {
+      return data.keys().hasAll([
+          'id',
+          'locked',
+          'consecutiveFailures',
+          'totalScheduledRuns',
+          'updatedAtIso'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'locked',
+          'lockRunId',
+          'lockOwner',
+          'lockTriggerMode',
+          'lockAcquiredAtIso',
+          'lockExpiresAtIso',
+          'lastExecutionAtIso',
+          'lastCompletedAtIso',
+          'lastDurationMs',
+          'lastRunId',
+          'lastTriggerMode',
+          'lastStatus',
+          'lastError',
+          'lastCounts',
+          'lastProviderResults',
+          'nextScheduledRunAtIso',
+          'consecutiveFailures',
+          'totalScheduledRuns',
+          'updatedAtIso'
+        ])
+        && data.id == 'state'
+        && data.locked is bool
+        && (!('lockRunId' in data) || data.lockRunId == null || (data.lockRunId is string && data.lockRunId.size() <= 128))
+        && (!('lockOwner' in data) || data.lockOwner == null || (data.lockOwner is string && data.lockOwner.size() <= 160))
+        && (!('lockTriggerMode' in data) || data.lockTriggerMode == null || data.lockTriggerMode in ['manual', 'single_url', 'scheduled'])
+        && (!('lockAcquiredAtIso' in data) || data.lockAcquiredAtIso == null || (data.lockAcquiredAtIso is string && data.lockAcquiredAtIso.size() <= 64))
+        && (!('lockExpiresAtIso' in data) || data.lockExpiresAtIso == null || (data.lockExpiresAtIso is string && data.lockExpiresAtIso.size() <= 64))
+        && (!('lastExecutionAtIso' in data) || data.lastExecutionAtIso == null || (data.lastExecutionAtIso is string && data.lastExecutionAtIso.size() <= 64))
+        && (!('lastCompletedAtIso' in data) || data.lastCompletedAtIso == null || (data.lastCompletedAtIso is string && data.lastCompletedAtIso.size() <= 64))
+        && (!('lastDurationMs' in data) || data.lastDurationMs == null || (data.lastDurationMs is number && data.lastDurationMs >= 0))
+        && (!('lastRunId' in data) || data.lastRunId == null || (data.lastRunId is string && data.lastRunId.size() <= 128))
+        && (!('lastTriggerMode' in data) || data.lastTriggerMode == null || data.lastTriggerMode in ['manual', 'single_url', 'scheduled'])
+        && (!('lastStatus' in data) || data.lastStatus == null || data.lastStatus in ['running', 'completed', 'partial_failure', 'failed', 'skipped'])
+        && (!('lastError' in data) || data.lastError == null || (data.lastError is string && data.lastError.size() <= 400))
+        && (!('lastCounts' in data) || data.lastCounts == null || data.lastCounts is map)
+        && (!('lastProviderResults' in data) || (data.lastProviderResults is list && data.lastProviderResults.size() <= 20))
+        && (!('nextScheduledRunAtIso' in data) || data.nextScheduledRunAtIso == null || (data.nextScheduledRunAtIso is string && data.nextScheduledRunAtIso.size() <= 64))
+        && data.consecutiveFailures is int && data.consecutiveFailures >= 0
+        && data.totalScheduledRuns is int && data.totalScheduledRuns >= 0
+        && data.updatedAtIso is string && data.updatedAtIso.size() > 0 && data.updatedAtIso.size() <= 64;
     }
 
     function isPublishedTrend(trendId) {
@@ -785,6 +910,17 @@ service cloud.firestore {
         && isValidTrendId(itemId)
         && isValidTrendIngestionItem(request.resource.data, itemId);
       allow delete: if isAdmin() && isValidTrendId(itemId);
+    }
+
+    // Trendz automated scheduler configuration & distributed execution lock/monitoring state — strictly admin/moderator only.
+    match /trendAutomation/{docId} {
+      allow get: if isModerator() && docId in ['config', 'state'];
+      allow list: if isModerator();
+      allow create, update: if isModerator() && (
+        (docId == 'config' && isValidTrendAutomationConfig(request.resource.data))
+        || (docId == 'state' && isValidTrendAutomationState(request.resource.data))
+      );
+      allow delete: if false;
     }
 
     match /communities/{communityId} {
